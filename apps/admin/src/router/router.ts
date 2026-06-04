@@ -1,0 +1,105 @@
+import { createRouter, createWebHistory } from 'vue-router'
+
+const routes = [
+  // --- NHÓM TRANG ADMIN (Giao diện Phoenix) ---
+  {
+    path: '/admin',
+    component: () => import('@/layouts/dashboard/DashboardLayout.vue'),
+    children: [
+      { path: '', redirect: '/admin/dashboard' },
+      { path: 'servicesManager', name: 'ServicesManager', component: () => import('@/Admin/ServicesManager.vue') },
+      { path: 'category', name: 'Category', component: () => import('@/Admin/Category.vue') },
+      { path: 'sale', name: 'sale', component: () => import('@/Admin/Sale/sale.vue') },
+      { path: 'checkin', name: 'checkin', component: () => import('@/Admin/Check-in/Checkin.vue') },
+      { path: 'voucher', name: 'VoucherAdmin', component: () => import('@/Admin/voucher/VoucherAdmin.vue') },
+      { path: 'ca-lam-viec', name: 'QuanLyCaLamAdmin', component: () => import('@/Admin/QuanLyCaLam/QuanLyCaLam.vue') },
+      { path: 'lich-su-diem-danh', name: 'LichSuDiemDanh', component: () => import('@/Admin/QuanLyCaLam/LichSuDiemDanh.vue') },
+      { path: 'hoa-don', name: 'HoaDonAdmin', component: () => import('@/Admin/HoaDon/HoaDon.vue') },
+      { path: 'khach-hang', name: 'KhachHangAdmin', component: () => import('@/Admin/KhachHangAdmin.vue') },
+      { path: 'quanlydanhgia', name: 'QuanLyDanhGia', component: () => import('@/Admin/QuanLyDanhGia/QuanLyDanhGia.vue') },
+      { path: 'dashboard', name: 'Dashboard', component: () => import('@/Admin/Dashboard/Dashboard.vue') },
+      { path: 'NhanVien', name: 'NhanVien', component: () => import('@/Admin/NhanVien/NhanVien.vue') },
+      { path: 'StyleHairXColor', name: 'StyleHairXColor', component: () => import('@/Admin/StyleHairAndColor/StyleHairXColor.vue') },
+      { path: 'nhan-vien', name: 'QuanLyNhanVienAdmin', component: () => import('@/Admin/NhanVien/NhanVien.vue') },
+      { path: 'Gui-Thong-Bao', name: 'GuiThongBao', component: () => import('@/Admin/GuiThongBao.vue') },
+    ],
+    meta: { requiresAdminAuth: true }
+  },
+  {
+    path: '/admin/login',
+    component: () => import('@/Admin/Account/login.vue'),
+    name: 'login-admin',
+    meta: { requiresGuestAdmin: true }
+  },
+  
+  // --- NHÓM TRANG NHÂN VIÊN ---
+  {
+    path: '/nhanvien',
+    component: () => import('@/layouts/dashboard/DashboardLayout.vue'),
+    children: [
+      { path: '', name: 'NhanVienHome', component: () => import('@/NhanVien/TrangChuNhanVien.vue') },
+      { path: 'ca-lam-viec', name: 'NhanVienCaLamViec', component: () => import('@/NhanVien/CaLamViec/CaLamViec.vue') },
+      { path: 'lich-su-diem-danh', name: 'NhanVienLichSuDiemDanh', component: () => import('@/Admin/QuanLyCaLam/LichSuDiemDanh.vue') },
+    ],
+    meta: { requiresStaffAuth: true }
+  },
+  {
+    path: '/nhanvien/login',
+    component: () => import('@/Admin/Account/login.vue'),
+    name: 'login-nhan-vien',
+    meta: { requiresGuestStaff: true }
+  },
+
+  // Redirect root to admin login or dashboard
+  {
+    path: '/',
+    redirect: '/admin'
+  }
+]
+
+const router = createRouter({
+  history: createWebHistory(import.meta.env.BASE_URL),
+  routes,
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) return savedPosition;
+    return { left: 0, top: 0 };
+  }
+})
+
+router.beforeEach((to, from, next) => {
+  const isAdminLoggedIn = sessionStorage.getItem('adminUser') !== null;
+  const isStaffLoggedIn = 
+    sessionStorage.getItem('staffUser') !== null || 
+    sessionStorage.getItem('nhanVienUser') !== null ||
+    sessionStorage.getItem('adminUser') !== null;
+
+  // 1. Kiểm tra quyền Admin
+  if (to.matched.some(record => record.meta.requiresAdminAuth)) {
+    if (!isAdminLoggedIn) next({ name: 'login-admin' });
+    else next();
+    return;
+  }
+
+  if (to.matched.some(record => record.meta.requiresGuestAdmin)) {
+    if (isAdminLoggedIn) next({ path: '/admin' });
+    else next();
+    return;
+  }
+
+  // 2. Kiểm tra quyền nhân viên
+  if (to.matched.some(record => record.meta.requiresStaffAuth)) {
+    if (!isStaffLoggedIn) next({ name: 'login-nhan-vien' });
+    else next();
+    return;
+  }
+
+  if (to.matched.some(record => record.meta.requiresGuestStaff)) {
+    if (isStaffLoggedIn) next({ path: '/nhanvien' });
+    else next();
+    return;
+  }
+
+  next();
+});
+
+export default router

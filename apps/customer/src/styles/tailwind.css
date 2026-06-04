@@ -1,0 +1,9 @@
+@import 'tailwindcss' source(none);
+@source '../**/*.{js,ts,vue}';
+
+@import 'tw-animate-css';
+
+@theme {
+  --breakpoint-md: 844px;
+  
+}

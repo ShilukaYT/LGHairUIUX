@@ -1,0 +1,12 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+allowBuilds:
+  '@openrouter/sdk': true
+  '@parcel/watcher': true
+  esbuild: true
+  tesseract.js: true
+  vue-demi: true
+minimumReleaseAgeExclude:
+  - pnpm@11.5.1
+  - axios@1.17.0

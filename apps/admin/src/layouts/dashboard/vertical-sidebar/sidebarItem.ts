@@ -1,0 +1,105 @@
+// icons
+import {
+  DashboardOutlined,
+  AppstoreOutlined,
+  TagOutlined,
+  PercentageOutlined,
+  CalendarOutlined,
+  FileTextOutlined,
+  UserOutlined,
+  StarOutlined,
+  TeamOutlined,
+  ScissorOutlined,
+  NotificationOutlined
+} from '@ant-design/icons-vue';
+
+export interface menu {
+  header?: string;
+  title?: string;
+  icon?: object;
+  to?: string;
+  divider?: boolean;
+  chip?: string;
+  chipColor?: string;
+  chipVariant?: string;
+  chipIcon?: string;
+  children?: menu[];
+  disabled?: boolean;
+  type?: string;
+  subCaption?: string;
+}
+
+const sidebarItem: menu[] = [
+  { header: 'Quản lý chung' },
+  {
+    title: 'Dashboard',
+    icon: DashboardOutlined,
+    to: '/admin/dashboard'
+  },
+  {
+    title: 'Hóa đơn',
+    icon: FileTextOutlined,
+    to: '/admin/hoa-don'
+  },
+  {
+    title: 'Khách hàng',
+    icon: UserOutlined,
+    to: '/admin/khach-hang'
+  },
+  { header: 'Dịch vụ & Sản phẩm' },
+  {
+    title: 'Quản lý Dịch vụ',
+    icon: AppstoreOutlined,
+    to: '/admin/servicesManager'
+  },
+  {
+    title: 'Danh mục',
+    icon: TagOutlined,
+    to: '/admin/category'
+  },
+  {
+    title: 'Style & Màu tóc',
+    icon: ScissorOutlined,
+    to: '/admin/StyleHairXColor'
+  },
+  { header: 'Khuyến mãi' },
+  {
+    title: 'Khuyến mãi (Sale)',
+    icon: PercentageOutlined,
+    to: '/admin/sale'
+  },
+  {
+    title: 'Voucher',
+    icon: TagOutlined,
+    to: '/admin/voucher'
+  },
+  { header: 'Nhân sự' },
+  {
+    title: 'Nhân viên',
+    icon: TeamOutlined,
+    to: '/admin/nhan-vien'
+  },
+  {
+    title: 'Ca làm việc',
+    icon: CalendarOutlined,
+    to: '/admin/ca-lam-viec'
+  },
+  {
+    title: 'Lịch sử điểm danh',
+    icon: FileTextOutlined,
+    to: '/admin/lich-su-diem-danh'
+  },
+  { header: 'Khác' },
+  {
+    title: 'Đánh giá',
+    icon: StarOutlined,
+    to: '/admin/quanlydanhgia'
+  },
+  {
+    title: 'Gửi Thông Báo',
+    icon: NotificationOutlined,
+    to: '/admin/Gui-Thong-Bao'
+  }
+];
+
+export default sidebarItem;

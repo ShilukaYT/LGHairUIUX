@@ -1,0 +1,329 @@
+<script setup lang="ts">
+import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { Search, User, ShoppingBag, Menu, X, Heart } from 'lucide-vue-next';
+
+const route = useRoute();
+const router = useRouter();
+const scrolled = ref(false);
+const mobileMenuOpen = ref(false);
+const currentUser = ref<any>(null);
+
+const checkUser = () => {
+  const userData = localStorage.getItem('user');
+  if (userData) {
+    try {
+      currentUser.value = JSON.parse(userData);
+    } catch (e) {
+      currentUser.value = null;
+    }
+  } else {
+    currentUser.value = null;
+  }
+};
+
+const handleLogout = () => {
+  localStorage.removeItem('user');
+  currentUser.value = null;
+  router.push({ name: 'login' });
+};
+
+// Single source of truth cho navigation (Web và Mobile dùng chung 100%)
+const navLinks: any[] = [
+  { name: 'home', label: 'Trang chủ' },
+  { name: 'services', label: 'Dịch vụ', match: 'service' },
+  { 
+    name: 'shop', 
+    label: 'Sản phẩm', 
+    match: 'product',
+    mega: true,
+    children: [
+      { 
+        label: 'Chăm sóc tóc', 
+        children: [
+          { label: 'Dầu gội', name: 'shop' }, 
+          { label: 'Dầu xả', name: 'shop' }, 
+          { label: 'Phục hồi chuyên sâu', name: 'shop' }
+        ] 
+      },
+      { 
+        label: 'Tạo kiểu', 
+        children: [
+          { label: 'Xịt tạo kiểu', name: 'shop' }, 
+          { label: 'Sáp & Pomade', name: 'shop' }, 
+          { label: 'Dưỡng bóng', name: 'shop' }
+        ] 
+      },
+      { 
+        label: 'Dụng cụ', 
+        children: [
+          { label: 'Máy sấy', name: 'shop' }, 
+          { label: 'Lược chuyên dụng', name: 'shop' }
+        ] 
+      }
+    ]
+  },
+  { 
+    name: 'shop', 
+    label: 'Thương Hiệu',
+    dropdown: true,
+    children: [
+      { label: 'Befor Signature', name: 'shop' },
+      { label: 'Kérastase', name: 'shop' },
+      { label: 'Olaplex', name: 'shop' },
+      { label: 'Moroccanoil', name: 'shop' },
+      { label: 'Kevin Murphy', name: 'shop' }
+    ]
+  },
+  { name: 'booking', label: 'Đặt lịch' }
+];
+
+const handleScroll = () => {
+  scrolled.value = window.scrollY >= 50;
+};
+
+watch(mobileMenuOpen, (isOpen) => {
+  if (isOpen) {
+    document.body.style.overflow = 'hidden';
+  } else {
+    document.body.style.overflow = '';
+  }
+});
+
+onMounted(() => {
+  window.addEventListener('scroll', handleScroll);
+  checkUser();
+  window.addEventListener('storage', checkUser);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', handleScroll);
+  window.removeEventListener('storage', checkUser);
+  document.body.style.overflow = '';
+});
+</script>
+
+<template>
+  <div class="w-full sticky top-0 z-[60]">
+    
+    <!-- ============================================== -->
+    <!-- 1. MOBILE MENU OVERLAY (Full Screen)           -->
+    <!-- ============================================== -->
+    <div :class="['min-[768px]:hidden fixed inset-0 bg-white z-[70] flex flex-col transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]', mobileMenuOpen ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-8 pointer-events-none']">
+      <!-- Top: Logo & Close -->
+      <div class="h-[72px] flex items-center justify-between px-6 border-b border-gray-100">
+        <span class="font-heading text-xl tracking-[0.25em] font-medium text-black">LGHair</span>
+        <button @click="mobileMenuOpen = false" class="text-black p-2 -mr-2">
+          <X :size="24" :stroke-width="1.5" />
+        </button>
+      </div>
+
+      <!-- Search Area -->
+      <div class="px-6 pt-10 pb-6">
+        <div class="flex items-center relative w-full">
+          <input 
+            type="text" 
+            placeholder="TÌM KIẾM" 
+            class="w-full bg-transparent border-0 border-b border-gray-200 focus:border-black focus:ring-0 outline-none px-0 py-2 pr-8 text-[12px] uppercase tracking-[0.15em] text-black placeholder:text-gray-400 transition-colors"
+          />
+          <button class="absolute right-0 text-black hover:text-gray-500 transition-colors" aria-label="Search">
+            <Search :size="20" :stroke-width="1.5" />
+          </button>
+        </div>
+      </div>
+
+      <!-- Vertical Menu -->
+      <nav class="flex flex-col px-6 py-6 gap-8 overflow-y-auto">
+        <router-link 
+          v-for="link in navLinks" 
+          :key="link.label"
+          :to="{ name: link.name || 'home' }" 
+          @click="mobileMenuOpen = false" 
+          class="text-xl font-heading uppercase tracking-[0.2em] text-left text-black"
+        >
+          {{ link.label }}
+        </router-link>
+      </nav>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- 2. DESKTOP HEADER (>= 768px)                   -->
+    <!-- ============================================== -->
+    <header :class="['hidden min-[768px]:block w-full transition-all duration-300', scrolled ? 'bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-200/50 py-0' : 'bg-white border-b border-gray-100 py-2']">
+      <div class="h-[64px] flex items-center justify-between px-6 lg:px-12 max-w-[1440px] mx-auto w-full">
+        <!-- Desktop Logo -->
+        <div class="flex-1 flex justify-start cursor-pointer">
+          <router-link :to="{ name: 'home' }" class="font-heading text-xl lg:text-2xl tracking-[0.25em] font-medium text-black">
+            LGHair
+          </router-link>
+        </div>
+
+        <!-- Desktop Horizontal Nav -->
+        <nav class="flex-5 flex justify-center items-center gap-6 lg:gap-8 whitespace-nowrap">
+          <div 
+            v-for="link in navLinks" 
+            :key="link.label"
+            class="relative group"
+          >
+            <router-link 
+              :to="{ name: link.name || 'home' }" 
+              :class="[
+                'text-[11px] lg:text-[12px] uppercase tracking-[0.2em] font-medium transition-colors py-6 inline-flex items-center gap-1', 
+                (link.match && route.path.includes(link.match)) || route.name === link.name ? 'text-black' : 'text-gray-400 hover:text-black'
+              ]"
+            >
+              {{ link.label }}
+              <svg v-if="link.children" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="transition-transform duration-300 group-hover:rotate-180 opacity-60"><path d="m6 9 6 6 6-6"/></svg>
+            </router-link>
+
+            <!-- Dropdown / Mega Menu Container -->
+            <div v-if="link.children" 
+                 class="absolute top-full left-1/2 -translate-x-1/2 pt-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 translate-y-2 group-hover:translate-y-0"
+            >
+              <!-- Mega Menu for Products -->
+              <div v-if="link.mega" class="bg-white border border-gray-100 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] p-8 flex gap-12 w-max rounded-sm">
+                <div v-for="category in link.children" :key="category.label">
+                  <h4 class="text-[10px] text-black uppercase tracking-[0.2em] font-semibold mb-5">{{ category.label }}</h4>
+                  <ul class="space-y-4">
+                    <li v-for="sub in category.children" :key="sub.label">
+                      <router-link :to="{ name: sub.name }" class="text-[11px] uppercase tracking-widest text-gray-500 hover:text-black transition-colors block">
+                        {{ sub.label }}
+                      </router-link>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <!-- Simple Dropdown for Brands -->
+              <div v-else class="bg-white border border-gray-100 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] py-4 min-w-[200px] rounded-sm">
+                <ul class="space-y-1">
+                  <li v-for="brand in link.children" :key="brand.label">
+                    <router-link :to="{ name: brand.name }" class="block px-8 py-3 text-[11px] uppercase tracking-widest text-gray-500 hover:text-black hover:bg-gray-50 transition-colors text-center">
+                      {{ brand.label }}
+                    </router-link>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </nav>
+
+        <!-- Desktop Icons -->
+        <div class="flex-1 flex justify-end items-center space-x-5 lg:space-x-6">
+          <div class="flex items-center relative group">
+            <input 
+              type="text" 
+              placeholder="TÌM KIẾM SẢN PHẨM..." 
+              class="w-32 lg:w-64 bg-transparent border-b border-gray-300 focus:border-black outline-none px-0 py-2 pr-4 text-[10px] lg:text-[10px] uppercase tracking-[0.15em] text-black placeholder:text-gray-500 transition-all duration-300 focus:w-20 lg:focus:w-60"
+            />
+            <button class="absolute right-0 text-black hover:text-gray-500 transition-colors" aria-label="Search">
+              <Search :size="16" :stroke-width="1.5" />
+            </button>
+          </div>
+          <router-link :to="{ name: 'wishlist' }" class="text-black hover:text-gray-500 transition-colors relative" aria-label="Wishlist">
+            <Heart :size="20" :stroke-width="1.5" />
+            <span class="absolute -top-1 -right-1 w-3 h-3 bg-black text-white text-[8px] flex items-center justify-center rounded-full">0</span>
+          </router-link>
+
+          <div class="relative group">
+            <button class="text-black hover:text-gray-500 transition-colors py-4 flex items-center justify-center" aria-label="Account">
+              <template v-if="currentUser">
+                <div class="w-6 h-6 rounded-full overflow-hidden border border-gray-200 shrink-0 flex items-center justify-center bg-gray-50">
+                  <img 
+                    :src="currentUser.hinhAnh || currentUser.picture || currentUser.avatar || ('https://ui-avatars.com/api/?name=' + encodeURIComponent(currentUser.hoTen || currentUser.name || currentUser.username || 'U') + '&background=random')" 
+                    alt="Avatar" 
+                    class="w-full h-full object-cover"
+                    @error="(e) => e.target.style.display='none'"
+                  />
+                  <!-- Fallback icon if img fails -->
+                  <User class="absolute -z-10" :size="16" :stroke-width="1.5" />
+                </div>
+              </template>
+              <template v-else>
+                <User :size="22" :stroke-width="1.5" />
+              </template>
+            </button>
+            <!-- User Dropdown -->
+            <div class="absolute top-full right-0 pt-0 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 translate-y-2 group-hover:translate-y-0 z-50">
+              <div class="bg-white border border-gray-100 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] py-4 min-w-[180px] rounded-sm text-left">
+                
+                <div v-if="currentUser" class="px-6 py-2 mb-2 border-b border-gray-100">
+                  <p class="text-xs font-medium text-black">{{ currentUser.hoTen || currentUser.name || currentUser.username || 'Người dùng' }}</p>
+                  <p v-if="currentUser.email" class="text-[10px] text-gray-500 truncate mt-1">{{ currentUser.email }}</p>
+                </div>
+
+                <router-link :to="{ name: 'profile' }" class="block px-6 py-2.5 text-[11px] uppercase tracking-widest text-gray-600 hover:text-black hover:bg-gray-50 transition-colors">
+                  Hồ Sơ Của Tôi
+                </router-link>
+                <router-link :to="{ name: 'profile' }" class="block px-6 py-2.5 text-[11px] uppercase tracking-widest text-gray-600 hover:text-black hover:bg-gray-50 transition-colors">
+                  Đơn Hàng
+                </router-link>
+                <div class="h-px bg-gray-100 my-2"></div>
+                
+                <button v-if="currentUser" @click="handleLogout" class="w-full text-left block px-6 py-2.5 text-[11px] uppercase tracking-widest text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors">
+                  Đăng Xuất
+                </button>
+                <router-link v-else :to="{ name: 'login' }" class="block px-6 py-2.5 text-[11px] uppercase tracking-widest text-gray-600 hover:text-black hover:bg-gray-50 transition-colors">
+                  Đăng Nhập
+                </router-link>
+              </div>
+            </div>
+          </div>
+
+          <router-link :to="{ name: 'cart' }" class="text-black hover:text-gray-500 transition-colors relative" aria-label="Cart">
+            <ShoppingBag :size="22" :stroke-width="1.5" />
+            <span class="absolute -top-1 -right-1 w-3 h-3 bg-black text-white text-[8px] flex items-center justify-center rounded-full">2</span>
+          </router-link>
+        </div>
+      </div>
+    </header>
+
+    <!-- ============================================== -->
+    <!-- 3. MOBILE HEADER (< 768px)                     -->
+    <!-- ============================================== -->
+    <header :class="['min-[768px]:hidden w-full transition-all duration-300', scrolled ? 'bg-white/80 backdrop-blur-md shadow-sm border-b border-gray-200/50' : 'bg-white border-b border-gray-100']">
+      <div class="h-[72px] flex items-center justify-between px-6 w-full">
+        <!-- Mobile Logo -->
+        <router-link :to="{ name: 'home' }" class="font-heading text-xl tracking-[0.25em] font-medium text-black">
+          LGHair
+        </router-link>
+
+        <!-- Mobile Icons -->
+        <div class="flex items-center space-x-5">
+          <router-link :to="{ name: 'wishlist' }" class="text-black hover:text-gray-500 transition-colors relative" aria-label="Wishlist">
+            <Heart :size="20" :stroke-width="1.5" />
+            <span class="absolute -top-1 -right-1 w-3 h-3 bg-black text-white text-[8px] flex items-center justify-center rounded-full">0</span>
+          </router-link>
+          <router-link :to="{ name: currentUser ? 'profile' : 'login' }" class="text-black hover:text-gray-500 transition-colors flex items-center justify-center" aria-label="Account">
+            <template v-if="currentUser">
+              <div class="w-5 h-5 rounded-full overflow-hidden border border-gray-200 shrink-0 flex items-center justify-center bg-gray-50">
+                <img 
+                  :src="currentUser.hinhAnh || currentUser.picture || currentUser.avatar || ('https://ui-avatars.com/api/?name=' + encodeURIComponent(currentUser.hoTen || currentUser.name || currentUser.username || 'U') + '&background=random')" 
+                  alt="Avatar" 
+                  class="w-full h-full object-cover"
+                  @error="(e) => e.target.style.display='none'"
+                />
+                <User class="absolute -z-10" :size="14" :stroke-width="1.5" />
+              </div>
+            </template>
+            <template v-else>
+              <User :size="20" :stroke-width="1.5" />
+            </template>
+          </router-link>
+          <router-link :to="{ name: 'cart' }" class="text-black hover:text-gray-500 transition-colors relative" aria-label="Cart">
+            <ShoppingBag :size="20" :stroke-width="1.5" />
+            <span class="absolute -top-1 -right-1 w-3 h-3 bg-black text-white text-[8px] flex items-center justify-center rounded-full">0</span>
+          </router-link>
+          <button 
+            @click="mobileMenuOpen = true"
+            class="text-black hover:text-gray-500 transition-colors -mr-2 p-2"
+            aria-label="Open Menu"
+          >
+            <Menu :size="24" :stroke-width="1.5" />
+          </button>
+        </div>
+      </div>
+    </header>
+
+  </div>
+</template>
