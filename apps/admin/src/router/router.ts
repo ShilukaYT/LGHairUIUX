@@ -22,6 +22,7 @@ const routes = [
       { path: 'StyleHairXColor', name: 'StyleHairXColor', component: () => import('@/Admin/StyleHairAndColor/StyleHairXColor.vue') },
       { path: 'nhan-vien', name: 'QuanLyNhanVienAdmin', component: () => import('@/Admin/NhanVien/NhanVien.vue') },
       { path: 'Gui-Thong-Bao', name: 'GuiThongBao', component: () => import('@/Admin/GuiThongBao.vue') },
+      { path: 'chat', name: 'AdminChat', component: () => import('@/components/AdminChat.vue') },
     ],
     meta: { requiresAdminAuth: true }
   },

@@ -98,7 +98,7 @@ const serviceCollages = {
   s2: {
     main: 'https://images.unsplash.com/photo-1615014664205-045388c422c5?q=80&w=1000',
     detail1: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?q=80&w=600',
-    detail2: 'https://images.unsplash.com/photo-1608248593859-679901416e78?q=80&w=600'
+    detail2: 'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?q=80&w=600'
   },
   s3: {
     main: 'https://images.unsplash.com/photo-1592856695076-3f2fd7dbfd82?q=80&w=1000',
@@ -174,7 +174,7 @@ const lookbookItems: LookbookItem[] = [
   },
   {
     id: 2,
-    image: 'https://images.unsplash.com/photo-1605497746444-ac9da58d7fc0?q=80&w=800',
+    image: 'https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=800',
     title: 'Cắt tỉa Layer cá tính',
     desc: 'Đường cắt layer sắc sảo tạo độ phồng tự nhiên cho mái tóc.',
     recommendation: 'Sử dụng Lược tròn & Xịt Tạo Kiểu Khô',
@@ -182,7 +182,7 @@ const lookbookItems: LookbookItem[] = [
   },
   {
     id: 3,
-    image: 'https://images.unsplash.com/photo-1595476108010-b4d1f10d5e43?q=80&w=800',
+    image: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?q=80&w=800',
     title: 'Màu nhuộm Bạch Kim Balayage',
     desc: 'Màu nhuộm đa tầng chuyển sắc mượt mà không hư tổn.',
     recommendation: 'Sử dụng Mặt Nạ Phục Hồi Tóc & Dầu Gội Cân Bằng',
@@ -203,6 +203,14 @@ const lookbookItems: LookbookItem[] = [
     desc: 'Mái tóc thẳng mượt như nhung, óng ả dưới mọi góc nhìn.',
     recommendation: 'Sử dụng Dầu hấp Silk & Dầu Xả Mỏng Nhẹ',
     heightClass: 'h-[460px]'
+  },
+  {
+    id: 6,
+    image: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=800',
+    title: 'Uốn xoăn sóng nước',
+    desc: 'Sóng tóc xoăn nhẹ nhàng tự nhiên giúp tôn lên đường nét nữ tính.',
+    recommendation: 'Sử dụng Xịt Tạo Nếp Muối Biển & Huyết Thanh Lụa',
+    heightClass: 'h-[400px]'
   }
 ];
 
@@ -229,7 +237,7 @@ const ingredients: Ingredient[] = [
     benefits: ['Lấp đầy các vết nứt gãy trên thân tóc', 'Tăng độ đàn hồi cho sợi tóc thêm 35%', 'Ngăn ngừa chẻ ngọn và đứt rụng'],
     productName: 'Mặt Nạ Phục Hồi Tóc',
     productId: 'p2',
-    image: 'https://images.unsplash.com/photo-1608248593859-679901416e78?q=80&w=800'
+    image: 'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?q=80&w=800'
   },
   {
     id: 3,
@@ -312,21 +320,21 @@ const currentTestimonial = computed(() => {
 const pillars: Pillar[] = [
   {
     id: 1,
-    title: 'Kỹ Thuật Độc Bản',
-    subtitle: 'Artistry & Precision',
-    desc: 'Đội ngũ chuyên gia được đào tạo chuẩn quốc tế, mỗi nhát kéo là sự tính toán kỹ lưỡng dựa trên cấu trúc khuôn mặt và chất tóc tự nhiên của bạn.'
+    title: 'Làm Sạch & Dưỡng Ẩm',
+    subtitle: 'Cleansing & Conditioning',
+    desc: 'Dầu gội và dầu xả chứa dưỡng chất tự nhiên giúp cân bằng bã nhờn, nuôi dưỡng nang tóc khỏe mạnh và duy trì độ ẩm mềm mượt.'
   },
   {
     id: 2,
-    title: 'Apothecary Thuần Chay',
-    subtitle: 'Organic Apothecary',
-    desc: '100% sản phẩm chăm sóc tóc có nguồn gốc hữu cơ tự nhiên, không thử nghiệm trên động vật, mang lại sức sống bền vững từ sâu bên trong.'
+    title: 'Phục Hồi Chuyên Sâu',
+    subtitle: 'Intensive Restoration',
+    desc: 'Mặt nạ phục hồi chuyên sâu tái cấu trúc sợi tóc hư tổn do uốn nhuộm hóa chất, trả lại độ đàn hồi tự nhiên từ sâu bên trong.'
   },
   {
     id: 3,
-    title: 'Nghi Tức Cá Nhân Hóa',
-    subtitle: 'Bespoke Experience',
-    desc: 'Không gian gội và trị liệu được thiết kế riêng tư với âm nhạc thiền định, massage da đầu chuyên sâu giúp tái tạo năng lượng hoàn hảo.'
+    title: 'Tạo Kiểu Chuyên Nghiệp',
+    subtitle: 'Professional Styling',
+    desc: 'Các dòng huyết thanh lụa, xịt tạo phồng muối biển giúp giữ nếp sóng lơi bồng bềnh, bảo vệ tóc trước nhiệt độ của máy sấy.'
   }
 ];
 
@@ -369,7 +377,7 @@ const apothecaryFormulas: Record<'dry' | 'damaged' | 'flat' | 'oily', ElixirForm
     ],
     productName: 'Mặt Nạ Phục Hồi Tóc',
     productId: 'p2',
-    productImg: 'https://images.unsplash.com/photo-1608248593859-679901416e78?q=80&w=800',
+    productImg: 'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?q=80&w=800',
     serviceName: 'Phục Hồi Lụa Silk',
     serviceId: 's4'
   },
@@ -407,18 +415,6 @@ const currentFormula = computed(() => {
   return apothecaryFormulas[activeConcern.value];
 });
 
-// Smooth mouse follower
-const cursorX = ref(0);
-const cursorY = ref(0);
-const cursorHovered = ref(false);
-const showCursor = ref(false);
-
-const updateCursor = (e: MouseEvent) => {
-  cursorX.value = e.clientX;
-  cursorY.value = e.clientY;
-  showCursor.value = true;
-};
-
 const setHeroSlide = (index: number): void => {
   activeHeroSlide.value = index;
 };
@@ -441,17 +437,6 @@ const prevTestimonial = (): void => {
 
 onMounted(() => {
   heroIntervalId = window.setInterval(nextHeroSlide, 4200);
-  window.addEventListener('mousemove', updateCursor);
-
-  // Bind mouseenter event on buttons/cards to enlarge custom cursor
-  const bindHoverEffects = (): void => {
-    const hoverables = document.querySelectorAll('button, a, .group, [role="button"], .cursor-pointer');
-    hoverables.forEach(el => {
-      el.addEventListener('mouseenter', () => { cursorHovered.value = true; });
-      el.addEventListener('mouseleave', () => { cursorHovered.value = false; });
-    });
-  };
-  setTimeout(bindHoverEffects, 1000);
 });
 
 onUnmounted(() => {
@@ -459,26 +444,11 @@ onUnmounted(() => {
     window.clearInterval(heroIntervalId);
     heroIntervalId = null;
   }
-  window.removeEventListener('mousemove', updateCursor);
 });
 </script>
 
 <template>
   <div class="w-full bg-white text-black font-sans antialiased selection:bg-black selection:text-white">
-    <!-- Custom Circular Cursor Follower -->
-    <div 
-      v-if="showCursor"
-      class="fixed pointer-events-none rounded-full border transition-all duration-300 ease-out z-50 -translate-x-1/2 -translate-y-1/2 hidden lg:block"
-      :style="{
-        left: cursorX + 'px',
-        top: cursorY + 'px',
-        width: cursorHovered ? '48px' : '20px',
-        height: cursorHovered ? '48px' : '20px',
-        backgroundColor: cursorHovered ? 'rgba(191, 167, 122, 0.08)' : 'transparent',
-        borderColor: '#bfa77a',
-        borderWidth: '1px'
-      }"
-    ></div>
 
     <!-- Floating Minimalist Toast -->
     <transition name="toast-slide">
@@ -491,26 +461,47 @@ onUnmounted(() => {
       </div>
     </transition>
 
-    <!-- Split Hero Section -->
-    <section class="grid grid-cols-1 lg:grid-cols-2 min-h-[85vh] lg:min-h-screen bg-black text-white w-full overflow-hidden relative isolate">
-      <!-- Left Column: Typographic Title & Dual CTA -->
-      <div class="flex flex-col justify-center px-8 md:px-16 lg:px-24 py-20 bg-[#0c0c0c] relative z-20 h-full w-full border-r border-neutral-900/60">
-        <!-- Vertical Scroll Indicator -->
-        <div class="absolute bottom-10 left-8 lg:left-12 flex items-center gap-4 text-neutral-500 pointer-events-none hidden md:flex">
-          <span class="text-[8px] uppercase tracking-[0.3em] font-semibold [writing-mode:vertical-lr] select-none">Cuộn để khám phá</span>
-          <div class="h-12 w-[1px] bg-neutral-800 relative overflow-hidden">
-            <div class="absolute top-0 left-0 w-full h-1/2 bg-[#bfa77a] animate-bounce"></div>
-          </div>
+    <!-- Full-screen Hero Section -->
+    <section class="relative w-full h-[450px] sm:h-[500px] lg:h-[580px] bg-black text-white overflow-hidden flex items-center">
+      
+      <!-- Visual Background Slider -->
+      <div class="absolute inset-0 w-full h-full z-0">
+        <div
+          v-for="(slide, index) in heroSlides"
+          :key="slide.id"
+          class="absolute inset-0 transition-all duration-[1200ms] ease-in-out"
+          :class="[
+            index === activeHeroSlide ? 'opacity-100 scale-100 z-10' : 'opacity-0 scale-105 z-0'
+          ]"
+        >
+          <img
+            :src="slide.image"
+            :alt="slide.alt"
+            class="w-full h-full object-cover saturate-110 contrast-105"
+          />
+          <!-- Moderate Overlay for balanced brightness and contrast -->
+          <div class="absolute inset-0 bg-black/40"></div>
         </div>
+      </div>
 
-        <div class="max-w-xl animate-in fade-in slide-in-from-bottom-8 duration-1000">
+      <!-- Vertical Scroll Indicator -->
+      <div class="absolute bottom-10 left-8 lg:left-12 flex items-center gap-4 text-neutral-400 z-20 pointer-events-none hidden md:flex">
+        <span class="text-[8px] uppercase tracking-[0.3em] font-semibold [writing-mode:vertical-lr] select-none">Cuộn để khám phá</span>
+        <div class="h-12 w-[1px] bg-neutral-800 relative overflow-hidden">
+          <div class="absolute top-0 left-0 w-full h-1/2 bg-[#bfa77a] animate-bounce"></div>
+        </div>
+      </div>
+
+      <!-- Left-aligned Content Overlay -->
+      <div class="relative z-20 max-w-2xl px-8 md:px-16 lg:px-24 py-12 md:py-16 w-full">
+        <div class="animate-in fade-in slide-in-from-bottom-8 duration-1000">
           <div class="overflow-hidden mb-4">
-            <p class="text-[9px] font-serif italic text-neutral-400 tracking-wider">
+            <p class="text-[10px] font-serif italic text-[#bfa77a] tracking-wider">
               "Nơi kỹ nghệ kéo vàng giao thoa cùng cảm hứng thời trang đương đại."
             </p>
           </div>
 
-          <p class="text-[11px] tracking-[0.4em] uppercase text-[#bfa77a] mb-6 font-semibold">
+          <p class="text-[11px] tracking-[0.4em] uppercase text-neutral-300 mb-6 font-semibold">
             {{ heroSlides[activeHeroSlide]?.subtitle }}
           </p>
           
@@ -518,7 +509,7 @@ onUnmounted(() => {
             Minh Tâm Hair Salon
           </h1>
 
-          <p class="text-sm md:text-base font-light leading-relaxed tracking-wide text-neutral-400 mb-12">
+          <p class="text-sm md:text-base font-light leading-relaxed tracking-wide text-neutral-300 mb-12 max-w-lg">
             {{ heroSlides[activeHeroSlide]?.desc }}
           </p>
 
@@ -542,51 +533,36 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Right Column: Visual Slider Backgrounds -->
-      <div class="relative w-full h-full min-h-[400px] lg:min-h-screen overflow-hidden z-10">
-        <div
+      <!-- Pagination Controls -->
+      <div class="absolute bottom-10 right-8 lg:right-12 z-25 flex items-center gap-3">
+        <button
           v-for="(slide, index) in heroSlides"
           :key="slide.id"
-          class="absolute inset-0 transition-all duration-[1200ms] ease-in-out"
-          :class="[
-            index === activeHeroSlide ? 'opacity-100 scale-100 z-10' : 'opacity-0 scale-105 z-0'
-          ]"
+          @click="setHeroSlide(index)"
+          class="relative h-[2px] transition-all duration-500 overflow-hidden"
+          :class="index === activeHeroSlide ? 'w-16 bg-white' : 'w-8 bg-white/30 hover:bg-white/60'"
+          aria-label="Go to slide"
         >
-          <img
-            :src="slide.image"
-            :alt="slide.alt"
-            class="w-full h-full object-cover saturate-110 contrast-105"
-          />
-          <!-- Luxury Overlay -->
-          <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
-        </div>
-
-        <!-- Pagination Controls -->
-        <div class="absolute bottom-10 right-8 lg:right-12 z-20 flex items-center gap-3">
-          <button
-            v-for="(slide, index) in heroSlides"
-            :key="slide.id"
-            @click="setHeroSlide(index)"
-            class="relative h-[2px] transition-all duration-500 overflow-hidden"
-            :class="index === activeHeroSlide ? 'w-16 bg-white' : 'w-8 bg-white/30 hover:bg-white/60'"
-            aria-label="Go to slide"
-          >
-            <div 
-              class="absolute top-0 left-0 h-full bg-[#bfa77a] transition-all ease-linear"
-              :style="{ width: index === activeHeroSlide ? '100%' : '0%', transitionDuration: index === activeHeroSlide ? '4200ms' : '0ms' }"
-            ></div>
-          </button>
-        </div>
+          <div 
+            class="absolute top-0 left-0 h-full bg-[#bfa77a] transition-all ease-linear"
+            :style="{ width: index === activeHeroSlide ? '100%' : '0%', transitionDuration: index === activeHeroSlide ? '4200ms' : '0ms' }"
+          ></div>
+        </button>
       </div>
     </section>
 
-    <!-- Philosophy Pillars Section -->
+    <!-- Categories Section -->
     <section class="w-full bg-white border-b border-neutral-200">
       <div class="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-neutral-200">
-        <div v-for="p in pillars" :key="p.id" class="p-8 lg:p-16 flex flex-col justify-between group hover:bg-neutral-50 transition-colors duration-500 min-h-[300px]">
+        <div
+          v-for="p in pillars"
+          :key="p.id"
+          @click="goToRoute('shop')"
+          class="p-8 lg:p-16 flex flex-col justify-between group hover:bg-neutral-50 transition-colors duration-500 min-h-[300px] cursor-pointer"
+        >
           <div>
             <span class="font-serif text-[#bfa77a] text-3xl lg:text-4xl block mb-6 font-light">0{{ p.id }}</span>
-            <div class="font-heading text-lg tracking-normal uppercase text-neutral-900 mb-2 font-medium">
+            <div class="font-heading text-lg tracking-normal uppercase text-neutral-900 mb-2 font-medium group-hover:text-[#bfa77a] transition-colors duration-300">
               {{ p.title }}
             </div>
             <p class="text-[10px] tracking-[0.2em] uppercase text-neutral-400 mb-6 font-semibold">{{ p.subtitle }}</p>
@@ -1233,34 +1209,6 @@ onUnmounted(() => {
       </div>
     </section>
 
-    <!-- Pre-Footer E-commerce Section -->
-    <section class="w-full py-16 bg-[#161616] text-white border-t border-neutral-800 px-6 lg:px-12">
-      <div class="max-w-[1440px] mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
-        <!-- Col 1: E-commerce Helper Links -->
-        <div class="flex flex-col space-y-4">
-          <h4 class="text-[10px] uppercase tracking-[0.2em] font-semibold text-[#bfa77a] mb-2">Hỗ Trợ Mua Sắm</h4>
-          <router-link :to="{ name: 'cart' }" class="text-sm text-neutral-400 font-light hover:text-white transition-colors text-left w-fit cursor-pointer">Giỏ hàng của tôi</router-link>
-          <button @click="showToast('Tính năng Theo dõi đơn hàng sẽ khả dụng sớm!')" class="text-sm text-neutral-400 font-light hover:text-white transition-colors text-left w-fit cursor-pointer">Theo dõi đơn hàng</button>
-          <button @click="showToast('Đang mở Chính sách vận chuyển & đổi trả...')" class="text-sm text-neutral-400 font-light hover:text-white transition-colors text-left w-fit cursor-pointer">Chính sách đổi trả & vận chuyển</button>
-        </div>
-
-        <!-- Col 2: Salon Policy Links -->
-        <div class="flex flex-col space-y-4">
-          <h4 class="text-[10px] uppercase tracking-[0.2em] font-semibold text-[#bfa77a] mb-2">Dịch Vụ Khách Hàng</h4>
-          <router-link :to="{ name: 'booking' }" class="text-sm text-neutral-400 font-light hover:text-white transition-colors text-left w-fit cursor-pointer">Đặt lịch hẹn</router-link>
-          <router-link :to="{ name: 'services' }" class="text-sm text-neutral-400 font-light hover:text-white transition-colors text-left w-fit cursor-pointer">Bảng giá dịch vụ</router-link>
-          <router-link :to="{ name: 'shop' }" class="text-sm text-neutral-400 font-light hover:text-white transition-colors text-left w-fit cursor-pointer">Chăm sóc tóc tại nhà</router-link>
-        </div>
-
-        <!-- Col 3: Boutique Concept Info -->
-        <div class="flex flex-col space-y-4 md:col-span-2">
-          <h4 class="text-[10px] uppercase tracking-[0.2em] font-semibold text-[#bfa77a] mb-2">Minh Tâm Hair Apothecary</h4>
-          <p class="text-sm text-neutral-400 font-light leading-relaxed max-w-md">
-            Mỗi chai sản phẩm tại boutique của chúng tôi đều chứa đựng các thành phần hữu cơ tinh tuyển kết hợp công nghệ độc quyền, giúp duy trì sức sống rạng ngời cho mái tóc chuẩn salon.
-          </p>
-        </div>
-      </div>
-    </section>
   </div>
 </template>
 
