@@ -2,12 +2,14 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Search, User, ShoppingBag, Menu, X, Heart } from 'lucide-vue-next';
+import axios from 'axios';
 
 const route = useRoute();
 const router = useRouter();
 const scrolled = ref(false);
 const mobileMenuOpen = ref(false);
 const currentUser = ref<any>(null);
+let checkSessionInterval: ReturnType<typeof setInterval>;
 
 const checkUser = () => {
   const userData = localStorage.getItem('user');
@@ -94,12 +96,31 @@ onMounted(() => {
   window.addEventListener('scroll', handleScroll);
   checkUser();
   window.addEventListener('storage', checkUser);
+
+  // Tự động kiểm tra phiên đăng nhập mỗi 5 phút
+  checkSessionInterval = setInterval(async () => {
+    if (!currentUser.value) return; // Chỉ kiểm tra khi có user đăng nhập
+    try {
+      await axios.get('https://localhost:7196/api/account/verify-session', {
+        withCredentials: true // Quan trọng để gửi kèm cookie HttpOnly
+      });
+    } catch (error: any) {
+      if (error.response && error.response.status === 401) {
+        clearInterval(checkSessionInterval);
+        alert('Phiên đăng nhập đã hết hạn hoặc bạn đã bị đăng xuất từ thiết bị khác. Vui lòng đăng nhập lại!');
+        handleLogout();
+      }
+    }
+  }, 60000); // 60,000 ms = 1 phút
 });
 
 onUnmounted(() => {
   window.removeEventListener('scroll', handleScroll);
   window.removeEventListener('storage', checkUser);
   document.body.style.overflow = '';
+  if (checkSessionInterval) {
+    clearInterval(checkSessionInterval);
+  }
 });
 </script>
 
