@@ -328,9 +328,8 @@ onMounted(() => {
           <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Bạn muốn đổi sang ca nào?</label>
           <select v-model="selectedNewShift" class="w-full border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 cursor-pointer text-slate-700">
             <option value="" disabled selected>-- Chọn ca muốn làm bù --</option>
-            <option value="Ca Sáng">Đổi sang Ca Sáng</option>
-            <option value="Ca Chiều">Đổi sang Ca Chiều</option>
-            <option value="Ca Tối">Đổi sang Ca Tối</option>
+            <option value="Ca ngày">Đổi sang Ca ngày</option>
+            <option value="Ca tối">Đổi sang Ca tối</option>
             <option value="Nghỉ nguyên ngày">Xin nghỉ hẳn (Không làm bù)</option>
           </select>
         </div>

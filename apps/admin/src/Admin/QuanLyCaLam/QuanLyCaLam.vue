@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import axios from 'axios'
-import { Check, X, RotateCcw, Plus, Search, ChevronLeft, ChevronRight, LogOut } from 'lucide-vue-next'
-
-
+import Swal from 'sweetalert2'
+import { Check, X, RotateCcw, Plus, Search, LogOut, Fingerprint, CalendarDays } from 'lucide-vue-next'
 
 // --- CẤU HÌNH API ---
 const API_BASE_URL = 'https://localhost:7196/api/admin/lich-lam-viec'
@@ -13,61 +12,70 @@ axios.defaults.withCredentials = true
 const lichLamViecs = ref<any[]>([])
 const nhanViens = ref<any[]>([])
 const isLoading = ref(false)
-const errorMessage = ref('')
-const successMessage = ref('')
+
+// Vuetify Snackbar State
+const snackbar = ref({
+  show: false,
+  text: '',
+  color: 'success'
+})
+const showSnackbar = (text: string, color: string = 'success') => {
+  snackbar.value.text = text;
+  snackbar.value.color = color;
+  snackbar.value.show = true;
+}
 
 const isGenerating = ref(false);
 
-// --- LOGIC TÌM KIẾM & PHÂN TRANG ---
+// --- LOGIC TÌM KIẾM ---
 const searchQuery = ref('')
-const currentPage = ref(1)
-const itemsPerPage = 10
-
-
-// 1. Lọc nhân viên theo tên hoặc loại thợ (Real-time)
-const filteredNhanViens = computed(() => {
-  if (!searchQuery.value.trim()) return nhanViens.value
-  const q = searchQuery.value.toLowerCase()
-  return nhanViens.value.filter(nv =>
-    nv.hoTenNv?.toLowerCase().includes(q) ||
-    nv.loaiNhanVien?.toLowerCase().includes(q)
-  )
-})
-
-// 2. Tính tổng số trang
-const totalPages = computed(() => Math.ceil(filteredNhanViens.value.length / itemsPerPage))
-
-// 3. Lấy dữ liệu của trang hiện tại để hiển thị
-const paginatedNhanViens = computed(() => {
-  const start = (currentPage.value - 1) * itemsPerPage
-  return filteredNhanViens.value.slice(start, start + itemsPerPage)
-})
-
-const changePage = (page: number) => {
-  if (page >= 1 && page <= totalPages.value) {
-    currentPage.value = page
-    // Cuộn nhẹ lên đầu bảng khi chuyển trang
-    document.querySelector('.overflow-x-auto')?.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-}
-
-// Reset về trang 1 khi gõ tìm kiếm mới
-watch(searchQuery, () => {
-  currentPage.value = 1
-})
 
 // --- LOGIC THỜI GIAN & ĐỒNG HỒ ---
 const getTodayLocal = () => new Date().toLocaleDateString('sv-SE')
 const todayStr = ref(getTodayLocal())
 let timer: any = null
 
+const getDaysOfWeek = () => {
+  const dates = []
+  for (let i = -3; i <= 3; i++) {
+    const d = new Date()
+    d.setDate(d.getDate() + i)
+    dates.push(d.toLocaleDateString('sv-SE'))
+  }
+  return dates
+}
+const tableDays = ref(getDaysOfWeek())
+
 const updateRealTime = async () => {
   const newToday = getTodayLocal()
   if (newToday !== todayStr.value) {
     todayStr.value = newToday
     tableDays.value = getDaysOfWeek()
-    await resetFilter() // Tự động load lại khi qua ngày mới
+    await resetFilter()
   }
+}
+
+// --- DATA TABLE HEADERS (DYNAMIC) ---
+const headers = computed(() => {
+  const h: any[] = [
+    { title: 'Nhân viên', key: 'nhanvien', align: 'start', sortable: false, minWidth: '220px' }
+  ];
+  tableDays.value.forEach(date => {
+     h.push({ 
+       title: date,
+       key: date, 
+       align: 'center', 
+       sortable: false, 
+       minWidth: '130px'
+     });
+  });
+  return h;
+})
+
+const formatDate = (dateStr?: string) => {
+  if (!dateStr) return '-'
+  const parts = dateStr.split('-')
+  return parts.length < 3 ? dateStr : `${parts[2]}/${parts[1]}`
 }
 
 // --- LOGIC CA LÀM & ĐIỂM DANH ---
@@ -91,10 +99,8 @@ const getShiftStatus = (caLam: string, ngayLam: string) => {
 
   const currentMin = now.getHours() * 60 + now.getMinutes();
   const shifts: any = {
-    "Sáng": { start: 8 * 60, end: 12 * 60 },
-    "Chiều": { start: 13 * 60, end: 17 * 60 },
-    "Tối": { start: 17 * 60, end: 21 * 60 },
-    "Cả ngày": { start: 8 * 60, end: 21 * 60 }
+    "Ca ngày": { start: 7 * 60, end: 17 * 60 },
+    "Ca tối": { start: 13 * 60, end: 20 * 60 }
   };
   const s = shifts[caLam];
   if (!s) return 'NO_SHIFT';
@@ -109,13 +115,45 @@ const isSubmitting = ref(false)
 const formData = ref({
   maNv: '',
   ngayLamViec: todayStr.value,
-  caLam: 'Sáng'
+  caLam: 'Ca ngày'
+})
+
+// --- FORM CẬP NHẬT TRẠNG THÁI ĐIỂM DANH ---
+const isAttendanceModalOpen = ref(false)
+const isSubmittingAttendance = ref(false)
+const attendanceForm = ref({
+  maLich: 0,
+  maNv: '',
+  hoTenNv: '',
+  caLam: '',
+  ngayLamViec: '',
+  trangThai: 2,
+  ghiChu: '',
+  trangThaiGoc: 1
+})
+
+const attendanceStatusOptions = computed(() => {
+  if (attendanceForm.value.trangThaiGoc === 2) {
+    // Nếu đã có mặt thì mới hiện Rời ca
+    return [
+      { title: 'Rời ca', value: 3 },
+      { title: 'Vắng mặt', value: 5 },
+      { title: 'Muộn', value: 6 }
+    ]
+  } else {
+    // Nếu chưa có mặt thì không thể Rời ca
+    return [
+      { title: 'Có mặt', value: 2 },
+      { title: 'Vắng mặt', value: 5 },
+      { title: 'Muộn', value: 6 }
+    ]
+  }
 })
 
 const openEditModal = (maNv?: string, caHienTai?: string) => {
   formData.value.maNv = maNv || ''
-  formData.value.caLam = caHienTai || 'Sáng'
-  formData.value.ngayLamViec = todayStr.value // Khóa chặt ngày hiện tại
+  formData.value.caLam = caHienTai || 'Ca ngày'
+  formData.value.ngayLamViec = todayStr.value
   isAddModalOpen.value = true
 }
 
@@ -127,32 +165,16 @@ const handleUpdateShift = async () => {
     if (res.data.success) {
       isAddModalOpen.value = false
       fetchLichLamViec()
+      showSnackbar("Sửa ca làm thành công!")
     }
   } catch (error: any) {
-    errorMessage.value = error.response?.data?.message || "Lỗi cập nhật."
+    showSnackbar(error.response?.data?.message || "Lỗi cập nhật.", "error")
   } finally {
     isSubmitting.value = false
   }
 }
 
-// --- DỮ LIỆU BẢNG ---
-const getDaysOfWeek = () => {
-  const dates = []
-  for (let i = -3; i <= 3; i++) {
-    const d = new Date()
-    d.setDate(d.getDate() + i)
-    dates.push(d.toLocaleDateString('sv-SE'))
-  }
-  return dates
-}
-const tableDays = ref(getDaysOfWeek())
-
-const formatDate = (dateStr?: string) => {
-  if (!dateStr) return '-'
-  const parts = dateStr.split('-')
-  return parts.length < 3 ? dateStr : `${parts[2]}/${parts[1]}`
-}
-
+// --- FETCH DỮ LIỆU ---
 const fetchNhanViens = async () => {
   try {
     const res = await axios.get(`${API_BASE_URL}/nhan-vien-hop-le`)
@@ -169,18 +191,20 @@ const fetchLichLamViec = async () => {
   finally { isLoading.value = false }
 }
 
-const handleCheckIn = async (lich: any) => {
-  // Chỉ cho điểm danh nếu đang trong giờ làm
+const handleCheckIn = (lich: any) => {
   if (lich.trangThai !== 1 || getShiftStatus(lich.caLam, lich.ngayLamViec) !== 'ON_TIME') return
 
-  try {
-    const res = await axios.patch(`${API_BASE_URL}/diem-danh/${lich.maLich}`)
-    if (res.data.success) {
-      lich.trangThai = 2
-      successMessage.value = "Điểm danh hoàn tất!"
-      setTimeout(() => successMessage.value = '', 2000)
-    }
-  } catch (e: any) { alert(e.response?.data?.message) }
+  attendanceForm.value = {
+    maLich: lich.maLich,
+    maNv: lich.maNv,
+    hoTenNv: lich.hoTenNv,
+    caLam: lich.caLam,
+    ngayLamViec: lich.ngayLamViec,
+    trangThai: 2, // Mặc định là Có mặt
+    ghiChu: lich.ghiChu || '',
+    trangThaiGoc: lich.trangThai
+  }
+  isAttendanceModalOpen.value = true
 }
 
 const resetFilter = async () => {
@@ -188,44 +212,77 @@ const resetFilter = async () => {
   fetchLichLamViec()
 }
 
-const handleLeaveEarly = async (lich: any) => {
-  // RÀNG BUỘC: Chỉ cho phép rời ca nếu là ngày hôm nay
+const handleLeaveEarly = (lich: any) => {
   if (lich.ngayLamViec !== todayStr.value) {
-    alert("Chỉ có thể ghi nhận rời ca sớm cho dữ liệu của ngày hôm nay.")
+    Swal.fire('Cảnh báo', "Chỉ có thể ghi nhận rời ca sớm cho dữ liệu của ngày hôm nay.", 'warning')
     return
   }
 
-  if (!confirm(`Xác nhận thợ ${lich.hoTenNv} rời ca sớm / bỏ về?`)) return
+  attendanceForm.value = {
+    maLich: lich.maLich,
+    maNv: lich.maNv,
+    hoTenNv: lich.hoTenNv,
+    caLam: lich.caLam,
+    ngayLamViec: lich.ngayLamViec,
+    trangThai: 3, // Mặc định là Rời ca
+    ghiChu: lich.ghiChu || '',
+    trangThaiGoc: lich.trangThai
+  }
+  isAttendanceModalOpen.value = true
+}
 
+const submitAttendance = async () => {
+  // Validate lý do
+  if (attendanceForm.value.trangThai !== 2 && !attendanceForm.value.ghiChu?.trim()) {
+    showSnackbar('Vui lòng nhập lý do (Ghi chú)', 'error')
+    return
+  }
+
+  isSubmittingAttendance.value = true
   try {
-    const res = await axios.patch(`${API_BASE_URL}/roi-ca-som/${lich.maLich}`)
+    const res = await axios.patch(`${API_BASE_URL}/cap-nhat-diem-danh/${attendanceForm.value.maLich}`, {
+      trangThai: attendanceForm.value.trangThai,
+      ghiChu: attendanceForm.value.ghiChu
+    })
+    
     if (res.data.success) {
-      lich.trangThai = 3
-      successMessage.value = "Đã ghi nhận rời ca sớm!"
-      setTimeout(() => successMessage.value = '', 2000)
+      isAttendanceModalOpen.value = false
+      showSnackbar("Cập nhật điểm danh thành công!")
+      fetchLichLamViec()
     }
-  } catch (e: any) {
-    alert(e.response?.data?.message || "Lỗi xử lý.")
+  } catch (error: any) {
+    showSnackbar(error.response?.data?.message || "Lỗi cập nhật.", "error")
+  } finally {
+    isSubmittingAttendance.value = false
   }
 }
 
 const generate30Days = async () => {
-  if (!confirm("Hệ thống sẽ tự động tạo lịch làm việc cho tất cả nhân viên trong 30 ngày tới. Bạn có chắc chắn không?")) return;
+  const result = await Swal.fire({
+      title: 'Xác nhận',
+      text: "Hệ thống sẽ tự động tạo lịch làm việc cho tất cả nhân viên trong 30 ngày tới.",
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Đồng ý',
+      cancelButtonText: 'Hủy',
+      confirmButtonColor: '#3085d6',
+      cancelButtonColor: '#d33'
+  });
+
+  if (!result.isConfirmed) return;
 
   isGenerating.value = true;
   try {
     const res = await axios.post(`${API_BASE_URL}/tao-lich-30-ngay`);
-    alert(res.data.message);
-    await fetchLichLamViec(); // Load lại bảng
+    Swal.fire('Thành công', res.data.message, 'success');
+    await fetchLichLamViec();
   } catch (error: any) {
-    alert(error.response?.data?.message || "Lỗi khi tạo lịch 30 ngày.");
-    console.error(error);
+    Swal.fire('Lỗi', error.response?.data?.message || "Lỗi khi tạo lịch 30 ngày.", 'error');
   } finally {
     isGenerating.value = false;
   }
 };
 
-// --- LIFECYCLE ---
 onMounted(async () => {
   isLoading.value = true
   todayStr.value = getTodayLocal()
@@ -240,215 +297,313 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 </script>
 
 <template>
-  <div class="p-6 space-y-6 bg-slate-50 min-h-screen">
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-      <div class="flex-1">
-        <h2 class="text-2xl font-bold text-slate-900">Sổ Điểm Danh Ca Làm</h2>
-        <p class="text-sm text-slate-500">Quản lý sự hiện diện của {{ filteredNhanViens.length }} thợ</p>
-      </div>
-
-      <div class="flex items-center gap-3 flex-wrap">
-        <div class="relative min-w-[280px]">
-          <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input v-model="searchQuery" type="text" placeholder="Tìm tên thợ hoặc loại thợ..."
-            class="w-full h-10 pl-10 pr-4 rounded-xl border border-slate-200 bg-white text-sm focus:ring-2 focus:ring-slate-900 outline-none shadow-sm transition-all">
+  <v-container fluid class="pa-6 fill-height align-start" style="min-height: 100vh;">
+    <v-card width="100%" elevation="2" rounded="xl">
+      <v-card-title class="d-flex flex-column flex-md-row align-md-center justify-space-between pa-6" style="white-space: normal;">
+        <div>
+          <h2 class="text-h5 font-weight-bold mb-1">Sổ Điểm Danh Ca Làm</h2>
+          <div class="text-subtitle-2 text-medium-emphasis">Quản lý sự hiện diện của {{ nhanViens.length }} thợ</div>
         </div>
+        
+        <div class="d-flex align-center gap-3 mt-4 mt-md-0 flex-wrap">
+          <v-text-field
+            v-model="searchQuery"
+            label="Tìm tên thợ hoặc loại thợ..."
+            density="compact"
+            variant="outlined"
+            hide-details
+            min-width="280"
+            rounded="lg"
+          >
+            <template v-slot:prepend-inner>
+              <Search class="w-5 h-5 text-grey" />
+            </template>
+          </v-text-field>
 
-        <button @click="resetFilter"
-          class="p-2 text-slate-500 hover:bg-white rounded-lg transition-all shadow-sm border">
-          <RotateCcw class="w-5 h-5" />
-        </button>
+          <v-btn
+            variant="outlined"
+            color="grey-darken-1"
+            size="40"
+            rounded="lg"
+            @click="resetFilter"
+          >
+            <RotateCcw class="w-5 h-5" />
+          </v-btn>
 
-        <button @click="generate30Days" :disabled="isGenerating"
-          class="px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-sm">
-          <i class="fas" :class="isGenerating ? 'fa-spinner fa-spin' : 'fa-calendar-plus'"></i>
-          {{ isGenerating ? 'Đang tạo lịch...' : 'Tự động tạo lịch 30 ngày' }}
-        </button>
-        <button @click="openEditModal()"
-          class="flex items-center gap-2 rounded-lg bg-slate-900 text-white px-4 py-2 text-sm font-semibold hover:bg-slate-800 transition-all shadow-md">
-          <Plus class="w-4 h-4" /> Sửa ca làm
-        </button>
-      </div>
-    </div>
-
-    <Transition name="fade">
-      <div v-if="successMessage"
-        class="fixed top-5 right-5 bg-emerald-500 text-white px-6 py-3 rounded-xl shadow-2xl z-[100] font-bold">
-        {{ successMessage }}
-      </div>
-    </Transition>
-
-    <div class="rounded-2xl border bg-white shadow-xl overflow-hidden flex flex-col">
-      <div v-if="filteredNhanViens.length > itemsPerPage"
-        class="p-4 border-b bg-slate-50/50 flex items-center justify-between">
-        <span class="text-xs font-medium text-slate-500">Trang {{ currentPage }} / {{ totalPages }}</span>
-        <div class="flex items-center gap-2">
-          <button @click="changePage(currentPage - 1)" :disabled="currentPage === 1"
-            class="p-1.5 rounded-lg border bg-white disabled:opacity-30 transition-all hover:bg-slate-100">
-            <ChevronLeft class="w-4 h-4" />
-          </button>
-          <button @click="changePage(currentPage + 1)" :disabled="currentPage === totalPages"
-            class="p-1.5 rounded-lg border bg-white disabled:opacity-30 transition-all hover:bg-slate-100">
-            <ChevronRight class="w-4 h-4" />
-          </button>
+          <v-btn
+            :loading="isGenerating"
+            color="primary"
+            rounded="lg"
+            class="text-none font-weight-bold"
+            elevation="1"
+            @click="generate30Days"
+          >
+            <template v-slot:prepend>
+              <CalendarDays class="w-5 h-5 mr-1" />
+            </template>
+            Tạo lịch 30 ngày
+          </v-btn>
+          
+          <v-btn
+            color="secondary"
+            variant="flat"
+            rounded="lg"
+            class="text-none font-weight-bold px-4"
+            elevation="1"
+            @click="openEditModal()"
+          >
+            <template v-slot:prepend>
+              <Plus class="w-5 h-5 mr-1" />
+            </template>
+            Sửa ca làm
+          </v-btn>
         </div>
-      </div>
+      </v-card-title>
 
-      <div class="overflow-x-auto">
-        <table class="w-full border-collapse text-sm">
-          <thead>
-            <tr class="bg-slate-50/80 border-b">
-              <th class="p-4 text-left font-bold text-slate-700 sticky left-0 bg-slate-50 z-20 border-r w-64">Nhân viên
-              </th>
-              <th v-for="date in tableDays" :key="date" class="p-4 text-center min-w-[130px] border-r last:border-r-0"
-                :class="date === todayStr ? 'bg-amber-50 text-amber-900' : 'text-slate-500'">
-                <div class="text-[10px] uppercase opacity-60">{{ date === todayStr ? 'Hôm nay' : 'Ngày' }}</div>
-                <div class="font-bold text-base">{{ formatDate(date) }}</div>
-              </th>
-            </tr>
-          </thead>
+      <v-divider></v-divider>
 
-          <tbody>
-            <tr v-if="isLoading">
-              <td :colspan="tableDays.length + 1" class="p-20 text-center text-slate-400">Đang tải...</td>
-            </tr>
-            <tr v-else-if="paginatedNhanViens.length === 0">
-              <td :colspan="tableDays.length + 1" class="p-20 text-center text-slate-400 font-medium italic">Không tìm
-                thấy thợ.</td>
-            </tr>
+      <v-data-table
+        :headers="headers"
+        :items="nhanViens"
+        :search="searchQuery"
+        :loading="isLoading"
+        items-per-page="10"
+        hover
+      >
+        <!-- Custom Header for Dates -->
+        <template v-for="date in tableDays" :key="'header_'+date" v-slot:[`header.${date}`]="{ column }">
+           <div class="text-center py-2">
+             <div class="text-caption text-uppercase opacity-60">{{ date === todayStr ? 'Hôm nay' : 'Ngày' }}</div>
+             <div class="text-subtitle-1 font-weight-bold" :class="date === todayStr ? 'text-amber-darken-4' : ''">{{ formatDate(date) }}</div>
+           </div>
+        </template>
 
-            <tr v-for="nv in paginatedNhanViens" :key="nv.maNv"
-              class="border-b last:border-b-0 hover:bg-slate-50/50 transition-colors">
-              <td class="p-4 sticky left-0 bg-white z-10 border-r shadow-[4px_0_10px_rgba(0,0,0,0.02)]">
-                <div class="font-bold text-slate-900">{{ nv.hoTenNv }}</div>
-                <div class="text-[10px] text-slate-400 font-medium uppercase">{{ nv.loaiNhanVien }}</div>
-              </td>
+        <template v-slot:item.nhanvien="{ item }">
+          <div class="py-2">
+            <div class="font-weight-bold">{{ item.hoTenNv }}</div>
+            <div class="text-caption text-uppercase font-weight-medium text-medium-emphasis">{{ item.loaiNhanVien }}</div>
+          </div>
+        </template>
 
-              <td v-for="date in tableDays" :key="date" class="p-3 border-r last:border-r-0 text-center">
-                <div v-if="getShiftData(nv.maNv, date)" class="flex flex-col items-center gap-2">
+        <!-- Custom Columns for Dates -->
+        <template v-for="date in tableDays" :key="'item_'+date" v-slot:[`item.${date}`]="{ item }">
+          <div class="d-flex flex-column align-center justify-center gap-1 py-2 h-100">
+            <template v-if="getShiftData(item.maNv, date)">
+               <v-chip
+                 size="small"
+                 class="font-weight-bold mb-1"
+                 variant="tonal"
+                 color="grey-darken-4"
+               >
+                 {{ getShiftData(item.maNv, date).caLam }}
+               </v-chip>
 
-                  <span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border">
-                    {{ getShiftData(nv.maNv, date).caLam }}
-                  </span>
+               <v-tooltip v-if="getShiftData(item.maNv, date).trangThai === 2" text="Bấm để cập nhật (Rời ca, Vắng mặt, Muộn)" location="top">
+                 <template v-slot:activator="{ props }">
+                    <v-btn
+                      v-bind="props"
+                      color="success"
+                      variant="flat"
+                      size="40"
+                      class="rounded-lg elevation-2"
+                      @click="handleLeaveEarly(getShiftData(item.maNv, date))"
+                    >
+                      <Check class="w-5 h-5" />
+                    </v-btn>
+                 </template>
+               </v-tooltip>
 
-                  <button @click="getShiftData(nv.maNv, date).trangThai === 2
-                    ? handleLeaveEarly(getShiftData(nv.maNv, date))
-                    : handleCheckIn(getShiftData(nv.maNv, date))"
-                    :disabled="getShiftData(nv.maNv, date).trangThai === 3 ||
-                      (getShiftData(nv.maNv, date).trangThai === 1 && getShiftStatus(getShiftData(nv.maNv, date).caLam, date) !== 'ON_TIME')"
-                    class="group relative w-12 h-12 rounded-2xl border-2 flex items-center justify-center transition-all duration-300"
-                    :class="{
-                      // 1. Đã có mặt (Xanh) - Click được để rời ca
-                      'bg-emerald-500 border-emerald-500 text-white shadow-lg cursor-pointer hover:bg-emerald-600': getShiftData(nv.maNv, date).trangThai === 2,
+               <v-btn
+                  v-else-if="getShiftData(item.maNv, date).trangThai === 3 || getShiftData(item.maNv, date).trangThai === 5 || getShiftData(item.maNv, date).trangThai === 6"
+                  color="warning"
+                  variant="flat"
+                  size="40"
+                  class="rounded-lg elevation-2 bg-grey-darken-4 text-warning"
+                  disabled
+                >
+                  <LogOut class="w-5 h-5" />
+                </v-btn>
 
-                      // 2. Chờ điểm danh (Vàng)
-                      'border-amber-400 bg-amber-50 hover:bg-amber-500': getShiftData(nv.maNv, date).trangThai === 1 && getShiftStatus(getShiftData(nv.maNv, date).caLam, date) === 'ON_TIME',
+                <v-btn
+                  v-else-if="getShiftData(item.maNv, date).trangThai === 1 && (getShiftStatus(getShiftData(item.maNv, date).caLam, date) === 'TOO_LATE' || getShiftStatus(getShiftData(item.maNv, date).caLam, date) === 'PAST')"
+                  color="error"
+                  variant="tonal"
+                  size="40"
+                  class="rounded-lg"
+                  disabled
+                >
+                  <X class="w-5 h-5" />
+                </v-btn>
 
-                      // 3. Đã rời ca sớm (Đen/Hổ phách)
-                      'bg-slate-900 text-amber-400 border-amber-400 shadow-lg': getShiftData(nv.maNv, date).trangThai === 3,
+                <v-btn
+                  v-else-if="getShiftData(item.maNv, date).trangThai === 1 && getShiftStatus(getShiftData(item.maNv, date).caLam, date) === 'ON_TIME'"
+                  variant="tonal"
+                  color="warning"
+                  size="40"
+                  class="rounded-lg"
+                  @click="handleCheckIn(getShiftData(item.maNv, date))"
+                >
+                  <Fingerprint class="w-5 h-5" />
+                </v-btn>
+                
+                <v-btn
+                  v-else-if="getShiftData(item.maNv, date).caLam === 'Chưa xếp'"
+                  variant="text"
+                  size="40"
+                  class="rounded-lg opacity-20"
+                  disabled
+                >---</v-btn>
 
-                      // 4. Quá giờ/Vắng mặt (Đỏ)
-                      'bg-rose-50 border-rose-200 text-rose-500': getShiftData(nv.maNv, date).trangThai === 1 && (getShiftStatus(getShiftData(nv.maNv, date).caLam, date) === 'TOO_LATE' || getShiftStatus(getShiftData(nv.maNv, date).caLam, date) === 'PAST'),
+                <div v-else class="rounded-lg border bg-grey-lighten-4" style="width: 40px; height: 40px; opacity: 0.5;"></div>
 
-                      // 5. Chưa đến giờ/Chưa xếp (Mờ)
-                      'bg-slate-50 border-slate-100 text-slate-300 opacity-50': getShiftData(nv.maNv, date).trangThai === 0 || (getShiftData(nv.maNv, date).trangThai === 1 && getShiftStatus(getShiftData(nv.maNv, date).caLam, date) === 'TOO_EARLY')
-                    }">
-                    <Check v-if="getShiftData(nv.maNv, date).trangThai === 2" class="w-6 h-6" />
-                    <LogOut v-else-if="getShiftData(nv.maNv, date).trangThai === 3" class="w-6 h-6" />
-                    <X v-else-if="getShiftData(nv.maNv, date).trangThai === 1 && (getShiftStatus(getShiftData(nv.maNv, date).caLam, date) === 'TOO_LATE' || getShiftStatus(getShiftData(nv.maNv, date).caLam, date) === 'PAST')"
-                      class="w-6 h-6" />
-                    <span v-else-if="getShiftData(nv.maNv, date).caLam === 'Chưa xếp'"
-                      class="opacity-20 text-[8px]">---</span>
-                    <span v-else></span>
-
-                    <div v-if="getShiftData(nv.maNv, date).trangThai === 2"
-                      class="absolute bottom-full mb-2 hidden group-hover:block bg-slate-800 text-[8px] text-white px-2 py-1 rounded whitespace-nowrap z-30">
-                      Bấm để rời ca sớm
-                    </div>
-                  </button>
+                <div v-if="getShiftData(item.maNv, date).ghiChu" class="text-caption text-error px-1 text-truncate mt-1" style="max-width: 90px; font-size: 0.65rem !important;" :title="getShiftData(item.maNv, date).ghiChu">
+                  {{ getShiftData(item.maNv, date).ghiChu }}
                 </div>
-
-                <div v-else class="opacity-5 text-xs">---</div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div v-if="filteredNhanViens.length > itemsPerPage"
-        class="p-4 border-t bg-slate-50 flex items-center justify-between">
-        <div class="flex items-center gap-1">
-          <button v-for="p in totalPages" :key="p" @click="changePage(p)"
-            class="min-w-[32px] h-8 rounded-lg text-xs font-bold transition-all"
-            :class="p === currentPage ? 'bg-slate-900 text-white shadow-md' : 'text-slate-400 hover:bg-slate-100'">
-            {{ p }}
-          </button>
-        </div>
-        <span class="text-xs font-medium text-slate-500">Tổng cộng {{ filteredNhanViens.length }} thợ</span>
-      </div>
-    </div>
-
-    <div v-if="isAddModalOpen"
-      class="fixed inset-0 z-[110] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-      <div
-        class="bg-white rounded-3xl shadow-2xl w-full max-w-md border overflow-hidden animate-in fade-in zoom-in duration-300">
-        <div class="p-6 border-b bg-slate-50">
-          <h3 class="font-bold text-xl text-slate-900">Sửa Ca Làm Hôm Nay</h3>
-          <p class="text-sm text-amber-600 font-medium">📅 Ngày: {{ formatDate(todayStr) }}</p>
-        </div>
-
-        <div class="p-6 space-y-5">
-          <div v-if="errorMessage"
-            class="p-3 bg-rose-50 text-rose-600 border border-rose-200 rounded-xl text-sm font-medium">{{ errorMessage
-            }}</div>
-
-          <div class="space-y-2">
-            <label class="text-sm font-bold text-slate-700">Chọn thợ</label>
-            <select v-model="formData.maNv"
-              class="w-full rounded-xl border border-slate-200 bg-white px-4 h-12 text-sm focus:ring-2 focus:ring-slate-900 outline-none">
-              <option value="" disabled>-- Chọn thợ để xếp ca --</option>
-              <option v-for="nv in nhanViens" :key="nv.maNv" :value="nv.maNv">{{ nv.hoTenNv }} ({{ nv.loaiNhanVien }})
-              </option>
-            </select>
+            </template>
+            <span v-else class="text-caption opacity-20">---</span>
           </div>
+        </template>
+      </v-data-table>
+    </v-card>
 
-          <div class="space-y-2">
-            <label class="text-sm font-bold text-slate-700">Phân ca làm việc</label>
-            <select v-model="formData.caLam"
-              class="w-full rounded-xl border border-slate-200 px-4 h-12 text-sm focus:ring-2 focus:ring-slate-900 outline-none">
-              <option value="Sáng">Ca Sáng (08:00 - 12:00)</option>
-              <option value="Chiều">Ca Chiều (13:00 - 17:00)</option>
-              <option value="Tối">Ca Tối (17:00 - 21:00)</option>
-              <option value="Cả ngày">Cả ngày (08:00 - 21:00)</option>
-            </select>
+    <!-- Modal Sửa Ca Làm (v-dialog) -->
+    <v-dialog v-model="isAddModalOpen" max-width="450" transition="dialog-bottom-transition">
+      <v-card rounded="xl">
+        <v-card-title class="pa-6 border-b" style="white-space: normal;">
+          <div class="text-h6 font-weight-bold">Sửa Ca Làm Hôm Nay</div>
+          <div class="text-subtitle-2 text-warning font-weight-medium mt-1 d-flex align-center">
+            <CalendarDays class="w-4 h-4 mr-1" /> 
+            Ngày: {{ formatDate(todayStr) }}
           </div>
-        </div>
+        </v-card-title>
+        
+        <v-card-text class="pa-6">
+          <v-form @submit.prevent="handleUpdateShift">
+            <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Chọn thợ</div>
+            <v-select
+              v-model="formData.maNv"
+              :items="nhanViens"
+              item-title="hoTenNv"
+              item-value="maNv"
+              placeholder="-- Chọn thợ để xếp ca --"
+              variant="outlined"
+              density="comfortable"
+              rounded="lg"
+            >
+              <template v-slot:item="{ props, item }">
+                <v-list-item v-bind="props" :title="item.raw.hoTenNv" :subtitle="item.raw.loaiNhanVien"></v-list-item>
+              </template>
+            </v-select>
 
-        <div class="p-6 bg-slate-50 flex justify-end gap-3">
-          <button @click="isAddModalOpen = false"
-            class="px-6 py-2.5 rounded-xl border bg-white font-bold text-slate-600 hover:bg-slate-100 transition-all">Hủy</button>
-          <button @click="handleUpdateShift" :disabled="isSubmitting"
-            class="px-6 py-2.5 rounded-xl bg-slate-900 text-white font-bold hover:bg-slate-800 shadow-lg disabled:opacity-50 transition-all">
-            {{ isSubmitting ? 'Đang lưu...' : 'Xác nhận sửa ca' }}
-          </button>
-        </div>
+            <div class="mb-2 mt-4 text-subtitle-2 font-weight-bold text-grey-darken-2">Phân ca làm việc</div>
+            <v-select
+              v-model="formData.caLam"
+              :items="['Ca ngày', 'Ca tối']"
+              variant="outlined"
+              density="comfortable"
+              rounded="lg"
+            ></v-select>
+          </v-form>
+        </v-card-text>
+
+        <v-card-actions class="pa-4 px-6 d-flex justify-end border-t">
+          <v-btn
+            variant="outlined"
+            rounded="lg"
+            class="text-none font-weight-bold mr-2"
+            color="grey-darken-2"
+            @click="isAddModalOpen = false"
+          >Hủy</v-btn>
+          <v-btn
+            variant="flat"
+            rounded="lg"
+            class="text-none font-weight-bold"
+            color="primary"
+            :loading="isSubmitting"
+            @click="handleUpdateShift"
+          >Xác nhận sửa ca</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Modal Cập nhật Điểm danh -->
+    <v-dialog v-model="isAttendanceModalOpen" max-width="450" transition="dialog-bottom-transition">
+      <v-card rounded="xl">
+        <v-card-title class="pa-6 border-b" style="white-space: normal;">
+          <div class="text-h6 font-weight-bold">Cập Nhật Trạng Thái</div>
+          <div class="text-subtitle-2 text-medium-emphasis font-weight-medium mt-1">
+            Nhân viên: {{ attendanceForm.hoTenNv }}
+          </div>
+          <div class="text-subtitle-2 text-warning font-weight-medium mt-1 d-flex align-center">
+            <CalendarDays class="w-4 h-4 mr-1" /> 
+            Ca {{ attendanceForm.caLam }} - {{ formatDate(attendanceForm.ngayLamViec) }}
+          </div>
+        </v-card-title>
+        
+        <v-card-text class="pa-6">
+          <v-form @submit.prevent="submitAttendance">
+            <template v-if="attendanceForm.trangThaiGoc !== 2">
+              <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Chọn trạng thái</div>
+              <v-select
+                v-model="attendanceForm.trangThai"
+                :items="attendanceStatusOptions"
+                item-title="title"
+                item-value="value"
+                variant="outlined"
+                density="comfortable"
+                rounded="lg"
+              ></v-select>
+            </template>
+            <template v-else>
+              <div class="mb-2 text-subtitle-2 font-weight-bold text-primary">Xác nhận Rời ca</div>
+            </template>
+
+            <div v-if="attendanceForm.trangThai !== 2" class="mb-2 mt-4 text-subtitle-2 font-weight-bold text-error">Lý do (Bắt buộc)</div>
+            <div v-else class="mb-2 mt-4 text-subtitle-2 font-weight-bold text-grey-darken-2">Ghi chú (Tùy chọn)</div>
+            <v-textarea
+              v-model="attendanceForm.ghiChu"
+              placeholder="Nhập ghi chú hoặc lý do..."
+              variant="outlined"
+              density="comfortable"
+              rounded="lg"
+              rows="3"
+              auto-grow
+            ></v-textarea>
+          </v-form>
+        </v-card-text>
+
+        <v-card-actions class="pa-4 px-6 d-flex justify-end border-t">
+          <v-btn
+            variant="outlined"
+            rounded="lg"
+            class="text-none font-weight-bold mr-2"
+            color="grey-darken-2"
+            @click="isAttendanceModalOpen = false"
+          >Hủy</v-btn>
+          <v-btn
+            variant="flat"
+            rounded="lg"
+            class="text-none font-weight-bold"
+            color="primary"
+            :loading="isSubmittingAttendance"
+            @click="submitAttendance"
+          >Xác nhận</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Snackbar -->
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" location="top right" timeout="3000" rounded="lg">
+      <div class="font-weight-bold d-flex align-center">
+        <Check v-if="snackbar.color === 'success'" class="w-5 h-5 mr-2" />
+        <X v-else class="w-5 h-5 mr-2" />
+        {{ snackbar.text }}
       </div>
-    </div>
-  </div>
+    </v-snackbar>
+  </v-container>
 </template>
 
 <style scoped>
-.sticky {
-  z-index: 20;
-}
-
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.5s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
+.gap-1 { gap: 4px; }
+.gap-3 { gap: 12px; }
 </style>
