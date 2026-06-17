@@ -19,11 +19,15 @@ const router = createRouter({
         { path: 'shop', name: 'shop', component: () => import('@/Views/Anonymous/Shop.vue') },
         { path: 'product/:id', name: 'product_detail', component: () => import('@/Views/Anonymous/ProductDetail.vue') },
         { path: 'services', name: 'services', component: () => import('@/Views/Anonymous/Services.vue') },
-        { path: 'service/:id', name: 'service_detail', component: () => import('@/Views/Anonymous/ServiceDetail.vue') },
+        { path: 'service/:id', name: 'serviceDetail', component: () => import('@/Views/Anonymous/ServiceDetail.vue') },
         { path: 'cart', name: 'cart', component: () => import('@/Views/Anonymous/Cart.vue') },
         { path: 'booking/:serviceId?', name: 'booking', component: () => import('@/Views/Anonymous/Booking.vue') },
         { path: 'wishlist', name: 'wishlist', component: () => import('@/Views/Anonymous/Wishlist.vue') },
         { path: 'profile', name: 'profile', component: () => import('@/Views/Anonymous/Profile.vue'), meta: { requiresAuth: true } },
+        { path: '/combo/:id', name: 'detailCombo', component: () => import('@/Views/Anonymous/ComboDetail.vue') },
+        { path: 'dmdv', name: 'dmdv', component: () => import('@/Views/Anonymous/Dmdichvu.vue') },
+        { path: 'product', name: 'Product', component: () => import('@/Views/Anonymous/Product.vue') },
+        { path: 'product/:id', name: 'productDetail', component: () => import('@/Views/Anonymous/ProductDetail.vue') },
       ]
     },
     // Future admin layout setup
