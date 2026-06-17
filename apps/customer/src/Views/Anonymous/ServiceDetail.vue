@@ -342,7 +342,9 @@ export default {
       =================================================== -->
       <section class="related-combos mb-5" v-if="relatedCombos.length > 0">
         <hr class="gold-line mt-5" />
-        <h3 class="font-playfair text-center mb-5" style="margin-top: 50px;">COMBO LIÊN QUAN</h3>
+        <h3 class="font-playfair text-center mb-5" style="margin-top: 50px">
+          COMBO LIÊN QUAN
+        </h3>
         <div class="row g-4 justify-content-center">
           <div
             v-for="c in relatedCombos"
@@ -377,7 +379,8 @@ export default {
                     <ul class="combo-items-list">
                       <li v-for="item in c.items" :key="item">
                         <i class="fas fa-check-circle"></i>
-                        <span>{{ item }}</span>   <!-- ← thêm span -->
+                        <span>{{ item }}</span>
+                        <!-- ← thêm span -->
                       </li>
                     </ul>
                   </div>
@@ -497,7 +500,7 @@ export default {
 .combo-items-list li span {
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;       /* ← text bị cắt với dấu ... thay vì xuống dòng */
+  white-space: nowrap; /* ← text bị cắt với dấu ... thay vì xuống dòng */
   font-size: 0.78rem;
   font-weight: 300;
   color: var(--ink-soft);
@@ -512,7 +515,7 @@ export default {
 .related-combos .row {
   --bs-gutter-x: 1.5rem;
   --bs-gutter-y: 1.5rem;
-  gap: 0;  /* để Bootstrap g-4 tự xử */
+  gap: 0; /* để Bootstrap g-4 tự xử */
 }
 
 /* Gap cho dịch vụ gợi ý */
@@ -523,7 +526,7 @@ export default {
 }
 .combo-footer {
   margin-top: auto;
-  padding-top: 10px !important;  /* ← giảm pt-3 */
+  padding-top: 10px !important; /* ← giảm pt-3 */
   border-top: 1px solid var(--line);
 }
 
@@ -711,7 +714,7 @@ export default {
 
 .old-price-inline {
   font-family: "Jost", sans-serif;
-  font-size: 1.0rem;
+  font-size: 1rem;
   color: var(--muted-light);
   text-decoration: line-through !important;
   font-weight: 300;
@@ -772,7 +775,9 @@ export default {
   border: 1px solid var(--line);
   box-shadow: none;
   flex-shrink: 0;
-  transition: border-color 0.25s ease, transform 0.25s ease;
+  transition:
+    border-color 0.25s ease,
+    transform 0.25s ease;
 }
 
 .svc-gallery-item:hover {
@@ -896,7 +901,9 @@ export default {
   overflow: hidden;
   border: 1px solid var(--line);
   box-shadow: none;
-  transition: transform 0.3s ease, border-color 0.3s ease;
+  transition:
+    transform 0.3s ease,
+    border-color 0.3s ease;
 }
 
 .kieu-grid-item:hover .kieu-img-wrap {
@@ -938,7 +945,7 @@ export default {
 .action-buttons-container {
   width: 100%;
   display: flex;
-  justify-content: center;   /* ← đã có rồi, giữ nguyên */
+  justify-content: center; /* ← đã có rồi, giữ nguyên */
   align-items: center;
   gap: 16px;
   margin-top: 2rem;
@@ -1083,13 +1090,13 @@ export default {
 
 .combo-body {
   min-height: 0;
-  padding: 16px !important;   /* ← giảm padding, override Bootstrap p-4 */
+  padding: 16px !important; /* ← giảm padding, override Bootstrap p-4 */
 }
 
 .combo-name {
   font-family: "Jost", sans-serif;
   font-weight: 600;
-  font-size: 0.82rem;         /* ← nhỏ lại chút */
+  font-size: 0.82rem; /* ← nhỏ lại chút */
   letter-spacing: 1.5px;
   text-transform: uppercase;
   color: var(--ink);
@@ -1105,11 +1112,11 @@ export default {
   font-size: 0.78rem;
   font-weight: 300;
   color: var(--muted);
-  margin-bottom: 8px;         /* ← giảm từ 14px */
+  margin-bottom: 8px; /* ← giảm từ 14px */
   letter-spacing: 0.3px;
   line-height: 1.4;
   display: -webkit-box;
-  -webkit-line-clamp: 1;      /* ← giới hạn 1 dòng */
+  -webkit-line-clamp: 1; /* ← giới hạn 1 dòng */
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -1121,7 +1128,7 @@ export default {
 }
 
 .combo-items-list li {
-  margin-bottom: 4px;         /* ← giảm từ 8px */
+  margin-bottom: 4px; /* ← giảm từ 8px */
   font-family: "Jost", sans-serif;
   font-size: 0.78rem;
   font-weight: 300;
@@ -1140,7 +1147,7 @@ export default {
   list-style: none;
   padding: 0;
   margin: 0;
-  max-height: 52px;           /* ← ~2 dòng */
+  max-height: 52px; /* ← ~2 dòng */
   overflow: hidden;
 }
 
@@ -1183,20 +1190,20 @@ export default {
   background: transparent;
   border: 1px solid var(--ink);
   color: var(--ink);
-  padding: 8px 8px;          /* ← giảm padding ngang */
+  padding: 8px 8px; /* ← giảm padding ngang */
   font-family: "Jost", sans-serif;
   font-size: 0.72rem;
   font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 1px;       /* ← giảm letter-spacing từ 2px */
+  letter-spacing: 1px; /* ← giảm letter-spacing từ 2px */
   border-radius: 0;
   transition: all 0.25s ease;
-  white-space: normal;       /* ← đổi từ nowrap sang normal */
-  word-break: break-word;    /* ← thêm dòng này */
+  white-space: normal; /* ← đổi từ nowrap sang normal */
+  word-break: break-word; /* ← thêm dòng này */
   cursor: pointer;
   width: 100%;
   text-align: center;
-  line-height: 1.3;          /* ← thêm dòng này cho dễ đọc khi xuống dòng */
+  line-height: 1.3; /* ← thêm dòng này cho dễ đọc khi xuống dòng */
 }
 
 .btn-outline-gold-fixed:hover {
@@ -1333,7 +1340,7 @@ export default {
 
 .new-price-sm {
   font-family: "Jost", sans-serif;
-  font-size: 1.0rem;
+  font-size: 1rem;
   font-weight: 500;
   color: var(--ink);
   letter-spacing: 0.5px;
@@ -1448,8 +1455,12 @@ export default {
     font-size: 1.5rem;
     letter-spacing: 2px;
   }
-  .kieu-grid { gap: 10px; }
-  .kieu-grid-item { width: calc(50% - 5px); }
+  .kieu-grid {
+    gap: 10px;
+  }
+  .kieu-grid-item {
+    width: calc(50% - 5px);
+  }
   .kieu-label {
     font-size: 0.68rem;
     letter-spacing: 1px;
@@ -1475,7 +1486,9 @@ export default {
     padding-left: 6px !important;
     padding-right: 6px !important;
   }
-  .action-buttons-container { gap: 10px !important; }
+  .action-buttons-container {
+    gap: 10px !important;
+  }
   .btn-add-cart,
   .btn-book-now {
     min-width: unset;
@@ -1520,8 +1533,12 @@ export default {
     font-size: 1.5rem;
     letter-spacing: 2px;
   }
-  .kieu-grid { gap: 10px; }
-  .kieu-grid-item { width: calc(50% - 5px); }
+  .kieu-grid {
+    gap: 10px;
+  }
+  .kieu-grid-item {
+    width: calc(50% - 5px);
+  }
   .kieu-label {
     font-size: 0.68rem;
     letter-spacing: 1px;
@@ -1549,7 +1566,9 @@ export default {
     padding-left: 0 !important;
     padding-right: 0 !important;
   }
-  .action-buttons-container { gap: 10px !important; }
+  .action-buttons-container {
+    gap: 10px !important;
+  }
   .btn-add-cart,
   .btn-book-now {
     min-width: unset;
