@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Search, User, ShoppingBag, Menu, X, Heart } from 'lucide-vue-next';
 import axios from 'axios';
 
+const API = import.meta.env.VITE_API_URL;
 const route = useRoute();
 const router = useRouter();
 const scrolled = ref(false);
@@ -30,40 +31,46 @@ const handleLogout = () => {
   router.push({ name: 'login' });
 };
 
+// ======================================================
+// DANH MỤC SẢN PHẨM — load từ backend cho mega menu
+// ======================================================
+const productCategories = ref<any[]>([]);
+
+const fetchProductCategories = async () => {
+  try {
+    const res = await axios.get(`${API}/api/DanhMucSP/san-pham`);
+    productCategories.value = res.data || [];
+  } catch (err) {
+    console.error('Lỗi lấy danh mục sản phẩm cho menu:', err);
+  }
+};
+
+// Chia danh mục thành các cột (tối đa 3 danh mục/cột) để mega menu không quá dài 1 cột
+const productCategoryColumns = computed(() => {
+  const perColumn = 3;
+  const cols: any[][] = [];
+  for (let i = 0; i < productCategories.value.length; i += perColumn) {
+    cols.push(productCategories.value.slice(i, i + perColumn));
+  }
+  return cols;
+});
+
+// Điều hướng sang trang Product kèm filter danh mục
+const goToProductCategory = (maDM: string) => {
+  router.push({ name: 'Product', query: { danhMuc: maDM } });
+  mobileMenuOpen.value = false;
+};
+
 // Single source of truth cho navigation (Web và Mobile dùng chung 100%)
 const navLinks: any[] = [
   { name: 'home', label: 'Trang chủ' },
-  { name: 'services', label: 'Dịch vụ', match: 'service' },
+  { name: 'dmdv', label: 'Dịch vụ', match: 'dmdv' },
   { 
     name: 'shop', 
     label: 'Sản phẩm', 
     match: 'product',
     mega: true,
-    children: [
-      { 
-        label: 'Chăm sóc tóc', 
-        children: [
-          { label: 'Dầu gội', name: 'shop' }, 
-          { label: 'Dầu xả', name: 'shop' }, 
-          { label: 'Phục hồi chuyên sâu', name: 'shop' }
-        ] 
-      },
-      { 
-        label: 'Tạo kiểu', 
-        children: [
-          { label: 'Xịt tạo kiểu', name: 'shop' }, 
-          { label: 'Sáp & Pomade', name: 'shop' }, 
-          { label: 'Dưỡng bóng', name: 'shop' }
-        ] 
-      },
-      { 
-        label: 'Dụng cụ', 
-        children: [
-          { label: 'Máy sấy', name: 'shop' }, 
-          { label: 'Lược chuyên dụng', name: 'shop' }
-        ] 
-      }
-    ]
+    isProductMenu: true // đánh dấu để template biết render danh mục động từ API
   },
   { 
     name: 'shop', 
@@ -96,6 +103,7 @@ onMounted(() => {
   window.addEventListener('scroll', handleScroll);
   checkUser();
   window.addEventListener('storage', checkUser);
+  fetchProductCategories();
 
   // Tự động kiểm tra phiên đăng nhập mỗi 5 phút
   checkSessionInterval = setInterval(async () => {
@@ -155,15 +163,38 @@ onUnmounted(() => {
 
       <!-- Vertical Menu -->
       <nav class="flex flex-col px-6 py-6 gap-8 overflow-y-auto">
-        <router-link 
-          v-for="link in navLinks" 
-          :key="link.label"
-          :to="{ name: link.name || 'home' }" 
-          @click="mobileMenuOpen = false" 
-          class="text-xl font-heading uppercase tracking-[0.2em] text-left text-black"
-        >
-          {{ link.label }}
-        </router-link>
+        <template v-for="link in navLinks" :key="link.label">
+
+          <!-- Menu Sản phẩm: load danh mục thật từ API, expand luôn ở mobile -->
+          <div v-if="link.isProductMenu" class="flex flex-col gap-4">
+            <router-link
+              :to="{ name: link.name || 'home' }"
+              @click="mobileMenuOpen = false"
+              class="text-xl font-heading uppercase tracking-[0.2em] text-left text-black"
+            >
+              {{ link.label }}
+            </router-link>
+            <div class="flex flex-col gap-3 pl-4 border-l border-gray-200">
+              <button
+                v-for="cat in productCategories"
+                :key="cat.maDM"
+                @click="goToProductCategory(cat.maDM)"
+                class="text-left text-xs uppercase tracking-widest text-gray-500 hover:text-black transition-colors"
+              >
+                {{ cat.tenDanhMuc }}
+              </button>
+            </div>
+          </div>
+
+          <router-link 
+            v-else
+            :to="{ name: link.name || 'home' }" 
+            @click="mobileMenuOpen = false" 
+            class="text-xl font-heading uppercase tracking-[0.2em] text-left text-black"
+          >
+            {{ link.label }}
+          </router-link>
+        </template>
       </nav>
     </div>
 
@@ -194,15 +225,34 @@ onUnmounted(() => {
               ]"
             >
               {{ link.label }}
-              <svg v-if="link.children" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="transition-transform duration-300 group-hover:rotate-180 opacity-60"><path d="m6 9 6 6 6-6"/></svg>
+              <svg v-if="link.children || link.isProductMenu" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="transition-transform duration-300 group-hover:rotate-180 opacity-60"><path d="m6 9 6 6 6-6"/></svg>
             </router-link>
 
             <!-- Dropdown / Mega Menu Container -->
-            <div v-if="link.children" 
+            <div v-if="link.children || link.isProductMenu" 
                  class="absolute top-full left-1/2 -translate-x-1/2 pt-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 translate-y-2 group-hover:translate-y-0"
             >
-              <!-- Mega Menu for Products -->
-              <div v-if="link.mega" class="bg-white border border-gray-100 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] p-8 flex gap-12 w-max rounded-sm">
+              <!-- Mega Menu DANH MỤC SẢN PHẨM (động từ API) -->
+              <div v-if="link.isProductMenu" class="bg-white border border-gray-100 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] p-8 flex gap-12 w-max rounded-sm max-w-[600px]">
+                <template v-if="productCategories.length > 0">
+                  <div v-for="(col, colIdx) in productCategoryColumns" :key="colIdx">
+                    <ul class="space-y-4">
+                      <li v-for="cat in col" :key="cat.maDM">
+                        <button
+                          @click="goToProductCategory(cat.maDM)"
+                          class="text-[11px] uppercase tracking-widest text-gray-500 hover:text-black transition-colors block text-left whitespace-nowrap"
+                        >
+                          {{ cat.tenDanhMuc }}
+                        </button>
+                      </li>
+                    </ul>
+                  </div>
+                </template>
+                <p v-else class="text-[11px] uppercase tracking-widest text-gray-400">Đang tải danh mục...</p>
+              </div>
+
+              <!-- Mega Menu cũ (giữ lại nếu sau này có dùng dạng category > children) -->
+              <div v-else-if="link.mega" class="bg-white border border-gray-100 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] p-8 flex gap-12 w-max rounded-sm">
                 <div v-for="category in link.children" :key="category.label">
                   <h4 class="text-[10px] text-black uppercase tracking-[0.2em] font-semibold mb-5">{{ category.label }}</h4>
                   <ul class="space-y-4">
