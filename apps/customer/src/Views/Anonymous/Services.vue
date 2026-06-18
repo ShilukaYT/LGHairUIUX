@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // import CartSidebar from "@/Khanhhang/views/CartSidebar.vue";
-// import { getCartDB } from "./CSDL/cartDB";
+import { getCartDB, addToCartDB } from "@/Views/Anonymous/CSDL/cartDB";
+import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 import { ref, computed, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import axios from "axios";
@@ -161,18 +162,18 @@ const activeCategoryName = computed(() => {
 });
 
 // Hàm cập nhật số lượng badge
-// const updateCartBadge = async () => {
-//   const savedUser = localStorage.getItem('user');
-//   userMaKH.value = savedUser ? JSON.parse(savedUser).maKH : null;
+const updateCartBadge = async () => {
+  const customer = getCustomerInfo();
+  userMaKH.value = customer.maKH;
 
-//   // Lấy dữ liệu từ IndexedDB
-//   const data = await getCartDB(userMaKH.value);
-//   cartItems.value = data;
-// };
+  // Lấy dữ liệu từ IndexedDB
+  const data = await getCartDB(userMaKH.value);
+  cartItems.value = data || [];
+};
 
 //Giỏ Hàng
 const openCart = () => {
-  cartRef.value?.openCart();
+  routerInstance.push('/cart');
 };
 
 const addToCart = async (rawItem: any) => {
@@ -195,6 +196,7 @@ const addToCart = async (rawItem: any) => {
     gia: finalPrice, // Giá đã giảm (dùng để thanh toán)
     giaGoc: giaGoc, // Giá gốc (dùng để hiển thị gạch ngang)
     hinhAnh: imgPath,
+    type: isCombo ? 'COMBO' : 'DICHVU',
     duration: isCombo
       ? rawItem.combo_DichVus?.reduce(
           (sum: any, cd: any) => sum + (cd.dichVu?.thoiGianLam || 30),
@@ -203,13 +205,11 @@ const addToCart = async (rawItem: any) => {
       : rawItem.thoiGianLam || 30,
   };
 
-  if (cartRef.value) {
-    await cartRef.value.addToCart(formattedItem);
-    window.dispatchEvent(new Event("cart-updated"));
-    if (typeof cartRef.value.openCart === "function") {
-      cartRef.value.openCart();
-    }
-  }
+  const customer = getCustomerInfo();
+  await addToCartDB(formattedItem, customer.maKH);
+  await updateCartBadge();
+  window.dispatchEvent(new Event("cart-updated"));
+  alert("Đã thêm dịch vụ vào giỏ hàng thành công!");
 };
 // =======================
 // MOUNT
@@ -229,7 +229,7 @@ onMounted(async () => {
 
   await fetchAll(); // 🔥 lấy combo + categories
   await fetchFiltered(); // 🔥 lấy services theo filter
-  //await updateCartBadge();// 🔥 cập nhật số lượng badge khi vào trang dịch vụ
+  await updateCartBadge(); // 🔥 cập nhật số lượng badge khi vào trang dịch vụ
   await fetchRatings(); // 🔥 lấy đánh giá trung bình cho tất cả dịch vụ
 });
 

@@ -304,7 +304,7 @@ onUnmounted(() => {
                     :src="currentUser.hinhAnh || currentUser.picture || currentUser.avatar || ('https://ui-avatars.com/api/?name=' + encodeURIComponent(currentUser.hoTen || currentUser.name || currentUser.username || 'U') + '&background=random')" 
                     alt="Avatar" 
                     class="w-full h-full object-cover"
-                    @error="(e) => e.target.style.display='none'"
+                    @error="(e) => { if (e.target) (e.target as HTMLImageElement).style.display='none' }"
                   />
                   <!-- Fallback icon if img fails -->
                   <User class="absolute -z-10" :size="16" :stroke-width="1.5" />
@@ -372,7 +372,7 @@ onUnmounted(() => {
                   :src="currentUser.hinhAnh || currentUser.picture || currentUser.avatar || ('https://ui-avatars.com/api/?name=' + encodeURIComponent(currentUser.hoTen || currentUser.name || currentUser.username || 'U') + '&background=random')" 
                   alt="Avatar" 
                   class="w-full h-full object-cover"
-                  @error="(e) => e.target.style.display='none'"
+                  @error="(e) => { if (e.target) (e.target as HTMLImageElement).style.display='none' }"
                 />
                 <User class="absolute -z-10" :size="14" :stroke-width="1.5" />
               </div>

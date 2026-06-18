@@ -2,14 +2,13 @@
 import axios from "axios";
 const API = import.meta.env.VITE_API_URL;
 // import ReviewList from "./ReviewList.vue";
-// import CartSidebar from "@/Khanhhang/views/CartSidebar.vue";
-// import { getCartDB, addToCartDB } from "@/Khanhhang/views/CSDL/cartDB";
+import { getCartDB, addToCartDB } from "@/Views/Anonymous/CSDL/cartDB";
+import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 
 export default {
   name: "ComboDetail",
   components: {
     // ReviewList,
-    // CartSidebar,
   },
   data() {
     return {
@@ -43,43 +42,14 @@ export default {
 
   methods: {
     async updateCartBadge() {
-      const savedUser = localStorage.getItem("user");
-      this.userMaKH = savedUser ? JSON.parse(savedUser).maKH : null;
+      const customer = getCustomerInfo();
+      this.userMaKH = customer.maKH;
       const data = await getCartDB(this.userMaKH);
       this.cartItems = data || [];
     },
 
     openCart() {
-      if (this.$refs.cartRef) {
-        this.$refs.cartRef.openCart();
-      }
-    },
-
-    async addToCart() {
-      let totalDuration = 60;
-      if (this.combo.combo_DichVus && this.combo.combo_DichVus.length > 0) {
-        totalDuration = this.combo.combo_DichVus.reduce(
-          (sum, cd) => sum + (cd.dichVu?.thoiGianLam || 30),
-          0,
-        );
-      }
-
-      const item = {
-        id: this.combo.maCb,
-        tenItem: this.combo.tenCombo,
-        gia: this.combo.gia,
-        // Dùng ảnh của combo, nếu trống thì gán ảnh mặc định
-        hinhAnh: this.combo.hinhAnh || "/assets/images/combo-default.jpg",
-        duration: totalDuration,
-      };
-
-      await addToCartDB(item, this.userMaKH);
-      await this.updateCartBadge();
-      alert(`Đã thêm "${this.combo.tenCombo}" vào giỏ lịch!`);
-
-      if (this.$refs.cartSidebar) {
-        this.$refs.cartSidebar.openCart();
-      }
+      this.$router.push('/cart');
     },
 
     async fetchCombo(id) {
@@ -161,60 +131,41 @@ export default {
     },
     // SỬA TRONG METHODS CỦA Chitietcombo.vue
     // TRONG FILE Chitietcombo.vue
-    async addToCart() {
-      // 1. TÍNH TỔNG THỜI GIAN COMBO (Đã khôi phục)
-      let totalDuration = 0;
-      if (this.dichVuTrongCombo && this.dichVuTrongCombo.length > 0) {
-        totalDuration = this.dichVuTrongCombo.reduce(
-          (sum, dv) => sum + (dv.thoiGianLam || 30),
-          0,
-        );
-      } else {
-        totalDuration = this.combo.tongThoiGian || 60; // Mặc định nếu không lấy được chi tiết
+    async addToCart(comboArg) {
+      const isComboArg = comboArg && (comboArg.id || comboArg.maCb) && comboArg.tenCombo;
+      const targetCombo = isComboArg ? comboArg : this.combo;
+
+      let totalDuration = 60;
+      if (!isComboArg) {
+        if (this.dichVuTrongCombo && this.dichVuTrongCombo.length > 0) {
+          totalDuration = this.dichVuTrongCombo.reduce(
+            (sum, dv) => sum + (dv.thoiGianLam || 30),
+            0,
+          );
+        } else {
+          totalDuration = this.combo.tongThoiGian || 60; 
+        }
       }
 
-      // 2. TẠO ĐỐI TƯỢNG ITEM
       const item = {
-        id: this.combo.maCb,
-        tenItem: this.combo.tenCombo,
-        gia: this.combo.gia,
-        // GIỮ GIÁ GỐC ĐỂ HIỆN GẠCH NGANG
-        originalPrice: this.combo.giaGoc || this.combo.gia,
-        hinhAnh: this.combo.hinhAnh || "/assets/images/combo-default.jpg",
-        duration: totalDuration, // Đã có thời gian
+        id: targetCombo.maCb || targetCombo.id,
+        tenItem: targetCombo.tenCombo,
+        gia: targetCombo.gia,
+        giaGoc: targetCombo.giaGoc || targetCombo.originalPrice || targetCombo.gia,
+        hinhAnh: targetCombo.hinhAnh || "/assets/images/combo-default.jpg",
+        duration: isComboArg ? (targetCombo.thoiGianLam || 60) : totalDuration,
+        type: 'COMBO'
       };
 
-      // 3. LƯU VÀO DATABASE GIỎ HÀNG
       await addToCartDB(item, this.userMaKH);
       await this.updateCartBadge();
-
-      alert(`Đã thêm "${this.combo.tenCombo}" vào giỏ lịch!`);
-      if (this.$refs.cartSidebar) this.$refs.cartSidebar.openCart();
+      window.dispatchEvent(new Event("cart-updated"));
+      alert(`Đã thêm "${item.tenItem}" vào giỏ hàng thành công!`);
     },
 
     async bookNow() {
-      // 1. TÍNH TỔNG THỜI GIAN (Đã khôi phục)
-      let totalDuration = 0;
-      if (this.dichVuTrongCombo && this.dichVuTrongCombo.length > 0) {
-        totalDuration = this.dichVuTrongCombo.reduce(
-          (sum, dv) => sum + (dv.thoiGianLam || 30),
-          0,
-        );
-      } else {
-        totalDuration = this.combo.tongThoiGian || 60;
-      }
-
-      const item = {
-        id: this.combo.maCb,
-        tenItem: this.combo.tenCombo,
-        gia: this.combo.gia,
-        originalPrice: this.combo.giaGoc || this.combo.gia,
-        hinhAnh: this.combo.hinhAnh,
-        duration: totalDuration,
-      };
-
-      await addToCartDB(item, this.userMaKH);
-      this.$router.push({ name: "booking" });
+      await this.addToCart();
+      this.$router.push('/cart');
     },
   },
 };
@@ -525,7 +476,7 @@ export default {
       <!-- ===================================================
            ĐÁNH GIÁ
       =================================================== -->
-      <ReviewList v-if="$route.params.id" :serviceId="$route.params.id" />
+      <!-- <ReviewList v-if="$route.params.id" :serviceId="$route.params.id" /> -->
     </div>
 
     <!-- FLOATING CART -->
@@ -533,8 +484,6 @@ export default {
       <i class="fas fa-shopping-bag"></i>
       <span class="cart-count">{{ cartItems.length }}</span>
     </div>
-
-    <CartSidebar ref="cartSidebar" />
   </div>
 </template>
 
