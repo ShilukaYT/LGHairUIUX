@@ -40,6 +40,36 @@ const breadcrumbs = computed(() => {
     case 'login':
       crumbs.push({ label: 'Tài khoản', to: { name: 'login' } });
       break;
+    case 'datdichvu':
+      crumbs.push({ label: 'Đặt lịch', to: { name: 'datdichvu' } });
+      break;
+    case 'thanh_toan_san_pham':
+      crumbs.push({ label: 'Thanh toán sản phẩm', to: { name: 'thanh_toan_san_pham' } });
+      break;
+    case 'thanh_toan_tong':
+      crumbs.push({ label: 'Thanh toán dịch vụ & sản phẩm', to: { name: 'thanh_toan_tong' } });
+      break;
+    case 'payment_result':
+    case 'payment_result_san_pham':
+    case 'payment_result_tong':
+      crumbs.push({ label: 'Kết quả giao dịch', to: { name: route.name } });
+      break;
+    case 'xac_nhan_dich_vu':
+      crumbs.push({ label: 'Xác nhận dịch vụ', to: { name: 'xac_nhan_dich_vu' } });
+      break;
+    case 'dmdv':
+      crumbs.push({ label: 'Danh mục dịch vụ', to: { name: 'dmdv' } });
+      break;
+    case 'detailCombo':
+      crumbs.push({ label: 'Chi tiết Combo', to: { name: 'detailCombo', params: route.params } });
+      break;
+    case 'Product':
+      crumbs.push({ label: 'Sản phẩm', to: { name: 'Product' } });
+      break;
+    case 'productDetail':
+      crumbs.push({ label: 'Sản phẩm', to: { name: 'Product' } });
+      crumbs.push({ label: 'Chi tiết sản phẩm', to: { name: route.name, params: route.params } });
+      break;
     default:
       if (route.name) {
          crumbs.push({ label: String(route.name).toUpperCase(), to: { name: route.name } });

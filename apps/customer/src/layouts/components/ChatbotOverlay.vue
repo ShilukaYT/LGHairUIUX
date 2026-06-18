@@ -2,7 +2,7 @@
 import { ref, nextTick, onUnmounted, watch } from 'vue'
 import { MessageSquare, X, Send, HeadphonesIcon, Loader2, Calendar } from 'lucide-vue-next'
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore'
-import { db } from '@/firebase.js'
+import { db } from '@/firebase'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 

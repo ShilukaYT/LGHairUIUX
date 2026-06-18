@@ -28,6 +28,13 @@ const router = createRouter({
         { path: 'dmdv', name: 'dmdv', component: () => import('@/Views/Anonymous/Dmdichvu.vue') },
         { path: 'product', name: 'Product', component: () => import('@/Views/Anonymous/Product.vue') },
         { path: 'product/:id', name: 'productDetail', component: () => import('@/Views/Anonymous/ProductDetail.vue') },
+        { path: 'dat-dich-vu', name: 'datdichvu', component: () => import('@/Views/Anonymous/Datdichvu/Datdichvu.vue') },
+        { path: 'payment-result', name: 'payment_result', component: () => import('@/Views/Anonymous/Datdichvu/PaymentResult.vue') },
+        { path: 'payment-result-san-pham', name: 'payment_result_san_pham', component: () => import('@/Views/Anonymous/Datdichvu/PaymentResultSanPham.vue') },
+        { path: 'payment-result-tong', name: 'payment_result_tong', component: () => import('@/Views/Anonymous/Datdichvu/PaymentResultTong.vue') },
+        { path: 'thanh-toan-san-pham', name: 'thanh_toan_san_pham', component: () => import('@/Views/Anonymous/Datdichvu/ThanhToanSanPham.vue') },
+        { path: 'thanh-toan-tong', name: 'thanh_toan_tong', component: () => import('@/Views/Anonymous/Datdichvu/ThanhToanTong.vue') },
+        { path: 'xac-nhan-dich-vu', name: 'xac_nhan_dich_vu', component: () => import('@/Views/Anonymous/Datdichvu/Xacnhandichvu.vue') },
       ]
     },
     // Future admin layout setup
