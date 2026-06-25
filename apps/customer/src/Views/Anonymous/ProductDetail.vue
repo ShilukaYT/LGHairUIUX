@@ -126,8 +126,10 @@ const selectBienThe = (bt: any) => {
   // Xây danh sách ảnh slide: ảnh đại diện trước, rồi gallery BT
   const imgs: string[] = [];
   if (bt.hinhAnhDaiDien) imgs.push(bt.hinhAnhDaiDien);
-  for (const h of bt.hinhAnhs ?? []) {
-    if (h.duongDan && !imgs.includes(h.duongDan)) imgs.push(h.duongDan);
+  if (Array.isArray(bt.hinhAnhs)) {
+    for (const h of bt.hinhAnhs) {
+      if (h.duongDan && !imgs.includes(h.duongDan)) imgs.push(h.duongDan);
+    }
   }
   btImageList.value = imgs;
   slideIndex.value  = 0;
@@ -151,7 +153,7 @@ const addToCart = async (isBuyNow = false) => {
   const customer = getCustomerInfo();
   
   const formattedItem = {
-    id: selectedBienThe.value.maBienThe,
+    id: selectedBienThe.value.maBienThe || selectedBienThe.value.id,
     maSanPham: product.value.maSp,
     tenItem: `${product.value.tenSp} - ${selectedBienThe.value.tenBienThe}`,
     gia: selectedBienThe.value.giaBan,

@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router';
 import axios from 'axios';
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 import { KHO_ORIGIN, calculateShippingFee } from './shippingCalculator';
-import { clearProductCartDB, removeFromCartDB } from '@/Views/Anonymous/CSDL/cartDB';
+import { clearCartDB, removeFromCartDB } from '@/Views/Anonymous/CSDL/cartDB';
 
 const router = useRouter();
 const API = import.meta.env.VITE_API_URL;
@@ -86,7 +86,7 @@ const addProduct = (sp: any, bt: any) => {
             id: bt.maBienThe,
             tenItem: `${sp.tenSp} - ${bt.tenBienThe}`,
             gia: bt.giaBan,
-            hinhAnh: bt.hinhAnh,
+            hinhAnh: bt.hinhAnhDaiDien || bt.hinhAnh || sp.hinhAnhDaiDien,
             soLuong: 1
         });
     }
@@ -324,7 +324,7 @@ const handleCheckout = async () => {
                 console.error("Lỗi xóa db giỏ hàng", e);
             }
             
-            await clearProductCartDB(customer?.maKH || 'GUEST'); // Backup xóa thêm theo luồng cũ
+            await clearCartDB(customer?.maKH || 'GUEST'); // Backup xóa thêm theo luồng cũ
             
             productItems.value = [];                 // Làm rỗng mảng hiển thị hiện tại
 
@@ -335,9 +335,16 @@ const handleCheckout = async () => {
                 // Đã xóa giỏ hàng xong -> Bay sang trang nhập thẻ của VNPay/MoMo
                 window.location.href = res.data.url;
             } else {
-                // COD -> Hiện thông báo -> Về trang chủ
-                alert(`Đặt hàng thành công! Sản phẩm sẽ được giao đến địa chỉ: ${orderData.value.address}`);
-                router.push('/');
+                // COD -> Chuyển sang trang kết quả thanh toán sản phẩm
+                const orderId = res.data.orderId || res.data.maHd || res.data.data?.orderId || res.data.data?.maHd || '';
+                router.push({
+                    path: '/payment-result-san-pham',
+                    query: {
+                        orderId: orderId,
+                        amount: finalTotal.value,
+                        cod: 'true'
+                    }
+                });
             }
         }
     } catch (error: any) {
@@ -437,20 +444,32 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
                             <div class="heading-line"></div>
                         </div>
                         <div class="payment-method-row mt-3">
-                            <div class="method-option" :class="{ active: orderData.paymentMethod === 'cod' }"
+                            <div class="method-option cod" :class="{ active: orderData.paymentMethod === 'cod' }"
                                 @click="orderData.paymentMethod = 'cod'">
-                                <span class="radio-dot"></span>
-                                <span class="method-label font-bold">Thanh toán khi nhận hàng (COD)</span>
+                                <div class="method-logo-wrapper">
+                                    <div class="cod-icon-wrapper">
+                                        <svg class="cod-svg-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M14 18H6C4.89543 18 4 17.1046 4 16V6C4 4.89543 4.89543 4 6 4H14V18Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                                            <path d="M14 8H20L22 11V16C22 17.1046 21.1046 18 20 18H18" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                                            <circle cx="7.5" cy="18.5" r="2.5" stroke="currentColor" stroke-width="2"/>
+                                            <circle cx="17.5" cy="18.5" r="2.5" stroke="currentColor" stroke-width="2"/>
+                                            <path d="M14 4V18" stroke="currentColor" stroke-width="2"/>
+                                        </svg>
+                                    </div>
+                                    <span class="method-label font-bold">COD</span>
+                                </div>
                             </div>
-                            <div class="method-option" :class="{ active: orderData.paymentMethod === 'vnpay' }"
+                            <div class="method-option vnpay" :class="{ active: orderData.paymentMethod === 'vnpay' }"
                                 @click="orderData.paymentMethod = 'vnpay'">
-                                <span class="radio-dot"></span>
-                                <span class="method-label font-bold">VNPay</span>
+                                <div class="method-logo-wrapper">
+                                    <img src="/vnpay-logo.png" alt="VNPay" class="method-logo-img">
+                                </div>
                             </div>
-                            <div class="method-option" :class="{ active: orderData.paymentMethod === 'momo' }"
+                            <div class="method-option momo" :class="{ active: orderData.paymentMethod === 'momo' }"
                                 @click="orderData.paymentMethod = 'momo'">
-                                <span class="radio-dot"></span>
-                                <span class="method-label font-bold">MoMo</span>
+                                <div class="method-logo-wrapper">
+                                    <img src="/momo-logo.png" alt="MoMo" class="method-logo-img">
+                                </div>
                             </div>
                         </div>
 
@@ -608,442 +627,408 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
 
 <style scoped>
 .booking-container {
-    --gold-metallic: #000;
-    --gold-solid: #000;
-}
-
-.booking-container {
-    background: #ffffff;
+    --gold-metallic: linear-gradient(135deg, #a88b58 0%, #bfa77a 50%, #d8c39e 100%);
+    --gold-solid: #bfa77a;
+    --gold-hover: #a88b58;
+    --gold-light: #fbfaf7;
+    --text-primary: #111827;
+    --text-secondary: #4b5563;
+    --text-muted: #9ca3af;
+    --border-color: #f3f4f6;
+    
+    background-color: #fbfbfd;
     min-height: 100vh;
-    font-family: 'Poppins', sans-serif;
-    color: #333;
-    line-height: 1.8;
+    font-family: 'Inter', sans-serif;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    position: relative;
 }
 
-.font-playfair {
+/* Background glows for a premium aesthetic */
+.booking-container::before {
+    content: '';
+    position: absolute;
+    top: -10%;
+    left: -10%;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(191, 167, 122, 0.04) 0%, rgba(255,255,255,0) 70%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.booking-container::after {
+    content: '';
+    position: absolute;
+    bottom: -10%;
+    right: -10%;
+    width: 800px;
+    height: 800px;
+    background: radial-gradient(circle, rgba(191, 167, 122, 0.03) 0%, rgba(255,255,255,0) 70%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.max-w-6xl {
+    position: relative;
+    z-index: 10;
+}
+
+/* Typography & Titles */
+.font-playfair, h1, h2, h3, h4, h5, h6, .section-heading-title {
     font-family: 'Montserrat', sans-serif !important;
 }
 
-/* Đảm bảo tiêu đề các mục dùng font hiện đại giống nút bấm */
-.card-header-title {
-    font-family: 'Poppins', sans-serif !important;
-    /* Đổi từ Playfair sang Poppins */
-    font-weight: 800 !important;
-    /* Độ dày cực đậm giống nút xác nhận */
-    font-size: 1.2rem;
-    text-transform: uppercase;
-    /* In hoa toàn bộ cho chuyên nghiệp */
-    letter-spacing: 0.5px;
-    border-bottom: 1px solid #f8f8f8;
-    padding-bottom: 15px;
-    margin-bottom: 25px;
-    display: flex;
-    align-items: center;
-}
-
-/* Tăng kích thước icon một chút cho cân đối */
-.card-header-title i {
-    font-size: 1.1rem;
-    /* Nếu muốn icon cũng có màu vàng ánh kim thì dùng dòng dưới, không thì giữ nguyên gold-text */
-    background: var(--gold-metallic);
-    -webkit-text-fill-color: transparent;
+input, select, textarea, button, .booking-input {
+    font-family: 'Inter', sans-serif !important;
 }
 
 .font-bold {
-    font-weight: 700 !important;
+    font-weight: 600 !important;
 }
 
-/* Font bình thường in đậm cho Tổng tiền và Nút */
-.total-val-standard {
-    font-family: Helvetica, sans-serif !important;
-    /* Xóa hoặc đổi thành Poppins */
-    font-weight: 700 !important;
-}
-
-.btn-text-normal {
-    font-family: 'Poppins', sans-serif !important;
-    font-weight: 800 !important;
-    /* Dùng độ đậm cực cao như ảnh mẫu */
-    font-size: 18px !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.5px !important;
-    line-height: 1.2 !important;
-    display: inline-block !important;
-    color: #ffffff !important;
-    -webkit-font-smoothing: antialiased;
-}
-
-/* Đồng bộ font cho phần số tiền để tránh bị méo số */
-.total-val-standard {
-    font-family: Helvetica, sans-serif !important;
-    font-weight: 700 !important;
-}
-
-/* Các thành phần cũ giữ nguyên */
-.gold-metallic-text {
-    color: #000;
-    text-transform: uppercase;
-    letter-spacing: 0.2em;
-    display: inline-block;
-}
-
-.gold-solid-text {
-    color: #000;
-    font-weight: 600;
+h1 {
+    letter-spacing: 2px;
+    font-weight: 800;
+    color: var(--text-primary);
 }
 
 .gold-accent-line {
     width: 60px;
-    height: 1px;
-    background: #000;
+    height: 3px;
+    background: var(--gold-metallic);
     margin: 15px auto;
-}
-
-.item-details {
-    display: flex;
-    flex-direction: column;
-    /* Đảm bảo tên ở trên, giá ở dưới */
-    gap: 4px;
-    /* Đây là khoảng cách giữa tên và giá, bạn có thể chỉnh 2px hoặc 6px tùy ý */
-}
-
-.glass-card {
-    background: #fff;
-    padding: 40px;
     border-radius: 2px;
-    border: 1px solid #eaeaea;
-    box-shadow: none;
 }
 
-.card-header-title {
-    font-size: 1.1rem;
-    border-bottom: 1px solid #f8f8f8;
-    padding-bottom: 15px;
-    margin-bottom: 25px;
+/* Section headings */
+.section-heading-wrapper {
+    position: relative;
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-color);
 }
 
-.stylist-meta {
-    display: flex;
-    flex-direction: column;
-    /* Xếp theo chiều dọc */
+.section-heading-wrapper.justify-content-center {
     align-items: center;
-    /* Canh giữa chữ */
-    margin-top: 10px;
-    /* Khoảng cách với ảnh đại diện */
-    gap: 2px;
-    /* Khoảng cách nhỏ giữa tên và role */
 }
 
-.s-name {
-    font-size: 14px;
-    color: #111;
-    display: block;
-    /* Luôn chiếm một hàng riêng */
-    line-height: 1.2;
-}
-
-.s-role {
-    font-size: 11px;
-    color: #888;
-    /* Màu xám nhẹ cho chức danh */
-    display: block;
-    /* Luôn chiếm một hàng riêng */
+.section-heading-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: var(--text-primary);
     text-transform: uppercase;
-    /* In hoa cho chuyên nghiệp */
-}
-
-.item-info {
-    display: flex;
-    flex-direction: column;
-    /* Xếp theo hàng dọc */
-    gap: 4px;
-    /* Khoảng cách giữa tên và giá (tùy chỉnh theo ý bạn) */
-    align-items: flex-start;
-    /* Canh lề trái cho cả 2 dòng */
-}
-
-/* Đảm bảo tên dịch vụ không bị dính vào giá */
-.item-info .n {
-    line-height: 1.2;
-    margin-bottom: 2px;
-}
-
-/* Giá tiền hiển thị rõ ràng */
-.item-info .p {
-    font-size: 13px;
-    /* Có thể chỉnh nhỏ hơn tên 1 chút cho đẹp */
-    line-height: 1;
-}
-
-.booking-input {
-    width: 100%;
-    height: 50px;
-    padding: 0 18px;
-    border-radius: 2px;
-    border: 1px solid #eee;
-    background: #fdfdfd;
-    outline: none;
-    font-size: 14px;
-}
-
-.booking-input:focus {
-    border-color: #000;
-}
-
-.stylist-flex {
-    display: flex;
-    gap: 20px;
-    overflow-x: auto;
-    padding: 10px 0;
-    scrollbar-width: none;
-}
-
-.stylist-card {
-    flex: 0 0 120px;
-    text-align: center;
-    cursor: pointer;
-    transition: 0.4s;
-}
-
-.avatar-box {
-    position: relative;
-    width: 80px;
-    height: 80px;
-    margin: 0 auto 10px;
-}
-
-.avatar-box img {
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 2px solid transparent;
-    padding: 3px;
-}
-
-.check-badge {
-    position: absolute;
-    bottom: 0;
-    right: 0;
-    background: #000;
-    color: #fff;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
     display: flex;
     align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    border: 2px solid #fff;
-    opacity: 0;
-    transform: scale(0.5);
-    transition: 0.3s;
 }
 
-.stylist-card.active img {
-    border-color: #000;
+.section-heading-title i {
+    color: var(--gold-solid);
+    font-size: 1.1rem;
 }
 
-.stylist-card.active .check-badge {
-    opacity: 1;
-    transform: scale(1);
-}
-
-/* Thanh toán & Voucher */
-.payment-method-row {
-    display: flex;
-    gap: 20px;
-}
-
-.method-option {
-    flex: 1;
-    border: 1px solid #eee;
-    padding: 15px;
-    border-radius: 2px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    transition: 0.3s;
-}
-
-.radio-dot {
-    flex-shrink: 0;
-    min-width: 20px;
-    min-height: 20px;
-    width: 20px;
-    height: 20px;
-    border: 2px solid #ddd;
-    border-radius: 50%;
-    margin-right: 12px;
-    position: relative;
-    display: block;
-}
-
-.method-option.active {
-    border-color: #000;
-    background: #fafafa;
-}
-
-.method-option.active .radio-dot {
-    border-color: #000;
-}
-
-.method-option.active .radio-dot::after {
-    content: '';
+.heading-line {
     position: absolute;
-    width: 10px;
-    height: 10px;
-    background: #000;
-    border-radius: 50%;
-    top: 50%;
+    bottom: -1px;
+    left: 0;
+    width: 50px;
+    height: 2px;
+    background: var(--gold-metallic);
+}
+
+.section-heading-wrapper.justify-content-center .heading-line {
     left: 50%;
-    transform: translate(-50%, -50%);
+    transform: translateX(-50%);
 }
 
-/* Ép mỗi Voucher chiếm 1 hàng duy nhất */
-.voucher-list-modern {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-    width: 100%;
-}
-
-.voucher-ticket-item {
-    display: flex;
-    width: 100%;
-    background: #fff;
-    border: 1px solid #eee;
-    border-radius: 2px;
-    overflow: hidden;
-    position: relative;
-    cursor: pointer;
-    transition: 0.3s ease;
-}
-
-.voucher-ticket-item.active {
-    border-color: #000;
-    background: #fafafa;
-}
-
-/* Phần nội dung bên phải */
-.ticket-right {
-    padding: 15px;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-}
-
-/* 1. Màu cho Ngày hết hạn (Vàng nhẹ tinh tế) */
-.v-tag-gold {
-    font-size: 11px;
-    color: #111111;
-    background: #f3f4f6;
-    padding: 3px 8px;
-    border-radius: 6px;
-}
-
-/* 2. Màu cho Giá tiền (Gold Metallic nổi bật nhất) */
-.v-price-gold {
-    font-size: 17px;
-    background: linear-gradient(135deg, #4b5563 0%, #111111 100%);
+.gold-metallic-text {
+    background: var(--gold-metallic);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
     display: inline-block;
 }
 
-.v-code {
-    font-size: 15px;
-    color: #111;
-}
-
-.v-divider {
-    width: 1px;
-    border-left: 2px dashed #eee;
-    height: 70%;
-    align-self: center;
-    margin: 0 5px;
-}
-
-.ticket-left {
-    background: var(--gold-metallic);
-    width: 50px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    position: relative;
-    flex-shrink: 0;
-}
-
-.v-check-icon {
-    position: absolute;
-    top: 10px;
-    right: 10px;
+.gold-solid-text {
     color: var(--gold-solid);
-    font-size: 18px;
+    font-weight: 600;
 }
 
-
-/* Style cho Icon thanh toán có màu */
-.method-icon-img {
-    width: 25px;
-    height: 25px;
-    object-fit: contain;
-    margin-right: 10px;
+/* Main Cards - Premium Glassmorphism style */
+.glass-card {
+    background: #ffffff;
+    padding: 32px;
+    border-radius: 16px;
+    border: 1px solid rgba(229, 231, 235, 0.7);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.015);
+    transition: all 0.3s ease;
 }
 
-/* Căn chỉnh lại ô chọn thanh toán */
+.left-main-card:hover, .bill-card:hover {
+    box-shadow: 0 10px 40px rgba(191, 167, 122, 0.04);
+}
+
+/* Forms & Inputs */
+.custom-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    display: block;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.booking-input {
+    width: 100%;
+    height: 48px;
+    padding: 0 16px;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    background: #fcfcfd;
+    outline: none;
+    font-size: 14px;
+    color: var(--text-primary);
+    transition: all 0.3s ease;
+}
+
+.booking-input:focus {
+    border-color: var(--gold-solid);
+    box-shadow: 0 0 0 3px rgba(191, 167, 122, 0.12);
+    background: #ffffff;
+}
+
+select.booking-input {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23bfa77a' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    background-size: 14px;
+    padding-right: 40px;
+}
+
+textarea.booking-input {
+    height: auto;
+    padding: 12px 16px;
+    border-radius: 8px;
+}
+
+/* Shipping info card */
+.shipping-info-card {
+    background: #fdfaf3;
+    border: 1px solid rgba(191, 167, 122, 0.15);
+    border-radius: 12px;
+    padding: 16px;
+    margin-top: 12px;
+}
+
+.shipping-info-card h6 {
+    font-family: 'Montserrat', sans-serif !important;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Payment Methods */
 .payment-method-row {
     display: flex;
-    gap: 15px;
+    gap: 16px;
 }
 
 .method-option {
     flex: 1;
-    border: 1px solid #eee;
-    padding: 12px;
-    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    padding: 10px 16px;
+    border-radius: 14px;
     display: flex;
     align-items: center;
+    justify-content: center;
     cursor: pointer;
-    background: #fff;
+    background: #ffffff;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    height: 80px;
+    overflow: visible;
 }
 
-.method-option.active {
-    border-color: #111;
-    background: #f9fafb;
+/* VNPay Branding */
+.method-option.vnpay {
+    position: relative;
+    border: 2px solid #e5e7eb;
 }
 
-/* Nút ĐÓNG danh sách dịch vụ tách biệt */
-.dropdown-close-footer {
-    text-align: left;
-    padding: 15px 20px;
-    font-size: 15px;
-    color: #666;
+.method-option.vnpay:hover {
+    border-color: rgba(0, 106, 194, 0.4);
+    transform: translateY(-2px);
+}
+
+.method-option.vnpay.active {
+    border-color: #006ac2;
+    background-color: #f4f9ff;
+    box-shadow: 0 8px 25px rgba(0, 106, 194, 0.15);
+    border-width: 3px;
+    transform: translateY(-2px) scale(1.02);
+}
+
+/* MoMo Branding */
+.method-option.momo {
+    position: relative;
+    border: 2px solid #e5e7eb;
+}
+
+.method-option.momo:hover {
+    border-color: rgba(216, 45, 139, 0.4);
+    transform: translateY(-2px);
+}
+
+.method-option.momo.active {
+    border-color: #d82d8b;
+    background-color: #fff5fa;
+    box-shadow: 0 8px 25px rgba(216, 45, 139, 0.15);
+    border-width: 3px;
+    transform: translateY(-2px) scale(1.02);
+}
+
+/* COD Branding */
+.method-option.cod {
+    position: relative;
+    border: 2px solid #e5e7eb;
+}
+
+.method-option.cod:hover {
+    border-color: rgba(22, 163, 74, 0.4);
+    transform: translateY(-2px);
+}
+
+.method-option.cod.active {
+    border-color: #16a34a;
+    background-color: #f0fdf4;
+    box-shadow: 0 8px 25px rgba(22, 163, 74, 0.15);
+    border-width: 3px;
+    transform: translateY(-2px) scale(1.02);
+}
+
+.cod-icon-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    background: #e2fbe9;
+    border-radius: 50%;
+    margin-right: 12px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 6px rgba(22, 163, 74, 0.08);
+}
+
+.method-option.cod.active .cod-icon-wrapper {
+    background: #16a34a;
+    box-shadow: 0 4px 10px rgba(22, 163, 74, 0.2);
+}
+
+.cod-svg-icon {
+    width: 22px;
+    height: 22px;
+    color: #16a34a;
+    transition: all 0.3s ease;
+}
+
+.method-option.cod.active .cod-svg-icon {
+    color: #ffffff;
+}
+
+.method-option.cod.active .method-label {
+    color: #16a34a;
+    transition: all 0.3s ease;
+}
+
+.method-logo-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    gap: 8px;
+}
+
+.method-logo-img {
+    height: 48px;
+    max-width: 85%;
+    object-fit: contain;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.method-option.active .method-logo-img {
+    transform: scale(1.08);
+}
+
+.method-label {
+    font-family: 'Montserrat', sans-serif !important;
+    font-weight: 700;
+    font-size: 1.2rem;
+    color: var(--text-primary);
+}
+
+
+
+/* Voucher ticket system */
+.voucher-list-modern {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+}
+
+.voucher-ticket-item {
+    display: flex;
+    width: 100%;
+    background: #ffffff;
+    border: 1px dashed #d1d5db;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
     cursor: pointer;
-    border-top: 1px solid #eee;
-    background: #fff;
-    font-family: 'Poppins', sans-serif;
+    transition: all 0.3s ease;
+}
+
+.voucher-ticket-item:hover {
+    border-color: var(--gold-solid);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+}
+
+.voucher-ticket-item.active {
+    border: 1px solid var(--gold-solid);
+    background: var(--gold-light);
+    box-shadow: 0 6px 16px rgba(191, 167, 122, 0.12);
 }
 
 .ticket-left {
     background: var(--gold-metallic);
-    width: 45px;
+    width: 48px;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #fff;
+    color: #ffffff;
     position: relative;
+    flex-shrink: 0;
+}
+
+.ticket-left i {
+    font-size: 16px;
 }
 
 .notch {
     position: absolute;
     width: 12px;
     height: 12px;
-    background: #fff;
+    background: #fbfbfd;
     border-radius: 50%;
     left: -6px;
+    z-index: 10;
 }
 
 .notch.top {
@@ -1054,24 +1039,89 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
     bottom: -6px;
 }
 
-.ticket-right {
-    padding: 12px;
-    flex: 1;
+.v-divider {
+    width: 1px;
+    border-left: 2px dashed #e5e7eb;
+    height: 60%;
+    align-self: center;
+    margin: 0 4px;
 }
 
+.ticket-right {
+    padding: 14px 16px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.v-code {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 0.5px;
+}
+
+.v-tag-gold {
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--gold-solid);
+    background: #fdfaf3;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: 1px solid rgba(191, 167, 122, 0.15);
+}
+
+.v-desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    line-height: 1.4;
+}
+
+.v-price-gold {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--gold-solid);
+    margin-top: 6px;
+}
+
+.v-check-icon {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    color: var(--gold-solid);
+    font-size: 18px;
+}
+
+/* Service Search Box Dropdown in Invoice card */
 .search-box-wrapper {
     position: relative;
 }
 
+.input-wrap {
+    position: relative;
+    width: 100%;
+}
+
 .search-input {
     width: 100%;
-    height: 50px;
-    padding-left: 50px;
-    border-radius: 50px;
-    border: 1px solid #eee;
-    background: #fdfdfd;
+    height: 46px;
+    padding-left: 44px;
+    padding-right: 16px;
+    border-radius: 24px;
+    border: 1px solid #e5e7eb;
+    background: #ffffff;
     outline: none;
-    font-size: 14px;
+    font-size: 13px;
+    color: var(--text-primary);
+    transition: all 0.3s ease;
+}
+
+.search-input:focus {
+    border-color: var(--gold-solid);
+    box-shadow: 0 0 0 3px rgba(191, 167, 122, 0.15);
 }
 
 .search-icon {
@@ -1079,304 +1129,203 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
     left: 18px;
     top: 50%;
     transform: translateY(-50%);
-    color: #ccc;
+    color: #9ca3af;
+    font-size: 14px;
+    pointer-events: none;
     z-index: 5;
 }
 
 .service-dropdown-list {
     position: absolute;
-    top: 110%;
+    top: 108%;
     left: 0;
     width: 100%;
-    background: #fff;
-    border-radius: 15px;
+    background: #ffffff;
+    border-radius: 12px;
     z-index: 1000;
-    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
     border: 1px solid #f0f0f0;
     overflow: hidden;
 }
 
 .dropdown-header {
-    padding: 10px 20px;
-    background: #fdfdfd;
-    font-size: 11px;
+    padding: 10px 16px;
+    background: #f9fafb;
+    font-size: 10px;
     font-weight: 700;
-    color: #999;
+    color: #6b7280;
     text-transform: uppercase;
-    border-bottom: 1px solid #f5f5f5;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #f3f4f6;
 }
 
 .dropdown-scroll-area {
-    max-height: 280px;
+    max-height: 250px;
     overflow-y: auto;
 }
 
 .service-dropdown-item {
-    padding: 12px 20px;
+    padding: 10px 16px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     cursor: pointer;
-    border-bottom: 1px solid #f9f9f9;
+    border-bottom: 1px solid #fcfcfc;
+    transition: all 0.2s ease;
 }
 
 .service-dropdown-item:hover {
-    background: #f9fafb;
+    background: var(--gold-light);
 }
 
-.item-icon-circle {
-    width: 32px;
-    height: 32px;
-    background: #f3f4f6;
-    color: var(--gold-solid);
-    border-radius: 50%;
+.item-details {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-right: 12px;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.item-details .item-name-text {
     font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.item-price-text {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.add-btn-icon {
+    color: var(--gold-solid);
+    font-size: 18px;
+    transition: transform 0.2s ease;
+}
+
+.service-dropdown-item:hover .add-btn-icon {
+    transform: scale(1.1);
 }
 
 .dropdown-close-footer {
-    text-align: left;
-    padding: 15px 20px;
-    font-size: 16px;
-    color: #666;
+    text-align: center;
+    padding: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
     cursor: pointer;
-    border-top: 1px solid #f5f5f5;
-    background: #fff;
+    border-top: 1px solid #f3f4f6;
+    background: #f9fafb;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.2s ease;
+}
+
+.dropdown-close-footer:hover {
+    background: #e5e7eb;
+    color: var(--text-primary);
+}
+
+/* Selected service item row in bill card */
+.selected-items-wrapper {
+    max-height: 220px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.selected-items-wrapper::-webkit-scrollbar {
+    width: 4px;
+}
+
+.selected-items-wrapper::-webkit-scrollbar-thumb {
+    background-color: #e5e7eb;
+    border-radius: 2px;
 }
 
 .item-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 15px 20px;
-    background: #fcfcfc;
-    border-radius: 12px;
-    margin-bottom: 10px;
-    border: 1px solid #f5f5f5;
+    padding: 10px 14px;
+    background: #fafafb;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    border: 1px solid #f3f4f6;
+    transition: all 0.3s ease;
+}
+
+.item-row:hover {
+    border-color: rgba(191, 167, 122, 0.2);
+    background: #ffffff;
+}
+
+.item-row img {
+    border-radius: 6px;
+    object-fit: cover;
+}
+
+.item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-start;
+}
+
+.item-info .n {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.3;
+}
+
+.item-info .p {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--gold-solid);
 }
 
 .del-btn {
     border: none;
     background: transparent;
-    color: #ff5e5e;
+    color: #9ca3af;
     cursor: pointer;
-}
-
-.total-box {
-    margin-top: 18px;
-    padding-top: 16px;
-    border-top: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-.total-line,
-.grand-line,
-.pay-line {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin: 10px 0;
-    font-weight: 700;
-}
-
-.total-line span,
-.total-line.muted {
-    color: #777;
-}
-
-.total-line.saving {
-    color: #16a34a;
-}
-
-.total-line.text-danger span,
-.total-line.text-danger b {
-    color: #d63031 !important;
-}
-
-.grand-line {
-    margin-top: 18px;
-    padding-top: 16px;
-    border-top: 1px solid rgba(0, 0, 0, 0.08);
-    font-size: 18px;
-}
-
-.grand-line b {
-    color: #1f2937;
-    font-size: 23px;
-}
-
-.pay-line {
-    padding: 14px;
-    border-radius: 18px;
-    background: rgba(22, 163, 74, 0.1);
-    color: #15803d;
-}
-
-.pay-now-alert {
-    background: #f6ffed;
-    padding: 10px 15px;
-    border-radius: 10px;
-    border: 1px solid #b7eb8f;
-}
-
-.btn-confirm-metallic-final {
-    width: 100%;
-    padding: 18px;
-    border: none;
-    border-radius: 2px;
-    background: #000;
-    color: #ffffff !important;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    position: relative;
-    overflow: hidden;
-    cursor: pointer;
-    transition: 0.4s;
-    font-family: 'Montserrat', Arial, sans-serif !important;
-    font-weight: 800 !important;
-    font-size: 18px !important;
-}
-
-.btn-confirm-metallic-final .btn-text-normal {
-    color: #ffffff !important;
-    font-family: Arial, Helvetica, sans-serif !important;
-}
-
-.btn-confirm-metallic-final::before {
-    display: none;
-}
-
-.pay-btn {
-    flex: 1;
-    border: 1px solid #eee;
-    padding: 12px;
-    border-radius: 2px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    transition: 0.3s;
     font-size: 13px;
+    padding: 6px;
+    transition: all 0.2s ease;
 }
 
-.pay-btn .dot {
-    width: 14px;
-    height: 14px;
-    border: 2px solid #ddd;
-    border-radius: 50%;
-    margin-right: 10px;
-    position: relative;
+.del-btn:hover {
+    color: #ef4444;
+    transform: scale(1.1);
 }
 
-.pay-btn.active {
-    border-color: #000;
-    background: #fafafa;
-}
-
-.pay-btn.active .dot {
-    border-color: #000;
-}
-
-.pay-btn.active .dot::after {
-    content: '';
-    position: absolute;
-    width: 8px;
-    height: 8px;
-    background: #000;
-    border-radius: 50%;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-}
-
-.list-fade-enter-active,
-.list-fade-leave-active {
-    transition: all 0.4s ease;
-}
-
-.list-fade-enter-from {
-    opacity: 0;
-    transform: translateX(30px);
-}
-
-.list-fade-leave-to {
-    opacity: 0;
-    transform: scale(0.5);
-}
-
-.sticky-bill {
-    position: sticky;
-    top: 120px;
-}
-
-@media (max-width: 991px) {
-    .sticky-bill {
-        position: static;
-        margin-top: 30px;
-    }
-
-    .voucher-list-modern,
-    .payment-method-row {
-        grid-template-columns: 1fr;
-    }
-}
-
-.booking-input {
-    width: 100%;
-    height: 50px;
-    /* Cố định chiều cao để tất cả các ô bằng chằn chặn */
-    padding: 0 18px;
-    border-radius: 12px;
-    border: 1px solid #eee;
-    background: #fafafa;
-    outline: none;
-    font-size: 14px;
+.quantity-pill {
     display: flex;
     align-items: center;
-    appearance: none;
-    /* Xóa style mặc định của trình duyệt cho select */
+    border: 1px solid #e5e7eb;
+    border-radius: 20px;
+    padding: 2px 8px;
+    background: #ffffff;
+    height: 32px;
 }
 
-/* Thêm icon mũi tên cho ô select cho đẹp */
-select.booking-input {
-    background-image: url("data:image/svg+xml,...");
-    /* Nếu muốn thêm icon dropdown */
-    background-repeat: no-repeat;
-    background-position: right 15px center;
-    background-size: 12px;
-}
-/* Custom Section Styles for Layout Balance */
-.section-card {
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-    border: 1px solid rgba(0, 0, 0, 0.05);
-}
-.section-card:hover {
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
-}
-.section-heading-wrapper {
-    position: relative;
-    margin-bottom: 1.5rem;
-    padding-bottom: 0.5rem;
-    display: flex;
-    flex-direction: column;
-}
-.section-heading-wrapper.justify-content-center {
-    align-items: center;
-}
-.section-heading-title {
-    font-size: 1.4rem;
-    letter-spacing: 1px;
-    margin-bottom: 0.5rem;
+.qty-btn {
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    width: 24px;
+    height: 24px;
     display: flex;
     align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    transition: all 0.2s;
 }
-.heading-line {
-    width: 60px;
-    height: 1px;
-    background: #000;
+
+.qty-btn:hover {
+    color: var(--gold-solid);
 }
+
 .qty-input {
     width: 32px;
     border: none;
@@ -1387,9 +1336,162 @@ select.booking-input {
     color: #111;
     outline: none;
 }
+
 .qty-input::-webkit-outer-spin-button,
 .qty-input::-webkit-inner-spin-button {
     -webkit-appearance: none;
     margin: 0;
+}
+
+/* Invoice / Bill details */
+.total-box {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px dashed #e5e7eb;
+}
+
+.total-line {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.total-line span {
+    font-weight: 500;
+}
+
+.total-line b {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.total-line.saving {
+    color: #16a34a;
+}
+.total-line.saving b {
+    color: #16a34a;
+}
+
+.total-line.text-danger {
+    color: #ef4444 !important;
+}
+.total-line.text-danger b,
+.total-line.text-danger span {
+    color: #ef4444 !important;
+}
+
+.grand-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 16px;
+    border-top: 1px dashed #e5e7eb;
+    padding-top: 16px;
+}
+
+.grand-line span {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.grand-line b {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.pay-line {
+    background: #f0fdf4;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #bbf7d0;
+    margin-top: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #15803d;
+}
+
+.pay-line span {
+    font-size: 11px;
+    font-weight: 700;
+    color: #15803d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.pay-line b {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #16a34a;
+}
+
+/* Premium Confirmation Button */
+.btn-confirm-metallic-final {
+    width: 100%;
+    padding: 16px;
+    border: none;
+    border-radius: 8px;
+    background: var(--gold-metallic);
+    color: #ffffff !important;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 14px rgba(191, 167, 122, 0.3);
+}
+
+.btn-confirm-metallic-final:hover {
+    background: var(--text-primary);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+.btn-text-normal {
+    font-family: inherit !important;
+    font-weight: 700 !important;
+    font-size: 14px !important;
+    color: #ffffff !important;
+    letter-spacing: 1px !important;
+}
+
+/* Animations */
+.list-fade-enter-active,
+.list-fade-leave-active {
+    transition: all 0.3s ease;
+}
+
+.list-fade-enter-from {
+    opacity: 0;
+    transform: translateX(20px);
+}
+
+.list-fade-leave-to {
+    opacity: 0;
+    transform: scale(0.9);
+}
+
+.sticky-bill {
+    position: sticky;
+    top: 100px;
+}
+
+/* Responsive Media Queries */
+@media (max-width: 991px) {
+    .sticky-bill {
+        position: static;
+        margin-top: 24px;
+    }
+    
+    .glass-card {
+        padding: 24px;
+    }
 }
 </style>

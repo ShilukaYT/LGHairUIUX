@@ -191,7 +191,7 @@ const addToCart = async (rawItem: any) => {
 
   // 2. Đóng gói object gửi sang Sidebar
   const formattedItem = {
-    id: isCombo ? rawItem.maCb : rawItem.maDv,
+    id: isCombo ? (rawItem.maCb || rawItem.id) : (rawItem.maDv || rawItem.id),
     tenItem: isCombo ? rawItem.tenCombo : rawItem.tenDv,
     gia: finalPrice, // Giá đã giảm (dùng để thanh toán)
     giaGoc: giaGoc, // Giá gốc (dùng để hiển thị gạch ngang)
@@ -565,10 +565,7 @@ const formatPrice = (price: number) => {
         </div>
       </div>
     </section>
-    <div class="floating-cart-btn" @click="openCart">
-      <i class="fas fa-shopping-bag"></i>
-      <span class="cart-count">{{ cartItems.length }}</span>
-    </div>
+
 
     <!-- <CartSidebar ref="cartRef" /> -->
   </div>
@@ -1416,49 +1413,7 @@ const formatPrice = (price: number) => {
   flex-direction: column !important;
 }
 
-/* =========================================================
-   FLOATING CART
-   ========================================================= */
-.floating-cart-btn {
-  position: fixed;
-  bottom: 160px;
-  right: 20px;
-  width: 56px;
-  height: 56px;
-  background: var(--ink);
-  border-radius: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  color: #fff;
-  font-size: 22px;
-  cursor: pointer;
-  box-shadow: none;
-  z-index: 9999999;
-  transition: 0.3s;
-}
 
-.floating-cart-btn:hover {
-  transform: scale(1.05);
-  background: var(--ink-soft);
-}
-
-.cart-count {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  background: #fff;
-  color: var(--ink);
-  font-size: 10px;
-  font-weight: 600;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  border: 1px solid var(--ink);
-}
 
 /* Misc legacy helpers (kept for compatibility) */
 .card-head {
