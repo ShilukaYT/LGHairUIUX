@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, reactive } from 'vue';
 import { CheckCircle, AlertCircle, X } from 'lucide-vue-next';
 import axios from 'axios';
+import { syncCartAfterLoginDB } from '@/Views/Anonymous/CSDL/cartDB';
 
 const isLogin = ref(true);
 const isForgotPassword = ref(false);
@@ -105,8 +106,19 @@ const handleLogin = async () => {
     });
 
     if (response.data.success) {
+      // ✅ Lưu thông tin user và JWT token
       localStorage.setItem('user', JSON.stringify(response.data.user));
+      localStorage.setItem('token', response.data.token ?? response.data.accessToken ?? '');
+
       showStatus("Thành công", "Đăng nhập hệ thống thành công!", "success");
+
+      // ✅ Đồng bộ giỏ hàng Guest → User trước khi chuyển trang
+      try {
+        await syncCartAfterLoginDB();
+      } catch (syncErr) {
+        console.warn("Đồng bộ giỏ hàng thất bại (không nghiêm trọng):", syncErr);
+      }
+
       setTimeout(() => {
         window.location.href = '/';
       }, 1000);

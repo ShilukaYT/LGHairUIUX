@@ -46,10 +46,15 @@
               </button>
             </div>
 
-            <!-- Table Header (hidden on mobile) -->
-            <div class="hidden md:grid grid-cols-[3fr_1fr_1fr_auto] gap-6 border-b border-gray-200 pb-4 mb-6 text-xs font-bold uppercase tracking-widest text-gray-500">
-              <span>Sản phẩm / Dịch vụ</span>
+            <!-- Table Header (hidden on mobile) — Sản phẩm có cột Số lượng, Dịch vụ thì không -->
+            <div v-if="activeTab === 'product'" class="hidden md:grid grid-cols-[3fr_1fr_1fr_auto] gap-6 border-b border-gray-200 pb-4 mb-6 text-xs font-bold uppercase tracking-widest text-gray-500">
+              <span>Sản phẩm</span>
               <span class="text-center">Số lượng</span>
+              <span class="text-right">Giá</span>
+              <span class="w-10"></span>
+            </div>
+            <div v-else class="hidden md:grid grid-cols-[3fr_1fr_auto] gap-6 border-b border-gray-200 pb-4 mb-6 text-xs font-bold uppercase tracking-widest text-gray-500">
+              <span>Dịch vụ</span>
               <span class="text-right">Giá</span>
               <span class="w-10"></span>
             </div>
@@ -59,8 +64,11 @@
               <div v-if="(activeTab === 'service' ? serviceItems : productItems).length === 0" class="py-16 text-center text-gray-500 font-medium text-base bg-gray-50 rounded-lg">
                  Chưa có {{ activeTab === 'service' ? 'dịch vụ' : 'sản phẩm' }} nào trong mục này.
               </div>
-              <div v-for="item in (activeTab === 'service' ? serviceItems : productItems)" :key="item.id" class="flex flex-col md:grid md:grid-cols-[3fr_1fr_1fr_auto] gap-6 items-center border border-gray-100 md:border-none md:border-b p-4 md:p-0 md:py-6 rounded-lg md:rounded-none bg-white hover:bg-gray-50 transition-colors group">
-                <!-- Product Info -->
+              <div v-for="item in (activeTab === 'service' ? serviceItems : productItems)" :key="item.id"
+                class="flex flex-col md:grid gap-6 items-center border border-gray-100 md:border-none md:border-b p-4 md:p-0 md:py-6 rounded-lg md:rounded-none bg-white hover:bg-gray-50 transition-colors group"
+                :class="item.type === 'SANPHAM' ? 'md:grid-cols-[3fr_1fr_1fr_auto]' : 'md:grid-cols-[3fr_1fr_auto]'"
+              >
+                <!-- Info -->
                 <div class="flex items-center gap-6 w-full">
                   <div class="w-24 h-24 md:w-28 md:h-28 bg-gray-100 flex-shrink-0 cursor-pointer overflow-hidden rounded-md border border-gray-200">
                     <img :src="getImageUrl(item.hinhAnh)" :alt="item.tenItem" class="w-full h-full object-cover" />
@@ -75,10 +83,9 @@
                   </div>
                 </div>
 
-                <!-- Quantity Mobile Header -->
-                <div class="md:hidden w-full flex justify-between items-center border-t border-gray-100 pt-4 mt-2">
+                <!-- Số lượng — CHỈ SẢN PHẨM (mobile) -->
+                <div v-if="item.type === 'SANPHAM'" class="md:hidden w-full flex justify-between items-center border-t border-gray-100 pt-4 mt-2">
                   <span class="text-xs font-bold uppercase tracking-widest text-gray-500">Số lượng</span>
-                  <!-- Mobile Qty Selector -->
                   <div class="flex items-center border-2 border-gray-200 rounded-md bg-white">
                     <button @click="decreaseQuantity(item)" class="w-10 h-10 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors"><Minus :size="16" /></button>
                     <span class="w-10 text-center font-bold text-sm">{{ item.soLuong || 1 }}</span>
@@ -86,8 +93,8 @@
                   </div>
                 </div>
 
-                <!-- Desktop Qty Selector -->
-                <div class="hidden md:flex justify-center w-full">
+                <!-- Số lượng — CHỈ SẢN PHẨM (desktop) -->
+                <div v-if="item.type === 'SANPHAM'" class="hidden md:flex justify-center w-full">
                   <div class="flex items-center border-2 border-gray-200 rounded-md bg-white">
                     <button @click="decreaseQuantity(item)" class="w-10 h-10 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors"><Minus :size="16" /></button>
                     <span class="w-10 text-center font-bold text-sm">{{ item.soLuong || 1 }}</span>
@@ -95,20 +102,20 @@
                   </div>
                 </div>
 
-                <!-- Price (Desktop) -->
+                <!-- Giá (desktop) -->
                 <div class="hidden md:block text-right w-full">
-                  <span class="text-lg font-bold text-black">{{ formatMoney((item.gia || 0) * (item.soLuong || 1)) }}</span>
+                  <span class="text-lg font-bold text-black">{{ formatMoney((item.gia || 0) * (item.type === 'SANPHAM' ? (item.soLuong || 1) : 1)) }}</span>
                 </div>
 
-                <!-- Remove -->
+                <!-- Xóa (desktop) -->
                 <div class="hidden md:flex justify-end w-10">
-                  <button @click="removeItem(item.id)" class="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-red-500 transition-all shadow-sm bg-white border border-gray-200 hover:border-red-500">
+                  <button @click="removeItem(item)" class="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-red-500 transition-all shadow-sm bg-white border border-gray-200 hover:border-red-500">
                     <X :size="18" :stroke-width="2" />
                   </button>
                 </div>
                 
-                <!-- Mobile Remove -->
-                <button @click="removeItem(item.id)" class="md:hidden w-full bg-red-50 text-red-600 font-bold text-xs uppercase tracking-widest text-center py-3 rounded-md mt-2 hover:bg-red-500 hover:text-white transition-colors">
+                <!-- Xóa (mobile) -->
+                <button @click="removeItem(item)" class="md:hidden w-full bg-red-50 text-red-600 font-bold text-xs uppercase tracking-widest text-center py-3 rounded-md mt-2 hover:bg-red-500 hover:text-white transition-colors">
                   <i class="fas fa-trash-alt me-2"></i> Xóa khỏi giỏ
                 </button>
               </div>
@@ -233,9 +240,9 @@ onMounted(() => {
 });
 
 const isProduct = (item: CartItem) => {
-    return item.type === "SANPHAM" || String(item.id).startsWith("SANPHAM_");
+    // Chỉ dựa vào type từ database để phân biệt
+    return item.type === "SANPHAM";
 };
-
 const isService = (item: CartItem) => {
     return !isProduct(item);
 };
@@ -282,8 +289,10 @@ const formatMoney = (money: number) => {
     }).format(money || 0);
 };
 
-const removeItem = async (id: string | number) => {
-    await removeFromCartDB(id);
+const removeItem = async (item: CartItem) => {
+    // ✅ Truyền type để tránh request thừa tìm kiếm loại
+    const backendLoai = item.type === 'SANPHAM' ? 'BIENTHE' : (item.type || 'DICHVU');
+    await removeFromCartDB(item.id, backendLoai);
     await loadCart();
 };
 
@@ -297,7 +306,7 @@ const decreaseQuantity = async (item: CartItem) => {
     const currentQuantity = Number(item.soLuong || 1);
 
     if (currentQuantity <= 1) {
-        await removeItem(item.id);
+        await removeItem(item);
         return;
     }
 
