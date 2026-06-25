@@ -105,7 +105,8 @@ const navLinks: any[] = [
       { label: 'Kevin Murphy', name: 'shop' }
     ]
   },
-  { name: 'datdichvu', label: 'Đặt lịch' }
+  { name: 'khuyenMai', label: 'Khuyến Mãi' },
+  { name: 'booking', label: 'Đặt lịch' }
 ];
 
 const handleScroll = () => {
