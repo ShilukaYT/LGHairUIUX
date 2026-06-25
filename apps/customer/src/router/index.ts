@@ -35,6 +35,7 @@ const router = createRouter({
         { path: 'thanh-toan-san-pham', name: 'thanh_toan_san_pham', component: () => import('@/Views/Anonymous/Datdichvu/ThanhToanSanPham.vue') },
         { path: 'thanh-toan-tong', name: 'thanh_toan_tong', component: () => import('@/Views/Anonymous/Datdichvu/ThanhToanTong.vue') },
         { path: 'xac-nhan-dich-vu', name: 'xac_nhan_dich_vu', component: () => import('@/Views/Anonymous/Datdichvu/Xacnhandichvu.vue') },
+        { path: 'khuyen-mai', name: 'khuyenMai', component: () => import('@/Views/Anonymous/KhuyenMai.vue') },
       ]
     },
     // Future admin layout setup

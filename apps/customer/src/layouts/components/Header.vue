@@ -84,6 +84,7 @@ const navLinks: any[] = [
       { label: 'Kevin Murphy', name: 'shop' }
     ]
   },
+  { name: 'khuyenMai', label: 'Khuyến Mãi' },
   { name: 'booking', label: 'Đặt lịch' }
 ];
 

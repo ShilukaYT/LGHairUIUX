@@ -21,6 +21,7 @@ const routes = [
       { path: 'NhanVien', name: 'NhanVien', component: () => import('@/Admin/NhanVien/NhanVien.vue') },
       { path: 'StyleHairXColor', name: 'StyleHairXColor', component: () => import('@/Admin/StyleHairAndColor/StyleHairXColor.vue') },
       { path: 'nhan-vien', name: 'QuanLyNhanVienAdmin', component: () => import('@/Admin/NhanVien/NhanVien.vue') },
+      { path: 'bang-luong', name: 'BangLuongAdmin', component: () => import('@/Admin/QuanLyLuong/BangLuong.vue') },
       { path: 'Gui-Thong-Bao', name: 'GuiThongBao', component: () => import('@/Admin/GuiThongBao.vue') },
       { path: 'chat', name: 'AdminChat', component: () => import('@/components/AdminChat.vue') },
     ],
