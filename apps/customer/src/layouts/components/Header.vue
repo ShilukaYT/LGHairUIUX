@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Search, User, ShoppingBag, Menu, X, Heart } from 'lucide-vue-next';
 import axios from 'axios';
+import { getCartDB } from '@/Views/Anonymous/CSDL/cartDB';
 
 const API = import.meta.env.VITE_API_URL;
 const route = useRoute();
@@ -11,6 +12,26 @@ const scrolled = ref(false);
 const mobileMenuOpen = ref(false);
 const currentUser = ref<any>(null);
 let checkSessionInterval: ReturnType<typeof setInterval>;
+
+const cartCount = ref(0);
+
+const updateCartCount = async () => {
+  const user = localStorage.getItem('user');
+  let maKH = 'GUEST';
+  if (user) {
+    try {
+      maKH = JSON.parse(user).maKH || 'GUEST';
+    } catch (e) {
+      maKH = 'GUEST';
+    }
+  }
+  const items = await getCartDB(maKH);
+  cartCount.value = items.length;
+};
+
+watch(currentUser, () => {
+  updateCartCount();
+});
 
 const checkUser = () => {
   const userData = localStorage.getItem('user');
@@ -106,6 +127,9 @@ onMounted(() => {
   window.addEventListener('storage', checkUser);
   fetchProductCategories();
 
+  window.addEventListener('cart-updated', updateCartCount);
+  updateCartCount();
+
   // Tự động kiểm tra phiên đăng nhập mỗi 5 phút
   checkSessionInterval = setInterval(async () => {
     if (!currentUser.value) return; // Chỉ kiểm tra khi có user đăng nhập
@@ -126,6 +150,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('scroll', handleScroll);
   window.removeEventListener('storage', checkUser);
+  window.removeEventListener('cart-updated', updateCartCount);
   document.body.style.overflow = '';
   if (checkSessionInterval) {
     clearInterval(checkSessionInterval);
@@ -317,34 +342,38 @@ onUnmounted(() => {
             </button>
             <!-- User Dropdown -->
             <div class="absolute top-full right-0 pt-0 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 translate-y-2 group-hover:translate-y-0 z-50">
-              <div class="bg-white border border-gray-100 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] py-4 min-w-[180px] rounded-sm text-left">
-                
-                <div v-if="currentUser" class="px-6 py-2 mb-2 border-b border-gray-100">
-                  <p class="text-xs font-medium text-black">{{ currentUser.hoTen || currentUser.name || currentUser.username || 'Người dùng' }}</p>
-                  <p v-if="currentUser.email" class="text-[10px] text-gray-500 truncate mt-1">{{ currentUser.email }}</p>
-                </div>
+              <div class="bg-white border border-gray-100 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] py-4 min-w-[200px] rounded-sm text-left">
 
-                <router-link :to="{ name: 'profile' }" class="block px-6 py-2.5 text-[11px] uppercase tracking-widest text-gray-600 hover:text-black hover:bg-gray-50 transition-colors">
-                  Hồ Sơ Của Tôi
-                </router-link>
-                <router-link :to="{ name: 'profile' }" class="block px-6 py-2.5 text-[11px] uppercase tracking-widest text-gray-600 hover:text-black hover:bg-gray-50 transition-colors">
-                  Đơn Hàng
-                </router-link>
-                <div class="h-px bg-gray-100 my-2"></div>
-                
-                <button v-if="currentUser" @click="handleLogout" class="w-full text-left block px-6 py-2.5 text-[11px] uppercase tracking-widest text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors">
-                  Đăng Xuất
-                </button>
-                <router-link v-else :to="{ name: 'login' }" class="block px-6 py-2.5 text-[11px] uppercase tracking-widest text-gray-600 hover:text-black hover:bg-gray-50 transition-colors">
-                  Đăng Nhập
-                </router-link>
+                <template v-if="currentUser">
+                  <div class="px-6 py-2 mb-2 border-b border-gray-100">
+                    <p class="text-xs font-medium text-black">{{ currentUser.hoTen || currentUser.name || currentUser.username || 'Người dùng' }}</p>
+                    <p v-if="currentUser.email" class="text-[10px] text-gray-500 truncate mt-1">{{ currentUser.email }}</p>
+                  </div>
+
+                  <router-link :to="{ name: 'profile' }" class="block px-6 py-2.5 text-[11px] uppercase tracking-widest text-gray-600 hover:text-black hover:bg-gray-50 transition-colors">
+                    Hồ Sơ Của Tôi
+                  </router-link>
+                  <router-link :to="{ name: 'profile' }" class="block px-6 py-2.5 text-[11px] uppercase tracking-widest text-gray-600 hover:text-black hover:bg-gray-50 transition-colors">
+                    Đơn Hàng
+                  </router-link>
+                  <div class="h-px bg-gray-100 my-2"></div>
+                  <button @click="handleLogout" class="w-full text-left block px-6 py-2.5 text-[11px] uppercase tracking-widest text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors">
+                    Đăng Xuất
+                  </button>
+                </template>
+
+                <template v-else>
+                  <router-link :to="{ name: 'login' }" class="block px-6 py-2.5 text-[11px] uppercase tracking-widest text-gray-600 hover:text-black hover:bg-gray-50 transition-colors">
+                    Đăng Nhập
+                  </router-link>
+                </template>
               </div>
             </div>
           </div>
 
           <router-link :to="{ name: 'cart' }" class="text-black hover:text-gray-500 transition-colors relative" aria-label="Cart">
             <ShoppingBag :size="22" :stroke-width="1.5" />
-            <span class="absolute -top-1 -right-1 w-3 h-3 bg-black text-white text-[8px] flex items-center justify-center rounded-full">2</span>
+            <span class="absolute -top-1 -right-1 w-3 h-3 text-white text-[8px] flex items-center justify-center rounded-full" :class="cartCount > 0 ? 'bg-red-500' : 'bg-black'">{{ cartCount }}</span>
           </router-link>
         </div>
       </div>
@@ -384,7 +413,7 @@ onUnmounted(() => {
           </router-link>
           <router-link :to="{ name: 'cart' }" class="text-black hover:text-gray-500 transition-colors relative" aria-label="Cart">
             <ShoppingBag :size="20" :stroke-width="1.5" />
-            <span class="absolute -top-1 -right-1 w-3 h-3 bg-black text-white text-[8px] flex items-center justify-center rounded-full">0</span>
+            <span class="absolute -top-1 -right-1 w-3 h-3 text-white text-[8px] flex items-center justify-center rounded-full" :class="cartCount > 0 ? 'bg-red-500' : 'bg-black'">{{ cartCount }}</span>
           </router-link>
           <button 
             @click="mobileMenuOpen = true"

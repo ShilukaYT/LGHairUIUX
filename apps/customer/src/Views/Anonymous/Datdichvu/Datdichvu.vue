@@ -290,7 +290,7 @@ const handleBooking = async () => {
         localStorage.setItem('total_bill_original', totalBill.value.toString()); // Lưu 500k
         localStorage.setItem('temp_services', JSON.stringify(bookingData.value.selectedServices));
         localStorage.setItem('temp_date', bookingData.value.bookingDate);
-        localStorage.setItem('temp_stylist_name', selectedStylist.value?.name || 'Minh Tâm Stylist');
+        localStorage.setItem('temp_stylist_name', selectedStylist.value?.name || 'LG Stylist');
         localStorage.setItem('temp_email', bookingData.value.email);
         localStorage.setItem('temp_phone', bookingData.value.phone);
         localStorage.setItem('temp_name', bookingData.value.customerName);
@@ -484,11 +484,9 @@ watch(
                                     <span class="s-name font-bold">{{ stylist.name }}</span>
                                     <span class="s-role text-black">{{ stylist.role }}</span>
 
-                                    <div class="mt-1 flex items-center justify-center"
-                                        style="background: #f3f4f6; padding: 2px 8px; border-radius: 20px; border: 1px solid #e5e7eb;">
-                                        <span class="font-bold me-1" style="font-size: 12px; color: #000;">{{
-                                            stylist.rating?.toFixed(1) || '5.0' }}</span>
-                                        <i class="fas fa-star" style="font-size: 10px; color: #4b5563;"></i>
+                                    <div class="stylist-rating-badge">
+                                        <span class="rating-val">{{ stylist.rating?.toFixed(1) || '5.0' }}</span>
+                                        <i class="fas fa-star rating-star-icon"></i>
                                     </div>
                                 </div>
                             </div>
@@ -501,15 +499,17 @@ watch(
                             <div class="heading-line"></div>
                         </div>
                         <div class="payment-method-row mt-3">
-                            <div class="method-option" :class="{ active: bookingData.paymentMethod === 'vnpay' }"
+                            <div class="method-option vnpay" :class="{ active: bookingData.paymentMethod === 'vnpay' }"
                                 @click="bookingData.paymentMethod = 'vnpay'">
-                                <span class="radio-dot"></span>
-                                <span class="method-label font-bold">Vnpay</span>
+                                <div class="method-logo-wrapper">
+                                    <img src="/vnpay-logo.png" alt="VNPay" class="method-logo-img">
+                                </div>
                             </div>
-                            <div class="method-option" :class="{ active: bookingData.paymentMethod === 'momo' }"
+                            <div class="method-option momo" :class="{ active: bookingData.paymentMethod === 'momo' }"
                                 @click="bookingData.paymentMethod = 'momo'">
-                                <span class="radio-dot"></span>
-                                <span class="method-label font-bold">MoMo</span>
+                                <div class="method-logo-wrapper">
+                                    <img src="/momo-logo.png" alt="MoMo" class="method-logo-img">
+                                </div>
                             </div>
                         </div>
 
@@ -639,48 +639,57 @@ watch(
                                 </div>
                             </div>
 
-                            <div class="bill-summary border-top pt-4 mt-3">
+                            <div class="bill-summary">
+                                <div class="summary-line" v-if="totalOriginalPrice > subTotal">
+                                    <span>Tổng giá gốc:</span>
+                                    <span style="text-decoration: line-through;">{{ totalOriginalPrice.toLocaleString() }}đ</span>
+                                </div>
+
+                                <div class="summary-line saving text-success" v-if="totalOriginalPrice > subTotal">
+                                    <span>Flash Sale dịch vụ:</span>
+                                    <span>-{{ (totalOriginalPrice - subTotal).toLocaleString() }}đ</span>
+                                </div>
+
+                                <div class="summary-line" v-if="totalOriginalPrice === subTotal">
+                                    <span>Tạm tính:</span>
+                                    <span>{{ subTotal.toLocaleString() }}đ</span>
+                                </div>
+
+                                <div v-if="bookingData.voucherIds.length" class="summary-line saving text-success">
+                                    <span>Voucher giảm giá:</span>
+                                    <span class="font-bold">-{{ discountAmount.toLocaleString() }}đ</span>
+                                </div>
+                                <div v-if="bookingData.voucherIds.length" class="summary-line small text-black font-bold">
+                                    <span>Mã đã chọn:</span>
+                                    <span>{{ bookingData.voucherIds.join(' → ') }}</span>
+                                </div>
+
                                 <div v-if="selectedStylist" class="summary-line">
                                     <span class="font-bold">Nhân Viên STYLIST:</span>
                                     <span class="text-black font-bold">{{ selectedStylist.name }}</span>
                                 </div>
 
-                                <div class="summary-line" v-if="totalOriginalPrice > subTotal">
-                                    <span class="font-bold">Tổng giá gốc:</span>
-                                    <span class="text-black" style="text-decoration: line-through;">
-                                        {{ totalOriginalPrice.toLocaleString() }}đ
-                                    </span>
-                                </div>
-
-                                <div class="summary-line text-success" v-if="totalOriginalPrice > subTotal">
-                                    <span class="font-bold">Tiết kiệm được (Flash Sale):</span>
-                                    <span class="font-bold">-{{ (totalOriginalPrice - subTotal).toLocaleString()
-                                    }}đ</span>
-                                </div>
-
-                                <div class="summary-line" v-if="totalOriginalPrice === subTotal">
-                                    <span class="font-bold">Tạm tính:</span>
-                                    <span class="font-bold">{{ subTotal.toLocaleString() }}đ</span>
-                                </div>
-
-                                <div v-if="bookingData.voucherIds.length" class="summary-line discount-red">
-                                    <span class="font-bold">Giảm giá Voucher:</span>
-                                    <span class="font-bold">-{{ discountAmount.toLocaleString() }}đ</span>
-                                </div>
-                                <div v-if="bookingData.voucherIds.length" class="summary-line small text-black font-bold">
-                                    <span>Mã áp dụng: {{ bookingData.voucherIds.join(' → ') }}</span>
-                                </div>
-
-                                <div class="total-line-final mt-4">
-                                    <div class="flex justify-between items-center">
-                                        <span class="total-lbl font-bold">TỔNG TIỀN:</span>
-                                        <span class="total-val-standard font-bold text-black">{{
-                                            totalBill.toLocaleString() }}đ</span>
+                                <div class="total-line-final mt-3 pt-3 border-t border-dashed">
+                                    <div class="summary-line">
+                                        <span class="total-lbl font-bold">TỔNG ĐƠN HÀNG:</span>
+                                        <span class="total-val-standard font-bold text-black">{{ totalBill.toLocaleString() }}đ</span>
                                     </div>
-                                    <div class="pay-now-alert flex justify-between items-center mt-3">
-                                        <span class="font-bold small">THANH TOÁN NGAY:</span>
-                                        <span class="font-bold text-success" style="font-size: 1.4rem;">{{
-                                            payNow.toLocaleString() }}đ</span>
+
+                                    <div class="mt-2 text-xs text-gray-500" v-if="bookingData.paymentMode === '10'">
+                                        <div class="flex justify-between py-0.5">
+                                            <span>+ Tiền cọc dịch vụ (10%):</span>
+                                            <span>{{ (totalBill * 0.1).toLocaleString() }}đ</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="pay-now-alert mt-3">
+                                        <span>THANH TOÁN NGAY:</span>
+                                        <span>{{ payNow.toLocaleString() }}đ</span>
+                                    </div>
+
+                                    <div class="summary-line mt-2" style="color: #e53e3e; font-weight: 600;" v-if="bookingData.paymentMode === '10' && totalBill > payNow">
+                                        <span style="color: #e53e3e;">Còn lại trả tại tiệm:</span>
+                                        <span class="font-bold" style="color: #e53e3e;">{{ (totalBill - payNow).toLocaleString() }}đ</span>
                                     </div>
                                 </div>
                             </div>
@@ -698,196 +707,234 @@ watch(
 
 <style scoped>
 .booking-container {
-    --gold-metallic: #000;
-    --gold-solid: #000;
-}
-
-.booking-container {
-    background: #ffffff;
+    --gold-metallic: linear-gradient(135deg, #a88b58 0%, #bfa77a 50%, #d8c39e 100%);
+    --gold-solid: #bfa77a;
+    --gold-hover: #a88b58;
+    --gold-light: #fbfaf7;
+    --text-primary: #111827;
+    --text-secondary: #4b5563;
+    --text-muted: #9ca3af;
+    --border-color: #f3f4f6;
+    
+    background-color: #fbfbfd;
     min-height: 100vh;
-    font-family: 'Poppins', sans-serif;
-    color: #333;
-    line-height: 1.8;
+    font-family: 'Inter', sans-serif;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    position: relative;
 }
 
-.font-playfair {
+/* Background glows for a premium aesthetic */
+.booking-container::before {
+    content: '';
+    position: absolute;
+    top: -10%;
+    left: -10%;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(191, 167, 122, 0.04) 0%, rgba(255,255,255,0) 70%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.booking-container::after {
+    content: '';
+    position: absolute;
+    bottom: -10%;
+    right: -10%;
+    width: 800px;
+    height: 800px;
+    background: radial-gradient(circle, rgba(191, 167, 122, 0.03) 0%, rgba(255,255,255,0) 70%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.max-w-6xl {
+    position: relative;
+    z-index: 10;
+}
+
+/* Typography & Titles */
+.font-playfair, h1, h2, h3, h4, h5, h6, .section-heading-title {
     font-family: 'Montserrat', sans-serif !important;
 }
 
-/* Đảm bảo tiêu đề các mục dùng font hiện đại giống nút bấm */
-.card-header-title {
-    font-family: 'Poppins', sans-serif !important;
-    /* Đổi từ Playfair sang Poppins */
-    font-weight: 800 !important;
-    /* Độ dày cực đậm giống nút xác nhận */
-    font-size: 1.2rem;
-    text-transform: uppercase;
-    /* In hoa toàn bộ cho chuyên nghiệp */
-    letter-spacing: 0.5px;
-    border-bottom: 1px solid #f8f8f8;
-    padding-bottom: 15px;
-    margin-bottom: 25px;
-    display: flex;
-    align-items: center;
-}
-
-/* Tăng kích thước icon một chút cho cân đối */
-.card-header-title i {
-    font-size: 1.1rem;
-    /* Nếu muốn icon cũng có màu vàng ánh kim thì dùng dòng dưới, không thì giữ nguyên text-black */
-    background: var(--gold-metallic);
-    -webkit-text-fill-color: transparent;
+input, select, textarea, button, .booking-input {
+    font-family: 'Inter', sans-serif !important;
 }
 
 .font-bold {
-    font-weight: 700 !important;
+    font-weight: 600 !important;
 }
 
-/* Font bình thường in đậm cho Tổng tiền và Nút */
-.total-val-standard {
-    font-family: Helvetica, sans-serif !important;
-    /* Xóa hoặc đổi thành Poppins */
-    font-weight: 700 !important;
+h1 {
+    letter-spacing: 2px;
+    font-weight: 800;
+    color: var(--text-primary);
 }
-
-.btn-text-normal {
-    font-family: Arial, Helvetica, sans-serif !important;
-    font-weight: 800 !important;
-    /* Dùng độ đậm cực cao như ảnh mẫu */
-    font-size: 18px !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.5px !important;
-    line-height: 1.2 !important;
-    display: inline-block !important;
-    color: #ffffff !important;
-    -webkit-font-smoothing: antialiased;
-}
-
-/* Đồng bộ font cho phần số tiền để tránh bị méo số */
-.total-val-standard {
-    font-family: Helvetica, sans-serif !important;
-    font-weight: 700 !important;
-}
-
-
 
 .gold-accent-line {
     width: 60px;
-    height: 1px;
-    background: #000;
+    height: 3px;
+    background: var(--gold-metallic);
     margin: 15px auto;
-}
-
-.item-details {
-    display: flex;
-    flex-direction: column;
-    /* Đảm bảo tên ở trên, giá ở dưới */
-    gap: 4px;
-    /* Đây là khoảng cách giữa tên và giá, bạn có thể chỉnh 2px hoặc 6px tùy ý */
-}
-
-.glass-card {
-    background: #fff;
-    padding: 40px;
     border-radius: 2px;
-    border: 1px solid #eaeaea;
-    box-shadow: none;
 }
 
-.card-header-title {
-    font-size: 1.1rem;
-    border-bottom: 1px solid #f8f8f8;
-    padding-bottom: 15px;
-    margin-bottom: 25px;
+/* Section headings */
+.section-heading-wrapper {
+    position: relative;
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-color);
 }
 
-.stylist-meta {
-    display: flex;
-    flex-direction: column;
-    /* Xếp theo chiều dọc */
+.section-heading-wrapper.justify-content-center {
     align-items: center;
-    /* Canh giữa chữ */
-    margin-top: 10px;
-    /* Khoảng cách với ảnh đại diện */
-    gap: 2px;
-    /* Khoảng cách nhỏ giữa tên và role */
 }
 
-.s-name {
-    font-size: 14px;
-    color: #111;
-    display: block;
-    /* Luôn chiếm một hàng riêng */
-    line-height: 1.2;
-}
-
-.s-role {
-    font-size: 11px;
-    color: #888;
-    /* Màu xám nhẹ cho chức danh */
-    display: block;
-    /* Luôn chiếm một hàng riêng */
+.section-heading-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: var(--text-primary);
     text-transform: uppercase;
-    /* In hoa cho chuyên nghiệp */
-}
-
-.item-info {
     display: flex;
-    flex-direction: column;
-    /* Xếp theo hàng dọc */
-    gap: 4px;
-    /* Khoảng cách giữa tên và giá (tùy chỉnh theo ý bạn) */
-    align-items: flex-start;
-    /* Canh lề trái cho cả 2 dòng */
+    align-items: center;
 }
 
-/* Đảm bảo tên dịch vụ không bị dính vào giá */
-.item-info .n {
-    line-height: 1.2;
-    margin-bottom: 2px;
+.section-heading-title i {
+    color: var(--gold-solid);
+    font-size: 1.1rem;
 }
 
-/* Giá tiền hiển thị rõ ràng */
-.item-info .p {
-    font-size: 13px;
-    /* Có thể chỉnh nhỏ hơn tên 1 chút cho đẹp */
-    line-height: 1;
+.heading-line {
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: 50px;
+    height: 2px;
+    background: var(--gold-metallic);
+}
+
+.section-heading-wrapper.justify-content-center .heading-line {
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+/* Main Cards - Premium Glassmorphism style */
+.glass-card {
+    background: #ffffff;
+    padding: 32px;
+    border-radius: 16px;
+    border: 1px solid rgba(229, 231, 235, 0.7);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.015);
+    transition: all 0.3s ease;
+}
+
+.left-main-card:hover, .bill-card:hover {
+    box-shadow: 0 10px 40px rgba(191, 167, 122, 0.04);
+}
+
+/* Forms & Inputs */
+.custom-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    display: block;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .booking-input {
     width: 100%;
-    height: 50px;
-    padding: 0 18px;
-    border-radius: 2px;
-    border: 1px solid #eee;
-    background: #fdfdfd;
+    height: 48px;
+    padding: 0 16px;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    background: #fcfcfd;
     outline: none;
     font-size: 14px;
+    color: var(--text-primary);
+    transition: all 0.3s ease;
 }
 
 .booking-input:focus {
-    border-color: #000;
+    border-color: var(--gold-solid);
+    box-shadow: 0 0 0 3px rgba(191, 167, 122, 0.12);
+    background: #ffffff;
 }
 
+select.booking-input {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23bfa77a' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    background-size: 14px;
+    padding-right: 40px;
+}
+
+/* Booking summary/metadata helper lines */
+.summary-line {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.summary-line span:first-child {
+    font-weight: 500;
+}
+
+.summary-line span:last-child {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Stylist Selection Carousel */
 .stylist-flex {
     display: flex;
-    gap: 20px;
+    gap: 16px;
     overflow-x: auto;
-    padding: 10px 0;
+    padding: 10px 4px;
     scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.stylist-flex::-webkit-scrollbar {
+    display: none;
 }
 
 .stylist-card {
     flex: 0 0 120px;
     text-align: center;
     cursor: pointer;
-    transition: 0.4s;
+    background: #ffffff;
+    border: 1px solid #f3f4f6;
+    border-radius: 12px;
+    padding: 16px 8px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.01);
+}
+
+.stylist-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(191, 167, 122, 0.3);
+    box-shadow: 0 6px 16px rgba(191, 167, 122, 0.06);
+}
+
+.stylist-card.active {
+    border-color: var(--gold-solid);
+    background: var(--gold-light);
+    box-shadow: 0 6px 20px rgba(191, 167, 122, 0.15);
 }
 
 .avatar-box {
     position: relative;
-    width: 80px;
-    height: 80px;
+    width: 68px;
+    height: 68px;
     margin: 0 auto 10px;
 }
 
@@ -897,30 +944,31 @@ watch(
     border-radius: 50%;
     object-fit: cover;
     border: 2px solid transparent;
-    padding: 3px;
+    padding: 2px;
+    transition: all 0.3s ease;
+}
+
+.stylist-card.active .avatar-box img {
+    border-color: var(--gold-solid);
 }
 
 .check-badge {
     position: absolute;
-    bottom: 0;
-    right: 0;
-    background: #000;
-    color: #fff;
-    width: 24px;
-    height: 24px;
+    bottom: -2px;
+    right: -2px;
+    background: var(--gold-solid);
+    color: #ffffff;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 10px;
-    border: 2px solid #fff;
+    font-size: 8px;
+    border: 2px solid #ffffff;
     opacity: 0;
     transform: scale(0.5);
-    transition: 0.3s;
-}
-
-.stylist-card.active img {
-    border-color: #000;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .stylist-card.active .check-badge {
@@ -928,199 +976,195 @@ watch(
     transform: scale(1);
 }
 
-/* Thanh toán & Voucher */
+.stylist-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 8px;
+    gap: 3px;
+}
+
+.s-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+}
+
+.s-role {
+    font-size: 10px;
+    font-weight: 500;
+    color: #888888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stylist-rating-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #f9fafb;
+    border: 1px solid #f3f4f6;
+    padding: 2px 6px;
+    border-radius: 12px;
+    margin-top: 4px;
+}
+
+.stylist-card.active .stylist-rating-badge {
+    background: #ffffff;
+    border-color: rgba(191, 167, 122, 0.2);
+}
+
+.rating-val {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-right: 2px;
+}
+
+.rating-star-icon {
+    font-size: 9px;
+    color: #f59e0b;
+}
+
+/* Payment Methods */
+/* Payment Methods */
 .payment-method-row {
     display: flex;
-    gap: 20px;
+    gap: 16px;
 }
 
 .method-option {
     flex: 1;
-    border: 1px solid #eee;
-    padding: 15px;
-    border-radius: 2px;
-    cursor: pointer;
+    border: 1px solid #e5e7eb;
+    padding: 10px 16px;
+    border-radius: 14px;
     display: flex;
     align-items: center;
-    transition: 0.3s;
+    justify-content: center;
+    cursor: pointer;
+    background: #ffffff;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    height: 80px;
+    overflow: hidden;
 }
 
-.radio-dot {
-    width: 18px;
-    height: 18px;
-    border: 1px solid rgba(191, 155, 48, 0.26);
-    border-radius: 50%;
-    margin-right: 12px;
+/* VNPay Branding */
+.method-option.vnpay {
     position: relative;
+    border: 2px solid #e5e7eb;
 }
 
-.method-option.active {
-    border-color: #000;
-    background: #fafafa;
+.method-option.vnpay:hover {
+    border-color: rgba(0, 106, 194, 0.4);
+    transform: translateY(-2px);
 }
 
-.method-option.active .radio-dot {
-    border-color: #000;
+.method-option.vnpay.active {
+    border-color: #006ac2;
+    background-color: #ffffff;
+    box-shadow: 0 8px 20px rgba(0, 106, 194, 0.12);
+    border-width: 3px;
+    transform: scale(1.02);
 }
 
-.method-option.active .radio-dot::after {
-    content: '';
-    position: absolute;
-    width: 10px;
-    height: 10px;
-    background: #000;
-    border-radius: 50%;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+/* MoMo Branding */
+.method-option.momo {
+    position: relative;
+    border: 2px solid #e5e7eb;
 }
 
-/* Ép mỗi Voucher chiếm 1 hàng duy nhất */
+.method-option.momo:hover {
+    border-color: rgba(216, 45, 139, 0.4);
+    transform: translateY(-2px);
+}
+
+.method-option.momo.active {
+    border-color: #d82d8b;
+    background-color: #ffffff;
+    box-shadow: 0 8px 20px rgba(216, 45, 139, 0.12);
+    border-width: 3px;
+    transform: scale(1.02);
+}
+
+.method-logo-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+}
+
+.method-logo-img {
+    height: 56px;
+    max-width: 90%;
+    object-fit: contain;
+    border-radius: 8px;
+    transition: transform 0.3s ease;
+}
+
+.method-option.active .method-logo-img {
+    transform: scale(1.05);
+}
+
+/* Voucher ticket system */
 .voucher-list-modern {
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: 12px;
     width: 100%;
 }
 
 .voucher-ticket-item {
     display: flex;
     width: 100%;
-    background: #fff;
-    border: 1px solid #eee;
-    border-radius: 2px;
+    background: #ffffff;
+    border: 1px dashed #d1d5db;
+    border-radius: 12px;
     overflow: hidden;
     position: relative;
     cursor: pointer;
-    transition: 0.3s ease;
+    transition: all 0.3s ease;
+}
+
+.voucher-ticket-item:hover {
+    border-color: var(--gold-solid);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
 }
 
 .voucher-ticket-item.active {
-    border-color: #000;
-    background: #fafafa;
-}
-
-/* Phần nội dung bên phải */
-.ticket-right {
-    padding: 15px;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-}
-
-/* 1. Màu cho Ngày hết hạn (Vàng nhẹ tinh tế) */
-.v-tag-black {
-    font-size: 11px;
-    color: #000;
-    /* Màu vàng sẫm để dễ đọc trên nền trắng */
-    background: #f3f4f6;
-    padding: 2px 8px;
-    border-radius: 4px;
-}
-
-/* 2. Màu cho Giá tiền (Gold Metallic nổi bật nhất) */
-.v-price-black {
-    font-size: 16px;
-    /* Hiệu ứng màu vàng ánh kim giống dự án của bạn */
-    background: #000;
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    display: inline-block;
-}
-
-.v-code {
-    font-size: 15px;
-    color: #111;
-}
-
-.v-divider {
-    width: 1px;
-    border-left: 2px dashed #eee;
-    height: 70%;
-    align-self: center;
-    margin: 0 5px;
+    border: 1px solid var(--gold-solid);
+    background: var(--gold-light);
+    box-shadow: 0 6px 16px rgba(191, 167, 122, 0.12);
 }
 
 .ticket-left {
     background: var(--gold-metallic);
-    width: 50px;
+    width: 48px;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #fff;
+    color: #ffffff;
     position: relative;
     flex-shrink: 0;
 }
 
-.v-check-icon {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    color: var(--gold-solid);
-    font-size: 18px;
-}
-
-
-/* Style cho Icon thanh toán có màu */
-.method-icon-img {
-    width: 25px;
-    height: 25px;
-    object-fit: contain;
-    margin-right: 10px;
-}
-
-/* Căn chỉnh lại ô chọn thanh toán */
-.payment-method-row {
-    display: flex;
-    gap: 15px;
-}
-
-.method-option {
-    flex: 1;
-    border: 1px solid #eee;
-    padding: 12px;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    cursor: pointer;
-    background: #fff;
-}
-
-.method-option.active {
-    border-color: #111;
-    background: #f9fafb;
-}
-
-/* Nút ĐÓNG danh sách dịch vụ tách biệt */
-.dropdown-close-footer {
-    text-align: left;
-    padding: 15px 20px;
-    font-size: 15px;
-    color: #666;
-    cursor: pointer;
-    border-top: 1px solid #eee;
-    background: #fff;
-    font-family: 'Poppins', sans-serif;
-}
-
-.ticket-left {
-    background: var(--gold-metallic);
-    width: 45px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    position: relative;
+.ticket-left i {
+    font-size: 16px;
 }
 
 .notch {
     position: absolute;
     width: 12px;
     height: 12px;
-    background: #fff;
+    background: #fbfbfd; /* Match container background to make punch out effect */
     border-radius: 50%;
     left: -6px;
+    z-index: 10;
 }
 
 .notch.top {
@@ -1131,24 +1175,89 @@ watch(
     bottom: -6px;
 }
 
-.ticket-right {
-    padding: 12px;
-    flex: 1;
+.v-divider {
+    width: 1px;
+    border-left: 2px dashed #e5e7eb;
+    height: 60%;
+    align-self: center;
+    margin: 0 4px;
 }
 
+.ticket-right {
+    padding: 14px 16px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.v-code {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 0.5px;
+}
+
+.v-tag-black {
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--gold-solid);
+    background: #fdfaf3;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: 1px solid rgba(191, 167, 122, 0.15);
+}
+
+.v-desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    line-height: 1.4;
+}
+
+.v-price-black {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--gold-solid);
+    margin-top: 6px;
+}
+
+.v-check-icon {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    color: var(--gold-solid);
+    font-size: 18px;
+}
+
+/* Service Search Box Dropdown in Invoice card */
 .search-box-wrapper {
     position: relative;
 }
 
+.input-wrap {
+    position: relative;
+    width: 100%;
+}
+
 .search-input {
     width: 100%;
-    height: 50px;
-    padding-left: 50px;
-    border-radius: 50px;
-    border: 1px solid #eee;
-    background: #fdfdfd;
+    height: 46px;
+    padding-left: 44px;
+    padding-right: 16px;
+    border-radius: 24px;
+    border: 1px solid #e5e7eb;
+    background: #ffffff;
     outline: none;
-    font-size: 14px;
+    font-size: 13px;
+    color: var(--text-primary);
+    transition: all 0.3s ease;
+}
+
+.search-input:focus {
+    border-color: var(--gold-solid);
+    box-shadow: 0 0 0 3px rgba(191, 167, 122, 0.15);
 }
 
 .search-icon {
@@ -1156,160 +1265,236 @@ watch(
     left: 18px;
     top: 50%;
     transform: translateY(-50%);
-    color: #ccc;
-    z-index: 5;
+    color: #9ca3af;
+    font-size: 14px;
+    pointer-events: none;
 }
 
 .service-dropdown-list {
     position: absolute;
-    top: 110%;
+    top: 108%;
     left: 0;
     width: 100%;
-    background: #fff;
-    border-radius: 15px;
+    background: #ffffff;
+    border-radius: 12px;
     z-index: 1000;
-    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
     border: 1px solid #f0f0f0;
     overflow: hidden;
 }
 
 .dropdown-header {
-    padding: 10px 20px;
-    background: #fdfdfd;
-    font-size: 11px;
+    padding: 10px 16px;
+    background: #f9fafb;
+    font-size: 10px;
     font-weight: 700;
-    color: #999;
+    color: #6b7280;
     text-transform: uppercase;
-    border-bottom: 1px solid #f5f5f5;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #f3f4f6;
 }
 
 .dropdown-scroll-area {
-    max-height: 280px;
+    max-height: 250px;
     overflow-y: auto;
 }
 
 .service-dropdown-item {
-    padding: 12px 20px;
+    padding: 10px 16px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     cursor: pointer;
-    border-bottom: 1px solid #f9f9f9;
+    border-bottom: 1px solid #fcfcfc;
+    transition: all 0.2s ease;
 }
 
 .service-dropdown-item:hover {
-    background: #f9fafb;
+    background: var(--gold-light);
 }
 
-.item-icon-circle {
-    width: 32px;
-    height: 32px;
-    background: #f3f4f6;
-    color: var(--gold-solid);
-    border-radius: 50%;
+.service-dropdown-item img {
+    border-radius: 6px;
+    object-fit: cover;
+}
+
+.item-details {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-right: 12px;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.item-details .item-name-text {
     font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.item-price-text {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.add-btn-icon {
+    color: var(--gold-solid);
+    font-size: 18px;
+    transition: transform 0.2s ease;
+}
+
+.service-dropdown-item:hover .add-btn-icon {
+    transform: scale(1.1);
 }
 
 .dropdown-close-footer {
-    text-align: left;
-    padding: 15px 20px;
-    font-size: 16px;
-    color: #666;
+    text-align: center;
+    padding: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
     cursor: pointer;
-    border-top: 1px solid #f5f5f5;
-    background: #fff;
+    border-top: 1px solid #f3f4f6;
+    background: #f9fafb;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.2s ease;
+}
+
+.dropdown-close-footer:hover {
+    background: #e5e7eb;
+    color: var(--text-primary);
+}
+
+/* Selected service item row in bill card */
+.selected-items-wrapper {
+    max-height: 220px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.selected-items-wrapper::-webkit-scrollbar {
+    width: 4px;
+}
+
+.selected-items-wrapper::-webkit-scrollbar-thumb {
+    background-color: #e5e7eb;
+    border-radius: 2px;
 }
 
 .item-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 15px 20px;
-    background: #fcfcfc;
-    border-radius: 12px;
-    margin-bottom: 10px;
-    border: 1px solid #f5f5f5;
+    padding: 10px 14px;
+    background: #fafafb;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    border: 1px solid #f3f4f6;
+    transition: all 0.3s ease;
+}
+
+.item-row:hover {
+    border-color: rgba(191, 167, 122, 0.2);
+    background: #ffffff;
+}
+
+.item-row img {
+    border-radius: 6px;
+    object-fit: cover;
+}
+
+.item-info .n {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.3;
+}
+
+.item-info .p {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--gold-solid);
 }
 
 .del-btn {
     border: none;
     background: transparent;
-    color: #ff5e5e;
+    color: #9ca3af;
     cursor: pointer;
+    font-size: 13px;
+    padding: 6px;
+    transition: all 0.2s ease;
 }
 
-.summary-line {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 10px;
-    font-size: 14px;
+.del-btn:hover {
+    color: #ef4444;
+    transform: scale(1.1);
 }
 
-.discount-red {
-    color: #d93025 !important;
+/* Payment deposit selectors */
+.payment-mode-select {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid #f3f4f6;
 }
 
-.pay-now-alert {
-    background: #f6ffed;
-    padding: 10px 15px;
-    border-radius: 10px;
-    border: 1px solid #b7eb8f;
-}
-
-.btn-confirm-metallic-final {
-    width: 100%;
-    padding: 18px;
-    border: none;
-    border-radius: 2px;
-    background: #000;
-    color: #ffffff !important;
+.payment-mode-select label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    position: relative;
-    overflow: hidden;
-    cursor: pointer;
-    transition: 0.4s;
-    font-family: Arial, Helvetica, sans-serif !important;
-    font-weight: 800 !important;
-    font-size: 18px !important;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
 }
 
-.btn-confirm-metallic-final::before {
-    display: none;
+.payment-mode-select label i {
+    color: var(--gold-solid);
+}
+
+.pay-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .pay-btn {
-    flex: 1;
-    border: 1px solid #eee;
-    padding: 12px;
-    border-radius: 2px;
+    border: 1px solid #e5e7eb;
+    padding: 12px 14px;
+    border-radius: 8px;
     cursor: pointer;
     display: flex;
     align-items: center;
-    transition: 0.3s;
+    transition: all 0.3s ease;
+    background: #ffffff;
     font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.pay-btn:hover {
+    border-color: rgba(191, 167, 122, 0.4);
+}
+
+.pay-btn.active {
+    border-color: var(--gold-solid);
+    background: var(--gold-light);
+    color: var(--text-primary);
+    font-weight: 600;
 }
 
 .pay-btn .dot {
     width: 14px;
     height: 14px;
-    border: 2px solid #ddd;
+    border: 2px solid #d1d5db;
     border-radius: 50%;
     margin-right: 10px;
     position: relative;
-}
-
-.pay-btn.active {
-    border-color: #000;
-    background: #fafafa;
+    transition: all 0.3s ease;
 }
 
 .pay-btn.active .dot {
-    border-color: #000;
+    border-color: var(--gold-solid);
 }
 
 .pay-btn.active .dot::after {
@@ -1317,97 +1502,149 @@ watch(
     position: absolute;
     width: 8px;
     height: 8px;
-    background: #000;
+    background: var(--gold-solid);
     border-radius: 50%;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
 }
 
+/* Bill Summary area */
+.bill-summary {
+    border-top: 1px solid #f3f4f6;
+    padding-top: 16px;
+    margin-top: 16px;
+}
+
+.bill-summary .summary-line {
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.bill-summary .summary-line span:first-child {
+    font-weight: 500;
+}
+
+.bill-summary .summary-line span:last-child {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.discount-red {
+    color: #ef4444 !important;
+}
+
+.discount-red span:last-child {
+    color: #ef4444 !important;
+}
+
+.total-line-final {
+    margin-top: 16px;
+    border-top: 1px dashed #e5e7eb;
+    padding-top: 16px;
+}
+
+.total-lbl {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.total-val-standard {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.pay-now-alert {
+    background: #f0fdf4;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #bbf7d0;
+    margin-top: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.pay-now-alert span:first-child {
+    font-size: 11px;
+    font-weight: 700;
+    color: #15803d;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.pay-now-alert span:last-child {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #16a34a;
+}
+
+/* Premium Confirmation Button */
+.btn-confirm-metallic-final {
+    width: 100%;
+    padding: 16px;
+    border: none;
+    border-radius: 8px;
+    background: var(--gold-metallic);
+    color: #ffffff !important;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 14px rgba(191, 167, 122, 0.3);
+}
+
+.btn-confirm-metallic-final:hover {
+    background: var(--text-primary);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+.btn-text-normal {
+    font-family: inherit !important;
+    font-weight: 700 !important;
+    font-size: 14px !important;
+    color: #ffffff !important;
+    letter-spacing: 1px !important;
+}
+
+/* Animations */
 .list-fade-enter-active,
 .list-fade-leave-active {
-    transition: all 0.4s ease;
+    transition: all 0.3s ease;
 }
 
 .list-fade-enter-from {
     opacity: 0;
-    transform: translateX(30px);
+    transform: translateX(20px);
 }
 
 .list-fade-leave-to {
     opacity: 0;
-    transform: scale(0.5);
+    transform: scale(0.9);
 }
 
 .sticky-bill {
     position: sticky;
-    top: 120px;
+    top: 100px;
 }
 
+/* Responsive Media Queries */
 @media (max-width: 991px) {
     .sticky-bill {
         position: static;
-        margin-top: 30px;
+        margin-top: 24px;
     }
-
-    .voucher-list-modern,
-    .payment-method-row {
-        grid-template-columns: 1fr;
+    
+    .glass-card {
+        padding: 24px;
     }
-}
-
-.booking-input {
-    width: 100%;
-    height: 50px;
-    /* Cố định chiều cao để tất cả các ô bằng chằn chặn */
-    padding: 0 18px;
-    border-radius: 12px;
-    border: 1px solid #eee;
-    background: #fafafa;
-    outline: none;
-    font-size: 14px;
-    display: flex;
-    align-items: center;
-    appearance: none;
-    /* Xóa style mặc định của trình duyệt cho select */
-}
-
-/* Thêm icon mũi tên cho ô select cho đẹp */
-select.booking-input {
-    background-image: url("data:image/svg+xml,...");
-    /* Nếu muốn thêm icon dropdown */
-    background-repeat: no-repeat;
-    background-position: right 15px center;
-    background-size: 12px;
-}
-/* Custom Section Styles for Layout Balance */
-.section-card {
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-    border: 1px solid rgba(212, 175, 55, 0.15);
-}
-.section-card:hover {
-    box-shadow: 0 10px 30px rgba(212, 175, 55, 0.15);
-}
-.section-heading-wrapper {
-    position: relative;
-    margin-bottom: 1.5rem;
-    padding-bottom: 0.5rem;
-    display: flex;
-    flex-direction: column;
-}
-.section-heading-wrapper.justify-content-center {
-    align-items: center;
-}
-.section-heading-title {
-    font-size: 1.4rem;
-    letter-spacing: 1px;
-    margin-bottom: 0.5rem;
-    display: flex;
-    align-items: center;
-}
-.heading-line {
-    width: 60px;
-    height: 1px;
-    background: #000;
 }
 </style>

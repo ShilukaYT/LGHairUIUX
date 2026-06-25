@@ -86,7 +86,7 @@ const heroSlides: HeroSlide[] = [
     subtitle: 'Trải Nghiệm Đẳng Cấp',
     title: 'Đặt lịch chăm sóc',
     desc: 'Tận hưởng không gian làm đẹp sang trọng và dịch vụ chăm sóc tóc đẳng cấp.',
-    route: 'booking'
+    route: 'datdichvu'
   }
 ];
 
@@ -609,7 +609,7 @@ onUnmounted(() => {
           <!-- Parallel Dual CTA -->
           <div class="flex flex-row flex-wrap gap-4">
             <button
-              @click="goToRoute('booking')"
+              @click="goToRoute('datdichvu')"
               class="group inline-flex items-center justify-center gap-3 bg-[#bfa77a] text-black px-8 py-4 text-[10px] font-semibold uppercase tracking-[0.2em] transition-all duration-300 hover:bg-white hover:text-black cursor-pointer shadow-md"
             >
               Đặt Lịch Cắt Tóc

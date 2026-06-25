@@ -1,186 +1,155 @@
-// Định nghĩa cấu trúc chuẩn nhất cho Giỏ hàng
-interface CartItem {
-    id: string | number;
-    maKH: string;
-    type: "DICHVU" | "COMBO" | "SANPHAM";
-    tenItem: string;
-    gia: number;
-    giaGoc: number;
-    phanTramGiam: number;
-    hinhAnh: string;
-    createdAt: number;
-    duration: number;
-    soLuong: number;
-}
+import axios from 'axios';
+import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 
-const DB_NAME = 'MinhTamHair_DB';
-const STORE_NAME = 'cart_items';
-// QUAN TRỌNG: Ép version lên 99 để trình duyệt đập đi xây lại bảng dữ liệu sạch sẽ
-const DB_VERSION = 99;
+const API = import.meta.env.VITE_API_URL || 'https://localhost:5174'; // Thay đổi nếu port API của bạn khác
 
-export const initDB = (): Promise<IDBDatabase> => {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-        request.onupgradeneeded = (e: any) => {
-            const db = e.target.result;
-            // Xóa sạch bảng cũ bị lỗi (nếu có) để làm lại từ đầu
-            if (db.objectStoreNames.contains(STORE_NAME)) {
-                db.deleteObjectStore(STORE_NAME);
-            }
-            db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-        };
-
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = (e) => {
-            console.error("Lỗi khởi tạo IndexedDB:", e);
-            reject(request.error);
-        };
-    });
+// ========================================================
+// 1. HÀM TRỢ GIÚP: QUẢN LÝ GUEST ID
+// ========================================================
+// Tự động tạo và lấy X-Guest-Id cho khách chưa đăng nhập
+const getGuestId = (): string => {
+    let guestId = localStorage.getItem('X-Guest-Id');
+    if (!guestId) {
+        // Sinh một chuỗi ngẫu nhiên đơn giản
+        guestId = 'guest_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem('X-Guest-Id', guestId);
+    }
+    return guestId;
 };
 
-// Hàm thêm giỏ hàng vạn năng: Tự động "dịch" mọi field từ API sang DB
-export const addToCartDB = async (item: any, maKH: string | null) => {
-    const db = await initDB();
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
+// ========================================================
+// 2. CẤU HÌNH AXIOS CHO GIỎ HÀNG
+// ========================================================
+const cartAxios = axios.create({
+    baseURL: `${API}/api/GioHang`,
+});
 
-    // 1. Tự động tìm ID từ đủ mọi loại định dạng
-    const resolvedId = String(item.id || item.maDv || item.maCb || item.maCB || item.maBienThe || `ITEM_${Date.now()}`);
-
-    // 2. Tự động phân loại (Dịch vụ, Combo hay Sản phẩm)
-    let resolvedType = item.type || "DICHVU";
-    if (item.maBienThe || resolvedId.startsWith("SANPHAM")) resolvedType = "SANPHAM";
-    else if (resolvedId.startsWith("CB")) resolvedType = "COMBO";
-
-    // 3. Gom dữ liệu chuẩn xác
-    const data: CartItem = {
-        id: resolvedId,
-        maKH: maKH || 'GUEST',
-        type: resolvedType as any,
-        tenItem: item.tenItem || item.name || item.tenDv || item.tenCombo || item.tenSp || "Dịch vụ Minh Tâm",
-        gia: Number(item.gia || item.price || item.giaBan || 0),
-        giaGoc: Number(item.giaGoc || item.originalPrice || item.gia || item.price || 0),
-        phanTramGiam: Number(item.phanTramGiam || 0),
-        hinhAnh: item.hinhAnh || item.icon || item.image || item.hinhAnhDaiDien || "/images/no-image.png",
-        createdAt: item.createdAt || Date.now(),
-        duration: Number(item.duration || item.thoiGianLam || 30),
-        soLuong: Number(item.soLuong || 1)
-    };
-
-    return new Promise((resolve, reject) => {
-        const getRequest = store.get(resolvedId);
-
-        getRequest.onsuccess = () => {
-            const existingItem = getRequest.result;
-
-            if (existingItem) {
-                // Nếu đã có trong giỏ, cộng dồn số lượng
-                existingItem.soLuong += data.soLuong;
-                existingItem.gia = data.gia; // Cập nhật lại giá nếu có thay đổi
-                
-                const updateRequest = store.put(existingItem);
-                updateRequest.onsuccess = () => resolve(true);
-                updateRequest.onerror = () => reject(updateRequest.error);
-            } else {
-                // Chưa có thì thêm mới
-                const putRequest = store.put(data);
-                putRequest.onsuccess = () => resolve(true);
-                putRequest.onerror = () => reject(putRequest.error);
-            }
-        };
-
-        getRequest.onerror = () => reject(getRequest.error);
-    });
-};
-
-// Hàm lấy giỏ hàng (Chỉ lấy đồ chưa quá 3 ngày)
-export const getCartDB = async (maKH: string | null): Promise<CartItem[]> => {
-    const db = await initDB();
-    return new Promise((resolve) => {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const store = tx.objectStore(STORE_NAME);
-        const request = store.getAll();
-
-        request.onsuccess = () => {
-            const now = Date.now();
-            const expireTime = 3 * 24 * 60 * 60 * 1000;
-            const currentMaKH = maKH || 'GUEST';
-
-            const allItems = request.result as CartItem[];
-            const validItems = allItems.filter(item => {
-                return item.maKH === currentMaKH && (now - item.createdAt < expireTime);
-            });
-            resolve(validItems);
-        };
-    });
-};
-
-export const updateCartItemDB = async (item: CartItem) => {
-    const db = await initDB();
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
+// Interceptor: Tự động gắn X-Guest-Id và Token (nếu có) vào mọi Request
+cartAxios.interceptors.request.use((config) => {
+    config.headers['X-Guest-Id'] = getGuestId();
     
-    return new Promise((resolve, reject) => {
-        try {
-            const cleanItem = JSON.parse(JSON.stringify(item));
-            const putRequest = store.put(cleanItem);
-            putRequest.onsuccess = () => resolve(true);
-            putRequest.onerror = () => reject(putRequest.error);
-        } catch (err) {
-            reject(err);
+    // Nếu có token đăng nhập, gắn vào Header Authorization (Sửa lại tên key 'token' nếu dự án bạn dùng tên khác)
+    const token = localStorage.getItem('token'); 
+    if (token) {
+        config.headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    return config;
+}, (error) => {
+    return Promise.reject(error);
+});
+
+// ========================================================
+// 3. CÁC HÀM XỬ LÝ CHÍNH (TƯƠNG THÍCH NGƯỢC VỚI CODE CŨ)
+// ========================================================
+
+// 🛒 Lấy giỏ hàng
+export const getCartDB = async (maKH: string | null = null) => {
+    try {
+        const res = await cartAxios.get('/chi-tiet');
+        // Map từng field backend → CartItem interface của Cart.vue
+        // Backend: { id, loai, ten, gia, hinhAnh, soLuong }
+        // Cart.vue cần: { id, type, tenItem, gia, hinhAnh, soLuong }
+        return res.data.items.map((item: any) => ({
+            ...item,
+            // ✅ 'loai' → 'type' (BIENTHE → SANPHAM để Cart hiểu đúng tab)
+            type: item.loai === 'BIENTHE' ? 'SANPHAM' : item.loai,
+            // ✅ 'ten' → 'tenItem' (Cart.vue template dùng item.tenItem)
+            tenItem: item.ten || item.tenItem || 'Không rõ tên',
+            // Giữ lại field gốc để tương thích
+            ten: item.ten,
+        }));
+    } catch (error) {
+        console.error("Lỗi lấy giỏ hàng từ API:", error);
+        return [];
+    }
+};
+
+// ➕ Thêm vào giỏ
+export const addToCartDB = async (item: any, maKH: string | null = null) => {
+    try {
+        const type = item.type || "DICHVU";
+        
+        if (type === "SANPHAM" || type === "BIENTHE") {
+            await cartAxios.post('/them-bien-the', {
+                maBienThe: item.id || item.maBienThe,
+                soLuong: item.soLuong || 1
+            });
+        } else if (type === "COMBO") {
+            await cartAxios.post('/them-combo', {
+                maCb: item.id || item.maCb,
+                soLuong: item.soLuong || 1
+            });
+        } else {
+            await cartAxios.post('/them-dich-vu', {
+                maDv: item.id || item.maDv,
+                soLuong: item.soLuong || 1
+            });
         }
-    });
+    } catch (error) {
+        console.error("Lỗi thêm item vào API:", error);
+    }
 };
 
-export const removeFromCartDB = async (id: string | number) => {
-    const db = await initDB();
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-    store.delete(id);
-    return new Promise((resolve) => tx.oncomplete = () => resolve(true));
-};
-
-export const clearCartDB = async (maKH: string | null) => {
-    const db = await initDB();
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-    const request = store.getAll();
-
-    request.onsuccess = () => {
-        const currentMaKH = maKH || 'GUEST';
-        const allItems = request.result as CartItem[];
-        allItems.forEach(item => {
-            if (item.maKH === currentMaKH) store.delete(item.id);
+// 🔄 Cập nhật số lượng
+export const updateCartItemDB = async (item: any) => {
+    try {
+        // Ép kiểu lại cho Backend hiểu
+        const loaiBackend = item.type === 'SANPHAM' ? 'BIENTHE' : (item.type || 'DICHVU');
+        await cartAxios.put('/cap-nhat-so-luong', {
+            id: item.id.toString(),
+            loai: loaiBackend,
+            soLuong: item.soLuong
         });
-    };
-    return new Promise((resolve) => tx.oncomplete = () => resolve(true));
+    } catch (error) {
+        console.error("Lỗi cập nhật số lượng API:", error);
+    }
 };
 
-export const clearProductCartDB = async (maKH: string | null) => {
-    const db = await initDB();
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    const store = tx.objectStore(STORE_NAME);
-    const request = store.getAll();
+// ❌ Xóa 1 Item
+export const removeFromCartDB = async (id: string | number, type?: string) => {
+    try {
+        let loaiBackend = type === 'SANPHAM' ? 'BIENTHE' : type;
 
-    request.onsuccess = () => {
-        const currentMaKH = maKH || 'GUEST';
-        const allItems = request.result as CartItem[];
-        allItems.forEach(item => {
-            if (item.maKH === currentMaKH && item.type === 'SANPHAM') {
-                store.delete(item.id);
+        // Xử lý thông minh: Nếu Frontend gọi hàm xóa mà quên truyền type, API sẽ tự mò tìm type trước khi xóa
+        if (!loaiBackend) {
+            const currentCart = await getCartDB();
+            const itemToRemove = currentCart.find((x: any) => String(x.id) === String(id));
+            if (itemToRemove) {
+                loaiBackend = itemToRemove.type === 'SANPHAM' ? 'BIENTHE' : (itemToRemove.type || 'DICHVU');
+            } else {
+                return; // Không có thì bỏ qua
+            }
+        }
+
+        await cartAxios.delete('/xoa-item', {
+            data: { 
+                id: id.toString(),
+                loai: loaiBackend
             }
         });
-    };
-    return new Promise((resolve) => tx.oncomplete = () => resolve(true));
+    } catch (error) {
+        console.error("Lỗi xóa item API:", error);
+    }
 };
 
-export const mergeGuestCart = async (loggedInMaKh: string) => {
-    const guestCart = await getCartDB('GUEST');
-    if (guestCart && guestCart.length > 0) {
-        for (const item of guestCart) {
-            await addToCartDB(item, loggedInMaKh);
-        }
-        await clearCartDB('GUEST');
+// 🗑️ Xóa sạch giỏ hàng
+export const clearCartDB = async (maKH: string | null = null) => {
+    try {
+        await cartAxios.delete('/xoa-sach');
+    } catch (error) {
+        console.error("Lỗi dọn dẹp giỏ hàng API:", error);
+    }
+};
+
+// ========================================================
+// 4. HÀM MỚI: ĐỒNG BỘ SAU KHI ĐĂNG NHẬP
+// ========================================================
+export const syncCartAfterLoginDB = async () => {
+    try {
+        await cartAxios.post('/dong-bo-khi-login');
+        // Sau khi đồng bộ thành công, không cần xóa X-Guest-Id vì backend đã lo việc xóa dữ liệu tạm trong Cache.
+    } catch (error) {
+        console.error("Lỗi đồng bộ giỏ hàng khi Login:", error);
     }
 };
