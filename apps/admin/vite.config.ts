@@ -9,7 +9,10 @@ import vuetify from 'vite-plugin-vuetify'
 const baseURL = process.env.BASE_URL;
 // https://vite.dev/config/
 export default defineConfig({
-  
+  server: {
+    port: 5174,
+    strictPort: true
+  },
   plugins: [
     vue(),
     vueDevTools(),
