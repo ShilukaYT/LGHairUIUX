@@ -12,8 +12,10 @@ const isSuccess = ref(false);
 const isLoading = ref(true);
 const API = import.meta.env.VITE_API_URL; 
 
+const lastBookingRef = ref(localStorage.getItem('last_booking_ref') || '');
+
 const qrInvoiceValue = computed(() => {
-    const maLd = localStorage.getItem('last_booking_ref');
+    const maLd = lastBookingRef.value;
     if (!isSuccess.value || !maLd) return '';
     
     let cleanId = maLd.trim();
@@ -47,8 +49,6 @@ onMounted(async () => {
     else if (route.query.amount) amount.value = Number(route.query.amount);
 
     if (vnpCode === '00' || momoCode === '0') {
-        isSuccess.value = true;
-
         const payModeVal = localStorage.getItem('current_pay_mode') || "10";
         payMode.value = payModeVal;
         totalAmount.value = Number(localStorage.getItem('total_bill_original') || 0);
@@ -94,18 +94,26 @@ onMounted(async () => {
                 bookingRequest
             );
             console.log("Lưu DB thành công:", response.data);
-            localStorage.setItem('last_booking_ref', String(bookingRequest.bookingId));
-                // Xóa giỏ hàng sau khi lưu thành công
+            
+            const returnedMaLd = response.data?.maLd || String(bookingRequest.bookingId);
+            localStorage.setItem('last_booking_ref', returnedMaLd);
+            lastBookingRef.value = returnedMaLd;
+            
+            // Xóa giỏ hàng sau khi lưu thành công
             const customer = getCustomerInfo();
             if (customer.maKH && customer.maKH !== 'GUEST') {
                 await clearCartDB(customer.maKH);
                 console.log("Giỏ hàng đã được dọn dẹp sạch sẽ.");
             }
+            isSuccess.value = true;
         } catch (err: any) {
             // Ép kiểu 'any' để TypeScript cho phép truy cập .response
             const errorMsg = err.response?.data || err.message || err;
             console.error("Lỗi lưu Database:", errorMsg);
+            isSuccess.value = false;
         }
+    } else {
+        isSuccess.value = false;
     }
     isLoading.value = false;
 });
