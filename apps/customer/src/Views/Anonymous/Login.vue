@@ -237,57 +237,7 @@ const handleGoogleLogin = async (response: any) => {
 onMounted(() => {
   updateGoogleBtnWidth();
   window.addEventListener('resize', updateGoogleBtnWidth);
-
-  const initFB = () => {
-    if ((window as any).__FB_INITIALIZED) return;
-    (window as any).FB.init({
-      appId: '2390553588092754',
-      cookie: true,
-      xfbml: true,
-      version: 'v18.0'
-    });
-    (window as any).__FB_INITIALIZED = true;
-  };
-
-  if ((window as any).FB) {
-    initFB();
-  } else {
-    (window as any).fbAsyncInit = initFB;
-  }
 });
-
-const handleFacebookLogin = () => {
-  if (typeof (window as any).FB === 'undefined') {
-    showStatus("Lỗi", "Facebook SDK chưa tải xong hoặc bị chặn bởi trình duyệt.", "error");
-    return;
-  }
-
-  (window as any).FB.login(function (response: any) {
-    if (response.authResponse) {
-      const accessToken = response.authResponse.accessToken;
-      console.log("FB Token (gửi cho Backend):", accessToken);
-
-      isLoading.value = true;
-      axios.post('https://localhost:7196/api/account/facebook-login', { token: accessToken })
-        .then(res => {
-          localStorage.setItem('user', JSON.stringify(res.data.user));
-          showStatus("Thành công", "Đăng nhập Facebook thành công!", "success");
-          setTimeout(() => {
-            window.location.href = '/';
-          }, 1000);
-        })
-        .catch(err => {
-          showStatus("Lỗi", err.response?.data?.message || "Xác thực Facebook thất bại", "error");
-        })
-        .finally(() => {
-          isLoading.value = false;
-        });
-
-    } else {
-      showStatus("Thông báo", "Người dùng đã hủy đăng nhập Facebook.", "error");
-    }
-  }, { scope: 'public_profile' });
-};
 
 const handleSendOTP = async () => {
   if (!forgotForm.email) {
@@ -371,35 +321,6 @@ const handleGoogleVerify = async (response: any) => {
     isLoading.value = false;
   }
 };
-
-const handleFacebookVerify = () => {
-  // @ts-ignore
-  FB.login(function (response: any) {
-    if (response.authResponse) {
-      (async () => {
-        isLoading.value = true;
-        try {
-          const res = await axios.post('https://localhost:7196/api/account/forgot-password-facebook', {
-            token: response.authResponse.accessToken
-          });
-          if (res.data.success) {
-            forgotForm.email = res.data.email;
-            forgotForm.isGoogleVerified = true; // Dùng chung cờ verified mxh
-            forgotForm.otp = '';
-            forgotForm.step = 2; // Nhảy qua bước nhập mật khẩu mới
-            showStatus("Xác minh thành công", "Vui lòng nhập mật khẩu mới.", "success");
-          }
-        } catch (err: any) {
-          showStatus("Lỗi", err.response?.data?.message || "Xác thực Facebook thất bại.", "error");
-        } finally {
-          isLoading.value = false;
-        }
-      })();
-    } else {
-      showStatus("Thông báo", "Bạn đã hủy xác thực Facebook.", "error");
-    }
-  }, { scope: 'public_profile,email' });
-};
 </script>
 
 <template>
@@ -428,16 +349,6 @@ const handleFacebookVerify = () => {
                 <GoogleLogin :key="googleBtnWidth" :callback="handleGoogleVerify"
                   :button-config="{ width: googleBtnWidth, shape: 'rectangular' }" />
               </div>
-              <button type="button" @click="handleFacebookVerify"
-                class="w-full bg-[#1877F2] text-white h-[40px] rounded flex items-center justify-center space-x-2 hover:bg-[#166FE5] transition-colors shadow-sm"
-                style="max-width: 400px; margin: 0 auto; box-shadow: 0 1px 2px 0 rgba(60,64,67,0.30), 0 1px 3px 1px rgba(60,64,67,0.15);">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                  <path
-                    d="M16 8.049c0-4.446-3.582-8.05-8-8.05C3.58 0-.002 3.603-.002 8.05c0 4.017 2.926 7.347 6.75 7.951v-5.625h-2.03V8.05H6.75V6.275c0-2.017 1.195-3.131 3.022-3.131.876 0 1.791.157 1.791.157v1.98h-1.009c-.993 0-1.303.621-1.303 1.258v1.51h2.218l-.354 2.326H9.25V16c3.824-.604 6.75-3.934 6.75-7.951z" />
-                </svg>
-                <span style="font-family: 'Roboto', arial, sans-serif; font-size: 14px; font-weight: 500;">Sign in with
-                  Facebook</span>
-              </button>
             </div>
 
             <div class="relative flex items-center py-4 mt-2">
@@ -589,15 +500,6 @@ const handleFacebookVerify = () => {
               <GoogleLogin :key="googleBtnWidth" :callback="handleGoogleLogin"
                 :button-config="{ width: googleBtnWidth, shape: 'rectangular' }" />
             </div>
-
-            <button type="button" @click="handleFacebookLogin"
-              class="w-full h-[40px] bg-[#1877f2] hover:bg-[#166fe5] text-white flex items-center justify-center gap-2 rounded transition-colors text-sm font-medium shadow-sm">
-              <svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-                <path
-                  d="M12 2.04C6.5 2.04 2 6.53 2 12.06C2 17.06 5.66 21.21 10.44 21.96V14.96H7.9V12.06H10.44V9.85C10.44 7.34 11.93 5.96 14.22 5.96C15.31 5.96 16.45 6.15 16.45 6.15V8.62H15.19C13.95 8.62 13.56 9.39 13.56 10.18V12.06H16.34L15.89 14.96H13.56V21.96A10 10 0 0 0 22 12.06C22 6.53 17.5 2.04 12 2.04Z" />
-              </svg>
-              Đăng nhập Facebook
-            </button>
           </div>
         </div>
       </form>

@@ -51,8 +51,12 @@ const data = {
       isActive: true,
       items: [
         {
-          title: "Điểm danh ca làm",
-          url: "/admin/ca-lam-viec",
+          title: "Quản lý ca làm",
+          url: "/admin/quan-ly-ca-lam",
+        },
+        {
+          title: "Điểm danh",
+          url: "/admin/diem-danh",
         },
         {
           title: "Lịch sử điểm danh",

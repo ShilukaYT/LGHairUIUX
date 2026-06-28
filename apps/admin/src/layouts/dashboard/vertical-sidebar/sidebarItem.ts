@@ -84,7 +84,12 @@ const sidebarItem: menu[] = [
   {
     title: 'Ca làm việc',
     icon: CalendarOutlined,
-    to: '/admin/ca-lam-viec'
+    to: '/admin/quan-ly-ca-lam'
+  },
+  {
+    title: 'Điểm danh',
+    icon: FileTextOutlined,
+    to: '/admin/diem-danh'
   },
   {
     title: 'Lịch sử điểm danh',
