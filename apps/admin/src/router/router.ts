@@ -12,7 +12,8 @@ const routes = [
       { path: 'sale', name: 'sale', component: () => import('@/Admin/Sale/sale.vue') },
       { path: 'checkin', name: 'checkin', component: () => import('@/Admin/Check-in/Checkin.vue') },
       { path: 'voucher', name: 'VoucherAdmin', component: () => import('@/Admin/voucher/VoucherAdmin.vue') },
-      { path: 'ca-lam-viec', name: 'QuanLyCaLamAdmin', component: () => import('@/Admin/QuanLyCaLam/QuanLyCaLam.vue') },
+      { path: 'quan-ly-ca-lam', name: 'QuanLyCaLamAdmin', component: () => import('@/Admin/QuanLyCaLam/QuanLyCaLam.vue') },
+      { path: 'diem-danh', name: 'DiemDanhAdmin', component: () => import('@/Admin/QuanLyCaLam/DiemDanh.vue') },
       { path: 'lich-su-diem-danh', name: 'LichSuDiemDanh', component: () => import('@/Admin/QuanLyCaLam/LichSuDiemDanh.vue') },
       { path: 'hoa-don', name: 'HoaDonAdmin', component: () => import('@/Admin/HoaDon/HoaDon.vue') },
       { path: 'khach-hang', name: 'KhachHangAdmin', component: () => import('@/Admin/KhachHangAdmin.vue') },
@@ -70,8 +71,8 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const isAdminLoggedIn = sessionStorage.getItem('adminUser') !== null;
   const isStaffLoggedIn = 
-    sessionStorage.getItem('staffUser') !== null || 
-    sessionStorage.getItem('nhanVienUser') !== null ||
+    localStorage.getItem('staffUser') !== null || sessionStorage.getItem('staffUser') !== null || 
+    localStorage.getItem('nhanVienUser') !== null || sessionStorage.getItem('nhanVienUser') !== null ||
     sessionStorage.getItem('adminUser') !== null;
 
   // 1. Kiểm tra quyền Admin

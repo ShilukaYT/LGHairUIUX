@@ -229,7 +229,7 @@ onMounted(() => {
   const initFB = () => {
     if ((window as any).__FB_INITIALIZED) return;
     (window as any).FB.init({
-      appId: '2390553588092754',
+      appId: '4481955345406767',
       cookie: true,
       xfbml: true,
       version: 'v18.0'
