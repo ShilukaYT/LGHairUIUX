@@ -51,7 +51,11 @@ const years = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i)
 const fetchPayroll = async () => {
   isLoading.value = true
   try {
+    const token = sessionStorage.getItem('adminToken')
     const response = await axios.get(`${API}/api/salary/summary`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      },
       params: {
         month: month.value,
         year: year.value
