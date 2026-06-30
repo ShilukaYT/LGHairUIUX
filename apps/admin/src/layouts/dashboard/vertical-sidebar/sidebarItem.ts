@@ -46,7 +46,7 @@ const sidebarItem: menu[] = [
     icon: UserOutlined,
     to: '/admin/khach-hang'
   },
-  { header: 'Dịch vụ & Sản phẩm' },
+  { header: 'Dịch vụ' },
   {
     title: 'Quản lý Dịch vụ',
     icon: AppstoreOutlined,
@@ -61,6 +61,22 @@ const sidebarItem: menu[] = [
     title: 'Style & Màu tóc',
     icon: ScissorOutlined,
     to: '/admin/StyleHairXColor'
+  },
+  { header: 'Sản phẩm' },
+  {
+    title: 'Quản lý sản phẩm',
+    icon: ScissorOutlined,
+    to: '/admin/productManager'
+  },
+  {
+    title: 'Danh mục sản phẩm',
+    icon: ScissorOutlined,
+    to: '/admin/categoriesProduct'
+  },
+  {
+    title: 'Quản lý kho',
+    icon: ScissorOutlined,
+    to: '/admin/quanLyKho'
   },
   { header: 'Khuyến mãi' },
   {

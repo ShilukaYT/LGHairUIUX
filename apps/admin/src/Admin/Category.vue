@@ -1082,11 +1082,10 @@ onMounted(loadData);
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
-  z-index: 500;
+  z-index: 9000;
   display: flex;
   align-items: center;
   justify-content: center;
-  backdrop-filter: blur(3px);
 }
 .modal {
   background: #fff;

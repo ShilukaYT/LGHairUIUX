@@ -94,6 +94,7 @@ export default {
           moTaChiTiet: data.moTa,
           images: data.images,
           activeImage: data.images?.[0],
+          isHot: data.isHot,
         };
 
         this.kieuTocs = data.kieuTocs ?? [];
@@ -229,16 +230,20 @@ export default {
         <h1 class="font-playfair service-title-lg">{{ service.tenDv }}</h1>
         <div class="title-underline mb-3"></div>
 
+        <!-- HOT BADGE -->
+        <div v-if="service.isHot" class="hot-badge-detail mb-3">
+          <i class="fas fa-fire"></i> HOT
+        </div>
+
         <div class="price-container-luxury mb-3">
-          <span class="new-price-lg">{{ formatPrice(service.gia) }}</span>
-
-          <span v-if="service.giaGoc > service.gia" class="old-price-inline">
-            {{ formatPrice(service.giaGoc) }}
-          </span>
-
-          <span v-if="service.phanTramGiam" class="discount-tag-premium">
-            -{{ service.phanTramGiam }}%
-          </span>
+          <template v-if="service.phanTramGiam">
+            <span class="old-price-inline">{{ formatPrice(service.giaGoc) }}</span>
+            <span class="new-price-lg" style="color: var(--danger)">{{ formatPrice(service.gia) }}</span>
+            <span class="discount-tag-premium">-{{ service.phanTramGiam }}%</span>
+          </template>
+          <template v-else>
+            <span class="new-price-lg">{{ formatPrice(service.gia) }}</span>
+          </template>
         </div>
 
         <div class="service-meta mb-3">
@@ -436,6 +441,10 @@ export default {
                   :alt="s.tenDv"
                   class="img-main-card"
                 />
+                <!-- HOT BADGE -->
+                <div v-if="s.isHot" class="hot-badge-sm">
+                  <i class="fas fa-fire"></i> HOT
+                </div>
                 <div v-if="s.phanTramGiam" class="discount-ribbon">
                   <span>-{{ s.phanTramGiam }}%</span>
                 </div>
@@ -588,6 +597,7 @@ export default {
   --line: #e7e5e2;
   --bg: #ffffff;
   --bg-soft: #fafafa;
+  --danger: #d92d20;
 
   font-family: "Jost", sans-serif;
   background: var(--bg);
@@ -706,10 +716,11 @@ export default {
 
 .new-price-lg {
   font-family: "Jost", sans-serif;
-  font-size: 1.7rem;
-  font-weight: 500;
+  font-size: 2.2rem;
+  font-weight: 700;
   color: var(--ink);
-  letter-spacing: 0.5px;
+  letter-spacing: -0.5px;
+  line-height: 1;
 }
 
 .old-price-inline {
@@ -723,7 +734,7 @@ export default {
 }
 
 .discount-tag-premium {
-  background: var(--ink);
+  background: var(--danger);
   color: #fff;
   font-family: "Jost", sans-serif;
   font-size: 0.68rem;
@@ -1074,7 +1085,7 @@ export default {
   display: block;
   width: 112px;
   padding: 6px 0;
-  background: var(--ink);
+  background: var(--danger);
   color: #fff;
   font-family: "Jost", sans-serif;
   font-weight: 500;
@@ -1174,7 +1185,7 @@ export default {
 }
 
 .combo-discount-badge-gold {
-  background: var(--ink);
+  background: var(--danger);
   color: #fff;
   font-family: "Jost", sans-serif;
   font-size: 0.65rem;
@@ -1248,33 +1259,26 @@ export default {
   transform: scale(1.05);
 }
 
-/* Discount ribbon */
+/* Discount ribbon — đồng bộ với Services.vue */
 .discount-ribbon {
   position: absolute;
-  top: 0;
-  right: 0;
-  width: 80px;
-  height: 80px;
-  overflow: hidden;
-  z-index: 2;
+  top: 14px;
+  right: 14px;
+  z-index: 5;
 }
 
 .discount-ribbon span {
-  position: absolute;
   display: block;
-  width: 112px;
-  padding: 6px 0;
-  background: var(--ink);
+  background: var(--danger);
   color: #fff;
   font-family: "Jost", sans-serif;
-  font-weight: 500;
-  font-size: 0.6rem;
-  letter-spacing: 1.5px;
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 2px;
   text-align: center;
   text-transform: uppercase;
-  top: 19px;
-  right: -26px;
-  transform: rotate(45deg);
+  padding: 7px 14px;
+  border-radius: 0;
   box-shadow: none;
 }
 
@@ -1369,6 +1373,44 @@ export default {
 }
 
 /* =========================================================
+   HOT BADGE — đồng bộ với Services.vue
+   ========================================================= */
+/* Badge HOT trên trang chi tiết (dưới tiêu đề) */
+.hot-badge-detail {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--danger);
+  color: #fff;
+  padding: 7px 14px;
+  font-family: "Jost", sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Badge HOT nhỏ trên card dịch vụ gợi ý */
+.hot-badge-sm {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 5;
+  background: var(--danger);
+  color: #fff;
+  padding: 7px 14px;
+  font-family: "Jost", sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* =========================================================
    FLOATING CART
    ========================================================= */
 .floating-cart-btn {
@@ -1449,7 +1491,7 @@ export default {
     height: 160px;
   }
   .new-price-lg {
-    font-size: 1.35rem;
+    font-size: 1.6rem;
   }
   .service-tieude-title {
     font-size: 1.5rem;
@@ -1527,7 +1569,7 @@ export default {
     height: 160px;
   }
   .new-price-lg {
-    font-size: 1.35rem;
+    font-size: 1.6rem;
   }
   .service-tieude-title {
     font-size: 1.5rem;

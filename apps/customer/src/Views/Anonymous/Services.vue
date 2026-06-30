@@ -1,12 +1,23 @@
 <script setup lang="ts">
 // import CartSidebar from "@/Khanhhang/views/CartSidebar.vue";
 // import { getCartDB } from "./CSDL/cartDB";
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, onMounted, watch, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import axios from "axios";
 
 const route = useRoute();
 const routerInstance = useRouter();
+
+// Vị trí "neo" đầu danh sách dịch vụ — dùng để auto scroll khi đổi trang / vào lại trang
+const servicesListRef = ref<HTMLElement | null>(null);
+const scrollToServicesTop = (smooth = true) => {
+  nextTick(() => {
+    servicesListRef.value?.scrollIntoView({
+      behavior: smooth ? "smooth" : "auto",
+      block: "start",
+    });
+  });
+};
 const cartItems = ref<any[]>([]);
 const cartRef = ref<any>(null);
 const userMaKH = ref<string | null>(null);
@@ -59,11 +70,12 @@ const fetchRatings = async () => {
 const currentPage = ref(1);
 const pageSize = ref(6);
 const totalPages = ref(1);
-const changePage = (page: number) => {
+const changePage = async (page: number) => {
   if (page < 1 || page > totalPages.value) return;
 
   currentPage.value = page;
-  fetchFiltered(); // 🔥 thiếu cái này
+  await fetchFiltered(); // 🔥 thiếu cái này
+  scrollToServicesTop(); // 🔥 auto scroll lên dịch vụ đầu tiên khi đổi trang
 };
 const visiblePages = computed(() => {
   const pages: (number | string)[] = [];
@@ -231,6 +243,9 @@ onMounted(async () => {
   await fetchFiltered(); // 🔥 lấy services theo filter
   //await updateCartBadge();// 🔥 cập nhật số lượng badge khi vào trang dịch vụ
   await fetchRatings(); // 🔥 lấy đánh giá trung bình cho tất cả dịch vụ
+
+  // 🔥 mỗi lần vào lại trang (mount) thì auto scroll lên đầu danh sách dịch vụ
+  scrollToServicesTop(false);
 });
 
 // =======================
@@ -294,113 +309,91 @@ const formatPrice = (price: number) => {
       </div>
     </section>
 
-    <!-- BREADCRUMB DANH MỤC ĐANG LỌC -->
-    <div
-      v-if="activeCategoryName"
-      class="container"
-      style="padding-top: 12px; padding-bottom: 0"
-    >
-      <div class="active-category-bar">
-        <span class="active-category-label">
-          <i
-            class="fas fa-filter"
-            style="margin-right: 6px; font-size: 10px"
-          ></i>
-          Đang xem: <strong>{{ activeCategoryName }}</strong>
-        </span>
-        <button class="clear-category-btn" @click="selectedCategory = 'all'">
-          <i class="fas fa-times"></i> Xem tất cả
-        </button>
-      </div>
+    <!-- ĐANG LỌC THEO DANH MỤC -->
+    <div v-if="activeCategoryName" class="container active-category-bar">
+      <span class="active-category-label">
+        Đang xem: <strong>{{ activeCategoryName }}</strong>
+      </span>
+      <button class="clear-category-btn" @click="selectedCategory = 'all'">
+        Xem tất cả
+      </button>
     </div>
 
-    <section class="container py-5 services-grid-layout">
-      <div v-if="services.length > 0" class="row g-4">
+    <section ref="servicesListRef" class="services-editorial-section" data-aos="fade-up">
+      <div v-if="services.length > 0" class="services-editorial-list">
         <div
-          v-for="s in services"
+          v-for="(s, idx) in services"
           :key="s.maDv"
-          class="col-lg-4 col-md-6"
-          data-aos="zoom-in"
-          style="padding-bottom: 28px"
+          :class="['editorial-row', idx % 2 !== 0 ? 'reverse' : '']"
         >
-          <router-link
-            :to="{ name: 'serviceDetail', params: { id: s.maDv } }"
-            style="
-              text-decoration: none;
-              color: inherit;
-              display: block;
-              height: 100%;
-            "
+          <div
+            class="editorial-image-wrap"
+            @click="routerInstance.push({ name: 'serviceDetail', params: { id: s.maDv } })"
           >
-            <div class="service-card-item">
-              <div v-if="s.flashSale" class="sale-ribbon-wrapper">
-                <div class="sale-ribbon">-{{ s.flashSale.phanTramGiam }}%</div>
-              </div>
-
-              <!-- <div v-if="s.flashSale" class="sale-time-premium">
-                <i class="fas fa-history"></i>
-                <span>{{ getRemainingTime(s.flashSale.ngayKetThuc) }}</span>
-              </div> -->
-              <div class="card-content">
-                <h3 class="service-title">{{ s.tenDv }}</h3>
-                <div class="rating-mini-box" v-if="ratingsMap[s.maDv]">
-                  <svg class="gold-star" width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.9-6.3 3.9 1.7-7L2 9.2l7.1-.6L12 2z"/>
-                  </svg>
-                  <span class="r-number">{{ ratingsMap[s.maDv]?.avg }}</span>
-                  <span class="r-count"
-                    >({{ ratingsMap[s.maDv]?.count }} đánh giá)</span
-                  >
-                </div>
-                <div class="rating-mini-box no-rating" v-else>
-                  Chưa có đánh giá
-                </div>
-                <div class="service-desc-group">
-                  <p class="service-desc">{{ s.moTa }}</p>
-                </div>
-              </div>
-
-              <div class="image-single-container">
-                <img
-                  :src="getImageUrl(s.hinhAnh)"
-                  alt="service"
-                  class="main-image-only"
-                />
-              </div>
-
-              <div class="duration-badge">
-                <span>{{ s.thoiGianLam }} Phút</span>
-              </div>
-
-              <div
-                class="price-button d-flex justify-content-between align-items-center"
-                @click="addToCart(s)"
-              >
-                <div class="price-values">
-                  <template v-if="s.flashSale">
-                    <span class="old-price">{{ formatPrice(s.gia) }}</span>
-                    <span class="new-price">
-                      {{
-                        formatPrice(
-                          getDiscountPrice(s.gia, s.flashSale.phanTramGiam),
-                        )
-                      }}
-                    </span>
-                  </template>
-                  <template v-else>
-                    <span class="main-price">{{ formatPrice(s.gia) }}</span>
-                  </template>
-                </div>
-
-                <button
-                  @click.stop.prevent="addToCart(s)"
-                  class="btn-order-now"
-                >
-                  ĐẶT NGAY
-                </button>
-              </div>
+            <!-- HOT BADGE -->
+            <div v-if="s.isHot" class="hot-badge">
+              <i class="fas fa-fire"></i> HOT
             </div>
-          </router-link>
+            <!-- SALE BADGE -->
+            <div v-if="s.flashSale" class="sale-ribbon-wrapper">
+              <div class="sale-ribbon">-{{ s.flashSale.phanTramGiam }}%</div>
+            </div>
+            <img
+              :src="getImageUrl(s.hinhAnh)"
+              :alt="s.tenDv"
+              class="editorial-img"
+            />
+          </div>
+
+          <div class="editorial-content">
+            <span class="editorial-duration">
+              <i class="fas fa-clock"></i> {{ s.thoiGianLam }} Phút
+            </span>
+            <h2 class="font-playfair editorial-title">{{ s.tenDv }}</h2>
+
+            <div class="editorial-price-row">
+              <template v-if="s.flashSale">
+                <span class="editorial-price-old">{{ formatPrice(s.gia) }}</span>
+                <span class="editorial-price-new">
+                  {{
+                    formatPrice(
+                      getDiscountPrice(s.gia, s.flashSale.phanTramGiam),
+                    )
+                  }}
+                </span>
+              </template>
+              <template v-else>
+                <span class="editorial-price-main">{{ formatPrice(s.gia) }}</span>
+              </template>
+            </div>
+
+            <div class="rating-mini-box" v-if="ratingsMap[s.maDv]">
+              <svg class="gold-star" width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.9-6.3 3.9 1.7-7L2 9.2l7.1-.6L12 2z"/>
+              </svg>
+              <span class="r-number">{{ ratingsMap[s.maDv]?.avg }}</span>
+              <span class="r-count"
+                >({{ ratingsMap[s.maDv]?.count }} đánh giá)</span
+              >
+            </div>
+            <div class="rating-mini-box no-rating" v-else>
+              Chưa có đánh giá
+            </div>
+
+            <p class="editorial-desc">{{ s.moTa }}</p>
+
+            <div class="editorial-actions">
+              <button
+                class="btn-outline-editorial"
+                @click="routerInstance.push({ name: 'serviceDetail', params: { id: s.maDv } })"
+              >
+                Xem Chi Tiết
+              </button>
+              <button class="btn-solid-editorial" @click="addToCart(s)">
+                Đặt Lịch Ngay
+              </button>
+            </div>
+          </div>
         </div>
       </div>
       <div v-else class="text-center py-5 no-result-box" data-aos="fade-in">
@@ -414,153 +407,110 @@ const formatPrice = (price: number) => {
         </p>
       </div>
     </section>
-    <div class="pagination-wrapper" v-if="totalPages > 1" data-aos="fade-up">
+
+    <div v-if="totalPages > 1" class="pagination-minimal" data-aos="fade-up">
       <button
         type="button"
-        class="pagination-btn prev-next"
+        class="pagination-nav"
         :disabled="currentPage === 1"
         @click="changePage(currentPage - 1)"
       >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 14 14"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M9 2L4 7L9 12"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
+        &larr; Trước
       </button>
 
-      <div class="page-numbers">
+      <div class="pagination-numbers">
         <button
           v-for="(page, index) in visiblePages"
           :key="index"
-          class="page-num-btn"
-          :class="{ active: currentPage === page }"
-          @click="typeof page === 'number' && changePage(page)"
+          type="button"
+          class="pagination-page"
+          :class="page === currentPage ? 'active' : page === '...' ? 'ellipsis' : ''"
           :disabled="page === '...'"
+          @click="typeof page === 'number' && changePage(page)"
         >
-          {{
-            page === "..."
-              ? "..."
-              : typeof page === "number" && page < 10
-                ? "0" + page
-                : page
-          }}
+          {{ page === '...' ? '...' : page }}
         </button>
       </div>
 
       <button
         type="button"
-        class="pagination-btn prev-next"
+        class="pagination-nav"
         :disabled="currentPage === totalPages"
         @click="changePage(currentPage + 1)"
       >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 14 14"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M5 2L10 7L5 12"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
+        Sau &rarr;
       </button>
     </div>
 
-    <section class="combo-white-section">
-      <div class="container">
-        <div class="text-center mb-5" data-aos="fade-up">
-          <h2 class="font-playfair combo-title-premium fw-900 display-5">
-            GÓI COMBO ĐẶC BIỆT
-          </h2>
-          <div class="gold-divider-thick"></div>
-          <p class="text-muted section-subtitle">
-            Tiết kiệm hơn, đẹp toàn diện hơn
-          </p>
-        </div>
+    <section class="services-editorial-section combo-editorial-section" style="margin-top: 100px; margin-bottom: 100px">
+      <div class="text-center mb-5" data-aos="fade-up">
+        <h2 class="font-playfair combo-title-premium fw-900 display-5">
+          GÓI COMBO ĐẶC BIỆT
+        </h2>
+        <div class="gold-divider-thick"></div>
+        <p class="text-muted section-subtitle">
+          Tiết kiệm hơn, đẹp toàn diện hơn
+        </p>
+      </div>
 
-        <div class="row g-4 gy-5 justify-content-center">
+      <div class="services-editorial-list">
+        <div
+          v-for="(c, idx) in combos"
+          :key="c.maCb || idx"
+          :class="['editorial-row', (services.length + idx) % 2 !== 0 ? 'reverse' : '']"
+          data-aos="fade-up"
+        >
           <div
-            v-for="(c, index) in combos"
-            :key="index"
-            class="col-lg-4 col-md-6"
-            data-aos="fade-up"
-            :data-aos-delay="index * 150"
-            style="padding-bottom: 28px"
+            class="editorial-image-wrap"
+            @click="routerInstance.push({ name: 'detailCombo', params: { id: c.maCb } })"
           >
-            <router-link
-              :to="{ name: 'detailCombo', params: { id: c.maCb } }"
-              style="
-                text-decoration: none;
-                color: inherit;
-                display: block;
-                height: 100%;
-              "
-            >
-              <div class="luxury-combo-card">
-                <div class="hover-tag">ƯU ĐÃI</div>
+            <div class="hot-badge combo-tag">ƯU ĐÃI</div>
+            <img
+              :src="getImageUrl(c.hinhAnh)"
+              :alt="c.tenCombo"
+              class="editorial-img"
+            />
+          </div>
 
-                <div class="combo-image-container">
-                  <img
-                    :src="getImageUrl(c.hinhAnh)"
-                    alt="combo-thumb"
-                    class="combo-img"
-                  />
-                </div>
+          <div class="editorial-content">
+            <h2 class="font-playfair editorial-title">{{ c.tenCombo }}</h2>
 
-                <div class="combo-info">
-                  <h4 class="font-playfair combo-name-title">
-                    {{ c.tenCombo }}
-                  </h4>
-                  <div
-                    class="rating-mini-box justify-content-center"
-                    v-if="ratingsMap[c.maCb]"
-                  >
-                    <svg class="gold-star" width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.9-6.3 3.9 1.7-7L2 9.2l7.1-.6L12 2z"/>
-                    </svg>
-                    <span class="r-number">{{ ratingsMap[c.maCb]?.avg }}</span>
-                    <span class="r-count"
-                      >({{ ratingsMap[c.maCb]?.count }} đánh giá)</span
-                    >
-                  </div>
-                  <div
-                    class="rating-mini-box justify-content-center no-rating"
-                    v-else
-                  >
-                    Chưa có đánh giá
-                  </div>
-                  <p class="combo-description">{{ c.moTa }}</p>
+            <div class="editorial-price-row">
+              <span class="editorial-price-main">{{ formatPrice(c.gia) }}</span>
+            </div>
 
-                  <div class="combo-price-val gold-gradient-darker">
-                    {{ formatPrice(c.gia) }}
-                  </div>
+            <div class="rating-mini-box" v-if="ratingsMap[c.maCb]">
+              <svg class="gold-star" width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.9-6.3 3.9 1.7-7L2 9.2l7.1-.6L12 2z"/>
+              </svg>
+              <span class="r-number">{{ ratingsMap[c.maCb]?.avg }}</span>
+              <span class="r-count"
+                >({{ ratingsMap[c.maCb]?.count }} đánh giá)</span
+              >
+            </div>
+            <div class="rating-mini-box no-rating" v-else>
+              Chưa có đánh giá
+            </div>
 
-                  <ul class="combo-list-items">
-                    <li v-for="item in c.items" :key="item">
-                      <i class="fas fa-gem gold-text-darker"></i> {{ item }}
-                    </li>
-                  </ul>
-                </div>
-                <button @click="addToCart(c)" class="btn-booking-luxury">
-                  Đặt lịch Ngay
-                </button>
-              </div>
-            </router-link>
+            <p class="editorial-desc">{{ c.moTa }}</p>
+
+            <ul class="combo-list-items editorial-combo-list">
+              <li v-for="item in c.items" :key="item">
+                <i class="fas fa-gem"></i> {{ item }}
+              </li>
+            </ul>
+
+            <div class="editorial-actions">
+              <button
+                class="btn-outline-editorial"
+                @click="routerInstance.push({ name: 'detailCombo', params: { id: c.maCb } })"
+              >
+                Xem Chi Tiết
+              </button>
+              <button class="btn-solid-editorial" @click="addToCart(c)">
+                Đặt Lịch Ngay
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -582,36 +532,36 @@ const formatPrice = (price: number) => {
 .active-category-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 10px 16px;
-  border: 1px solid var(--line);
-  background: var(--bg-soft);
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 32px;
   font-family: "Jost", sans-serif;
-  font-size: 12px;
-  letter-spacing: 1px;
+  font-size: 11px;
+  letter-spacing: 0.15em;
   text-transform: uppercase;
-  color: var(--ink);
+  color: var(--muted, #9ca3af);
 }
 
 .active-category-label strong {
   font-weight: 500;
+  color: var(--ink);
 }
 
 .clear-category-btn {
   background: none;
-  border: 1px solid var(--line);
-  color: var(--ink-soft);
-  font-size: 10px;
+  border: none;
+  color: inherit;
+  font-size: 11px;
   font-family: "Jost", sans-serif;
   text-transform: uppercase;
-  letter-spacing: 1.5px;
-  padding: 4px 12px;
+  letter-spacing: 0.15em;
+  text-decoration: underline;
+  padding: 0;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: color 0.2s ease;
 }
 
 .clear-category-btn:hover {
-  border-color: var(--ink);
   color: var(--ink);
 }
 
@@ -646,6 +596,7 @@ const formatPrice = (price: number) => {
   --line: #e7e5e2;
   --bg: #ffffff;
   --bg-soft: #fafafa;
+  --danger: #d92d20;
 
   font-family: "Jost", sans-serif;
   background: var(--bg);
@@ -893,6 +844,38 @@ const formatPrice = (price: number) => {
   letter-spacing: 1.5px;
 }
 
+/* HOT badge — overlay góc dưới trái ảnh */
+.hot-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+  background: #ff4444;
+  color: #fff;
+  padding: 8px 16px;
+  font-family: "Jost", sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 4px;
+  animation: hot-pulse 1.5s ease-in-out infinite;
+  box-shadow: 0 4px 12px rgba(255, 68, 68, 0.4);
+}
+
+.hot-badge i {
+  font-size: 12px;
+}
+
+@keyframes hot-pulse {
+  0%   { opacity: 1; transform: scale(1); }
+  50%  { opacity: 0.85; transform: scale(1.05); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
 /* Countdown timer (kept for future use) */
 .sale-time-premium {
   position: absolute;
@@ -941,6 +924,7 @@ const formatPrice = (price: number) => {
   border-radius: 0;
   aspect-ratio: 4 / 5;
   background: var(--bg-soft);
+  position: relative; /* ← cho phép badge absolute bên trong */
 }
 
 .main-image-only {
@@ -1414,6 +1398,329 @@ const formatPrice = (price: number) => {
 .combo-white-section .col-md-6 {
   display: flex !important;
   flex-direction: column !important;
+}
+
+/* =========================================================
+   EDITORIAL SERVICES LAYOUT (ảnh - chữ xen kẽ)
+   ========================================================= */
+.services-editorial-section {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 60px 24px 0;
+}
+
+.services-editorial-list {
+  display: flex;
+  flex-direction: column;
+  gap: 96px;
+}
+
+.editorial-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 48px;
+}
+
+@media (min-width: 768px) {
+  .editorial-row {
+    flex-direction: row;
+    gap: 80px;
+  }
+  .editorial-row.reverse {
+    flex-direction: row-reverse;
+  }
+}
+
+.editorial-image-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  background: var(--bg-soft);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+@media (min-width: 768px) {
+  .editorial-image-wrap,
+  .editorial-content {
+    width: 50%;
+  }
+}
+
+.editorial-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 1s ease;
+}
+
+.editorial-image-wrap:hover .editorial-img {
+  transform: scale(1.05);
+}
+
+.editorial-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.editorial-duration {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--ink);
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  padding: 7px 14px;
+  margin-bottom: 18px;
+  width: fit-content;
+}
+
+.editorial-duration i {
+  font-size: 11px;
+  color: var(--danger);
+}
+
+.editorial-title {
+  font-size: 1.8rem;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 16px;
+}
+
+@media (min-width: 1024px) {
+  .editorial-title {
+    font-size: 2.2rem;
+  }
+}
+
+.editorial-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.editorial-price-old {
+  font-size: 1rem;
+  color: var(--muted-light);
+  text-decoration: line-through;
+  font-family: "Jost", sans-serif;
+}
+
+.editorial-price-new {
+  font-size: 1.3rem;
+  font-weight: 500;
+  color: var(--danger);
+  font-family: "Jost", sans-serif;
+}
+
+.editorial-price-main {
+  font-size: 1.3rem;
+  font-weight: 400;
+  color: var(--ink);
+  font-family: "Jost", sans-serif;
+}
+
+.editorial-desc {
+  color: var(--muted);
+  font-weight: 300;
+  line-height: 1.7;
+  margin: 16px 0 40px;
+  max-width: 480px;
+}
+
+.editorial-actions {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.btn-outline-editorial {
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  padding: 16px 32px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  background: transparent;
+  cursor: pointer;
+  font-family: "Jost", sans-serif;
+  transition: all 0.3s ease;
+}
+
+.btn-outline-editorial:hover {
+  background: var(--ink);
+  color: #fff;
+}
+
+.btn-solid-editorial {
+  background: var(--ink);
+  color: #fff;
+  border: 1px solid var(--ink);
+  padding: 16px 32px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  cursor: pointer;
+  font-family: "Jost", sans-serif;
+  transition: all 0.3s ease;
+}
+
+.btn-solid-editorial:hover {
+  background: var(--ink-soft);
+  border-color: var(--ink-soft);
+}
+
+/* Pagination — đồng bộ với Product.vue */
+.pagination-minimal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 48px;
+  max-width: 1440px;
+  margin: 96px auto 0;
+  padding: 32px 24px 0;
+  border-top: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+@media (max-width: 1023px) {
+  .pagination-minimal {
+    gap: 24px;
+  }
+}
+
+.pagination-nav {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: "Jost", sans-serif;
+  transition: color 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pagination-nav:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+.pagination-nav:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.pagination-numbers {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "Jost", sans-serif;
+  font-size: 12px;
+  font-weight: 300;
+}
+
+@media (min-width: 1024px) {
+  .pagination-numbers {
+    gap: 16px;
+  }
+}
+
+.pagination-page {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: "Jost", sans-serif;
+  font-size: 12px;
+  font-weight: 300;
+  transition: color 0.2s ease;
+}
+
+.pagination-page:hover:not(:disabled):not(.active):not(.ellipsis) {
+  color: var(--ink);
+}
+
+.pagination-page.active {
+  border-bottom: 1px solid var(--ink);
+  color: var(--ink);
+}
+
+.pagination-page.ellipsis {
+  color: var(--muted-light);
+  cursor: default;
+}
+
+
+/* Tag "ƯU ĐÃI" cho combo — màu đen để phân biệt với badge đỏ (HOT/giảm giá) */
+.editorial-image-wrap .hot-badge.combo-tag {
+  background: var(--ink);
+}
+
+/* List tính năng combo trong layout editorial — căn trái, theo chiều rộng nội dung */
+.editorial-combo-list {
+  max-width: 480px;
+  margin: 0 0 32px;
+}
+
+/* Badges inside editorial image — gọn, vuông góc, đồng bộ màu đỏ */
+.editorial-image-wrap .hot-badge,
+.editorial-image-wrap .sale-ribbon-wrapper {
+  position: absolute;
+  z-index: 5;
+}
+
+.editorial-image-wrap .hot-badge {
+  top: 14px;
+  left: 14px;
+  right: auto;
+  bottom: auto;
+  background: var(--danger);
+  color: #fff;
+  padding: 7px 14px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  border-radius: 0;
+  box-shadow: none;
+  animation: none;
+}
+
+.editorial-image-wrap .sale-ribbon-wrapper {
+  top: 14px;
+  right: 14px;
+  left: auto;
+  width: auto;
+  height: auto;
+  overflow: visible;
+}
+
+.editorial-image-wrap .sale-ribbon {
+  position: static;
+  top: auto;
+  right: auto;
+  transform: none;
+  width: auto;
+  background: var(--danger);
+  padding: 7px 14px;
+  font-size: 10px;
+  letter-spacing: 2px;
 }
 
 /* =========================================================
