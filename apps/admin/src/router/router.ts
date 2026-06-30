@@ -25,6 +25,9 @@ const routes = [
       { path: 'bang-luong', name: 'BangLuongAdmin', component: () => import('@/Admin/QuanLyLuong/BangLuong.vue') },
       { path: 'Gui-Thong-Bao', name: 'GuiThongBao', component: () => import('@/Admin/GuiThongBao.vue') },
       { path: 'chat', name: 'AdminChat', component: () => import('@/components/AdminChat.vue') },
+      { path: 'productManager', name: 'ProductManager', component: () => import('@/Admin/Productmanager.vue') },
+      { path: 'categoriesProduct', name: 'CategoriesProduct', component: () => import('@/Admin/DanhMucSP.vue') },
+      { path: 'quanLyKho', name: 'QuanLyKho', component: () => import('@/Admin/QuanLyKho.vue') },
     ],
     meta: { requiresAdminAuth: true }
   },

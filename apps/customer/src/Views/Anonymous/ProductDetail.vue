@@ -114,7 +114,7 @@ const formatSinglePrice = (price?: number | null) =>
   price != null ? Number(price).toLocaleString("vi-VN") + "đ" : "—";
 
 const selectBienThe = (bt: any) => {
-  if (bt.soLuongTon === 0) return;
+  // Biến thể hết hàng vẫn cho chọn để xem ảnh/giá, nhưng canOrder sẽ false → nút disabled
   // Toggle: click lại biến thể đang chọn → bỏ chọn (chỉ áp dụng nếu có > 1 biến thể)
   if (selectedBienThe.value?.maBienThe === bt.maBienThe && product.value?.bienThes?.length > 1) {
     selectedBienThe.value = null;
@@ -289,7 +289,10 @@ watch(
             <p class="text-xs text-gray-400 italic mb-4" v-else>Chưa có đánh giá</p>
 
             <!-- GIÁ -->
-            <span class="text-xl font-light mb-8" :class="{ 'text-lg': priceDisplay.isRange }">
+            <span
+              class="font-semibold tracking-tight mb-8 leading-none"
+              :class="priceDisplay.isRange ? 'text-xl' : 'text-3xl'"
+            >
               {{ priceDisplay.text }}
             </span>
 
@@ -307,12 +310,15 @@ watch(
                   :key="bt.maBienThe"
                   class="relative border px-3 py-2 cursor-pointer transition-colors text-left"
                   :class="[
-                    selectedBienThe?.maBienThe === bt.maBienThe ? 'border-black' : 'border-gray-200 hover:border-gray-400',
-                    bt.soLuongTon === 0 ? 'opacity-40 cursor-not-allowed' : ''
+                    selectedBienThe?.maBienThe === bt.maBienThe
+                      ? (bt.soLuongTon === 0 ? 'border-gray-400' : 'border-black')
+                      : 'border-gray-200 hover:border-gray-400',
+                    bt.soLuongTon === 0 ? 'opacity-50' : ''
                   ]"
                   @click="selectBienThe(bt)"
                 >
-                  <div class="text-xs font-medium uppercase tracking-wide truncate mb-0.5">{{ bt.tenBienThe }}</div>
+                  <div class="text-xs font-medium uppercase tracking-wide truncate mb-0.5"
+                       :class="bt.soLuongTon === 0 ? 'line-through text-gray-400' : ''">{{ bt.tenBienThe }}</div>
                   <div class="text-xs text-gray-600 mb-0.5">{{ formatSinglePrice(bt.giaBan) }}</div>
                   <div class="text-[10px] uppercase tracking-wide" :class="bt.soLuongTon > 0 ? 'text-gray-400' : 'text-gray-300'">
                     {{ bt.soLuongTon > 0 ? `Còn ${bt.soLuongTon}` : 'Hết' }}
@@ -332,6 +338,15 @@ watch(
                   <line x1="12" y1="8" x2="12.01" y2="8"/>
                 </svg>
                 Vui lòng chọn một loại sản phẩm để thêm vào giỏ
+              </p>
+              <!-- Cảnh báo khi chọn biến thể hết hàng -->
+              <p class="text-[11px] text-red-400 mt-3 flex items-center gap-1.5" v-if="selectedBienThe && selectedBienThe.soLuongTon === 0">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="8" x2="12" y2="12"/>
+                  <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                Lựa chọn này tạm thời hết hàng, vui lòng chọn loại khác
               </p>
             </div>
 
