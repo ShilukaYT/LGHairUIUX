@@ -118,7 +118,7 @@ const serviceCollages = {
 const activeCollage = computed(() => {
   const activeSvc = dataStore.SERVICES.find(s => s.img === hoveredServiceImg.value) || dataStore.SERVICES[0];
   if (activeSvc) {
-    const realImgs = activeSvc.imgs || [];
+    const realImgs = (activeSvc as any).imgs || [];
     const mainImg = realImgs[0] || activeSvc.img;
     
     // Lấy ảnh thứ 2 từ DB. Nếu dịch vụ chỉ có 1 ảnh, lấy ảnh đầu tiên của dịch vụ tiếp theo trong DB làm ảnh nhỏ để không bị trùng và không dùng ảnh mẫu.
@@ -504,23 +504,28 @@ onMounted(async () => {
     const resProd = await axios.get(`${API}/api/SanPham/filter`, {
       params: {
         page: 1,
-        pageSize: 4
+        pageSize: 10
       }
     });
     if (resProd.data && resProd.data.data && resProd.data.data.length > 0) {
+      // Hàm ghép URL ảnh sản phẩm — đồng bộ với Shop.vue getImageUrl()
+      const getProductImageUrl = (img?: string): string => {
+        if (!img) return 'https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?q=80&w=800';
+        if (img.startsWith('http')) return img;
+        if (img.startsWith('/')) return `${API}${img}`;
+        return `${API}/uploads/sanpham/${img}`;
+      };
+
       dataStore.PRODUCTS = resProd.data.data.map((p: any) => {
-        const prodImg = p.hinhAnhDaiDien 
-          ? (p.hinhAnhDaiDien.startsWith('http') 
-            ? p.hinhAnhDaiDien 
-            : (p.hinhAnhDaiDien.startsWith('/') 
-              ? `${API}${p.hinhAnhDaiDien}` 
-              : `${API}/uploads/sanpham/${p.hinhAnhDaiDien}`)) 
-          : 'https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?q=80&w=800';
+        // Thử nhiều tên field ảnh mà backend có thể trả về
+        const rawImg = p.hinhAnhDaiDien || p.hinhAnh || p.anhDaiDien || p.imageUrl || '';
+        const prodImg = getProductImageUrl(rawImg);
+
         return {
-          id: p.maSp,
+          id: String(p.maSp), // Ép kiểu string để tránh lỗi TypeScript so sánh với number
           name: p.tenSp,
           desc: p.moTa || '',
-          price: p.giaTu,
+          price: p.giaTu ?? p.gia ?? 0,
           img: prodImg,
           category: p.danhMuc?.tenDanhMuc || 'Boutique',
           size: p.thuongHieu?.tenThuongHieu || 'Minh Tâm'
@@ -797,27 +802,27 @@ onUnmounted(() => {
         <div
           v-for="prod in dataStore.PRODUCTS"
           :key="prod.id"
-          class="flex-shrink-0 w-[280px] sm:w-[320px] snap-start group cursor-pointer flex flex-col"
+          class="flex-shrink-0 w-[280px] sm:w-[320px] snap-start group cursor-pointer flex flex-col outline-none focus:outline-none"
           @click="router.push({ name: 'product_detail', params: { id: prod.id } })"
         >
-          <!-- Minimalist product image background container -->
-          <div class="aspect-[3/4] w-full bg-neutral-50/50 border border-neutral-100/50 flex items-center justify-center relative overflow-hidden mb-6 p-10">
+          <!-- Minimalist product image background container matching Shop page layout -->
+          <div class="aspect-[4/5] w-full bg-white overflow-hidden mb-4 relative">
             <!-- Premium product ribbon/tag -->
             <span 
-              v-if="prod.id === 'p1' || prod.id === 'p2' || prod.id === 'p3' || prod.id === 'p4'"
+              v-if="prod.id === 'p1' || prod.id === 'p2' || prod.id === 'p3' || prod.id === 'p4' || prod.id === '1' || prod.id === '2' || prod.id === '3' || prod.id === '4'"
               class="absolute top-4 left-4 z-20 bg-neutral-950/80 backdrop-blur-sm text-[#bfa77a] text-[8px] font-semibold uppercase tracking-widest px-3 py-1.5 border border-[#bfa77a]/30"
             >
-              {{ prod.id === 'p1' ? 'Signature' : prod.id === 'p2' ? 'Bán Chạy' : prod.id === 'p3' ? 'Mới Về' : 'Thuần Chay' }}
+              {{ (prod.id === 'p1' || prod.id === '1') ? 'Signature' : (prod.id === 'p2' || prod.id === '2') ? 'Bán Chạy' : (prod.id === 'p3' || prod.id === '3') ? 'Mới Về' : 'Thuần Chay' }}
             </span>
 
             <img
               :src="prod.img"
               :alt="prod.name"
-              class="w-4/5 h-4/5 object-contain mix-blend-multiply transition-all duration-700 ease-out group-hover:scale-110 group-hover:-translate-y-3 saturate-110"
+              class="w-full h-full object-cover object-center block transition-all duration-700 ease-out group-hover:scale-105 saturate-110"
             />
             
             <!-- Luxury Floating Actions Overlay -->
-            <div class="absolute inset-0 bg-neutral-900/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-center justify-center gap-4 z-25">
+            <div class="absolute inset-0 bg-neutral-900/15 opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-center justify-center gap-4 z-25">
               <button 
                 @click.stop="showToast('Đã thêm ' + prod.name + ' vào giỏ hàng!');"
                 class="w-12 h-12 rounded-full bg-white text-black hover:bg-[#bfa77a] hover:text-black flex items-center justify-center shadow-lg transition-all duration-300 scale-90 group-hover:scale-100 cursor-pointer"
