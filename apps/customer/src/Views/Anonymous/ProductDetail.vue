@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import axios from "axios";
+import { addToCartDB } from "@/Views/Anonymous/CSDL/cartDB";
+import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 
 const API   = import.meta.env.VITE_API_URL;
 const route = useRoute();
+const router = useRouter();
 
 // ======================================================
 // STATE
@@ -123,8 +126,10 @@ const selectBienThe = (bt: any) => {
   // Xây danh sách ảnh slide: ảnh đại diện trước, rồi gallery BT
   const imgs: string[] = [];
   if (bt.hinhAnhDaiDien) imgs.push(bt.hinhAnhDaiDien);
-  for (const h of bt.hinhAnhs ?? []) {
-    if (h.duongDan && !imgs.includes(h.duongDan)) imgs.push(h.duongDan);
+  if (Array.isArray(bt.hinhAnhs)) {
+    for (const h of bt.hinhAnhs) {
+      if (h.duongDan && !imgs.includes(h.duongDan)) imgs.push(h.duongDan);
+    }
   }
   btImageList.value = imgs;
   slideIndex.value  = 0;
@@ -141,6 +146,32 @@ const slideNext = () => {
 
 const openLightbox = (img: string) => { lightboxImg.value = img; lightboxOpen.value = true; };
 const closeLightbox = () => { lightboxOpen.value = false; };
+
+const addToCart = async (isBuyNow = false) => {
+  if (!selectedBienThe.value || !canOrder.value) return;
+  
+  const customer = getCustomerInfo();
+  
+  const formattedItem = {
+    id: selectedBienThe.value.maBienThe || selectedBienThe.value.id,
+    maSanPham: product.value.maSp,
+    tenItem: `${product.value.tenSp} - ${selectedBienThe.value.tenBienThe}`,
+    gia: selectedBienThe.value.giaBan,
+    giaGoc: selectedBienThe.value.giaBan,
+    hinhAnh: selectedBienThe.value.hinhAnhDaiDien || product.value.hinhAnhDaiDien || "/assets/images/default.jpg",
+    type: 'SANPHAM',
+    soLuong: 1
+  };
+
+  await addToCartDB(formattedItem, customer.maKH);
+  window.dispatchEvent(new Event("cart-updated"));
+  
+  if (isBuyNow) {
+    router.push('/cart');
+  } else {
+    alert("Đã thêm sản phẩm vào giỏ hàng thành công!");
+  }
+};
 
 watch(
   () => route.params.id,
@@ -336,6 +367,7 @@ watch(
             <!-- Nút hành động -->
             <div class="flex items-center gap-3 flex-wrap mb-8 pb-8 border-b border-gray-100">
               <button
+                @click="addToCart(false)"
                 class="flex-1 border border-black bg-white text-black py-4 text-xs font-medium uppercase tracking-[0.2em]
                        transition-all duration-300 ease-out
                        hover:bg-black hover:text-white hover:tracking-[0.24em]
@@ -345,6 +377,7 @@ watch(
                 Thêm vào giỏ hàng
               </button>
               <button
+                @click="addToCart(true)"
                 class="flex-1 bg-black text-white py-4 text-xs uppercase tracking-[0.2em] hover:bg-gray-800 transition-colors
                        disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-black"
                 :disabled="!canOrder"

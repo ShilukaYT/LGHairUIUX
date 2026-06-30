@@ -26,6 +26,29 @@ app.use(vue3GoogleLogin, {
 // 1. Luôn cho phép gửi Cookie
 axios.defaults.withCredentials = true;
 
+// 1.5. Trạm gác chặn các Request gửi đi (Gắn Token vào Header)
+axios.interceptors.request.use(
+  (config) => {
+    const requestUrl = config.url || '';
+    let token = '';
+
+    if (requestUrl.includes('/api/admin') || requestUrl.includes('/api/nhan-vien')) {
+      token = sessionStorage.getItem('adminToken') || localStorage.getItem('staffToken') || sessionStorage.getItem('staffToken') || '';
+    } else {
+      token = localStorage.getItem('userToken') || sessionStorage.getItem('userToken') || '';
+    }
+
+    if (token && token !== 'undefined') {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 // 2. Trạm gác chặn các Response trả về từ Server (ĐÃ NÂNG CẤP HỖ TRỢ ADMIN, NHÂN VIÊN VÀ KHÁCH)
 axios.interceptors.response.use(
   (response) => {
@@ -48,14 +71,31 @@ axios.interceptors.response.use(
       const isStaffApi = requestUrl.includes('/api/nhan-vien'); // Bổ sung API nhân viên
 
       try {
+        let refreshRes;
         if (isAdminApi) {
-          await axios.post('https://localhost:7196/api/admin/auth/refresh-token');
+          refreshRes = await axios.post('https://localhost:7196/api/admin/auth/refresh-token');
         } else if (isStaffApi) {
-          // Bạn có thể đổi đường dẫn này nếu Nhân viên có API refresh-token riêng
-          // Nếu dùng chung AuthController với Admin, hãy giữ nguyên dòng dưới
-          await axios.post('https://localhost:7196/api/admin/auth/refresh-token'); 
+          refreshRes = await axios.post('https://localhost:7196/api/admin/auth/refresh-token'); 
         } else {
-          await axios.post('https://localhost:7196/api/account/refresh-token');
+          refreshRes = await axios.post('https://localhost:7196/api/account/refresh-token');
+        }
+
+        // Cập nhật Token mới vào Storage & Header nếu API trả về Token
+        if (refreshRes && refreshRes.data) {
+          const data = refreshRes.data.data || refreshRes.data;
+          const newAccessToken = data.accessToken || data.token;
+          if (newAccessToken) {
+            if (isAdminApi) {
+              sessionStorage.setItem('adminToken', newAccessToken);
+            } else if (isStaffApi) {
+              localStorage.setItem('staffToken', newAccessToken);
+              sessionStorage.setItem('staffToken', newAccessToken);
+            } else {
+              localStorage.setItem('userToken', newAccessToken);
+              sessionStorage.setItem('userToken', newAccessToken);
+            }
+            originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
+          }
         }
         
         // Xin thành công -> tự động gọi lại API cũ
@@ -67,6 +107,7 @@ axios.interceptors.response.use(
         // XỬ LÝ ĐÁ VĂNG VỀ ĐÚNG TRANG LOGIN
         if (isAdminApi) {
           sessionStorage.removeItem('adminUser');
+          sessionStorage.removeItem('adminToken');
           router.push('/admin/login');
         } 
         else if (isStaffApi) {

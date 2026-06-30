@@ -3,6 +3,9 @@ import { onMounted, onUnmounted, ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { ArrowRight, ShoppingBag, ChevronLeft, ChevronRight, Eye } from 'lucide-vue-next';
 import { useDataStore } from '@/stores/useDataStore';
+import axios from 'axios';
+
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196';
 
 type HeroSlide = {
   id: number;
@@ -83,7 +86,7 @@ const heroSlides: HeroSlide[] = [
     subtitle: 'Trải Nghiệm Đẳng Cấp',
     title: 'Đặt lịch chăm sóc',
     desc: 'Tận hưởng không gian làm đẹp sang trọng và dịch vụ chăm sóc tóc đẳng cấp.',
-    route: 'booking'
+    route: 'datdichvu'
   }
 ];
 
@@ -113,8 +116,27 @@ const serviceCollages = {
 };
 
 const activeCollage = computed(() => {
-  const activeSvcId = dataStore.SERVICES.find(s => s.img === hoveredServiceImg.value)?.id || 's1';
-  return serviceCollages[activeSvcId as keyof typeof serviceCollages] || serviceCollages.s1;
+  const activeSvc = dataStore.SERVICES.find(s => s.img === hoveredServiceImg.value) || dataStore.SERVICES[0];
+  if (activeSvc) {
+    const realImgs = activeSvc.imgs || [];
+    const mainImg = realImgs[0] || activeSvc.img;
+    
+    // Lấy ảnh thứ 2 từ DB. Nếu dịch vụ chỉ có 1 ảnh, lấy ảnh đầu tiên của dịch vụ tiếp theo trong DB làm ảnh nhỏ để không bị trùng và không dùng ảnh mẫu.
+    let detail1Img = realImgs[1];
+    if (!detail1Img && dataStore.SERVICES.length > 1) {
+      const activeIdx = dataStore.SERVICES.indexOf(activeSvc);
+      const nextIdx = (activeIdx + 1) % dataStore.SERVICES.length;
+      detail1Img = dataStore.SERVICES[nextIdx]?.img || mainImg;
+    } else if (!detail1Img) {
+      detail1Img = mainImg;
+    }
+
+    return {
+      main: mainImg,
+      detail1: detail1Img
+    };
+  }
+  return serviceCollages.s1;
 });
 
 const productCarouselRef = ref<HTMLElement | null>(null);
@@ -141,17 +163,23 @@ const showToast = (message: string): void => {
 
 const formatPriceToVND = (priceVal: string | number): string => {
   if (typeof priceVal === 'number') {
+    if (priceVal > 5000) {
+      return priceVal.toLocaleString('vi-VN') + ' đ';
+    }
     const vnd = priceVal * 25000;
     return vnd.toLocaleString('vi-VN') + ' đ';
   }
   if (typeof priceVal === 'string') {
-    if (priceVal.includes('120')) return '1.200.000 đ';
-    if (priceVal.includes('250')) return 'Từ 2.500.000 đ';
-    if (priceVal.includes('300')) return '3.000.000 đ';
-    if (priceVal.includes('150')) return '1.500.000 đ';
+    if (priceVal.includes('120') && !priceVal.includes('000')) return '1.200.000 đ';
+    if (priceVal.includes('250') && !priceVal.includes('000')) return 'Từ 2.500.000 đ';
+    if (priceVal.includes('300') && !priceVal.includes('000')) return '3.000.000 đ';
+    if (priceVal.includes('150') && !priceVal.includes('000')) return '1.500.000 đ';
     
     const cleanNum = parseFloat(priceVal.replace(/[^0-9.]/g, ''));
     if (!isNaN(cleanNum)) {
+      if (cleanNum > 5000) {
+        return (priceVal.toLowerCase().includes('từ') ? 'Từ ' : '') + cleanNum.toLocaleString('vi-VN') + ' đ';
+      }
       const vnd = cleanNum * 25000;
       return (priceVal.toLowerCase().includes('từ') ? 'Từ ' : '') + vnd.toLocaleString('vi-VN') + ' đ';
     }
@@ -435,8 +463,73 @@ const prevTestimonial = (): void => {
   activeTestimonial.value = (activeTestimonial.value - 1 + testimonials.length) % testimonials.length;
 };
 
-onMounted(() => {
+onMounted(async () => {
   heroIntervalId = window.setInterval(nextHeroSlide, 4200);
+
+  // Fetch real services from API
+  try {
+    const res = await axios.get(`${API}/api/DanhSachDichVu/filter`, {
+      params: {
+        page: 1,
+        pageSize: 4
+      }
+    });
+    if (res.data && res.data.data && res.data.data.length > 0) {
+      dataStore.SERVICES = res.data.data.map((s: any) => {
+        const formatImgUrl = (url: string) => {
+          if (!url) return '';
+          if (url.startsWith('http')) return url;
+          return url.startsWith('/') ? `${API}${url}` : `${API}/${url}`;
+        };
+        const mainImg = s.hinhAnh ? formatImgUrl(s.hinhAnh) : 'https://images.unsplash.com/photo-1595476108010-b4d1f10d5e43?q=80&w=1000';
+        const rawImgs = s.hinhAnhs || [];
+        const mappedImgs = rawImgs.map((img: string) => formatImgUrl(img));
+        return {
+          id: s.maDv,
+          name: s.tenDv,
+          desc: s.moTa || '',
+          price: s.gia,
+          duration: `${s.thoiGianLam || 30} PHÚT`,
+          img: mainImg,
+          imgs: mappedImgs.length > 0 ? mappedImgs : [mainImg]
+        };
+      });
+    }
+  } catch (err) {
+    console.error("Lỗi khi tải dữ liệu dịch vụ thật:", err);
+  }
+
+  // Fetch real products from API
+  try {
+    const resProd = await axios.get(`${API}/api/SanPham/filter`, {
+      params: {
+        page: 1,
+        pageSize: 4
+      }
+    });
+    if (resProd.data && resProd.data.data && resProd.data.data.length > 0) {
+      dataStore.PRODUCTS = resProd.data.data.map((p: any) => {
+        const prodImg = p.hinhAnhDaiDien 
+          ? (p.hinhAnhDaiDien.startsWith('http') 
+            ? p.hinhAnhDaiDien 
+            : (p.hinhAnhDaiDien.startsWith('/') 
+              ? `${API}${p.hinhAnhDaiDien}` 
+              : `${API}/uploads/sanpham/${p.hinhAnhDaiDien}`)) 
+          : 'https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?q=80&w=800';
+        return {
+          id: p.maSp,
+          name: p.tenSp,
+          desc: p.moTa || '',
+          price: p.giaTu,
+          img: prodImg,
+          category: p.danhMuc?.tenDanhMuc || 'Boutique',
+          size: p.thuongHieu?.tenThuongHieu || 'Minh Tâm'
+        };
+      });
+    }
+  } catch (err) {
+    console.error("Lỗi khi tải dữ liệu sản phẩm thật:", err);
+  }
 });
 
 onUnmounted(() => {
@@ -496,7 +589,7 @@ onUnmounted(() => {
       <div class="relative z-20 max-w-2xl px-8 md:px-16 lg:px-24 py-12 md:py-16 w-full">
         <div class="animate-in fade-in slide-in-from-bottom-8 duration-1000">
           <div class="overflow-hidden mb-4">
-            <p class="text-[10px] font-serif italic text-[#bfa77a] tracking-wider">
+            <p class="text-xs md:text-sm font-serif italic text-[#f9e5b5] tracking-wider">
               "Nơi kỹ nghệ kéo vàng giao thoa cùng cảm hứng thời trang đương đại."
             </p>
           </div>
@@ -506,7 +599,7 @@ onUnmounted(() => {
           </p>
           
           <h1 class="text-4xl md:text-5xl lg:text-6xl font-sans font-bold tracking-wide uppercase text-white mb-8 leading-tight">
-            Minh Tâm Hair Salon
+            LG HAIR SALON
           </h1>
 
           <p class="text-sm md:text-base font-light leading-relaxed tracking-wide text-neutral-300 mb-12 max-w-lg">
@@ -516,7 +609,7 @@ onUnmounted(() => {
           <!-- Parallel Dual CTA -->
           <div class="flex flex-row flex-wrap gap-4">
             <button
-              @click="goToRoute('booking')"
+              @click="goToRoute('datdichvu')"
               class="group inline-flex items-center justify-center gap-3 bg-[#bfa77a] text-black px-8 py-4 text-[10px] font-semibold uppercase tracking-[0.2em] transition-all duration-300 hover:bg-white hover:text-black cursor-pointer shadow-md"
             >
               Đặt Lịch Cắt Tóc
@@ -627,20 +720,10 @@ onUnmounted(() => {
           <!-- Interactive Collage of Overlapping Images -->
           <div class="relative w-full aspect-[4/5]">
             <!-- Background Frame Decoration -->
-            <div class="absolute -inset-2 border border-[#bfa77a]/20 pointer-events-none z-0 translate-x-3 translate-y-3 transition-transform duration-700"></div>
+            <div class="absolute -inset-2 border border-[#bfa77a]/20 pointer-events-none z-0 translate-x-2 translate-y-2 transition-transform duration-700"></div>
 
-            <!-- Background Layer Image (Detail 2) -->
-            <div class="absolute -top-8 -right-8 w-2/5 aspect-square z-0 border border-neutral-100 shadow-lg rotate-[6deg] overflow-hidden transition-all duration-700 ease-out hover:rotate-0 hover:scale-105">
-              <img
-                :key="activeCollage.detail2"
-                :src="activeCollage.detail2"
-                class="w-full h-full object-cover animate-in fade-in duration-700"
-                alt="Product used"
-              />
-            </div>
-
-            <!-- Main Front Image -->
-            <div class="w-full h-full overflow-hidden bg-neutral-50 relative border border-neutral-100 z-10 shadow-2xl">
+            <!-- Big Image (Main) -->
+            <div class="w-full h-full overflow-hidden bg-neutral-50 relative border border-neutral-100 z-10 shadow-2xl rounded-xl">
               <img
                 :key="activeCollage.main"
                 :src="activeCollage.main"
@@ -648,19 +731,19 @@ onUnmounted(() => {
                 alt="Salon service main"
               />
               <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
-              <div class="absolute bottom-8 left-8 text-white z-10">
-                <p class="text-[10px] tracking-[0.3em] uppercase text-[#bfa77a] mb-2 font-semibold">Minh Tâm Hair Design</p>
+              <div class="absolute bottom-8 right-8 text-white z-20 text-right">
+                <p class="text-[10px] tracking-[0.3em] uppercase text-[#bfa77a] mb-2 font-semibold">LG HAIR SALON</p>
                 <p class="font-serif text-xl italic font-light">Kiệt tác sáng tạo riêng bạn</p>
               </div>
             </div>
 
-            <!-- Foreground Overlapping Image (Detail 1) -->
-            <div class="absolute -bottom-8 -left-8 w-1/2 aspect-square z-20 border-2 border-white shadow-xl rotate-[-4deg] overflow-hidden transition-all duration-700 ease-out hover:rotate-0 hover:scale-105">
+            <!-- Small Image (Detail 1) - bottom-left corner overlapping -->
+            <div class="absolute -bottom-8 -left-8 w-1/2 aspect-square z-20 border-2 border-white shadow-xl rotate-[-4deg] overflow-hidden rounded-lg hover:rotate-0 hover:scale-105 transition-all duration-500">
               <img
                 :key="activeCollage.detail1"
                 :src="activeCollage.detail1"
                 class="w-full h-full object-cover animate-in fade-in duration-700"
-                alt="Hair styling detail"
+                alt="Salon service detail"
               />
             </div>
           </div>

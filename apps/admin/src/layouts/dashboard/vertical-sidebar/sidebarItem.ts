@@ -10,7 +10,9 @@ import {
   StarOutlined,
   TeamOutlined,
   ScissorOutlined,
-  NotificationOutlined
+  NotificationOutlined,
+  DollarOutlined,
+  MessageOutlined
 } from '@ant-design/icons-vue';
 
 export interface menu {
@@ -98,14 +100,29 @@ const sidebarItem: menu[] = [
   {
     title: 'Ca làm việc',
     icon: CalendarOutlined,
-    to: '/admin/ca-lam-viec'
+    to: '/admin/quan-ly-ca-lam'
+  },
+  {
+    title: 'Điểm danh',
+    icon: FileTextOutlined,
+    to: '/admin/diem-danh'
   },
   {
     title: 'Lịch sử điểm danh',
     icon: FileTextOutlined,
     to: '/admin/lich-su-diem-danh'
   },
+  {
+    title: 'Bảng lương',
+    icon: DollarOutlined,
+    to: '/admin/bang-luong'
+  },
   { header: 'Khác' },
+  {
+    title: 'Hỗ trợ khách hàng',
+    icon: MessageOutlined,
+    to: '/admin/chat'
+  },
   {
     title: 'Đánh giá',
     icon: StarOutlined,

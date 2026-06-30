@@ -2,14 +2,13 @@
 import axios from "axios";
 const API = import.meta.env.VITE_API_URL;
 // import ReviewList from "./ReviewList.vue";
-// import CartSidebar from "@/Khanhhang/views/CartSidebar.vue";
-// import { getCartDB, addToCartDB } from "@/Khanhhang/views/CSDL/cartDB";
+import { getCartDB, addToCartDB } from "@/Views/Anonymous/CSDL/cartDB";
+import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 
 export default {
   name: "ServiceDetail",
   components: {
     // ReviewList,
-    // CartSidebar,
   },
   data() {
     return {
@@ -45,29 +44,14 @@ export default {
 
   methods: {
     async updateCartBadge() {
-      // const savedUser = localStorage.getItem("user");
-      // this.userMaKH = savedUser ? JSON.parse(savedUser).maKH : null;
-      // const data = await getCartDB(this.userMaKH);
-      // this.cartItems = data || [];
+      const customer = getCustomerInfo();
+      this.userMaKH = customer.maKH;
+      const data = await getCartDB(this.userMaKH);
+      this.cartItems = data || [];
     },
 
     openCart() {
-      if (this.$refs.cartRef) {
-        this.$refs.cartRef.openCart();
-      }
-    },
-
-    async addToCart(item) {
-      if (this.$refs.cartRef) {
-        const cartItem = {
-          maDv: item.maDv || item.id || item.maCb,
-          tenDv: item.tenDv || item.tenCombo,
-          gia: item.gia,
-          hinhAnh: item.activeImage || item.images?.[0] || item.hinhAnh,
-        };
-        await this.$refs.cartRef.addToCart(cartItem);
-        await this.updateCartBadge();
-      }
+      this.$router.push('/cart');
     },
 
     async fetchService(id) {
@@ -158,55 +142,34 @@ export default {
     },
     // TRONG FILE ChiTietDichVu.vue
 
-    async addToCart() {
-      // 1. LẤY ẢNH CHUẨN (Ưu tiên ảnh đang xem hoặc ảnh đầu tiên)
-      const imgPath = this.activeImage
-        ? this.activeImage
-        : this.service.images && this.service.images.length > 0
-          ? this.service.images[0]
-          : "";
+    async addToCart(comboArg) {
+      // Xác định xem tham số truyền vào là combo (từ "Combo liên quan") hay là dịch vụ hiện tại
+      const isComboArg = comboArg && (comboArg.id || comboArg.maCb) && comboArg.tenCombo;
+      const targetService = isComboArg ? comboArg : this.service;
 
-      // 2. TẠO ĐỐI TƯỢNG ITEM ĐỂ LƯU VÀO GIỎ
+      const imgPath = isComboArg 
+        ? (targetService.hinhAnh || targetService.images?.[0] || "") 
+        : (this.activeImage ? this.activeImage : this.service.images && this.service.images.length > 0 ? this.service.images[0] : "");
+
       const item = {
-        id: this.service.maDv,
-        tenItem: this.service.tenDv,
-        gia: this.service.gia,
-        // GIỮ GIÁ GỐC ĐỂ ĐỒNG BỘ VỚI TRANG ĐẶT LỊCH (Phải là originalPrice)
-        originalPrice: this.service.giaGoc || this.service.gia,
+        id: targetService.maDv || targetService.id || targetService.maCb,
+        tenItem: targetService.tenDv || targetService.tenCombo,
+        gia: targetService.gia,
+        giaGoc: targetService.giaGoc || targetService.originalPrice || targetService.gia,
         hinhAnh: imgPath,
-        // GIỮ NGUYÊN THỜI GIAN LÀM CỦA DỊCH VỤ
-        duration: this.service.thoiGianLam || 30,
+        type: isComboArg ? 'COMBO' : 'DICHVU',
+        duration: targetService.thoiGianLam || 30,
       };
 
-      // await addToCartDB(item, this.userMaKH);
+      await addToCartDB(item, this.userMaKH);
       await this.updateCartBadge();
-
-      alert(`Đã thêm "${this.service.tenDv}" vào giỏ lịch!`);
-
-      // Mở Sidebar giỏ hàng nếu có ref
-      if (this.$refs.cartSidebar) {
-        this.$refs.cartSidebar.openCart();
-      } else if (this.$refs.cartRef) {
-        this.$refs.cartRef.openCart();
-      }
+      window.dispatchEvent(new Event("cart-updated"));
+      alert(`Đã thêm "${item.tenItem}" vào giỏ hàng thành công!`);
     },
 
     async bookNow() {
-      // 1. CHUẨN BỊ DỮ LIỆU ĐẶT NGAY
-      const item = {
-        id: this.service.maDv,
-        tenItem: this.service.tenDv,
-        gia: this.service.gia,
-        originalPrice: this.service.giaGoc || this.service.gia,
-        hinhAnh:
-          this.activeImage ||
-          (this.service.images ? this.service.images[0] : ""),
-        duration: this.service.thoiGianLam || 30,
-      };
-
-      // 2. LƯU VÀO GIỎ VÀ CHUYỂN TRANG
-      // await addToCartDB(item, this.userMaKH);
-      this.$router.push({ name: "booking" });
+      await this.addToCart();
+      this.$router.push('/cart');
     },
   },
 };
@@ -479,16 +442,10 @@ export default {
       <!-- ===================================================
            ĐÁNH GIÁ TỪ KHÁCH HÀNG (giữ nguyên từ ChiTietDichVu)
       =================================================== -->
-      <ReviewList v-if="$route.params.id" :serviceId="$route.params.id" />
+      <!-- <ReviewList v-if="$route.params.id" :serviceId="$route.params.id" /> -->
     </div>
 
-    <!-- FLOATING CART + SIDEBAR (giữ nguyên từ ChiTietDichVu) -->
-    <div class="floating-cart-btn" @click="openCart">
-      <i class="fas fa-shopping-bag"></i>
-      <span class="cart-count">{{ cartItems.length }}</span>
-    </div>
 
-    <CartSidebar ref="cartRef" />
   </div>
 </template>
 
@@ -1432,27 +1389,6 @@ export default {
   transition: 0.3s;
 }
 
-.floating-cart-btn:hover {
-  transform: scale(1.05);
-  background: var(--ink-soft);
-}
-
-.cart-count {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  background: #fff;
-  color: var(--ink);
-  font-size: 10px;
-  font-weight: 600;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  border: 1px solid var(--ink);
-}
 
 /* =========================================================
    RESPONSIVE

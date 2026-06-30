@@ -2,6 +2,8 @@
 // import CartSidebar from "@/Khanhhang/views/CartSidebar.vue";
 // import { getCartDB } from "./CSDL/cartDB";
 import { ref, computed, onMounted, watch, nextTick } from "vue";
+import { getCartDB, addToCartDB } from "@/Views/Anonymous/CSDL/cartDB";
+import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 import { useRoute, useRouter } from "vue-router";
 import axios from "axios";
 
@@ -173,18 +175,18 @@ const activeCategoryName = computed(() => {
 });
 
 // Hàm cập nhật số lượng badge
-// const updateCartBadge = async () => {
-//   const savedUser = localStorage.getItem('user');
-//   userMaKH.value = savedUser ? JSON.parse(savedUser).maKH : null;
+const updateCartBadge = async () => {
+  const customer = getCustomerInfo();
+  userMaKH.value = customer.maKH;
 
-//   // Lấy dữ liệu từ IndexedDB
-//   const data = await getCartDB(userMaKH.value);
-//   cartItems.value = data;
-// };
+  // Lấy dữ liệu từ IndexedDB
+  const data = await getCartDB(userMaKH.value);
+  cartItems.value = data || [];
+};
 
 //Giỏ Hàng
 const openCart = () => {
-  cartRef.value?.openCart();
+  routerInstance.push('/cart');
 };
 
 const addToCart = async (rawItem: any) => {
@@ -202,11 +204,12 @@ const addToCart = async (rawItem: any) => {
 
   // 2. Đóng gói object gửi sang Sidebar
   const formattedItem = {
-    id: isCombo ? rawItem.maCb : rawItem.maDv,
+    id: isCombo ? (rawItem.maCb || rawItem.id) : (rawItem.maDv || rawItem.id),
     tenItem: isCombo ? rawItem.tenCombo : rawItem.tenDv,
     gia: finalPrice, // Giá đã giảm (dùng để thanh toán)
     giaGoc: giaGoc, // Giá gốc (dùng để hiển thị gạch ngang)
     hinhAnh: imgPath,
+    type: isCombo ? 'COMBO' : 'DICHVU',
     duration: isCombo
       ? rawItem.combo_DichVus?.reduce(
           (sum: any, cd: any) => sum + (cd.dichVu?.thoiGianLam || 30),
@@ -215,13 +218,11 @@ const addToCart = async (rawItem: any) => {
       : rawItem.thoiGianLam || 30,
   };
 
-  if (cartRef.value) {
-    await cartRef.value.addToCart(formattedItem);
-    window.dispatchEvent(new Event("cart-updated"));
-    if (typeof cartRef.value.openCart === "function") {
-      cartRef.value.openCart();
-    }
-  }
+  const customer = getCustomerInfo();
+  await addToCartDB(formattedItem, customer.maKH);
+  await updateCartBadge();
+  window.dispatchEvent(new Event("cart-updated"));
+  alert("Đã thêm dịch vụ vào giỏ hàng thành công!");
 };
 // =======================
 // MOUNT
@@ -241,7 +242,7 @@ onMounted(async () => {
 
   await fetchAll(); // 🔥 lấy combo + categories
   await fetchFiltered(); // 🔥 lấy services theo filter
-  //await updateCartBadge();// 🔥 cập nhật số lượng badge khi vào trang dịch vụ
+  await updateCartBadge(); // 🔥 cập nhật số lượng badge khi vào trang dịch vụ
   await fetchRatings(); // 🔥 lấy đánh giá trung bình cho tất cả dịch vụ
 
   // 🔥 mỗi lần vào lại trang (mount) thì auto scroll lên đầu danh sách dịch vụ
@@ -515,10 +516,7 @@ const formatPrice = (price: number) => {
         </div>
       </div>
     </section>
-    <div class="floating-cart-btn" @click="openCart">
-      <i class="fas fa-shopping-bag"></i>
-      <span class="cart-count">{{ cartItems.length }}</span>
-    </div>
+
 
     <!-- <CartSidebar ref="cartRef" /> -->
   </div>
@@ -1745,27 +1743,6 @@ const formatPrice = (price: number) => {
   transition: 0.3s;
 }
 
-.floating-cart-btn:hover {
-  transform: scale(1.05);
-  background: var(--ink-soft);
-}
-
-.cart-count {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  background: #fff;
-  color: var(--ink);
-  font-size: 10px;
-  font-weight: 600;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  border: 1px solid var(--ink);
-}
 
 /* Misc legacy helpers (kept for compatibility) */
 .card-head {

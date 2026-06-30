@@ -1,3 +1,14 @@
+if (window.location.hostname === '127.0.0.1' || window.location.port === '3000') {
+  let newUrl = window.location.href;
+  if (window.location.hostname === '127.0.0.1') {
+    newUrl = newUrl.replace('127.0.0.1', 'localhost');
+  }
+  if (window.location.port === '3000') {
+    newUrl = newUrl.replace('http:', 'https:').replace(':3000', ':5173');
+  }
+  window.location.replace(newUrl);
+}
+
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 

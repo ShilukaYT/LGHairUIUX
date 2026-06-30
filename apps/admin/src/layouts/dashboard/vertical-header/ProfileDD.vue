@@ -15,10 +15,18 @@ import {
   WalletOutlined
 } from '@ant-design/icons-vue';
 
-const tab = ref(null);
+import { useCustomizerStore } from '../../../stores/customizer';
+import { useTheme } from 'vuetify';
+
+const customizer = useCustomizerStore();
+const theme = useTheme();
+
 const router = useRouter();
 const userName = ref('Admin');
 const userRole = ref('Quản trị viên');
+
+const currentThemeSelection = ref(localStorage.getItem('theme_selection') || 'system');
+const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
 onMounted(() => {
   // Lấy thông tin user từ localStorage
@@ -34,7 +42,31 @@ onMounted(() => {
     userName.value = staff.hoTen || staff.tenNhanVien || staff.username || 'Nhân viên';
     userRole.value = 'Nhân viên';
   }
+
+  // Initialize theme based on saved selection
+  handleThemeSelection(currentThemeSelection.value as 'light' | 'dark' | 'system', false);
+
+  mediaQuery.addEventListener('change', (e) => {
+    if (currentThemeSelection.value === 'system') {
+      const newTheme = e.matches ? 'dark' : 'light';
+      customizer.SET_THEME(newTheme);
+      theme.global.name.value = newTheme;
+    }
+  });
 });
+
+const handleThemeSelection = (selection: 'light' | 'dark' | 'system', save = true) => {
+  if (save) {
+    currentThemeSelection.value = selection;
+    localStorage.setItem('theme_selection', selection);
+  }
+  let newTheme = selection;
+  if (selection === 'system') {
+    newTheme = mediaQuery.matches ? 'dark' : 'light';
+  }
+  customizer.SET_THEME(newTheme);
+  theme.global.name.value = newTheme;
+};
 
 const handleLogout = () => {
   sessionStorage.removeItem('adminToken');
@@ -66,51 +98,63 @@ const handleLogout = () => {
         </v-btn>
       </div>
     </div>
-    <v-tabs v-model="tab" color="primary" grow>
-      <v-tab value="111"> <UserOutlined class="v-icon--start" /> Profile </v-tab>
-      <v-tab value="222"> <SettingOutlined class="v-icon--start" /> Setting </v-tab>
-    </v-tabs>
-    <perfect-scrollbar style="height: calc(100vh - 300px); max-height: 240px">
-      <v-window v-model="tab">
-        <v-window-item value="111">
-          <v-list class="py-0" aria-label="profile list" aria-busy="true">
-            <v-list-item color="primary" rounded="0" value="Edit profile">
-              <template v-slot:prepend>
-                <EditOutlined :style="{ fontSize: '14px' }" class="mr-4" />
-              </template>
+    
+    <v-divider></v-divider>
+    
+    <perfect-scrollbar style="height: auto; max-height: 350px" :options="{ wheelPropagation: false }">
+      <v-list class="py-0" aria-label="profile list" aria-busy="true">
+        
+        <v-list-subheader class="text-uppercase text-caption font-weight-bold px-5 mt-2">Giao diện</v-list-subheader>
+        <v-list-item class="px-5 mb-2">
+          <v-btn-toggle
+            v-model="currentThemeSelection"
+            color="primary"
+            class="w-100 rounded"
+            mandatory
+            @update:modelValue="(val: any) => handleThemeSelection(val)"
+            variant="outlined"
+            divided
+            style="height: 36px;"
+          >
+            <v-btn value="light" class="flex-grow-1 text-caption">Sáng</v-btn>
+            <v-btn value="dark" class="flex-grow-1 text-caption">Tối</v-btn>
+            <v-btn value="system" class="flex-grow-1 text-caption">Hệ thống</v-btn>
+          </v-btn-toggle>
+        </v-list-item>
 
-              <v-list-item-title class="text-h6"> Edit Profile</v-list-item-title>
-            </v-list-item>
+        <v-divider></v-divider>
 
-            <v-list-item color="primary" rounded="0" value="View Profile">
-              <template v-slot:prepend>
-                <UserOutlined :style="{ fontSize: '14px' }" class="mr-4" />
-              </template>
+        <v-list-subheader class="text-uppercase text-caption font-weight-bold px-5 mt-2">Tài khoản</v-list-subheader>
+        
+        <v-list-item color="primary" rounded="0" value="Edit profile">
+          <template v-slot:prepend>
+            <EditOutlined :style="{ fontSize: '14px' }" class="mr-4" />
+          </template>
+          <v-list-item-title class="text-body-1"> Chỉnh sửa thông tin</v-list-item-title>
+        </v-list-item>
 
-              <v-list-item-title class="text-h6"> View Profile</v-list-item-title>
-            </v-list-item>
+        <v-list-item color="primary" rounded="0" value="View Profile">
+          <template v-slot:prepend>
+            <UserOutlined :style="{ fontSize: '14px' }" class="mr-4" />
+          </template>
+          <v-list-item-title class="text-body-1"> Xem thông tin</v-list-item-title>
+        </v-list-item>
+        
+        <v-list-item color="primary" rounded="0" value="Account settings">
+          <template v-slot:prepend>
+            <SettingOutlined :style="{ fontSize: '14px' }" class="mr-4" />
+          </template>
+          <v-list-item-title class="text-body-1"> Cài đặt tài khoản</v-list-item-title>
+        </v-list-item>
 
-            <v-list-item @click="handleLogout" color="secondary" rounded="0">
-              <template v-slot:prepend>
-                <LogoutOutlined :style="{ fontSize: '14px' }" class="mr-4" />
-              </template>
-
-              <v-list-item-title class="text-h6"> Đăng xuất</v-list-item-title>
-            </v-list-item>
-          </v-list>
-        </v-window-item>
-        <v-window-item value="222">
-          <v-list class="py-0" aria-label="profile list" aria-busy="true">
-            <v-list-item color="primary" rounded="0" value="Account">
-              <template v-slot:prepend>
-                <UserOutlined :style="{ fontSize: '14px' }" class="mr-4" />
-              </template>
-
-              <v-list-item-title class="text-h6"> Account settings</v-list-item-title>
-            </v-list-item>
-          </v-list>
-        </v-window-item>
-      </v-window>
+        <v-list-item @click="handleLogout" color="error" rounded="0">
+          <template v-slot:prepend>
+            <LogoutOutlined :style="{ fontSize: '14px' }" class="mr-4" />
+          </template>
+          <v-list-item-title class="text-body-1 text-error"> Đăng xuất</v-list-item-title>
+        </v-list-item>
+      </v-list>
     </perfect-scrollbar>
   </div>
 </template>
+

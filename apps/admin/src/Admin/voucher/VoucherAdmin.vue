@@ -403,25 +403,22 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="w-full max-w-full space-y-3">
-    <div class="space-y-2">
+  <div class="w-full max-w-full space-y-5">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <h1 class="text-xl font-semibold tracking-tight">Quản lý voucher</h1>
-        <p class="text-muted-foreground text-sm">
-         
-        </p>
+        <h1 class="text-lg font-serif text-[#8c734b] tracking-wider uppercase">Quản lý voucher</h1>
       </div>
 
       <!-- Thanh thao tác: gom nút giữa khối nội dung, không ép góc phải viewport -->
       <div
-        class="flex flex-wrap items-center justify-center gap-2 rounded-md border border-border bg-muted/30 px-2.5 py-2 sm:justify-start"
+        class="flex flex-wrap items-center gap-3 bg-transparent p-1 border-none shadow-none"
       >
-        <Button type="button" @click="openCreate">Thêm voucher</Button>
-        <label class="text-muted-foreground flex items-center gap-2 text-sm">
-          <span class="whitespace-nowrap">Lọc vòng đời</span>
+        <Button type="button" class="h-11 px-5 !bg-[#9d804e] !text-white hover:!bg-[#866a3d] border border-solid !border-[#9d804e] text-xs font-bold rounded-xl shadow-none cursor-pointer tracking-wider" @click="openCreate">Thêm voucher</Button>
+        <div class="flex items-center gap-2 text-xs">
+          <span class="font-bold text-slate-500 tracking-wider">VÒNG ĐỜI:</span>
           <select
             v-model="lifecycleFilter"
-            class="border-input bg-background ring-offset-background focus-visible:ring-ring h-9 min-w-[11rem] rounded-md border px-2 text-sm shadow-xs focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+            class="h-11 min-w-[11rem] rounded-xl border border-solid !border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 outline-none transition-all cursor-pointer"
             @change="load"
           >
             <option value="">Tất cả</option>
@@ -430,8 +427,8 @@ onMounted(async () => {
             <option value="hetHan">Đã hết hạn</option>
             <option value="hetLuot">Đã hết lượt</option>
           </select>
-        </label>
-        <Button type="button" variant="outline" :disabled="loading" @click="load">
+        </div>
+        <Button type="button" variant="outline" class="h-11 px-5 text-xs font-bold rounded-xl border border-solid !border-slate-300 text-slate-700 hover:bg-slate-100 shadow-none cursor-pointer" :disabled="loading" @click="load">
           {{ loading ? 'Đang tải…' : 'Tải lại danh sách' }}
         </Button>
       </div>
@@ -440,56 +437,56 @@ onMounted(async () => {
     <p v-if="toast" class="text-sm text-green-600 dark:text-green-400">{{ toast }}</p>
     <p v-if="listError" class="text-destructive text-sm">{{ listError }}</p>
 
-    <div class="overflow-x-auto rounded-md border border-border">
-      <table class="w-full min-w-[880px] table-fixed text-left text-sm">
-        <thead class="bg-muted/50">
+    <div class="overflow-x-auto rounded-2xl border border-solid !border-slate-200 shadow-sm mt-4 bg-white">
+      <table class="w-full min-w-[960px] table-fixed text-left text-xs">
+        <thead class="bg-slate-50 border-b border-solid !border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
           <tr>
-            <th class="w-[10%] px-2 py-1.5 text-xs font-medium">Mã</th>
-            <th class="w-[9%] px-2 py-1.5 text-xs font-medium">Ưu đãi</th>
-            <th class="w-[28%] px-2 py-1.5 text-xs font-medium">Mô tả</th>
-            <th class="w-[10%] px-2 py-1.5 text-xs font-medium">HSD</th>
-            <th class="w-[10%] px-2 py-1.5 text-xs font-medium">Lượt</th>
-            <th class="w-[8%] px-2 py-1.5 text-xs font-medium">KH lưu</th>
-            <th class="w-[7%] px-2 py-1.5 text-xs font-medium">TT</th>
-            <th class="w-[18%] px-2 py-1.5 text-center text-xs font-medium whitespace-nowrap">Thao tác</th>
+            <th class="w-[12%] px-3 py-3 text-center font-bold">Mã</th>
+            <th class="w-[10%] px-3 py-3 text-center font-bold">Ưu đãi</th>
+            <th class="w-[26%] px-3 py-3 text-left font-bold">Mô tả</th>
+            <th class="w-[12%] px-3 py-3 text-center font-bold">HSD</th>
+            <th class="w-[12%] px-3 py-3 text-center font-bold">Lượt dùng</th>
+            <th class="w-[10%] px-3 py-3 text-center font-bold">KH lưu</th>
+            <th class="w-[8%] px-3 py-3 text-center font-bold">Trạng thái</th>
+            <th class="w-[10%] px-3 py-3 text-center font-bold whitespace-nowrap">Thao tác</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="loading">
-            <td colspan="8" class="px-2 py-5 text-center text-muted-foreground text-xs">Đang tải…</td>
+            <td colspan="8" class="px-3 py-5 text-center text-slate-450 text-xs">Đang tải…</td>
           </tr>
           <tr v-else-if="list.length === 0">
-            <td colspan="8" class="px-2 py-5 text-center text-muted-foreground text-xs">Chưa có voucher.</td>
+            <td colspan="8" class="px-3 py-5 text-center text-slate-450 text-xs">Chưa có voucher.</td>
           </tr>
           <tr
             v-for="row in list"
             :key="row.maCode"
-            class="border-t border-border hover:bg-muted/30"
+            class="border-t border-solid !border-slate-200 hover:bg-slate-50/50 transition-colors"
           >
-            <td class="px-2 py-1.5 font-mono text-[11px] leading-tight">{{ row.maCode }}</td>
-            <td class="px-2 py-1.5 text-xs leading-tight">{{ discountLabel(row) }}</td>
-            <td class="px-2 py-1.5 align-top break-words text-xs leading-snug text-foreground/90" :title="row.moTa ?? ''">
+            <td class="px-3 py-3 text-center font-mono text-[11px] leading-tight text-slate-800 font-bold">{{ row.maCode }}</td>
+            <td class="px-3 py-3 text-center text-xs font-bold text-slate-700">{{ discountLabel(row) }}</td>
+            <td class="px-3 py-3 text-left break-words text-xs leading-relaxed text-slate-600" :title="row.moTa ?? ''">
               {{ row.moTa || '—' }}
             </td>
-            <td class="px-2 py-1.5 whitespace-nowrap text-xs">{{ formatShortDate(row.ngayKetThuc) }}</td>
-            <td class="px-2 py-1.5 text-[11px] leading-tight">
+            <td class="px-3 py-3 text-center whitespace-nowrap text-xs text-slate-600">{{ formatShortDate(row.ngayKetThuc) }}</td>
+            <td class="px-3 py-3 text-center font-mono text-[11px] text-slate-600 leading-tight">
               <span v-if="row.soLuong != null">{{ row.soLuongDaDung ?? 0 }}/{{ row.soLuong }}</span>
               <span v-else>∞</span>
             </td>
-            <td class="px-2 py-1.5 text-xs">{{ row.soKhachDaLuu }}</td>
-            <td class="px-2 py-1.5 text-xs">
-              <span v-if="row.trangThai === 1" class="text-green-600">Bật</span>
-              <span v-else class="text-muted-foreground">Tắt</span>
+            <td class="px-3 py-3 text-center text-xs font-semibold text-slate-700">{{ row.soKhachDaLuu }}</td>
+            <td class="px-3 py-3 text-center text-xs">
+              <span v-if="row.trangThai === 1" class="inline-block px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-solid border-emerald-200 rounded-md">Bật</span>
+              <span v-else class="inline-block px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-slate-50 text-slate-500 border border-solid border-slate-200 rounded-md">Tắt</span>
             </td>
-            <td class="px-2 py-1.5">
-              <div class="flex flex-wrap items-center justify-center gap-1">
-                <Button variant="secondary" size="sm" class="h-7 min-w-0 px-2 text-[11px]" @click="openDetail(row)">
+            <td class="px-3 py-3">
+              <div class="flex items-center justify-center gap-1.5">
+                <Button type="button" class="h-7 px-2.5 text-[10px] font-bold rounded-lg bg-slate-600 text-white hover:bg-slate-700 border-none shadow-none cursor-pointer" @click="openDetail(row)">
                   Chi tiết
                 </Button>
-                <Button variant="outline" size="sm" class="h-7 min-w-0 px-2 text-[11px]" @click="openEdit(row)">
+                <Button type="button" class="h-7 px-2.5 text-[10px] font-bold rounded-lg border border-solid !border-slate-300 text-slate-700 hover:bg-slate-100 shadow-none cursor-pointer" @click="openEdit(row)">
                   Sửa
                 </Button>
-                <Button variant="destructive" size="sm" class="h-7 min-w-0 px-2 text-[11px]" @click="remove(row)">
+                <Button type="button" class="h-7 px-2.5 text-[10px] font-bold rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 border border-solid border-rose-200 shadow-none cursor-pointer" @click="remove(row)">
                   Xóa
                 </Button>
               </div>
@@ -503,54 +500,58 @@ onMounted(async () => {
     <Teleport to="body">
       <div
         v-if="modalOpen"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity"
         role="dialog"
         aria-modal="true"
         aria-labelledby="voucher-modal-title"
       >
         <button
           type="button"
-          class="absolute inset-0 bg-black/50"
+          class="absolute inset-0 bg-transparent cursor-default"
           aria-label="Đóng"
           @click="closeModal"
         />
         <div
-          class="relative z-10 flex max-h-[85vh] w-full max-w-2xl min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-background shadow-lg"
+          class="relative z-10 flex max-h-[90vh] w-full max-w-2xl min-h-0 flex-col overflow-hidden rounded-2xl border border-solid !border-slate-300 bg-white shadow-2xl transition-all"
           @click.stop
         >
-          <div class="shrink-0 border-b border-border px-4 py-2">
-            <h2 id="voucher-modal-title" class="text-base font-semibold">
-              {{ isEdit ? 'Sửa voucher' : 'Thêm voucher' }}
+          <div class="shrink-0 border-b border-solid !border-slate-200 !px-8 !pt-6 !pb-4 bg-slate-50/50">
+            <h2 id="voucher-modal-title" class="text-lg font-serif text-[#8c734b] tracking-wider uppercase">
+              {{ isEdit ? 'Sửa voucher' : 'Thêm voucher mới' }}
             </h2>
-            <p class="text-muted-foreground mt-0.5 text-xs leading-snug">
-              Mã: chữ in hoa + số. Chỉ điền <span class="font-medium">% hoặc tiền</span> giảm.
+            <p class="text-slate-500 mt-1 text-xs leading-relaxed">
+              Mã: gồm chữ in hoa và số. Chỉ điền <span class="font-bold text-slate-700">% hoặc số tiền</span> giảm giá.
             </p>
-            <p v-if="isRestrictedEdit" class="text-amber-700 dark:text-amber-400 mt-1.5 text-xs leading-snug">
-              Đã chạy và có KH lưu mã / đã dùng lượt: chỉ sửa mô tả, gia hạn hạn dùng, tăng số lượng, trạng thái.
-            </p>
-            <p v-if="saveError" class="text-destructive mt-1.5 text-xs">{{ saveError }}</p>
+            <div v-if="isRestrictedEdit" class="mt-2 bg-amber-50 border border-solid border-amber-200 p-2.5 rounded-xl text-amber-700 text-[11px] leading-relaxed">
+              <strong>Hạn chế chỉnh sửa:</strong> Voucher đã phát hành và được lưu/sử dụng. Chỉ được sửa mô tả, trạng thái, gia hạn ngày kết thúc và tăng tổng số lượng.
+            </div>
+            <div v-if="saveError" class="mt-2 bg-rose-50 border border-solid border-rose-200 p-2.5 rounded-xl text-rose-600 text-xs font-bold">{{ saveError }}</div>
           </div>
 
-          <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
-            <div class="grid grid-cols-1 gap-x-3 gap-y-2 md:grid-cols-2">
-              <div class="grid gap-0.5">
-                <label class="text-xs font-medium">Mã voucher *</label>
+          <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain !px-8 !py-6 space-y-5 text-xs">
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-x-6">
+              <div class="space-y-1">
+                <label class="text-xs font-bold text-slate-500 tracking-wider uppercase">Mã voucher *</label>
                 <Input
                   v-model="form.maCode"
                   :disabled="isEdit"
                   placeholder="VD: CHAOHEXIN"
-                  class="font-mono text-sm uppercase"
+                  class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all font-mono uppercase"
                   @blur="form.maCode = asTrimmedString(form.maCode).toUpperCase()"
                 />
               </div>
-              <div class="grid gap-0.5 md:col-span-2">
-                <label class="text-xs font-medium">Mô tả</label>
-                <Input v-model="form.moTa" placeholder="Hiển thị cho khách" />
+              <div class="space-y-1 md:col-span-2">
+                <label class="text-xs font-bold text-slate-500 tracking-wider uppercase">Mô tả</label>
+                <Input
+                  v-model="form.moTa"
+                  placeholder="Hiển thị cho khách"
+                  class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
+                />
               </div>
 
-              <div class="grid grid-cols-2 gap-2 md:col-span-2 lg:grid-cols-3">
-                <div class="grid gap-0.5">
-                  <label class="text-xs font-medium">Giảm %</label>
+              <div class="grid grid-cols-2 gap-4 md:col-span-2 lg:grid-cols-3">
+                <div class="space-y-1">
+                  <label class="text-xs font-bold text-slate-500 tracking-wider uppercase">Giảm %</label>
                   <Input
                     v-model="form.phanTramGiam"
                     type="number"
@@ -558,10 +559,11 @@ onMounted(async () => {
                     max="100"
                     placeholder="Để trống"
                     :disabled="isRestrictedEdit"
+                    class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
                   />
                 </div>
-                <div class="grid gap-0.5">
-                  <label class="text-xs font-medium">Giảm tiền (đ)</label>
+                <div class="space-y-1">
+                  <label class="text-xs font-bold text-slate-500 tracking-wider uppercase">Giảm tiền (đ)</label>
                   <Input
                     v-model="form.soTienGiam"
                     type="number"
@@ -569,10 +571,11 @@ onMounted(async () => {
                     step="1000"
                     placeholder="VD: 50000"
                     :disabled="isRestrictedEdit"
+                    class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
                   />
                 </div>
-                <div class="col-span-2 grid gap-0.5 lg:col-span-1">
-                  <label class="text-xs font-medium">Đơn tối thiểu (đ)</label>
+                <div class="col-span-2 space-y-1 lg:col-span-1">
+                  <label class="text-xs font-bold text-slate-500 tracking-wider uppercase">Đơn tối thiểu (đ)</label>
                   <Input
                     v-model="form.giaTriToiThieu"
                     type="number"
@@ -580,47 +583,62 @@ onMounted(async () => {
                     step="1000"
                     placeholder="Tùy chọn"
                     :disabled="isRestrictedEdit"
+                    class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
                   />
                 </div>
               </div>
 
-              <div class="grid gap-2 md:col-span-2 sm:grid-cols-2">
-                <div class="grid gap-0.5">
-                  <label class="text-xs font-medium">Bắt đầu</label>
-                  <Input v-model="form.ngayBatDau" type="datetime-local" :disabled="isRestrictedEdit" />
+              <div class="grid gap-4 md:col-span-2 sm:grid-cols-2">
+                <div class="space-y-1">
+                  <label class="text-xs font-bold text-slate-500 tracking-wider uppercase">Bắt đầu</label>
+                  <Input
+                    v-model="form.ngayBatDau"
+                    type="datetime-local"
+                    :disabled="isRestrictedEdit"
+                    class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
+                  />
                 </div>
-                <div class="grid gap-0.5">
-                  <label class="text-xs font-medium">Kết thúc</label>
+                <div class="space-y-1">
+                  <label class="text-xs font-bold text-slate-500 tracking-wider uppercase">Kết thúc</label>
                   <Input
                     v-model="form.ngayKetThuc"
                     type="datetime-local"
                     :min="minNgayKetThucLocal || undefined"
+                    class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
                   />
                 </div>
               </div>
 
-              <div class="grid grid-cols-2 gap-2 md:col-span-2">
-                <div class="grid gap-0.5">
-                  <label class="text-xs font-medium">Số lượng phát hành *</label>
+              <div class="grid grid-cols-2 gap-4 md:col-span-2">
+                <div class="space-y-1">
+                  <label class="text-xs font-bold text-slate-500 tracking-wider uppercase">Số lượng phát hành *</label>
                   <Input
                     v-model="form.soLuong"
                     type="number"
                     :min="minSoLuongEdit"
                     step="1"
                     placeholder="VD: 100"
+                    class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
                   />
                 </div>
-                <div class="grid gap-0.5">
-                  <label class="text-xs font-medium">Đã dùng</label>
-                  <Input v-model="form.soLuongDaDung" type="number" min="0" disabled title="Hệ thống tự quản lý" />
+                <div class="space-y-1">
+                  <label class="text-xs font-bold text-slate-500 tracking-wider uppercase">Đã dùng</label>
+                  <Input
+                    v-model="form.soLuongDaDung"
+                    type="number"
+                    min="0"
+                    disabled
+                    title="Hệ thống tự quản lý"
+                    class="h-11 text-xs rounded-xl border border-solid !border-slate-300 bg-slate-100 text-slate-500 shadow-none cursor-not-allowed"
+                  />
                 </div>
               </div>
 
-              <div class="grid gap-0.5 sm:max-w-xs">
-                <label class="text-xs font-medium">Trạng thái</label>
+              <div class="space-y-1 sm:max-w-xs">
+                <label class="text-xs font-bold text-slate-500 tracking-wider uppercase">Trạng thái</label>
                 <select
                   v-model="form.trangThai"
-                  class="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-8 w-full rounded-md border px-2 py-1 text-xs shadow-xs focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+                  class="h-11 w-full text-xs font-semibold text-slate-700 !bg-slate-50/50 rounded-xl border border-solid !border-slate-300 outline-none focus:ring-0 shadow-none transition-all cursor-pointer"
                 >
                   <option value="1">Hoạt động</option>
                   <option value="0">Ngưng</option>
@@ -629,11 +647,11 @@ onMounted(async () => {
             </div>
           </div>
 
-          <div class="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-border bg-background px-4 py-2.5">
-            <Button type="button" variant="outline" size="sm" @click="closeModal">Hủy</Button>
+          <div class="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-solid !border-slate-200 bg-slate-50/50 !px-8 !py-4">
+            <Button type="button" variant="outline" class="h-11 px-5 text-xs font-bold rounded-xl border border-solid !border-slate-300 text-slate-700 hover:bg-slate-100 cursor-pointer" @click="closeModal">Hủy</Button>
             <Button
               type="button"
-              size="sm"
+              class="h-11 px-5 !bg-[#9d804e] !text-white hover:!bg-[#866a3d] border border-solid !border-[#9d804e] text-xs font-bold rounded-xl shadow-none cursor-pointer tracking-wider"
               :disabled="saving || (!isEdit && !asTrimmedString(form.maCode))"
               @click="save"
             >
@@ -647,78 +665,81 @@ onMounted(async () => {
     <Teleport to="body">
       <div
         v-if="detailOpen"
-        class="fixed inset-0 z-[60] flex items-center justify-center p-4"
+        class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity"
         role="dialog"
         aria-modal="true"
         aria-labelledby="voucher-detail-title"
       >
-        <button type="button" class="absolute inset-0 bg-black/50" aria-label="Đóng" @click="closeDetail" />
+        <button type="button" class="absolute inset-0 bg-transparent cursor-default" aria-label="Đóng" @click="closeDetail" />
         <div
-          class="relative z-10 flex max-h-[82vh] w-full max-w-4xl min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-background shadow-lg"
+          class="relative z-10 flex max-h-[85vh] w-full max-w-4xl min-h-0 flex-col overflow-hidden rounded-2xl border border-solid !border-slate-300 bg-white shadow-2xl transition-all"
           @click.stop
         >
-          <div class="shrink-0 border-b border-border px-4 py-2">
-            <h2 id="voucher-detail-title" class="text-base font-semibold">
-              Chi tiết voucher
-              <span v-if="detailCode" class="text-muted-foreground font-mono text-sm">{{ detailCode }}</span>
+          <div class="shrink-0 border-b border-solid !border-slate-200 !px-8 !pt-6 !pb-4 bg-slate-50/50">
+            <h2 id="voucher-detail-title" class="text-lg font-serif text-[#8c734b] tracking-wider uppercase flex items-center gap-2">
+              <span>Chi tiết voucher:</span>
+              <span v-if="detailCode" class="font-mono text-base text-slate-800 bg-slate-200/60 px-2 py-0.5 rounded-md">{{ detailCode }}</span>
             </h2>
-            <p class="text-muted-foreground mt-0.5 text-xs">Khách đã lưu mã và hóa đơn đã áp mã.</p>
-            <p v-if="detailError" class="text-destructive mt-1.5 text-xs">{{ detailError }}</p>
+            <p class="text-slate-500 mt-1 text-xs">Danh sách khách hàng đã lưu mã và các hóa đơn đã áp dụng mã voucher này.</p>
+            <div v-if="detailError" class="mt-2 bg-rose-50 border border-solid border-rose-200 p-2.5 rounded-xl text-rose-600 text-xs font-bold">{{ detailError }}</div>
           </div>
-          <div class="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-3">
-            <p v-if="detailLoading" class="text-muted-foreground text-xs">Đang tải…</p>
+          <div class="min-h-0 flex-1 space-y-5 overflow-y-auto !px-8 !py-6 text-xs">
+            <p v-if="detailLoading" class="text-slate-450 text-xs">Đang tải…</p>
             <template v-else>
-              <div>
-                <h3 class="mb-1 text-xs font-medium">Khách đã lưu mã</h3>
-                <div class="overflow-x-auto rounded-md border border-border">
-                  <table class="w-full min-w-[480px] text-left text-xs">
-                    <thead class="bg-muted/50">
+              <div class="space-y-2">
+                <h3 class="text-xs font-bold text-[#8c734b] uppercase tracking-wider">Khách đã lưu mã</h3>
+                <div class="overflow-x-auto rounded-none border border-solid !border-slate-200 shadow-xs bg-white">
+                  <table class="w-full min-w-[540px] text-left text-xs">
+                    <thead class="bg-slate-50 border-b border-solid !border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
                       <tr>
-                        <th class="px-2 py-1.5 font-medium">Mã KH</th>
-                        <th class="px-2 py-1.5 font-medium">Họ tên</th>
-                        <th class="px-2 py-1.5 font-medium">SĐT</th>
-                        <th class="px-2 py-1.5 font-medium">Email</th>
+                        <th class="px-3 py-2.5 text-center font-bold">Mã KH</th>
+                        <th class="px-3 py-2.5 text-left font-bold">Họ tên</th>
+                        <th class="px-3 py-2.5 text-center font-bold">SĐT</th>
+                        <th class="px-3 py-2.5 text-left font-bold">Email</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr v-if="detailKhach.length === 0">
-                        <td colspan="4" class="text-muted-foreground px-2 py-4 text-center">Chưa có khách lưu mã.</td>
+                        <td colspan="4" class="text-slate-450 px-3 py-4 text-center">Chưa có khách lưu mã.</td>
                       </tr>
-                      <tr v-for="k in detailKhach" :key="k.maKh" class="border-t border-border">
-                        <td class="px-2 py-1.5 font-mono text-[11px]">{{ k.maKh }}</td>
-                        <td class="px-2 py-1.5">{{ k.hoTen || '—' }}</td>
-                        <td class="px-2 py-1.5 whitespace-nowrap">{{ k.sdt || '—' }}</td>
-                        <td class="px-2 py-1.5 break-all text-[11px]">{{ k.email || '—' }}</td>
+                      <tr v-for="k in detailKhach" :key="k.maKh" class="border-t border-solid !border-slate-200">
+                        <td class="px-3 py-2.5 text-center font-mono text-[11px] text-slate-800 font-semibold">{{ k.maKh }}</td>
+                        <td class="px-3 py-2.5 text-slate-700 font-medium">{{ k.hoTen || '—' }}</td>
+                        <td class="px-3 py-2.5 text-center font-mono text-[11px] text-slate-600 whitespace-nowrap">{{ k.sdt || '—' }}</td>
+                        <td class="px-3 py-2.5 text-left font-mono text-[11px] text-slate-500 break-all">{{ k.email || '—' }}</td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
               </div>
-              <div>
-                <h3 class="mb-1 text-xs font-medium">Hóa đơn đã áp dụng mã</h3>
-                <div class="overflow-x-auto rounded-md border border-border">
-                  <table class="w-full min-w-[560px] text-left text-xs">
-                    <thead class="bg-muted/50">
+              <div class="space-y-2">
+                <h3 class="text-xs font-bold text-[#8c734b] uppercase tracking-wider">Hóa đơn đã áp dụng mã</h3>
+                <div class="overflow-x-auto rounded-none border border-solid !border-slate-200 shadow-xs bg-white">
+                  <table class="w-full min-w-[640px] text-left text-xs">
+                    <thead class="bg-slate-50 border-b border-solid !border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
                       <tr>
-                        <th class="px-2 py-1.5 font-medium">Mã HĐ</th>
-                        <th class="px-2 py-1.5 font-medium">Mã KH</th>
-                        <th class="px-2 py-1.5 font-medium">Ngày</th>
-                        <th class="px-2 py-1.5 font-medium">Tổng tiền</th>
-                        <th class="px-2 py-1.5 font-medium">Thành tiền</th>
-                        <th class="px-2 py-1.5 font-medium">TT</th>
+                        <th class="px-3 py-2.5 text-center font-bold">Mã HĐ</th>
+                        <th class="px-3 py-2.5 text-center font-bold">Mã KH</th>
+                        <th class="px-3 py-2.5 text-center font-bold">Ngày</th>
+                        <th class="px-3 py-2.5 text-center font-bold">Tổng tiền</th>
+                        <th class="px-3 py-2.5 text-center font-bold">Thành tiền</th>
+                        <th class="px-3 py-2.5 text-center font-bold">Trạng thái</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr v-if="detailHoaDon.length === 0">
-                        <td colspan="6" class="text-muted-foreground px-2 py-4 text-center">Chưa có hóa đơn.</td>
+                        <td colspan="6" class="text-slate-450 px-3 py-4 text-center">Chưa có hóa đơn.</td>
                       </tr>
-                      <tr v-for="h in detailHoaDon" :key="h.maHd" class="border-t border-border">
-                        <td class="px-2 py-1.5 font-mono text-[11px]">{{ h.maHd }}</td>
-                        <td class="px-2 py-1.5 font-mono text-[11px]">{{ h.maKh || '—' }}</td>
-                        <td class="px-2 py-1.5 whitespace-nowrap">{{ formatShortDate(h.ngayTao) }}</td>
-                        <td class="px-2 py-1.5">{{ formatMoney(h.tongTien) }}</td>
-                        <td class="px-2 py-1.5">{{ formatMoney(h.thanhTien) }}</td>
-                        <td class="px-2 py-1.5">{{ h.trangThai ?? '—' }}</td>
+                      <tr v-for="h in detailHoaDon" :key="h.maHd" class="border-t border-solid !border-slate-200">
+                        <td class="px-3 py-2.5 text-center font-mono text-[11px] text-slate-800 font-semibold">{{ h.maHd }}</td>
+                        <td class="px-3 py-2.5 text-center font-mono text-[11px] text-slate-600">{{ h.maKh || '—' }}</td>
+                        <td class="px-3 py-2.5 text-center text-slate-600 whitespace-nowrap">{{ formatShortDate(h.ngayTao) }}</td>
+                        <td class="px-3 py-2.5 text-center font-mono text-[11px] text-slate-700">{{ formatMoney(h.tongTien) }}</td>
+                        <td class="px-3 py-2.5 text-center font-mono text-[11px] text-[#8c734b] font-bold">{{ formatMoney(h.thanhTien) }}</td>
+                        <td class="px-3 py-2.5 text-center text-[10px] font-bold">
+                          <span v-if="h.trangThai === 1" class="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-none border border-solid border-emerald-200">Thành công</span>
+                          <span v-else class="text-slate-500 bg-slate-50 px-2 py-0.5 rounded-none border border-solid border-slate-200">Chờ</span>
+                        </td>
                       </tr>
                     </tbody>
                   </table>
@@ -726,8 +747,8 @@ onMounted(async () => {
               </div>
             </template>
           </div>
-          <div class="flex shrink-0 justify-end border-t border-border px-4 py-2">
-            <Button type="button" variant="outline" size="sm" @click="closeDetail">Đóng</Button>
+          <div class="flex shrink-0 justify-end border-t border-solid !border-slate-200 bg-slate-50/50 !px-8 !py-4">
+            <Button type="button" variant="outline" class="h-11 px-6 text-xs font-bold rounded-xl border border-solid !border-slate-300 text-slate-700 hover:bg-slate-100 cursor-pointer" @click="closeDetail">Đóng</Button>
           </div>
         </div>
       </div>

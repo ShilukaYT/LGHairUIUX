@@ -18,7 +18,7 @@ const filter = ref({
 const fetchHoaDons = async () => {
     isLoading.value = true
     try {
-        const res = await axios.get(`${API_BASE_URL}/danh-sach`, { params: filter.value })
+        const res = await axios.get(`${API_BASE_URL}/danh-sach`, { params: filter.value, withCredentials: true })
         if (res.data.success) hoaDons.value = res.data.data
     } catch (e) { console.error(e) }
     finally { isLoading.value = false }

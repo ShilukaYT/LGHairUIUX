@@ -29,11 +29,6 @@ onMounted(() => {
   }
 });
 
-function toggleTheme() {
-  const newTheme = customizer.actTheme === 'dark' ? 'light' : 'dark';
-  customizer.SET_THEME(newTheme);
-  theme.global.name.value = newTheme;
-}
 </script>
 
 <template>
@@ -100,18 +95,8 @@ function toggleTheme() {
     <!-- ---------------------------------------------- -->
 
     <!-- ---------------------------------------------- -->
-    <!-- Theme Toggle -->
+    <!-- Theme Toggle moved to ProfileDD -->
     <!-- ---------------------------------------------- -->
-    <v-btn
-      icon
-      class="text-secondary hidden-sm-and-down d-flex"
-      color="darkText"
-      rounded="sm"
-      variant="text"
-      @click="toggleTheme"
-    >
-      <component :is="customizer.actTheme === 'dark' ? SunIcon : MoonIcon" size="20" />
-    </v-btn>
 
     <!-- ---------------------------------------------- -->
     <!-- Notification -->
