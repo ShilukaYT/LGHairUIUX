@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { ref, nextTick, onUnmounted, watch } from 'vue'
+import { ref, nextTick, onUnmounted, watch, onMounted } from 'vue'
 import { MessageSquare, X, Send, HeadphonesIcon, Loader2, Calendar } from 'lucide-vue-next'
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc } from 'firebase/firestore'
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, getDoc } from 'firebase/firestore'
 import { db } from '@/firebase'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import axios from 'axios'
 
 // ── Config ──────────────────────────────────────────────
 const API_BASE = 'https://localhost:7196/api/chat' // API cho live chat nhân viên
 const API_AI_BOT = 'https://localhost:7196/api/Chatbot' // API cho AI bot
+const GEMINI_API_KEY: string = 'AIzaSyDBxuIvcyEWKXnmj0UXtgHNqGK5q3LuJv0' // Cấu hình API Key Gemini của bạn tại đây để tự động phản hồi
 const router = useRouter()
+const route = useRoute()
 
 // ── State ───────────────────────────────────────────────
 const isOpen        = ref(false)
@@ -21,6 +23,11 @@ const inputMessage  = ref('')
 const roomId        = ref<string | null>(null)
 const messages      = ref<any[]>([]) // Tin nhắn Firebase
 const messagesContainer = ref<HTMLElement | null>(null)
+const showNamePrompt = ref(false)
+const tempCustomerName = ref('')
+const validationError = ref('')
+
+
 
 const botMessages = ref<any[]>([
   {
@@ -33,15 +40,43 @@ const botMessages = ref<any[]>([
 
 const getCustomerInfo = () => {
   try {
-    const raw = localStorage.getItem('userInfo') || sessionStorage.getItem('accessToken') || ''
+    const raw = localStorage.getItem('user') || sessionStorage.getItem('accessToken') || ''
     const user = raw ? JSON.parse(raw) : null
-    return {
-      name: user?.hoTen || user?.name || 'Khách',
-      email: user?.email || ''
+    if (user?.hoTen || user?.name) {
+      return {
+        name: user.hoTen || user.name,
+        email: user.email || ''
+      }
     }
-  } catch {
-    return { name: 'Khách', email: '' }
+  } catch (err) {
+    console.error(err)
   }
+
+  // Khách vãng lai: Sử dụng tên tùy chỉnh đã nhập nếu có
+  const customName = localStorage.getItem('lghair_chat_custom_name')
+  if (customName) {
+    return { name: customName, email: '' }
+  }
+
+  // Mặc định là 'Khách' (sẽ bị yêu cầu nhập tên khi bấm Bắt đầu chat với nhân viên)
+  return { name: 'Khách', email: '' }
+}
+
+const getStorageKey = () => {
+  try {
+    const raw = localStorage.getItem('user') || sessionStorage.getItem('accessToken') || ''
+    const user = raw ? JSON.parse(raw) : null
+    if (user?.email) {
+      return `lghair_chat_room_id_${user.email}`
+    }
+  } catch (err) {
+    console.error(err)
+  }
+  const customName = localStorage.getItem('lghair_chat_custom_name')
+  if (customName) {
+    return `lghair_chat_room_id_anon_${customName}`
+  }
+  return 'lghair_chat_room_id_guest'
 }
 
 // ── Xử lý Markdown & Hình ảnh cho AI ────────────────────
@@ -109,12 +144,41 @@ const startChat = async () => {
 
   const { name, email } = getCustomerInfo()
 
+  // 1. Kiểm tra xem đã có roomId lưu ở localStorage chưa
+  const key = getStorageKey()
+  const savedRoomId = localStorage.getItem(key)
+  if (savedRoomId) {
+    try {
+      const roomSnap = await getDoc(doc(db, 'ChatRooms', savedRoomId))
+      if (roomSnap.exists()) {
+        const roomData = roomSnap.data()
+        roomId.value = savedRoomId
+        isConnected.value = true
+        listenToMessages(savedRoomId)
+
+        // Đồng bộ lại tên mới nếu khách đã đăng nhập (trước đó là tên ẩn danh hoặc ngược lại)
+        if (roomData.customerName !== name) {
+          await updateDoc(doc(db, 'ChatRooms', savedRoomId), {
+            customerName: name,
+            customerEmail: email
+          })
+        }
+        isConnecting.value = false
+        return
+      }
+    } catch (err) {
+      console.warn('[LiveChat] Lỗi khôi phục phòng chat cũ:', err)
+    }
+  }
+
+  // 2. Tạo phòng chat mới nếu chưa có hoặc phòng cũ đã bị xóa
   try {
     const res = await axios.post(`${API_BASE}/room`, {
       customerName: name,
       customerEmail: email
     })
     roomId.value = res.data.roomId
+    localStorage.setItem(key, res.data.roomId)
     isConnected.value = true
     listenToMessages(roomId.value!)
   } catch (err: any) {
@@ -133,10 +197,96 @@ const startChat = async () => {
   }
 }
 
+const handleStartChatClick = async () => {
+  const { name } = getCustomerInfo()
+  
+  // Nếu là tài khoản thực (không phải 'Khách') hoặc đã điền tên tùy chỉnh trước đó
+  if (name && name !== 'Khách') {
+    await startChat()
+  } else {
+    // Hiện khung nhập tên
+    showNamePrompt.value = true
+  }
+}
+
+const submitNameAndStartChat = async () => {
+  const enteredName = tempCustomerName.value.trim()
+  if (!enteredName) return
+
+  localStorage.setItem('lghair_chat_custom_name', enteredName)
+  showNamePrompt.value = false
+  await startChat()
+}
+
+const switchToAI = async () => {
+  if (unsubscribe) {
+    unsubscribe()
+    unsubscribe = null
+  }
+  
+  if (roomId.value) {
+    try {
+      await updateDoc(doc(db, 'ChatRooms', roomId.value), {
+        isCustomerTyping: false
+      })
+    } catch (e) {}
+  }
+
+  isConnected.value = false
+  roomId.value = null
+}
+
+const containsProfanity = (text: string): boolean => {
+  // 1. Kiểm tra các cụm từ viết liền/bậy bạ rõ ràng (substring match)
+  const badSubstrings = [
+    'đm', 'dkm', 'đkm', 'đéo', 'cặc', 'lồn', 'địt', 'chịch', 'óc chó', 'chó đẻ', 
+    'mẹ mày', 'bố mày', 'con đĩ', 'thằng chó', 'đĩ chó', 'đồ ngu', 'khốn nạn', 
+    'mất dạy', 'vãi lồn', 'vãi cặc', 'vcl', 'vkl', 'clm', 'súc vật', 
+    'đầu khấc', 'bú cu', 'đút đít', 'cak', 'cax', 'đjt', 'djt', 'mgu'
+  ]
+  const cleanText = text.toLowerCase().replace(/\s+/g, '')
+  for (const word of badSubstrings) {
+    const cleanWord = word.replace(/\s+/g, '')
+    if (cleanText.includes(cleanWord)) {
+      return true
+    }
+  }
+
+  // 2. Kiểm tra khớp nguyên từ đơn để tránh nhận nhầm (ví dụ 'ngu' trong 'nguồn')
+  const badWords = [
+    'ngu', 'nguu', 'nguuu', 'nguuuu', 'chó', 'choa', 'đĩ', 'cac', 'cl', 'cút'
+  ]
+  const words = text.toLowerCase().split(/[\s,.\-!?_]+/)
+  for (const w of words) {
+    if (badWords.includes(w)) {
+      return true
+    }
+  }
+
+  return false
+}
+
 // Xử lý gửi tin nhắn (Tách biệt logic AI và Live Agent)
 const sendMsg = async () => {
   const content = inputMessage.value.trim()
   if (!content || sending.value) return
+
+  // Chặn ngôn từ khiếm nhã tục tĩu
+  if (containsProfanity(content)) {
+    validationError.value = 'Tin nhắn chứa ngôn từ không phù hợp. Vui lòng nhắn tin lịch sự!'
+    setTimeout(() => {
+      validationError.value = ''
+    }, 4000)
+    return
+  }
+
+  if (typingTimeout) {
+    clearTimeout(typingTimeout)
+    typingTimeout = null
+  }
+  if (roomId.value && isConnected.value) {
+    updateTypingStatus(false)
+  }
 
   sending.value = true
   inputMessage.value = ''
@@ -192,6 +342,15 @@ const sendMsg = async () => {
       senderName: name,
       content
     })
+
+    // Kích hoạt bộ hẹn giờ 5 giây cho Gemini trả lời tự động ngay lập tức
+    if (geminiTimeout) clearTimeout(geminiTimeout)
+    geminiTimeout = window.setTimeout(async () => {
+      const currentLastMsg = messages.value[messages.value.length - 1]
+      if (currentLastMsg && currentLastMsg.senderRole === 'Customer') {
+        await respondWithGemini(currentLastMsg.content)
+      }
+    }, 5000)
   } catch (err: any) {
     console.error('[LiveChat] Lỗi gửi tin:', err)
     inputMessage.value = content // restore nếu lỗi
@@ -221,11 +380,153 @@ const formatTime = (ts: any) => {
   return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
 }
 
-// ── Lifecycle ───────────────────────────────────────────
-watch(messages, scrollToBottom)
+// ── Lifecycle & Gemini Auto Reply ────────────────────────
+let geminiTimeout: any = null
+
+const respondWithGemini = async (userContent: string) => {
+  if (!GEMINI_API_KEY || GEMINI_API_KEY === 'YOUR_GEMINI_API_KEY_HERE') {
+    console.warn('[Gemini] Chưa cấu hình API Key trong ChatbotOverlay.vue')
+    return
+  }
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}`
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{ text: `Bạn là trợ lý AI hỗ trợ khách hàng của salon tóc LG Hair. Hiện tại nhân viên tư vấn đang bận và chưa thể trả lời khách hàng ngay lập tức. Hãy thay mặt nhân viên phản hồi khách hàng một cách cực kỳ ngắn gọn, lịch sự, thân thiện bằng tiếng Việt dựa trên tin nhắn sau: "${userContent}". Lưu ý: Không tự ý hẹn lịch hay chốt đơn dịch vụ mà hãy nhắc họ chờ nhân viên một chút.` }]
+        }]
+      })
+    })
+
+    if (!response.ok) {
+      const errText = await response.text()
+      throw new Error(`Google API error: ${response.status} - ${errText}`)
+    }
+
+    const data = await response.json()
+    const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text
+    
+    if (reply && roomId.value) {
+      // Gửi câu trả lời của Gemini vào phòng chat 1vs1 của nhân viên qua axios
+      await axios.post(`${API_BASE}/send`, {
+        roomId: roomId.value,
+        senderRole: 'Staff',
+        senderName: 'Trợ lý AI (Tự động)',
+        content: reply
+      })
+    }
+  } catch (error: any) {
+    console.error('[Gemini] Lỗi gọi API Gemini:', error)
+    if (roomId.value) {
+      await axios.post(`${API_BASE}/send`, {
+        roomId: roomId.value,
+        senderRole: 'Staff',
+        senderName: 'Hệ thống (Lỗi AI)',
+        content: `⚠️ Lỗi gọi Gemini API: ${error.message}`
+      })
+    }
+  }
+}
+
+watch(messages, (newMessages) => {
+  scrollToBottom()
+
+  if (!isConnected.value || !roomId.value) return
+
+  // Hủy bộ đếm Gemini nếu phát hiện có tin nhắn mới từ Staff (admin đã trả lời)
+  if (newMessages.length > 0) {
+    const lastMsg = newMessages[newMessages.length - 1]
+    if (lastMsg.senderRole === 'Staff') {
+      if (geminiTimeout) {
+        clearTimeout(geminiTimeout)
+        geminiTimeout = null
+      }
+    }
+  }
+})
+
+let typingTimeout: any = null
+
+const updateTypingStatus = async (isTyping: boolean) => {
+  if (!roomId.value) return
+  try {
+    await updateDoc(doc(db, 'ChatRooms', roomId.value), {
+      isCustomerTyping: isTyping
+    })
+  } catch (err) {
+    // ignore
+  }
+}
+
+watch(inputMessage, (newVal) => {
+  if (!roomId.value || !isConnected.value) return
+  updateTypingStatus(newVal.trim().length > 0)
+
+  if (typingTimeout) clearTimeout(typingTimeout)
+  if (newVal.trim().length > 0) {
+    typingTimeout = setTimeout(() => {
+      updateTypingStatus(false)
+    }, 3000)
+  }
+})
+
+const initRoom = async () => {
+  // Hủy listener cũ trước
+  if (unsubscribe) {
+    unsubscribe()
+    unsubscribe = null
+  }
+  roomId.value = null
+  isConnected.value = false
+
+  const key = getStorageKey()
+  const savedRoomId = localStorage.getItem(key)
+  if (savedRoomId) {
+    try {
+      const roomSnap = await getDoc(doc(db, 'ChatRooms', savedRoomId))
+      if (roomSnap.exists()) {
+        const roomData = roomSnap.data()
+        roomId.value = savedRoomId
+        isConnected.value = true
+        listenToMessages(savedRoomId)
+
+        // Đồng bộ lại tên mới nếu khách đã đăng nhập (trước đó là tên ẩn danh hoặc ngược lại)
+        const { name, email } = getCustomerInfo()
+        if (roomData.customerName !== name) {
+          await updateDoc(doc(db, 'ChatRooms', savedRoomId), {
+            customerName: name,
+            customerEmail: email
+          })
+        }
+      } else {
+        localStorage.removeItem(key)
+      }
+    } catch (err) {
+      console.warn('[LiveChat] Lỗi khôi phục phòng chat cũ:', err)
+    }
+  }
+}
+
+watch(() => route.path, () => {
+  initRoom()
+})
+
+onMounted(async () => {
+  await initRoom()
+})
 
 onUnmounted(() => {
   if (unsubscribe) unsubscribe()
+  if (geminiTimeout) clearTimeout(geminiTimeout)
+  if (typingTimeout) clearTimeout(typingTimeout)
+  if (roomId.value && isConnected.value) {
+    updateTypingStatus(false)
+  }
 })
 </script>
 
@@ -293,7 +594,7 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <div class="flex flex-wrap gap-2 mt-3 pl-1">
+            <div v-if="!showNamePrompt" class="flex flex-wrap gap-2 mt-3 pl-1">
               <button
                 @click="consultProduct"
                 :disabled="isConnecting || sending"
@@ -311,13 +612,41 @@ onUnmounted(() => {
               </button>
 
               <button
-                @click="startChat"
+                @click="handleStartChatClick"
                 :disabled="isConnecting || sending"
                 class="inline-flex items-center gap-1.5 px-4 py-2 border border-neutral-200 bg-white hover:border-black rounded-full text-neutral-800 text-[10px] font-bold tracking-wider transition active:scale-95 shadow-sm uppercase disabled:opacity-60"
               >
                 <span>Gặp nhân viên hỗ trợ</span>
                 <Loader2 v-if="isConnecting" :size="11" class="animate-spin text-neutral-500" />
               </button>
+            </div>
+
+            <div v-else class="mt-4 p-4 border border-black/10 bg-white rounded-2xl shadow-sm space-y-3 mx-1">
+              <p class="text-xs font-semibold text-neutral-700">Vui lòng nhập tên của bạn để bắt đầu trò chuyện với nhân viên hỗ trợ:</p>
+              <div class="flex gap-2">
+                <input
+                  v-model="tempCustomerName"
+                  type="text"
+                  placeholder="Nhập họ và tên..."
+                  class="h-9 flex-1 rounded-xl border border-black/10 bg-neutral-50 px-3 text-xs outline-none focus:border-black transition"
+                  @keydown.enter="submitNameAndStartChat"
+                />
+                <button
+                  @click="submitNameAndStartChat"
+                  :disabled="!tempCustomerName.trim() || isConnecting"
+                  class="px-4 py-2 bg-black text-white rounded-xl text-xs font-bold transition active:scale-95 hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400"
+                >
+                  Bắt đầu
+                </button>
+              </div>
+              <div class="text-right">
+                <button
+                  @click="showNamePrompt = false"
+                  class="text-[10px] text-neutral-400 hover:text-black transition"
+                >
+                  Hủy bỏ
+                </button>
+              </div>
             </div>
 
             <div v-if="isConnecting" class="text-center py-2">
@@ -332,10 +661,16 @@ onUnmounted(() => {
           </template>
 
           <template v-else>
-            <div class="flex justify-center">
+            <div class="flex flex-col items-center gap-1.5 mb-3">
               <span class="text-[10px] text-neutral-400 bg-neutral-100 px-3 py-1 rounded-full">
                 Bạn đã được kết nối với nhân viên hỗ trợ
               </span>
+              <button
+                @click="switchToAI"
+                class="px-2.5 py-1 border border-neutral-200 bg-white hover:border-black rounded-full text-neutral-600 hover:text-black text-[9px] font-bold tracking-wider transition active:scale-95 shadow-sm uppercase cursor-pointer"
+              >
+                Trở lại Chatbot AI
+              </button>
             </div>
 
             <div
@@ -382,23 +717,28 @@ onUnmounted(() => {
 
         </div>
 
-        <div class="flex items-center gap-2 border-t border-black/10 bg-white px-4 py-2.5 flex-shrink-0">
-          <input
-            v-model="inputMessage"
-            @keydown="handleKeydown"
-            type="text"
-            placeholder="Nhập tin nhắn..."
-            :disabled="sending"
-            class="h-10 flex-1 rounded-full border border-black/10 bg-neutral-50 px-4 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white disabled:opacity-50"
-          />
-          <button
-            @click="sendMsg"
-            :disabled="!inputMessage.trim() || sending"
-            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black text-white transition duration-300 hover:bg-neutral-800 active:scale-95 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
-          >
-            <Loader2 v-if="sending" :size="15" class="animate-spin" />
-            <Send v-else :size="15" :stroke-width="1.8" />
-          </button>
+        <div class="flex flex-col border-t border-black/10 bg-white flex-shrink-0 z-10">
+          <p v-if="validationError" class="text-red-500 text-[10px] text-center bg-red-50 py-1.5 px-3 border-b border-red-100 font-semibold select-none">
+            ⚠️ {{ validationError }}
+          </p>
+          <div class="flex items-center gap-2 px-4 py-2.5">
+            <input
+              v-model="inputMessage"
+              @keydown="handleKeydown"
+              type="text"
+              placeholder="Nhập tin nhắn..."
+              :disabled="sending"
+              class="h-10 flex-1 rounded-full border border-black/10 bg-neutral-50 px-4 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-black focus:bg-white disabled:opacity-50"
+            />
+            <button
+              @click="sendMsg"
+              :disabled="!inputMessage.trim() || sending"
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black text-white transition duration-300 hover:bg-neutral-800 active:scale-95 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
+            >
+              <Loader2 v-if="sending" :size="15" class="animate-spin" />
+              <Send v-else :size="15" :stroke-width="1.8" />
+            </button>
+          </div>
         </div>
 
       </div>
