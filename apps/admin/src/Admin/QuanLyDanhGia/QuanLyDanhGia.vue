@@ -8,6 +8,7 @@ import {
 import axios from 'axios'
 import { toast } from 'vue-sonner'
 import Swal from 'sweetalert2'
+import { logActivity } from '@/utils/activityLogger'
 
 // --- UI Components ---
 import { Button } from '@/components/ui/button'
@@ -103,6 +104,7 @@ const submitReply = async () => {
             reply: replyContent.value
         })
 
+        logActivity("Phản hồi đánh giá", `Đã phản hồi đánh giá của khách hàng ${selectedReview.value.tenKhach} cho dịch vụ ${selectedReview.value.tenDichVu}`, "Đánh giá");
         toast.success("Đã gửi phản hồi cho khách hàng!")
 
         // Cập nhật giao diện không cần load lại trang
@@ -114,7 +116,8 @@ const submitReply = async () => {
         selectedReview.value.daPhanHoi = true
         selectedReview.value.phanHoiAdmin = replyContent.value
 
-    } catch (error) {
+    } catch (error: any) {
+        logActivity("Phản hồi đánh giá", `Thất bại khi phản hồi đánh giá của ${selectedReview.value?.tenKhach || ''} - Lỗi: ${error.message || ''}`, "Đánh giá", "Thất bại");
         toast.error("Lỗi khi gửi phản hồi!")
     }
 }
@@ -135,12 +138,14 @@ const toggleVisibility = async () => {
     if (result.isConfirmed) {
         try {
             await axios.put(`${API_BASE_URL}/toggle-visibility/${selectedReview.value.id}`)
+            logActivity("Đổi trạng thái hiển thị đánh giá", `Đã ${actionStr} đánh giá của khách hàng ${selectedReview.value.tenKhach}`, "Đánh giá");
             toast.success(`Đã ${actionStr} đánh giá!`)
 
             selectedReview.value.isHidden = !selectedReview.value.isHidden
             const idx = reviews.value.findIndex(r => r.id === selectedReview.value.id)
             if (idx !== -1) reviews.value[idx].isHidden = selectedReview.value.isHidden
-        } catch (error) {
+        } catch (error: any) {
+            logActivity("Đổi trạng thái hiển thị đánh giá", `Thất bại khi ${actionStr} đánh giá của ${selectedReview.value.tenKhach} - Lỗi: ${error.message || ''}`, "Đánh giá", "Thất bại");
             toast.error("Thao tác thất bại!")
         }
     }
@@ -159,8 +164,10 @@ const deleteReview = async () => {
     })
 
     if (result.isConfirmed) {
+        const reviewKhachName = selectedReview.value.tenKhach;
         try {
             await axios.delete(`${API_BASE_URL}/delete/${selectedReview.value.id}`)
+            logActivity("Xóa đánh giá", `Đã xóa vĩnh viễn đánh giá của khách hàng ${reviewKhachName}`, "Đánh giá");
             toast.success("Đã xóa đánh giá!")
 
             // Cập nhật lại list trên UI
@@ -169,7 +176,8 @@ const deleteReview = async () => {
 
             // Xử lý tụt trang nếu xóa hết item ở trang cuối
             if (paginatedData.value.length === 0 && currentPage.value > 1) currentPage.value--
-        } catch (error) {
+        } catch (error: any) {
+            logActivity("Xóa đánh giá", `Thất bại khi xóa vĩnh viễn đánh giá của ${reviewKhachName} - Lỗi: ${error.message || ''}`, "Đánh giá", "Thất bại");
             toast.error("Lỗi khi xóa đánh giá!")
         }
     }
@@ -207,6 +215,7 @@ const deleteByKeyword = async () => {
             try {
                 // Gọi API truyền từ khóa lên
                 const res = await axios.delete(`${API_BASE_URL}/delete-by-keyword?keyword=${encodeURIComponent(keyword)}`);
+                logActivity("Xóa đánh giá hàng loạt", `Đã xóa hàng loạt các đánh giá chứa từ khóa rác: "${keyword}"`, "Đánh giá");
                 toast.success(res.data.message);
 
                 // Reset lại giao diện
@@ -214,6 +223,7 @@ const deleteByKeyword = async () => {
                 await fetchReviews();
 
             } catch (error: any) {
+                logActivity("Xóa đánh giá hàng loạt", `Thất bại khi xóa các đánh giá chứa từ khóa rác: "${keyword}" - Lỗi: ${error.message || ''}`, "Đánh giá", "Thất bại");
                 if (error.response && error.response.status === 404) {
                     toast.info("Không có đánh giá nào chứa từ khóa này.");
                 } else {

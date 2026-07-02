@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { toast } from 'vue-sonner'
+import { logActivity } from '@/utils/activityLogger'
 import {
   Plus,
   Pencil,
@@ -338,10 +339,12 @@ async function saveEdit() {
     } else {
       toast.success('Đã cập nhật khách hàng.')
     }
+    logActivity("Cập nhật khách hàng", `Đã cập nhật thông tin khách hàng ${editForm.value.hoTen} (Mã: ${editingMaKh.value})`, "Khách hàng")
     editOpen.value = false
     await fetchList()
   } catch (e: unknown) {
     const msg = axios.isAxiosError(e) ? (e.response?.data as { message?: string })?.message : null
+    logActivity("Cập nhật khách hàng", `Thất bại khi cập nhật khách hàng ${editForm.value.hoTen} (Mã: ${editingMaKh.value}) - Lỗi: ${msg || ''}`, "Khách hàng", "Thất bại")
     toast.error(msg || 'Lưu thất bại.')
   } finally {
     saving.value = false
@@ -407,11 +410,13 @@ async function saveCreate() {
     } else {
       toast.success('Đã tạo khách hàng mới.')
     }
+    logActivity("Thêm khách hàng", `Đã thêm khách hàng mới ${createForm.value.hoTen} (Mã: ${maKh || ''})`, "Khách hàng")
     createOpen.value = false
     page.value = 1
     await fetchList()
   } catch (e: unknown) {
     const msg = axios.isAxiosError(e) ? (e.response?.data as { message?: string })?.message : null
+    logActivity("Thêm khách hàng", `Thất bại khi thêm khách hàng ${createForm.value.hoTen} - Lỗi: ${msg || ''}`, "Khách hàng", "Thất bại")
     toast.error(msg || 'Tạo thất bại.')
   } finally {
     saving.value = false

@@ -337,6 +337,7 @@ import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 import { collection, query, where, orderBy, onSnapshot, doc, deleteDoc } from 'firebase/firestore'
 import { db } from '@/firebase.js'
 import { sendMessage, toggleRoomStatus } from '@/services/chatService.js'
+import { logActivity } from '@/utils/activityLogger'
 
 // ── State ──────────────────────────────────────────────
 const allRooms        = ref([])
@@ -398,8 +399,10 @@ const deleteSelectedRooms = async () => {
       }
       await deleteDoc(doc(db, 'ChatRooms', id))
     }
+    logActivity("Xóa phòng chat", `Đã xóa ${idsToDelete.length} cuộc hội thoại chat hỗ trợ khách hàng`, "Hỗ trợ khách hàng");
     isManageMode.value = false
   } catch (err) {
+    logActivity("Xóa phòng chat", `Thất bại khi xóa các cuộc trò chuyện - Lỗi: ${err.message || ''}`, "Hỗ trợ khách hàng", "Thất bại");
     console.error('Lỗi khi xóa các cuộc trò chuyện:', err)
     alert('Đã xảy ra lỗi khi xóa cuộc trò chuyện.')
   }
@@ -500,7 +503,9 @@ const handleSend = async () => {
 
   try {
     await sendMessage(selectedRoom.value.id, 'Staff', staffName, msgContent)
+    logActivity("Gửi tin nhắn hỗ trợ", `Đã gửi tin nhắn hỗ trợ cho khách hàng ${selectedRoom.value.customerName}`, "Hỗ trợ khách hàng");
   } catch (err) {
+    logActivity("Gửi tin nhắn hỗ trợ", `Thất bại khi gửi tin nhắn cho khách hàng ${selectedRoom.value.customerName} - Lỗi: ${err.message || ''}`, "Hỗ trợ khách hàng", "Thất bại");
     console.error('[Chat] Lỗi gửi tin:', err)
     newMessage.value = msgContent // Restore nếu lỗi
   } finally {
@@ -516,11 +521,14 @@ const handleToggleStatus = async () => {
 
   try {
     await toggleRoomStatus(selectedRoom.value.id, newStatus)
+    const actionLabel = newStatus === 'Closed' ? 'Đóng' : 'Mở lại';
+    logActivity("Thay đổi trạng thái phòng chat", `Đã ${actionLabel} phòng chat của khách hàng ${selectedRoom.value.customerName}`, "Hỗ trợ khách hàng");
     // Firestore onSnapshot sẽ tự cập nhật selectedRoom
     if (newStatus === 'Closed') {
       selectedRoom.value = null // Reset về màn hình chờ
     }
   } catch (err) {
+    logActivity("Thay đổi trạng thái phòng chat", `Thất bại khi thay đổi trạng thái phòng chat của ${selectedRoom.value.customerName} sang ${newStatus} - Lỗi: ${err.message || ''}`, "Hỗ trợ khách hàng", "Thất bại");
     console.error('[Chat] Lỗi đổi trạng thái:', err)
   } finally {
     togglingStatus.value = false

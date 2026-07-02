@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { Search, User, ShoppingBag, Menu, X, Heart } from 'lucide-vue-next';
 import axios from 'axios';
 import { getCartDB } from '@/Views/Anonymous/CSDL/cartDB';
+import { useWishlistStore } from '@/stores/useWishlistStore';
 
 const API = import.meta.env.VITE_API_URL;
 const route = useRoute();
@@ -14,6 +15,8 @@ const currentUser = ref<any>(null);
 let checkSessionInterval: ReturnType<typeof setInterval>;
 
 const cartCount = ref(0);
+const wishlistStore = useWishlistStore();
+const wishlistCount = computed(() => (wishlistStore.favoriteProducts?.length || 0) + (wishlistStore.favoriteServices?.length || 0));
 
 const updateCartCount = async () => {
   const user = localStorage.getItem('user');
@@ -319,7 +322,7 @@ onUnmounted(() => {
           </div>
           <router-link :to="{ name: 'wishlist' }" class="text-black hover:text-gray-500 transition-colors relative" aria-label="Wishlist">
             <Heart :size="20" :stroke-width="1.5" />
-            <span class="absolute -top-1 -right-1 w-3 h-3 bg-black text-white text-[8px] flex items-center justify-center rounded-full">0</span>
+            <span class="absolute -top-1 -right-1 w-3 h-3 text-white text-[8px] flex items-center justify-center rounded-full" :class="wishlistCount > 0 ? 'bg-red-500' : 'bg-black'">{{ wishlistCount }}</span>
           </router-link>
 
           <div class="relative group">
@@ -393,7 +396,7 @@ onUnmounted(() => {
         <div class="flex items-center space-x-5">
           <router-link :to="{ name: 'wishlist' }" class="text-black hover:text-gray-500 transition-colors relative" aria-label="Wishlist">
             <Heart :size="20" :stroke-width="1.5" />
-            <span class="absolute -top-1 -right-1 w-3 h-3 bg-black text-white text-[8px] flex items-center justify-center rounded-full">0</span>
+            <span class="absolute -top-1 -right-1 w-3 h-3 text-white text-[8px] flex items-center justify-center rounded-full" :class="wishlistCount > 0 ? 'bg-red-500' : 'bg-black'">{{ wishlistCount }}</span>
           </router-link>
           <router-link :to="{ name: currentUser ? 'profile' : 'login' }" class="text-black hover:text-gray-500 transition-colors flex items-center justify-center" aria-label="Account">
             <template v-if="currentUser">

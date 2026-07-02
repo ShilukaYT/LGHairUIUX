@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import axios from 'axios'
 import Swal from 'sweetalert2'
 import { Check, X, Search, CalendarDays, Plus, Edit, RotateCcw, AlertTriangle } from 'lucide-vue-next'
+import { logActivity } from '@/utils/activityLogger'
 
 // --- CẤU HÌNH API ---
 const API_BASE_URL = 'https://localhost:7196/api/admin/lich-lam-viec'
@@ -86,7 +87,7 @@ const headers = [
   { title: 'Ngày kết thúc', key: 'ngayKetThuc', align: 'center', sortable: true },
   { title: 'Trạng thái', key: 'trangThaiLich', align: 'center', sortable: true },
   { title: 'Hành động', key: 'actions', align: 'center', sortable: false },
-]
+] as const
 
 // --- HÀNH ĐỘNG TẠO LỊCH ---
 const handleCreateSchedule = async (item: any) => {
@@ -128,9 +129,11 @@ const handleCreateSchedule = async (item: any) => {
         ));
     }
 
+    logActivity("Xếp lịch ca làm", `Đã tạo/gia hạn lịch làm việc 30 ngày cho thợ ${item.hoTenNv} (Mã: ${item.maNv}) từ ngày ${startDate.toLocaleDateString('vi-VN')}`, "Ca làm");
     showSnackbar(`Đã tạo lịch 30 ngày cho thợ!`);
     await fetchLichLamViec();
-  } catch (error) {
+  } catch (error: any) {
+    logActivity("Xếp lịch ca làm", `Thất bại khi xếp lịch làm việc cho thợ ${item.hoTenNv} - Lỗi: ${error.message || ''}`, "Ca làm", "Thất bại");
     showSnackbar('Có lỗi xảy ra khi tạo lịch', 'error');
   } finally {
     isSubmitting.value = false;
@@ -204,10 +207,12 @@ const submitEditSchedule = async () => {
             });
         }));
      }
+     logActivity("Sửa lịch ca làm", `Đã sửa lịch làm việc của thợ ${editState.value.tenNv} (Mã: ${editState.value.maNv}) trong ${editState.value.affectedDates.length} ngày từ ${editState.value.ngayBatDauSua} thành ${editState.value.caLamApDung}`, "Ca làm");
      showSnackbar("Cập nhật lịch làm việc thành công!");
      isEditModalOpen.value = false;
      await fetchLichLamViec();
-  } catch (error) {
+  } catch (error: any) {
+     logActivity("Sửa lịch ca làm", `Thất bại khi sửa lịch làm việc của thợ ${editState.value.tenNv} - Lỗi: ${error.message || ''}`, "Ca làm", "Thất bại");
      showSnackbar("Lỗi cập nhật ca làm.", "error");
   } finally {
      isSubmitting.value = false;

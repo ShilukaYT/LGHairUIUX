@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 // icons
 import {
   LogoutOutlined,
@@ -21,38 +21,45 @@ import { useTheme } from 'vuetify';
 const customizer = useCustomizerStore();
 const theme = useTheme();
 
+const tab = ref(null);
 const router = useRouter();
+const route = useRoute();
 const userName = ref('Admin');
 const userRole = ref('Quản trị viên');
+const userAvatar = ref('');
 
 const currentThemeSelection = ref(localStorage.getItem('theme_selection') || 'system');
 const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
-onMounted(() => {
-  // Lấy thông tin user từ localStorage
+const loadUserFromStorage = () => {
   const adminStr = sessionStorage.getItem('adminUser');
   const staffStr = sessionStorage.getItem('staffUser') || sessionStorage.getItem('nhanVienUser');
-  
+
+  let user: any = null;
   if (adminStr) {
-    const admin = JSON.parse(adminStr);
-    userName.value = admin.hoTen || admin.tenNhanVien || admin.username || 'Admin';
+    user = JSON.parse(adminStr);
+    userName.value = user.hoTen || user.tenNhanVien || user.username || 'Admin';
     userRole.value = 'Quản trị viên';
   } else if (staffStr) {
-    const staff = JSON.parse(staffStr);
-    userName.value = staff.hoTen || staff.tenNhanVien || staff.username || 'Nhân viên';
+    user = JSON.parse(staffStr);
+    userName.value = user.hoTen || user.tenNhanVien || user.username || 'Nhân viên';
     userRole.value = 'Nhân viên';
   }
 
-  // Initialize theme based on saved selection
-  handleThemeSelection(currentThemeSelection.value as 'light' | 'dark' | 'system', false);
-
-  mediaQuery.addEventListener('change', (e) => {
-    if (currentThemeSelection.value === 'system') {
-      const newTheme = e.matches ? 'dark' : 'light';
-      customizer.SET_THEME(newTheme);
-      theme.global.name.value = newTheme;
+  if (user) {
+    const rawAvatar = user.hinhAnh || user.avatar || '';
+    if (rawAvatar) {
+      userAvatar.value = rawAvatar.startsWith('/')
+        ? `https://localhost:7196${rawAvatar}`
+        : rawAvatar;
+    } else {
+      userAvatar.value = '';
     }
-  });
+  }
+};
+
+const avatarSrc = computed(() => {
+  return userAvatar.value || new URL('@/assets/images/users/avatar-1.png', import.meta.url).href;
 });
 
 const handleThemeSelection = (selection: 'light' | 'dark' | 'system', save = true) => {
@@ -68,6 +75,26 @@ const handleThemeSelection = (selection: 'light' | 'dark' | 'system', save = tru
   theme.global.name.value = newTheme;
 };
 
+onMounted(() => {
+  loadUserFromStorage();
+  window.addEventListener('update-staff-sidebar', loadUserFromStorage);
+
+  // Initialize theme based on saved selection
+  handleThemeSelection(currentThemeSelection.value as 'light' | 'dark' | 'system', false);
+
+  mediaQuery.addEventListener('change', (e) => {
+    if (currentThemeSelection.value === 'system') {
+      const newTheme = e.matches ? 'dark' : 'light';
+      customizer.SET_THEME(newTheme);
+      theme.global.name.value = newTheme;
+    }
+  });
+});
+
+onUnmounted(() => {
+  window.removeEventListener('update-staff-sidebar', loadUserFromStorage);
+});
+
 const handleLogout = () => {
   sessionStorage.removeItem('adminToken');
   sessionStorage.removeItem('adminUser');
@@ -77,6 +104,19 @@ const handleLogout = () => {
   // Chuyển hướng về trang đăng nhập
   router.push('/admin/login');
 };
+
+const navigateToProfile = () => {
+  // Dùng path hiện tại để phát hiện đang ở giao diện nào
+  // Nếu URL bắt đầu bằng /nhanvien → dùng route nhân viên
+  // Ngược lại → dùng route admin
+  const isNhanVienContext = route.path.startsWith('/nhanvien');
+
+  if (isNhanVienContext) {
+    router.push({ name: 'NhanVienProfile' });
+  } else {
+    router.push({ name: 'AdminProfile' });
+  }
+};
 </script>
 
 <template>
@@ -85,8 +125,8 @@ const handleLogout = () => {
   <!-- ---------------------------------------------- -->
   <div>
     <div class="d-flex align-center pa-5">
-      <v-avatar size="32" class="mr-2">
-        <img src="@/assets/images/users/avatar-1.png" width="32" alt="Avatar" />
+      <v-avatar size="40" class="mr-2" style="overflow:hidden;">
+        <v-img :src="avatarSrc" cover width="40" height="40" />
       </v-avatar>
       <div>
         <h6 class="text-h6 mb-0">{{ userName }}</h6>
@@ -126,14 +166,14 @@ const handleLogout = () => {
 
         <v-list-subheader class="text-uppercase text-caption font-weight-bold px-5 mt-2">Tài khoản</v-list-subheader>
         
-        <v-list-item color="primary" rounded="0" value="Edit profile">
+        <v-list-item @click="navigateToProfile" color="primary" rounded="0" value="Edit profile">
           <template v-slot:prepend>
             <EditOutlined :style="{ fontSize: '14px' }" class="mr-4" />
           </template>
           <v-list-item-title class="text-body-1"> Chỉnh sửa thông tin</v-list-item-title>
         </v-list-item>
 
-        <v-list-item color="primary" rounded="0" value="View Profile">
+        <v-list-item @click="navigateToProfile" color="primary" rounded="0" value="View Profile">
           <template v-slot:prepend>
             <UserOutlined :style="{ fontSize: '14px' }" class="mr-4" />
           </template>
@@ -157,4 +197,3 @@ const handleLogout = () => {
     </perfect-scrollbar>
   </div>
 </template>
-

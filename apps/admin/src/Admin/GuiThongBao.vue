@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Toaster } from '@/components/ui/sonner'
 import 'vue-sonner/style.css'
+import { logActivity } from '@/utils/activityLogger'
 
 const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
 
@@ -113,6 +114,12 @@ async function onSubmit() {
   }
 
   sending.value = true
+  const khachName = selectedKhach.value?.hoTen || maKh.value || '';
+  const channels = [
+    sendViaGmail.value && 'Gmail',
+    sendViaZalo.value && 'Zalo'
+  ].filter(Boolean).join(', ');
+
   try {
     const res = await axios.post<SendResponse>(
       `${API}/api/ThongBao/Send`,
@@ -144,6 +151,7 @@ async function onSubmit() {
     const allOk = results.length ? results.every((r) => r.trangThai === 1) : data.success
 
     if (data.success && allOk && zaloSimulated && gmailR?.trangThai === 1) {
+      logActivity("Gửi thông báo", `Đã gửi thông báo thành công cho khách hàng ${khachName} qua kênh ${channels}`, "Thông báo");
       toast.success('Đã gửi Gmail thành công.')
       toast.warning('Zalo: đang chế độ thử (HttpTest)', {
         description:
@@ -151,6 +159,7 @@ async function onSubmit() {
         duration: 12000,
       })
     } else if (data.success && allOk && zaloSimulated && !sendViaGmail.value) {
+      logActivity("Gửi thông báo", `Đã gửi thông báo thành công cho khách hàng ${khachName} qua kênh ${channels} (Simulated)`, "Thông báo");
       toast.warning('Zalo: chưa gửi thật (HttpTest)', {
         description:
           'Chỉ gọi URL thử (httpbin), không tin trên app. Gửi thật: Zns (OA + template) hoặc Personal (bridge zca-js + BaseUrl).',
@@ -163,6 +172,7 @@ async function onSubmit() {
             `${r.kenhGui}: ${r.trangThai === 1 ? 'OK' : 'lỗi'}${r.chiTiet ? ` — ${r.chiTiet}` : ''}`,
         )
         .join('\n')
+      logActivity("Gửi thông báo", `Đã gửi thông báo thành công cho khách hàng ${khachName} qua kênh ${channels}`, "Thông báo");
       toast.success(data.message || 'Đã gửi thông báo.', detail ? { description: detail } : undefined)
     } else if (data.success) {
       const detail = results
@@ -171,6 +181,7 @@ async function onSubmit() {
             `${r.kenhGui}: ${r.trangThai === 1 ? 'OK' : 'lỗi'}${r.chiTiet ? ` — ${r.chiTiet}` : ''}`,
         )
         .join('\n')
+      logActivity("Gửi thông báo", `Đã gửi thông báo cho khách hàng ${khachName} qua kênh ${channels} (Một số kênh thất bại)`, "Thông báo");
       toast.warning(data.message || 'Một số kênh thất bại.', { description: detail })
     } else {
       const detail = results
@@ -179,17 +190,22 @@ async function onSubmit() {
             `${r.kenhGui}: ${r.trangThai === 1 ? 'OK' : 'lỗi'}${r.chiTiet ? ` — ${r.chiTiet}` : ''}`,
         )
         .join('\n')
+      logActivity("Gửi thông báo", `Thất bại khi gửi thông báo cho khách hàng ${khachName} qua kênh ${channels} - Lỗi: ${data.message || ''}`, "Thông báo", "Thất bại");
       toast.error(data.message || 'Gửi thất bại.', detail ? { description: detail } : undefined)
     }
   } catch (e: unknown) {
+    let errorMsg = 'Lỗi kết nối hoặc máy chủ.';
     if (axios.isAxiosError(e) && e.response?.status === 404) {
-      toast.error('Không tìm thấy khách hàng.')
+      errorMsg = 'Không tìm thấy khách hàng.';
+      toast.error(errorMsg)
     } else if (axios.isAxiosError(e) && e.response?.status === 400) {
       const msg = (e.response.data as { message?: string })?.message
-      toast.error(msg || 'Dữ liệu không hợp lệ.')
+      errorMsg = msg || 'Dữ liệu không hợp lệ.';
+      toast.error(errorMsg)
     } else {
-      toast.error('Lỗi kết nối hoặc máy chủ.')
+      toast.error(errorMsg)
     }
+    logActivity("Gửi thông báo", `Thất bại khi gửi thông báo cho khách hàng ${khachName} qua kênh ${channels} - Lỗi: ${errorMsg}`, "Thông báo", "Thất bại");
   } finally {
     sending.value = false
   }

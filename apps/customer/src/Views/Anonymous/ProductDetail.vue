@@ -4,6 +4,10 @@ import { useRoute, useRouter } from "vue-router";
 import axios from "axios";
 import { addToCartDB } from "@/Views/Anonymous/CSDL/cartDB";
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
+import { useWishlistStore } from "@/stores/useWishlistStore";
+import { Heart } from "lucide-vue-next";
+
+const wishlistStore = useWishlistStore();
 
 const API   = import.meta.env.VITE_API_URL;
 const route = useRoute();
@@ -114,7 +118,7 @@ const formatSinglePrice = (price?: number | null) =>
   price != null ? Number(price).toLocaleString("vi-VN") + "đ" : "—";
 
 const selectBienThe = (bt: any) => {
-  // Biến thể hết hàng vẫn cho chọn để xem ảnh/giá, nhưng canOrder sẽ false → nút disabled
+  if (bt.soLuongTon === 0) return;
   // Toggle: click lại biến thể đang chọn → bỏ chọn (chỉ áp dụng nếu có > 1 biến thể)
   if (selectedBienThe.value?.maBienThe === bt.maBienThe && product.value?.bienThes?.length > 1) {
     selectedBienThe.value = null;
@@ -126,10 +130,8 @@ const selectBienThe = (bt: any) => {
   // Xây danh sách ảnh slide: ảnh đại diện trước, rồi gallery BT
   const imgs: string[] = [];
   if (bt.hinhAnhDaiDien) imgs.push(bt.hinhAnhDaiDien);
-  if (Array.isArray(bt.hinhAnhs)) {
-    for (const h of bt.hinhAnhs) {
-      if (h.duongDan && !imgs.includes(h.duongDan)) imgs.push(h.duongDan);
-    }
+  for (const h of bt.hinhAnhs ?? []) {
+    if (h.duongDan && !imgs.includes(h.duongDan)) imgs.push(h.duongDan);
   }
   btImageList.value = imgs;
   slideIndex.value  = 0;
@@ -153,7 +155,7 @@ const addToCart = async (isBuyNow = false) => {
   const customer = getCustomerInfo();
   
   const formattedItem = {
-    id: selectedBienThe.value.maBienThe || selectedBienThe.value.id,
+    id: selectedBienThe.value.maBienThe,
     maSanPham: product.value.maSp,
     tenItem: `${product.value.tenSp} - ${selectedBienThe.value.tenBienThe}`,
     gia: selectedBienThe.value.giaBan,
@@ -289,10 +291,7 @@ watch(
             <p class="text-xs text-gray-400 italic mb-4" v-else>Chưa có đánh giá</p>
 
             <!-- GIÁ -->
-            <span
-              class="font-semibold tracking-tight mb-8 leading-none"
-              :class="priceDisplay.isRange ? 'text-xl' : 'text-3xl'"
-            >
+            <span class="text-xl font-light mb-8" :class="{ 'text-lg': priceDisplay.isRange }">
               {{ priceDisplay.text }}
             </span>
 
@@ -310,15 +309,12 @@ watch(
                   :key="bt.maBienThe"
                   class="relative border px-3 py-2 cursor-pointer transition-colors text-left"
                   :class="[
-                    selectedBienThe?.maBienThe === bt.maBienThe
-                      ? (bt.soLuongTon === 0 ? 'border-gray-400' : 'border-black')
-                      : 'border-gray-200 hover:border-gray-400',
-                    bt.soLuongTon === 0 ? 'opacity-50' : ''
+                    selectedBienThe?.maBienThe === bt.maBienThe ? 'border-black' : 'border-gray-200 hover:border-gray-400',
+                    bt.soLuongTon === 0 ? 'opacity-40 cursor-not-allowed' : ''
                   ]"
                   @click="selectBienThe(bt)"
                 >
-                  <div class="text-xs font-medium uppercase tracking-wide truncate mb-0.5"
-                       :class="bt.soLuongTon === 0 ? 'line-through text-gray-400' : ''">{{ bt.tenBienThe }}</div>
+                  <div class="text-xs font-medium uppercase tracking-wide truncate mb-0.5">{{ bt.tenBienThe }}</div>
                   <div class="text-xs text-gray-600 mb-0.5">{{ formatSinglePrice(bt.giaBan) }}</div>
                   <div class="text-[10px] uppercase tracking-wide" :class="bt.soLuongTon > 0 ? 'text-gray-400' : 'text-gray-300'">
                     {{ bt.soLuongTon > 0 ? `Còn ${bt.soLuongTon}` : 'Hết' }}
@@ -338,15 +334,6 @@ watch(
                   <line x1="12" y1="8" x2="12.01" y2="8"/>
                 </svg>
                 Vui lòng chọn một loại sản phẩm để thêm vào giỏ
-              </p>
-              <!-- Cảnh báo khi chọn biến thể hết hàng -->
-              <p class="text-[11px] text-red-400 mt-3 flex items-center gap-1.5" v-if="selectedBienThe && selectedBienThe.soLuongTon === 0">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0">
-                  <circle cx="12" cy="12" r="10"/>
-                  <line x1="12" y1="8" x2="12" y2="12"/>
-                  <line x1="12" y1="16" x2="12.01" y2="16"/>
-                </svg>
-                Lựa chọn này tạm thời hết hàng, vui lòng chọn loại khác
               </p>
             </div>
 
@@ -383,6 +370,21 @@ watch(
                 :disabled="!canOrder"
               >
                 Mua ngay
+              </button>
+              <button
+                @click="wishlistStore.toggleProductFavorite(product)"
+                class="w-14 h-14 flex items-center justify-center rounded-full transition-all duration-300 shadow-md hover:scale-105"
+                :class="wishlistStore.isProductFavorite(product.maSp) 
+                  ? 'bg-red-500 border border-red-500 text-white hover:bg-red-600' 
+                  : 'bg-red-50 border border-red-200 text-red-500 hover:bg-red-100'"
+                :title="wishlistStore.isProductFavorite(product.maSp) ? 'Xóa khỏi yêu thích' : 'Thêm vào yêu thích'"
+              >
+                <Heart 
+                  :size="22" 
+                  :stroke-width="wishlistStore.isProductFavorite(product.maSp) ? 0 : 2" 
+                  :fill="wishlistStore.isProductFavorite(product.maSp) ? '#ffffff' : 'none'" 
+                  :class="{'animate-bounce': wishlistStore.isProductFavorite(product.maSp)}" 
+                />
               </button>
             </div>
 

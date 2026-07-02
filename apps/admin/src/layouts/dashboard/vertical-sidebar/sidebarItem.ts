@@ -12,7 +12,9 @@ import {
   ScissorOutlined,
   NotificationOutlined,
   DollarOutlined,
-  MessageOutlined
+  ShopOutlined,
+  MessageOutlined,
+  HistoryOutlined
 } from '@ant-design/icons-vue';
 
 export interface menu {
@@ -48,6 +50,11 @@ const sidebarItem: menu[] = [
     icon: UserOutlined,
     to: '/admin/khach-hang'
   },
+  {
+    title: 'Quản lý hoạt động',
+    icon: HistoryOutlined,
+    to: '/admin/quan-ly-hoat-dong'
+  },
   { header: 'Dịch vụ' },
   {
     title: 'Quản lý Dịch vụ',
@@ -74,6 +81,11 @@ const sidebarItem: menu[] = [
     title: 'Danh mục sản phẩm',
     icon: ScissorOutlined,
     to: '/admin/categoriesProduct'
+  },
+  {
+    title: 'Nhà cung cấp',
+    icon: ShopOutlined,
+    to: '/admin/nha-cung-cap'
   },
   {
     title: 'Quản lý kho',
