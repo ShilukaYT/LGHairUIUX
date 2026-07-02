@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, reactive, onMounted } from "vue";
 import axios from "axios";
+import { logActivity } from "@/utils/activityLogger";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -217,7 +218,6 @@ function closeModal() { modal.open = false; }
 
 async function saveDM() {
   if (!validate()) {
-    // Scroll đến lỗi đầu tiên nếu cần
     showToast("Vui lòng kiểm tra lại thông tin trong form.", "error");
     return;
   }
@@ -232,12 +232,15 @@ async function saveDM() {
       await axios.put(`${API}/api/QuanLyDanhMucSP/${editingId.value}`, fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
+      logActivity("Cập nhật danh mục sản phẩm", `Đã cập nhật danh mục sản phẩm ${form.tenDanhMuc} (Mã: ${editingId.value})`, "Sản phẩm");
       showToast("Cập nhật danh mục thành công!");
     } else {
-      fd.append("MaDMSP", form.maDMSP.trim().toUpperCase());
+      const maDMSPUpper = form.maDMSP.trim().toUpperCase();
+      fd.append("MaDMSP", maDMSPUpper);
       await axios.post(`${API}/api/QuanLyDanhMucSP`, fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
+      logActivity("Thêm danh mục sản phẩm", `Đã thêm danh mục sản phẩm mới ${form.tenDanhMuc} (Mã: ${maDMSPUpper})`, "Sản phẩm");
       showToast("Thêm danh mục thành công!");
     }
     closeModal(); await loadData();
@@ -245,7 +248,13 @@ async function saveDM() {
     const status = e.response?.status;
     const msg    = e.response?.data?.message ?? "";
 
-    // Map lỗi server về đúng field nếu nhận ra
+    logActivity(
+      editingId.value ? "Cập nhật danh mục sản phẩm" : "Thêm danh mục sản phẩm",
+      `Thất bại khi ${editingId.value ? 'cập nhật' : 'thêm'} danh mục sản phẩm ${form.tenDanhMuc} - Lỗi: ${msg || e.message || ''}`,
+      "Sản phẩm",
+      "Thất bại"
+    );
+
     if (status === 409 || msg.toLowerCase().includes("mã")) {
       errors.maDMSP = msg || "Mã danh mục đã tồn tại trên server.";
       touched.maDMSP = true;
@@ -264,20 +273,36 @@ async function deleteDM(dm) {
   if (!confirm(`Xóa danh mục "${dm.tenDanhMuc}"?\nLưu ý: danh mục có sản phẩm sẽ không xóa được.`)) return;
   try {
     await axios.delete(`${API}/api/QuanLyDanhMucSP/${dm.maDMSP}`);
+    logActivity("Xóa danh mục sản phẩm", `Đã xóa danh mục sản phẩm ${dm.tenDanhMuc} (Mã: ${dm.maDMSP})`, "Sản phẩm");
     showToast("Đã xóa danh mục!");
     await loadData();
   } catch (e) {
     const msg = e.response?.data?.message ?? "Lỗi khi xóa danh mục!";
+    logActivity("Xóa danh mục sản phẩm", `Thất bại khi xóa danh mục sản phẩm ${dm.tenDanhMuc} (Mã: ${dm.maDMSP}) - Lỗi: ${msg}`, "Sản phẩm", "Thất bại");
     showToast(msg, "error");
   }
 }
 
 async function toggleStatus(dm) {
+  const newStatus = dm.trangThai === 1 ? 0 : 1;
   try {
-    await axios.patch(`${API}/api/QuanLyDanhMucSP/${dm.maDMSP}/trangthai`, { trangThai: dm.trangThai === 1 ? 0 : 1 });
+    await axios.patch(`${API}/api/QuanLyDanhMucSP/${dm.maDMSP}/trangthai`, { trangThai: newStatus });
+    logActivity(
+      "Đổi trạng thái danh mục sản phẩm",
+      `Đã chuyển trạng thái danh mục sản phẩm ${dm.tenDanhMuc} (Mã: ${dm.maDMSP}) sang ${newStatus === 1 ? 'Đang hiện' : 'Tạm ẩn'}`,
+      "Sản phẩm"
+    );
     await loadData();
     showToast("Đã cập nhật trạng thái!");
-  } catch { showToast("Lỗi cập nhật trạng thái!", "error"); }
+  } catch (err) {
+    logActivity(
+      "Đổi trạng thái danh mục sản phẩm",
+      `Thất bại khi chuyển trạng thái danh mục sản phẩm ${dm.tenDanhMuc} (Mã: ${dm.maDMSP}) sang ${newStatus === 1 ? 'Đang hiện' : 'Tạm ẩn'} - Lỗi: ${err.message || ''}`,
+      "Sản phẩm",
+      "Thất bại"
+    );
+    showToast("Lỗi cập nhật trạng thái!", "error");
+  }
 }
 
 // ══ INIT ══════════════════════════════════════════════════════════

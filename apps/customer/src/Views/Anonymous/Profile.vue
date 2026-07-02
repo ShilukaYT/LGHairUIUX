@@ -1,14 +1,26 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { User, Package, Calendar, LogOut, Star } from 'lucide-vue-next';
 import axios from 'axios';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import LichSuDanhGia from './Profile/lichsudanhgia.vue';
 import LichSuDanhGiaSanPham from './Profile/lichsudanhgiasanpham.vue';
 
+const route = useRoute();
 const router = useRouter();
 const activeTab = ref('profile');
 const reviewSubTab = ref<'service' | 'product'>('service');
+
+watch(
+  () => route.query.tab,
+  (newTab) => {
+    if (newTab) {
+      activeTab.value = newTab as string;
+    } else {
+      activeTab.value = 'profile';
+    }
+  }
+);
 
 const profileForm = ref({
   firstName: '',
@@ -80,6 +92,9 @@ const loadLocalProfile = () => {
 
 onMounted(() => {
   fetchProfile();
+  if (route.query.tab) {
+    activeTab.value = route.query.tab as string;
+  }
 });
 
 const saveProfile = async () => {
@@ -155,7 +170,7 @@ const handleLogoutAll = async () => {
 
 <template>
   <div class="w-full bg-[#fcfcfc] min-h-screen py-10 lg:py-16 animate-in fade-in duration-500">
-    <div class="max-w-[1024px] mx-auto px-4 lg:px-8">
+    <div class="max-w-[1440px] mx-auto px-4 lg:px-8">
 
       <div class="flex flex-col lg:flex-row gap-8 lg:gap-12">
 
@@ -181,8 +196,8 @@ const handleLogoutAll = async () => {
               <User :size="16" :stroke-width="1.5" />
               Hồ Sơ Của Tôi
             </button>
-            <button @click="activeTab = 'orders'"
-              :class="['flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest transition-all rounded-sm', activeTab === 'orders' ? 'bg-white border-l-2 border-black text-black shadow-sm font-semibold' : 'text-gray-600 hover:text-black hover:bg-gray-100/50 border-l-2 border-transparent']">
+            <button @click="router.push({ name: 'lich_su_mua_hang' })"
+              class="flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest transition-all rounded-sm text-gray-600 hover:text-black hover:bg-gray-100/50 border-l-2 border-transparent">
               <Package :size="16" :stroke-width="1.5" />
               Đơn Hàng
             </button>

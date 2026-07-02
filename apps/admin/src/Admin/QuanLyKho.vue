@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, reactive, onMounted } from "vue";
 import axios from "axios";
+import { logActivity } from "@/utils/activityLogger";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -358,9 +359,11 @@ async function savePN() {
       })),
     };
     await axios.post(`${API}/api/QuanLyKho/phieunhap`, payload);
+    logActivity("Tạo phiếu nhập kho", `Đã tạo phiếu nhập kho mới ${pnForm.maPn} với ${pnForm.chiTiet.length} dòng hàng, tổng tiền ${fmt(tongTienForm.value)}`, "Quản lý kho");
     showToast("Tạo phiếu nhập thành công!");
     closePnModal(); await loadPhieuNhap();
   } catch (err) {
+    logActivity("Tạo phiếu nhập kho", `Thất bại khi tạo phiếu nhập kho ${pnForm.maPn} - Lỗi: ${err.message || ''}`, "Quản lý kho", "Thất bại");
     showToast(err.response?.data?.message || "Lỗi khi tạo phiếu nhập!", "error");
   } finally { savingPN.value = false; }
 }
@@ -369,28 +372,40 @@ async function duyetPN(p) {
   if (!confirm(`Duyệt phiếu nhập "${p.maPn}"? Tồn kho sẽ được cập nhật.`)) return;
   try {
     await axios.post(`${API}/api/QuanLyKho/phieunhap/${p.maPn}/duyet`);
+    logActivity("Duyệt phiếu nhập kho", `Đã duyệt phiếu nhập kho ${p.maPn}, cập nhật tồn kho`, "Quản lý kho");
     showToast("Duyệt phiếu nhập thành công!");
     await loadPhieuNhap();
     if (activeTab.value === "tonkho") loadTonKho();
     if (activeTab.value === "canhbao") loadCanhBao();
     if (activeTab.value === "lichsu") loadLichSu();
-  } catch (err) { showToast(err.response?.data?.message || "Lỗi khi duyệt phiếu!", "error"); }
+  } catch (err) {
+    logActivity("Duyệt phiếu nhập kho", `Thất bại khi duyệt phiếu nhập kho ${p.maPn} - Lỗi: ${err.message || ''}`, "Quản lý kho", "Thất bại");
+    showToast(err.response?.data?.message || "Lỗi khi duyệt phiếu!", "error");
+  }
 }
 
 async function huyPN(p) {
   if (!confirm(`Hủy phiếu nhập "${p.maPn}"?`)) return;
   try {
     await axios.post(`${API}/api/QuanLyKho/phieunhap/${p.maPn}/huy`);
+    logActivity("Hủy phiếu nhập kho", `Đã hủy phiếu nhập kho ${p.maPn}`, "Quản lý kho");
     showToast("Đã hủy phiếu nhập!"); await loadPhieuNhap();
-  } catch (err) { showToast(err.response?.data?.message || "Lỗi khi hủy phiếu!", "error"); }
+  } catch (err) {
+    logActivity("Hủy phiếu nhập kho", `Thất bại khi hủy phiếu nhập kho ${p.maPn} - Lỗi: ${err.message || ''}`, "Quản lý kho", "Thất bại");
+    showToast(err.response?.data?.message || "Lỗi khi hủy phiếu!", "error");
+  }
 }
 
 async function deletePN(p) {
   if (!confirm(`Xóa phiếu nhập "${p.maPn}"? Hành động không thể hoàn tác.`)) return;
   try {
     await axios.delete(`${API}/api/QuanLyKho/phieunhap/${p.maPn}`);
+    logActivity("Xóa phiếu nhập kho", `Đã xóa phiếu nhập kho ${p.maPn}`, "Quản lý kho");
     showToast("Đã xóa phiếu nhập!"); await loadPhieuNhap();
-  } catch (err) { showToast(err.response?.data?.message || "Lỗi khi xóa phiếu!", "error"); }
+  } catch (err) {
+    logActivity("Xóa phiếu nhập kho", `Thất bại khi xóa phiếu nhập kho ${p.maPn} - Lỗi: ${err.message || ''}`, "Quản lý kho", "Thất bại");
+    showToast(err.response?.data?.message || "Lỗi khi xóa phiếu!", "error");
+  }
 }
 
 // ── Tìm kiếm biến thể để thêm vào chi tiết phiếu nhập ──────────────
@@ -517,13 +532,21 @@ async function saveNcc() {
     };
     if (editingNccId.value) {
       await axios.put(`${API}/api/QuanLyKho/nhacungcap/${editingNccId.value}`, dto);
+      logActivity("Cập nhật nhà cung cấp", `Đã cập nhật nhà cung cấp ${nccForm.tenNcc} (Mã: ${editingNccId.value})`, "Nhà cung cấp");
       showToast("Cập nhật nhà cung cấp thành công!");
     } else {
       await axios.post(`${API}/api/QuanLyKho/nhacungcap`, dto);
+      logActivity("Thêm nhà cung cấp", `Đã thêm nhà cung cấp mới ${nccForm.tenNcc} (Mã: ${nccForm.maNcc})`, "Nhà cung cấp");
       showToast("Thêm nhà cung cấp thành công!");
     }
     closeNccModal(); await loadNcc();
   } catch (err) {
+    logActivity(
+      editingNccId.value ? "Cập nhật nhà cung cấp" : "Thêm nhà cung cấp",
+      `Thất bại khi ${editingNccId.value ? 'cập nhật' : 'thêm'} nhà cung cấp ${nccForm.tenNcc} - Lỗi: ${err.message || ''}`,
+      "Nhà cung cấp",
+      "Thất bại"
+    );
     showToast(err.response?.data?.message || "Lỗi khi lưu nhà cung cấp!", "error");
   } finally { savingNcc.value = false; }
 }
@@ -532,20 +555,27 @@ async function deleteNcc(n) {
   if (!confirm(`Xóa nhà cung cấp "${n.tenNcc}"?`)) return;
   try {
     await axios.delete(`${API}/api/QuanLyKho/nhacungcap/${n.maNcc}`);
+    logActivity("Xóa nhà cung cấp", `Đã xóa nhà cung cấp ${n.tenNcc} (Mã: ${n.maNcc})`, "Nhà cung cấp");
     showToast("Đã xóa nhà cung cấp!"); await loadNcc();
   } catch (err) {
+    logActivity("Xóa nhà cung cấp", `Thất bại khi xóa nhà cung cấp ${n.tenNcc} (Mã: ${n.maNcc}) - Lỗi: ${err.message || ''}`, "Nhà cung cấp", "Thất bại");
     showToast(err.response?.data?.message || "Lỗi khi xóa nhà cung cấp!", "error");
   }
 }
 
 async function toggleStatusNcc(n) {
+  const newStatus = n.trangThai ? 0 : 1;
   try {
     await axios.put(`${API}/api/QuanLyKho/nhacungcap/${n.maNcc}`, {
       maNcc: n.maNcc, tenNcc: n.tenNcc, soDienThoai: n.soDienThoai,
-      diaChi: n.diaChi, email: n.email, trangThai: n.trangThai ? 0 : 1,
+      diaChi: n.diaChi, email: n.email, trangThai: newStatus,
     });
+    logActivity("Đổi trạng thái nhà cung cấp", `Đã đổi trạng thái nhà cung cấp ${n.tenNcc} sang ${newStatus ? 'Đang hoạt động' : 'Ngừng hợp tác'}`, "Nhà cung cấp");
     showToast("Đã cập nhật trạng thái!"); await loadNcc();
-  } catch { showToast("Lỗi khi đổi trạng thái!", "error"); }
+  } catch (err) {
+    logActivity("Đổi trạng thái nhà cung cấp", `Thất bại khi đổi trạng thái nhà cung cấp ${n.tenNcc} - Lỗi: ${err.message || ''}`, "Nhà cung cấp", "Thất bại");
+    showToast("Lỗi khi đổi trạng thái!", "error");
+  }
 }
 
 // ══ TAB SWITCH ═════════════════════════════════════════════════════

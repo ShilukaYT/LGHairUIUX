@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { logActivity } from '@/utils/activityLogger'
 
 const API_BASE = 'https://localhost:7196/api/admin/vouchers'
 
@@ -300,15 +301,25 @@ async function save() {
     const payload = buildPayload(!isEdit.value)
     if (isEdit.value && editingCode.value) {
       await axios.put(`${API_BASE}/${encodeURIComponent(editingCode.value)}`, payload)
+      logActivity("Cập nhật voucher", `Đã cập nhật voucher ${editingCode.value}`, "Voucher");
       toast.value = 'Đã cập nhật voucher.'
     } else {
       await axios.post(API_BASE, payload)
+      const maVoucherNew = String(payload.maCode || '').toUpperCase();
+      logActivity("Thêm voucher", `Đã tạo voucher mới (Mã: ${maVoucherNew})`, "Voucher");
       toast.value = 'Đã tạo voucher.'
     }
     closeModal()
     await load()
   } catch (e: unknown) {
-    saveError.value = formatApiError(e)
+    const errorMsg = formatApiError(e)
+    logActivity(
+      isEdit.value ? "Cập nhật voucher" : "Thêm voucher",
+      `Thất bại khi ${isEdit.value ? 'cập nhật' : 'tạo'} voucher - Lỗi: ${errorMsg}`,
+      "Voucher",
+      "Thất bại"
+    );
+    saveError.value = errorMsg
   } finally {
     saving.value = false
   }
@@ -348,10 +359,13 @@ async function remove(row: AdminVoucherRow) {
   toast.value = ''
   try {
     await axios.delete(`${API_BASE}/${encodeURIComponent(row.maCode)}`)
+    logActivity("Xóa voucher", `Đã vô hiệu hóa/xóa voucher ${row.maCode}`, "Voucher");
     toast.value = MSG_VOUCHER_VO_HIEU
     await load()
   } catch (e: unknown) {
-    alert(formatApiError(e))
+    const errorMsg = formatApiError(e)
+    logActivity("Xóa voucher", `Thất bại khi xóa/vô hiệu hóa voucher ${row.maCode} - Lỗi: ${errorMsg}`, "Voucher", "Thất bại");
+    alert(errorMsg)
   }
 }
 

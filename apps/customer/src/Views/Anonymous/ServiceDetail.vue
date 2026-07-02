@@ -4,11 +4,14 @@ const API = import.meta.env.VITE_API_URL;
 // import ReviewList from "./ReviewList.vue";
 import { getCartDB, addToCartDB } from "@/Views/Anonymous/CSDL/cartDB";
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
+import { useWishlistStore } from "@/stores/useWishlistStore";
+import { Heart } from "lucide-vue-next";
 
 export default {
   name: "ServiceDetail",
   components: {
     // ReviewList,
+    Heart,
   },
   data() {
     return {
@@ -32,6 +35,12 @@ export default {
         this.fetchService(newId);
       },
     },
+  },
+
+  computed: {
+    wishlistStore() {
+      return useWishlistStore();
+    }
   },
 
   async mounted() {
@@ -78,7 +87,6 @@ export default {
           moTaChiTiet: data.moTa,
           images: data.images,
           activeImage: data.images?.[0],
-          isHot: data.isHot,
         };
 
         this.kieuTocs = data.kieuTocs ?? [];
@@ -193,20 +201,16 @@ export default {
         <h1 class="font-playfair service-title-lg">{{ service.tenDv }}</h1>
         <div class="title-underline mb-3"></div>
 
-        <!-- HOT BADGE -->
-        <div v-if="service.isHot" class="hot-badge-detail mb-3">
-          <i class="fas fa-fire"></i> HOT
-        </div>
-
         <div class="price-container-luxury mb-3">
-          <template v-if="service.phanTramGiam">
-            <span class="old-price-inline">{{ formatPrice(service.giaGoc) }}</span>
-            <span class="new-price-lg" style="color: var(--danger)">{{ formatPrice(service.gia) }}</span>
-            <span class="discount-tag-premium">-{{ service.phanTramGiam }}%</span>
-          </template>
-          <template v-else>
-            <span class="new-price-lg">{{ formatPrice(service.gia) }}</span>
-          </template>
+          <span class="new-price-lg">{{ formatPrice(service.gia) }}</span>
+
+          <span v-if="service.giaGoc > service.gia" class="old-price-inline">
+            {{ formatPrice(service.giaGoc) }}
+          </span>
+
+          <span v-if="service.phanTramGiam" class="discount-tag-premium">
+            -{{ service.phanTramGiam }}%
+          </span>
         </div>
 
         <div class="service-meta mb-3">
@@ -302,6 +306,19 @@ export default {
         </button>
         <button class="btn-book-now" @click="bookNow">
           <i class="fas fa-calendar-check me-2"></i>ĐẶT LỊCH NGAY
+        </button>
+        <button 
+          @click="wishlistStore.toggleServiceFavorite(service)"
+          class="btn-favorite-detail d-flex align-items-center justify-content-center"
+          :class="{ 'is-favorite': wishlistStore.isServiceFavorite(service.maDv) }"
+          :title="wishlistStore.isServiceFavorite(service.maDv) ? 'Xóa khỏi yêu thích' : 'Thêm vào yêu thích'"
+        >
+          <Heart 
+            :size="22" 
+            :stroke-width="wishlistStore.isServiceFavorite(service.maDv) ? 0 : 2" 
+            :fill="wishlistStore.isServiceFavorite(service.maDv) ? '#ffffff' : 'none'" 
+            :class="wishlistStore.isServiceFavorite(service.maDv) ? 'text-white animate-bounce' : 'text-red-500'" 
+          />
         </button>
       </div>
 
@@ -404,10 +421,6 @@ export default {
                   :alt="s.tenDv"
                   class="img-main-card"
                 />
-                <!-- HOT BADGE -->
-                <div v-if="s.isHot" class="hot-badge-sm">
-                  <i class="fas fa-fire"></i> HOT
-                </div>
                 <div v-if="s.phanTramGiam" class="discount-ribbon">
                   <span>-{{ s.phanTramGiam }}%</span>
                 </div>
@@ -445,15 +458,20 @@ export default {
       <!-- <ReviewList v-if="$route.params.id" :serviceId="$route.params.id" /> -->
     </div>
 
-
+    <!-- FLOATING CART + SIDEBAR (giữ nguyên từ ChiTietDichVu) -->
+    <div class="floating-cart-btn" @click="openCart">
+      <i class="fas fa-shopping-bag"></i>
+      <span class="cart-count">{{ cartItems.length }}</span>
+    </div>
   </div>
 </template>
 
 <style scoped>
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Jost:wght@200;300;400;500;600&display=swap");
+
 /* =========================================================
    FONT — Cormorant Garamond (heading) + Jost (body)
    ========================================================= */
-@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Jost:wght@200;300;400;500;600&display=swap");
 /* Fix Bootstrap row bên trong scoped component */
 .combo-items-list li {
   display: flex;
@@ -554,7 +572,6 @@ export default {
   --line: #e7e5e2;
   --bg: #ffffff;
   --bg-soft: #fafafa;
-  --danger: #d92d20;
 
   font-family: "Jost", sans-serif;
   background: var(--bg);
@@ -673,11 +690,10 @@ export default {
 
 .new-price-lg {
   font-family: "Jost", sans-serif;
-  font-size: 2.2rem;
-  font-weight: 700;
+  font-size: 1.7rem;
+  font-weight: 500;
   color: var(--ink);
-  letter-spacing: -0.5px;
-  line-height: 1;
+  letter-spacing: 0.5px;
 }
 
 .old-price-inline {
@@ -691,7 +707,7 @@ export default {
 }
 
 .discount-tag-premium {
-  background: var(--danger);
+  background: var(--ink);
   color: #fff;
   font-family: "Jost", sans-serif;
   font-size: 0.68rem;
@@ -966,6 +982,39 @@ export default {
   transform: translateY(-2px);
 }
 
+.btn-favorite-detail {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 56px;
+  width: 56px;
+  background-color: #fef2f2; /* bg-red-50 equivalent */
+  color: #ef4444; /* text-red-500 */
+  border: 1px solid #fca5a5; /* border-red-200 equivalent */
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.btn-favorite-detail:hover {
+  background-color: #fee2e2;
+  border-color: #ef4444;
+  transform: scale(1.05) translateY(-2px);
+}
+
+.btn-favorite-detail.is-favorite {
+  background-color: #ef4444;
+  color: #ffffff;
+  border-color: #ef4444;
+}
+
+.btn-favorite-detail.is-favorite:hover {
+  background-color: #dc2626;
+  border-color: #dc2626;
+  transform: scale(1.05) translateY(-2px);
+}
+
 /* Legacy (kept for compatibility) */
 .btn-booking-premium {
   display: inline-block;
@@ -1042,7 +1091,7 @@ export default {
   display: block;
   width: 112px;
   padding: 6px 0;
-  background: var(--danger);
+  background: var(--ink);
   color: #fff;
   font-family: "Jost", sans-serif;
   font-weight: 500;
@@ -1142,7 +1191,7 @@ export default {
 }
 
 .combo-discount-badge-gold {
-  background: var(--danger);
+  background: var(--ink);
   color: #fff;
   font-family: "Jost", sans-serif;
   font-size: 0.65rem;
@@ -1216,26 +1265,33 @@ export default {
   transform: scale(1.05);
 }
 
-/* Discount ribbon — đồng bộ với Services.vue */
+/* Discount ribbon */
 .discount-ribbon {
   position: absolute;
-  top: 14px;
-  right: 14px;
-  z-index: 5;
+  top: 0;
+  right: 0;
+  width: 80px;
+  height: 80px;
+  overflow: hidden;
+  z-index: 2;
 }
 
 .discount-ribbon span {
+  position: absolute;
   display: block;
-  background: var(--danger);
+  width: 112px;
+  padding: 6px 0;
+  background: var(--ink);
   color: #fff;
   font-family: "Jost", sans-serif;
-  font-weight: 600;
-  font-size: 10px;
-  letter-spacing: 2px;
+  font-weight: 500;
+  font-size: 0.6rem;
+  letter-spacing: 1.5px;
   text-align: center;
   text-transform: uppercase;
-  padding: 7px 14px;
-  border-radius: 0;
+  top: 19px;
+  right: -26px;
+  transform: rotate(45deg);
   box-shadow: none;
 }
 
@@ -1330,44 +1386,6 @@ export default {
 }
 
 /* =========================================================
-   HOT BADGE — đồng bộ với Services.vue
-   ========================================================= */
-/* Badge HOT trên trang chi tiết (dưới tiêu đề) */
-.hot-badge-detail {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--danger);
-  color: #fff;
-  padding: 7px 14px;
-  font-family: "Jost", sans-serif;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  border-radius: 0;
-  box-shadow: none;
-}
-
-/* Badge HOT nhỏ trên card dịch vụ gợi ý */
-.hot-badge-sm {
-  position: absolute;
-  top: 14px;
-  left: 14px;
-  z-index: 5;
-  background: var(--danger);
-  color: #fff;
-  padding: 7px 14px;
-  font-family: "Jost", sans-serif;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  border-radius: 0;
-  box-shadow: none;
-}
-
-/* =========================================================
    FLOATING CART
    ========================================================= */
 .floating-cart-btn {
@@ -1389,6 +1407,27 @@ export default {
   transition: 0.3s;
 }
 
+.floating-cart-btn:hover {
+  transform: scale(1.05);
+  background: var(--ink-soft);
+}
+
+.cart-count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 600;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border: 1px solid var(--ink);
+}
 
 /* =========================================================
    RESPONSIVE
@@ -1427,7 +1466,7 @@ export default {
     height: 160px;
   }
   .new-price-lg {
-    font-size: 1.6rem;
+    font-size: 1.35rem;
   }
   .service-tieude-title {
     font-size: 1.5rem;
@@ -1505,7 +1544,7 @@ export default {
     height: 160px;
   }
   .new-price-lg {
-    font-size: 1.6rem;
+    font-size: 1.35rem;
   }
   .service-tieude-title {
     font-size: 1.5rem;

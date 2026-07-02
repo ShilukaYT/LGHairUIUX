@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import axios from 'axios'
 import Swal from 'sweetalert2'
 import { Check, X, RotateCcw, Search, LogOut, Fingerprint, CalendarDays } from 'lucide-vue-next'
+import { logActivity } from '@/utils/activityLogger'
 
 // --- CẤU HÌNH API ---
 const API_BASE_URL = 'https://localhost:7196/api/admin/lich-lam-viec'
@@ -204,6 +205,13 @@ const submitAttendance = async () => {
   }
 
   isSubmittingAttendance.value = true
+  const statusLabels: Record<number, string> = {
+    2: "Có mặt",
+    3: "Rời ca",
+    5: "Vắng mặt",
+    6: "Muộn"
+  };
+  const label = statusLabels[attendanceForm.value.trangThai] || String(attendanceForm.value.trangThai);
   try {
     const res = await axios.patch(`${API_BASE_URL}/cap-nhat-diem-danh/${attendanceForm.value.maLich}`, {
       trangThai: attendanceForm.value.trangThai,
@@ -211,11 +219,22 @@ const submitAttendance = async () => {
     })
     
     if (res.data.success) {
+      logActivity(
+        "Điểm danh nhân viên",
+        `Đã cập nhật trạng thái điểm danh của nhân viên ${attendanceForm.value.hoTenNv} (Mã: ${attendanceForm.value.maNv}) trong ngày ${attendanceForm.value.ngayLamViec} (Ca: ${attendanceForm.value.caLam}) thành "${label}"`,
+        "Điểm danh"
+      );
       isAttendanceModalOpen.value = false
       showSnackbar("Cập nhật điểm danh thành công!")
       fetchLichLamViec()
     }
   } catch (error: any) {
+    logActivity(
+      "Điểm danh nhân viên",
+      `Thất bại khi cập nhật trạng thái điểm danh của nhân viên ${attendanceForm.value.hoTenNv} (Mã: ${attendanceForm.value.maNv}) thành "${label}" - Lỗi: ${error.message || ''}`,
+      "Điểm danh",
+      "Thất bại"
+    );
     showSnackbar(error.response?.data?.message || "Lỗi cập nhật.", "error")
   } finally {
     isSubmittingAttendance.value = false

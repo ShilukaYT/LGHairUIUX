@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
+import { logActivity } from '@/utils/activityLogger'
 import { 
   Search, 
   FileDown, 
@@ -145,6 +146,13 @@ const closeDetail = () => {
 
 // Print payslip
 const printPayslip = () => {
+  if (selectedSalary.value) {
+    logActivity(
+      "In phiếu lương",
+      `Đã in phiếu lương chi tiết cho nhân viên ${selectedSalary.value.hoTenNv} (Mã: ${selectedSalary.value.maNv}) - Tháng ${selectedSalary.value.thang}/${selectedSalary.value.nam}`,
+      "Lương"
+    )
+  }
   window.print()
 }
 
@@ -311,6 +319,12 @@ const exportExcel = async () => {
     const buffer = await workbook.xlsx.writeBuffer()
     saveAs(new Blob([buffer]), `Bang_Luong_Thang_${month.value}_${year.value}.xlsx`)
     
+    logActivity(
+      "Xuất Excel bảng lương",
+      `Đã xuất thành công tệp Excel bảng lương Tháng ${month.value}/${year.value} (${dataList.length} nhân viên)`,
+      "Lương"
+    )
+
     Swal.fire({
       icon: 'success',
       title: 'Xuất file thành công',
@@ -335,6 +349,14 @@ const exportExcel = async () => {
     } else if (err.message) {
       errorMsg = `Lỗi: ${err.message}`
     }
+
+    logActivity(
+      "Xuất Excel bảng lương",
+      `Thất bại khi xuất tệp Excel bảng lương Tháng ${month.value}/${year.value} - Lỗi: ${errorMsg}`,
+      "Lương",
+      "Thất bại"
+    )
+
     Swal.fire({
       icon: 'error',
       title: 'Lỗi xuất file',
