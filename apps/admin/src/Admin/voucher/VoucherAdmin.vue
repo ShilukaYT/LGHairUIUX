@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { logActivity } from '@/utils/activityLogger'
+import { Plus, RotateCcw } from 'lucide-vue-next'
 
 const API_BASE = 'https://localhost:7196/api/admin/vouchers'
 
@@ -301,25 +301,15 @@ async function save() {
     const payload = buildPayload(!isEdit.value)
     if (isEdit.value && editingCode.value) {
       await axios.put(`${API_BASE}/${encodeURIComponent(editingCode.value)}`, payload)
-      logActivity("Cập nhật voucher", `Đã cập nhật voucher ${editingCode.value}`, "Voucher");
       toast.value = 'Đã cập nhật voucher.'
     } else {
       await axios.post(API_BASE, payload)
-      const maVoucherNew = String(payload.maCode || '').toUpperCase();
-      logActivity("Thêm voucher", `Đã tạo voucher mới (Mã: ${maVoucherNew})`, "Voucher");
       toast.value = 'Đã tạo voucher.'
     }
     closeModal()
     await load()
   } catch (e: unknown) {
-    const errorMsg = formatApiError(e)
-    logActivity(
-      isEdit.value ? "Cập nhật voucher" : "Thêm voucher",
-      `Thất bại khi ${isEdit.value ? 'cập nhật' : 'tạo'} voucher - Lỗi: ${errorMsg}`,
-      "Voucher",
-      "Thất bại"
-    );
-    saveError.value = errorMsg
+    saveError.value = formatApiError(e)
   } finally {
     saving.value = false
   }
@@ -359,13 +349,10 @@ async function remove(row: AdminVoucherRow) {
   toast.value = ''
   try {
     await axios.delete(`${API_BASE}/${encodeURIComponent(row.maCode)}`)
-    logActivity("Xóa voucher", `Đã vô hiệu hóa/xóa voucher ${row.maCode}`, "Voucher");
     toast.value = MSG_VOUCHER_VO_HIEU
     await load()
   } catch (e: unknown) {
-    const errorMsg = formatApiError(e)
-    logActivity("Xóa voucher", `Thất bại khi xóa/vô hiệu hóa voucher ${row.maCode} - Lỗi: ${errorMsg}`, "Voucher", "Thất bại");
-    alert(errorMsg)
+    alert(formatApiError(e))
   }
 }
 
@@ -413,108 +400,135 @@ function formatMoney(n: number | null | undefined): string {
 
 onMounted(async () => {
   await load()
+  const wrapper = document.querySelector('.page-wrapper')
+  if (wrapper) {
+    wrapper.classList.add('full-width-layout')
+  }
+})
+
+onUnmounted(() => {
+  const wrapper = document.querySelector('.page-wrapper')
+  if (wrapper) {
+    wrapper.classList.remove('full-width-layout')
+  }
 })
 </script>
 
 <template>
-  <div class="w-full max-w-full space-y-5">
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <h1 class="text-lg font-serif text-[#8c734b] tracking-wider uppercase">Quản lý voucher</h1>
-      </div>
-
-      <!-- Thanh thao tác: gom nút giữa khối nội dung, không ép góc phải viewport -->
-      <div
-        class="flex flex-wrap items-center gap-3 bg-transparent p-1 border-none shadow-none"
-      >
-        <Button type="button" class="h-11 px-5 !bg-[#9d804e] !text-white hover:!bg-[#866a3d] border border-solid !border-[#9d804e] text-xs font-bold rounded-xl shadow-none cursor-pointer tracking-wider" @click="openCreate">Thêm voucher</Button>
-        <div class="flex items-center gap-2 text-xs">
-          <span class="font-bold text-slate-500 tracking-wider">VÒNG ĐỜI:</span>
-          <select
-            v-model="lifecycleFilter"
-            class="h-11 min-w-[11rem] rounded-xl border border-solid !border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 outline-none transition-all cursor-pointer"
-            @change="load"
-          >
-            <option value="">Tất cả</option>
-            <option value="dangChay">Đang chạy</option>
-            <option value="sapChay">Sắp chạy</option>
-            <option value="hetHan">Đã hết hạn</option>
-            <option value="hetLuot">Đã hết lượt</option>
-          </select>
+  <v-container fluid class="pa-6 fill-height align-start" style="min-height: 100vh;">
+    <v-card width="100%" elevation="2" rounded="xl" class="d-flex flex-column w-full">
+      <div class="d-flex flex-column flex-md-row align-md-center justify-space-between pa-6">
+        <div>
+          <h2 class="text-h5 font-weight-bold mb-1">Quản Lý Voucher</h2>
+          <div class="text-subtitle-2 text-medium-emphasis">Quản lý mã giảm giá, ưu đãi và lượt sử dụng của khách hàng</div>
         </div>
-        <Button type="button" variant="outline" class="h-11 px-5 text-xs font-bold rounded-xl border border-solid !border-slate-300 text-slate-700 hover:bg-slate-100 shadow-none cursor-pointer" :disabled="loading" @click="load">
-          {{ loading ? 'Đang tải…' : 'Tải lại danh sách' }}
-        </Button>
+
+        <div class="d-flex align-center gap-3 mt-4 mt-md-0 flex-wrap">
+          <div class="d-flex align-center gap-2 text-caption font-weight-bold text-medium-emphasis">
+            <span>VÒNG ĐỜI:</span>
+            <select
+              v-model="lifecycleFilter"
+              class="h-10 px-3 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-700 outline-none cursor-pointer"
+              @change="load"
+            >
+              <option value="">Tất cả</option>
+              <option value="dangChay">Đang chạy</option>
+              <option value="sapChay">Sắp chạy</option>
+              <option value="hetHan">Đã hết hạn</option>
+              <option value="hetLuot">Đã hết lượt</option>
+            </select>
+          </div>
+
+          <v-btn variant="outlined" color="grey-darken-1" size="40" rounded="lg" :loading="loading" @click="load" title="Tải lại">
+            <RotateCcw class="w-5 h-5" />
+          </v-btn>
+
+          <v-btn color="primary" variant="flat" rounded="lg" class="text-none font-weight-bold" @click="openCreate">
+            <template v-slot:prepend><Plus class="w-4 h-4 mr-1" /></template>
+            Thêm voucher
+          </v-btn>
+        </div>
       </div>
-    </div>
 
-    <p v-if="toast" class="text-sm text-green-600 dark:text-green-400">{{ toast }}</p>
-    <p v-if="listError" class="text-destructive text-sm">{{ listError }}</p>
+      <v-divider></v-divider>
 
-    <div class="overflow-x-auto rounded-2xl border border-solid !border-slate-200 shadow-sm mt-4 bg-white">
-      <table class="w-full min-w-[960px] table-fixed text-left text-xs">
-        <thead class="bg-slate-50 border-b border-solid !border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
-          <tr>
-            <th class="w-[12%] px-3 py-3 text-center font-bold">Mã</th>
-            <th class="w-[10%] px-3 py-3 text-center font-bold">Ưu đãi</th>
-            <th class="w-[26%] px-3 py-3 text-left font-bold">Mô tả</th>
-            <th class="w-[12%] px-3 py-3 text-center font-bold">HSD</th>
-            <th class="w-[12%] px-3 py-3 text-center font-bold">Lượt dùng</th>
-            <th class="w-[10%] px-3 py-3 text-center font-bold">KH lưu</th>
-            <th class="w-[8%] px-3 py-3 text-center font-bold">Trạng thái</th>
-            <th class="w-[10%] px-3 py-3 text-center font-bold whitespace-nowrap">Thao tác</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="loading">
-            <td colspan="8" class="px-3 py-5 text-center text-slate-450 text-xs">Đang tải…</td>
-          </tr>
-          <tr v-else-if="list.length === 0">
-            <td colspan="8" class="px-3 py-5 text-center text-slate-450 text-xs">Chưa có voucher.</td>
-          </tr>
-          <tr
-            v-for="row in list"
-            :key="row.maCode"
-            class="border-t border-solid !border-slate-200 hover:bg-slate-50/50 transition-colors"
-          >
-            <td class="px-3 py-3 text-center font-mono text-[11px] leading-tight text-slate-800 font-bold">{{ row.maCode }}</td>
-            <td class="px-3 py-3 text-center text-xs font-bold text-slate-700">{{ discountLabel(row) }}</td>
-            <td class="px-3 py-3 text-left break-words text-xs leading-relaxed text-slate-600" :title="row.moTa ?? ''">
-              {{ row.moTa || '—' }}
-            </td>
-            <td class="px-3 py-3 text-center whitespace-nowrap text-xs text-slate-600">{{ formatShortDate(row.ngayKetThuc) }}</td>
-            <td class="px-3 py-3 text-center font-mono text-[11px] text-slate-600 leading-tight">
-              <span v-if="row.soLuong != null">{{ row.soLuongDaDung ?? 0 }}/{{ row.soLuong }}</span>
-              <span v-else>∞</span>
-            </td>
-            <td class="px-3 py-3 text-center text-xs font-semibold text-slate-700">{{ row.soKhachDaLuu }}</td>
-            <td class="px-3 py-3 text-center text-xs">
-              <span v-if="row.trangThai === 1" class="inline-block px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-solid border-emerald-200 rounded-md">Bật</span>
-              <span v-else class="inline-block px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider bg-slate-50 text-slate-500 border border-solid border-slate-200 rounded-md">Tắt</span>
-            </td>
-            <td class="px-3 py-3">
-              <div class="flex items-center justify-center gap-1.5">
-                <Button type="button" class="h-7 px-2.5 text-[10px] font-bold rounded-lg bg-slate-600 text-white hover:bg-slate-700 border-none shadow-none cursor-pointer" @click="openDetail(row)">
-                  Chi tiết
-                </Button>
-                <Button type="button" class="h-7 px-2.5 text-[10px] font-bold rounded-lg border border-solid !border-slate-300 text-slate-700 hover:bg-slate-100 shadow-none cursor-pointer" @click="openEdit(row)">
-                  Sửa
-                </Button>
-                <Button type="button" class="h-7 px-2.5 text-[10px] font-bold rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 border border-solid border-rose-200 shadow-none cursor-pointer" @click="remove(row)">
-                  Xóa
-                </Button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+      <p v-if="toast" class="px-6 pt-4 text-sm font-bold text-emerald-600">{{ toast }}</p>
+      <p v-if="listError" class="px-6 pt-4 text-sm font-bold text-rose-600">{{ listError }}</p>
+
+      <div class="overflow-x-auto w-full px-6 pb-6 pt-2 bg-slate-50/50">
+        <table class="w-full min-w-[960px] text-left text-xs border-separate [border-spacing:0_8px]">
+          <thead class="text-slate-550 uppercase tracking-wider text-[11px]">
+            <tr>
+              <th class="w-[8%] px-4 py-2 text-center font-bold">Mã</th>
+              <th class="w-[8%] px-4 py-2 text-center font-bold">Ưu đãi</th>
+              <th class="w-[32%] px-4 py-2 text-left font-bold">Mô tả</th>
+              <th class="w-[10%] px-4 py-2 text-center font-bold">HSD</th>
+              <th class="w-[10%] px-4 py-2 text-center font-bold">Lượt dùng</th>
+              <th class="w-[6%] px-4 py-2 text-center font-bold">KH lưu</th>
+              <th class="w-[10%] px-4 py-2 text-center font-bold">Trạng thái</th>
+              <th class="w-[16%] px-4 py-2 text-center font-bold whitespace-nowrap">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="loading">
+              <td colspan="8" class="px-4 py-8 text-center text-slate-450 text-xs font-medium bg-white border border-slate-200/60 rounded-xl">Đang tải dữ liệu voucher…</td>
+            </tr>
+            <tr v-else-if="list.length === 0">
+              <td colspan="8" class="px-4 py-8 text-center text-slate-450 text-xs font-medium bg-white border border-slate-200/60 rounded-xl">Chưa có voucher nào.</td>
+            </tr>
+            <tr
+              v-for="row in list"
+              :key="row.maCode"
+              class="hover:bg-slate-50/10 transition-colors group"
+            >
+              <td class="px-4 py-3 text-center font-mono text-xs text-slate-800 font-bold bg-white border-l border-t border-b border-slate-200/60 rounded-l-xl">{{ row.maCode }}</td>
+              <td class="px-4 py-3 text-center text-xs font-bold text-primary bg-white border-t border-b border-slate-200/60">{{ discountLabel(row) }}</td>
+              <td class="px-4 py-3 text-left break-words text-xs leading-relaxed text-slate-600 font-medium bg-white border-t border-b border-slate-200/60" :title="row.moTa ?? ''">
+                {{ row.moTa || '—' }}
+              </td>
+              <td class="px-4 py-3 text-center whitespace-nowrap text-xs font-medium text-slate-600 bg-white border-t border-b border-slate-200/60">{{ formatShortDate(row.ngayKetThuc) }}</td>
+              <td class="px-4 py-3 text-center font-mono text-xs text-slate-600 bg-white border-t border-b border-slate-200/60">
+                <span v-if="row.soLuong != null">{{ row.soLuongDaDung ?? 0 }}/{{ row.soLuong }}</span>
+                <span v-else>∞</span>
+              </td>
+              <td class="px-4 py-3 text-center text-xs font-bold text-slate-700 bg-white border-t border-b border-slate-200/60">{{ row.soKhachDaLuu }}</td>
+              <td class="px-4 py-3 text-center text-xs bg-white border-t border-b border-slate-200/60">
+                <span v-if="row.trangThai === 1" class="inline-block px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md">Hoạt động</span>
+                <span v-else class="inline-block px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500 border border-slate-200 rounded-md">Vô hiệu</span>
+              </td>
+              <td class="px-4 py-3 text-center bg-white border-r border-t border-b border-slate-200/60 rounded-r-xl">
+                <div class="d-flex align-center justify-center gap-4">
+                  <v-btn
+                    color="info" variant="tonal" size="small" rounded="lg" class="text-none font-weight-bold"
+                    @click="openDetail(row)"
+                  >
+                    Chi tiết
+                  </v-btn>
+                  <v-btn
+                    color="primary" variant="tonal" size="small" rounded="lg" class="text-none font-weight-bold"
+                    @click="openEdit(row)"
+                  >
+                    Sửa
+                  </v-btn>
+                  <v-btn
+                    color="error" variant="tonal" size="small" rounded="lg" class="text-none font-weight-bold"
+                    @click="remove(row)"
+                  >
+                    Xóa
+                  </v-btn>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </v-card>
 
     <!-- Modal giữa màn hình — footer Luu/Hủy luôn thấy -->
     <Teleport to="body">
       <div
         v-if="modalOpen"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+        class="fixed inset-0 z-[2400] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity"
         role="dialog"
         aria-modal="true"
         aria-labelledby="voucher-modal-title"
@@ -530,7 +544,7 @@ onMounted(async () => {
           @click.stop
         >
           <div class="shrink-0 border-b border-solid !border-slate-200 !px-8 !pt-6 !pb-4 bg-slate-50/50">
-            <h2 id="voucher-modal-title" class="text-lg font-serif text-[#8c734b] tracking-wider uppercase">
+            <h2 id="voucher-modal-title" class="!text-lg !font-sans !font-bold text-[#8c734b] tracking-wider uppercase">
               {{ isEdit ? 'Sửa voucher' : 'Thêm voucher mới' }}
             </h2>
             <p class="text-slate-500 mt-1 text-xs leading-relaxed">
@@ -679,7 +693,7 @@ onMounted(async () => {
     <Teleport to="body">
       <div
         v-if="detailOpen"
-        class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+        class="fixed inset-0 z-[2400] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity"
         role="dialog"
         aria-modal="true"
         aria-labelledby="voucher-detail-title"
@@ -690,7 +704,7 @@ onMounted(async () => {
           @click.stop
         >
           <div class="shrink-0 border-b border-solid !border-slate-200 !px-8 !pt-6 !pb-4 bg-slate-50/50">
-            <h2 id="voucher-detail-title" class="text-lg font-serif text-[#8c734b] tracking-wider uppercase flex items-center gap-2">
+            <h2 id="voucher-detail-title" class="!text-lg !font-sans !font-bold text-[#8c734b] tracking-wider uppercase flex items-center gap-2">
               <span>Chi tiết voucher:</span>
               <span v-if="detailCode" class="font-mono text-base text-slate-800 bg-slate-200/60 px-2 py-0.5 rounded-md">{{ detailCode }}</span>
             </h2>
@@ -700,59 +714,59 @@ onMounted(async () => {
           <div class="min-h-0 flex-1 space-y-5 overflow-y-auto !px-8 !py-6 text-xs">
             <p v-if="detailLoading" class="text-slate-450 text-xs">Đang tải…</p>
             <template v-else>
-              <div class="space-y-2">
-                <h3 class="text-xs font-bold text-[#8c734b] uppercase tracking-wider">Khách đã lưu mã</h3>
-                <div class="overflow-x-auto rounded-none border border-solid !border-slate-200 shadow-xs bg-white">
-                  <table class="w-full min-w-[540px] text-left text-xs">
-                    <thead class="bg-slate-50 border-b border-solid !border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
+              <div class="space-y-3">
+                <h3 class="!text-sm !font-bold !font-sans text-[#8c734b] uppercase tracking-wider">Khách đã lưu mã</h3>
+                <div class="overflow-x-auto rounded-xl border border-solid border-slate-200 shadow-xs bg-white">
+                  <table class="w-full min-w-[540px] text-left text-xs border-collapse">
+                    <thead class="bg-slate-50 border-b border-solid border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
                       <tr>
-                        <th class="px-3 py-2.5 text-center font-bold">Mã KH</th>
-                        <th class="px-3 py-2.5 text-left font-bold">Họ tên</th>
-                        <th class="px-3 py-2.5 text-center font-bold">SĐT</th>
-                        <th class="px-3 py-2.5 text-left font-bold">Email</th>
+                        <th class="px-4 py-3 text-center font-semibold border-b border-solid border-slate-200">Mã KH</th>
+                        <th class="px-4 py-3 text-left font-semibold border-b border-solid border-slate-200">Họ tên</th>
+                        <th class="px-4 py-3 text-center font-semibold border-b border-solid border-slate-200">SĐT</th>
+                        <th class="px-4 py-3 text-left font-semibold border-b border-solid border-slate-200">Email</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr v-if="detailKhach.length === 0">
-                        <td colspan="4" class="text-slate-450 px-3 py-4 text-center">Chưa có khách lưu mã.</td>
+                        <td colspan="4" class="text-slate-450 px-4 py-8 text-center bg-white">Chưa có khách lưu mã.</td>
                       </tr>
-                      <tr v-for="k in detailKhach" :key="k.maKh" class="border-t border-solid !border-slate-200">
-                        <td class="px-3 py-2.5 text-center font-mono text-[11px] text-slate-800 font-semibold">{{ k.maKh }}</td>
-                        <td class="px-3 py-2.5 text-slate-700 font-medium">{{ k.hoTen || '—' }}</td>
-                        <td class="px-3 py-2.5 text-center font-mono text-[11px] text-slate-600 whitespace-nowrap">{{ k.sdt || '—' }}</td>
-                        <td class="px-3 py-2.5 text-left font-mono text-[11px] text-slate-500 break-all">{{ k.email || '—' }}</td>
+                      <tr v-for="k in detailKhach" :key="k.maKh" class="border-b border-solid border-slate-100 hover:bg-slate-50/50 transition-colors">
+                        <td class="px-4 py-3 text-center font-mono text-[11px] text-slate-800 font-semibold bg-white">{{ k.maKh }}</td>
+                        <td class="px-4 py-3 text-slate-700 font-medium bg-white">{{ k.hoTen || '—' }}</td>
+                        <td class="px-4 py-3 text-center font-mono text-[11px] text-slate-600 whitespace-nowrap bg-white">{{ k.sdt || '—' }}</td>
+                        <td class="px-4 py-3 text-left font-mono text-[11px] text-slate-500 break-all bg-white">{{ k.email || '—' }}</td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
               </div>
-              <div class="space-y-2">
-                <h3 class="text-xs font-bold text-[#8c734b] uppercase tracking-wider">Hóa đơn đã áp dụng mã</h3>
-                <div class="overflow-x-auto rounded-none border border-solid !border-slate-200 shadow-xs bg-white">
-                  <table class="w-full min-w-[640px] text-left text-xs">
-                    <thead class="bg-slate-50 border-b border-solid !border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
+              <div class="space-y-3">
+                <h3 class="!text-sm !font-bold !font-sans text-[#8c734b] uppercase tracking-wider">Hóa đơn đã áp dụng mã</h3>
+                <div class="overflow-x-auto rounded-xl border border-solid border-slate-200 shadow-xs bg-white">
+                  <table class="w-full min-w-[640px] text-left text-xs border-collapse">
+                    <thead class="bg-slate-50 border-b border-solid border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
                       <tr>
-                        <th class="px-3 py-2.5 text-center font-bold">Mã HĐ</th>
-                        <th class="px-3 py-2.5 text-center font-bold">Mã KH</th>
-                        <th class="px-3 py-2.5 text-center font-bold">Ngày</th>
-                        <th class="px-3 py-2.5 text-center font-bold">Tổng tiền</th>
-                        <th class="px-3 py-2.5 text-center font-bold">Thành tiền</th>
-                        <th class="px-3 py-2.5 text-center font-bold">Trạng thái</th>
+                        <th class="px-4 py-3 text-center font-semibold border-b border-solid border-slate-200">Mã HĐ</th>
+                        <th class="px-4 py-3 text-center font-semibold border-b border-solid border-slate-200">Mã KH</th>
+                        <th class="px-4 py-3 text-center font-semibold border-b border-solid border-slate-200">Ngày</th>
+                        <th class="px-4 py-3 text-center font-semibold border-b border-solid border-slate-200">Tổng tiền</th>
+                        <th class="px-4 py-3 text-center font-semibold border-b border-solid border-slate-200">Thành tiền</th>
+                        <th class="px-4 py-3 text-center font-semibold border-b border-solid border-slate-200">Trạng thái</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr v-if="detailHoaDon.length === 0">
-                        <td colspan="6" class="text-slate-450 px-3 py-4 text-center">Chưa có hóa đơn.</td>
+                        <td colspan="6" class="text-slate-450 px-4 py-8 text-center bg-white">Chưa có hóa đơn.</td>
                       </tr>
-                      <tr v-for="h in detailHoaDon" :key="h.maHd" class="border-t border-solid !border-slate-200">
-                        <td class="px-3 py-2.5 text-center font-mono text-[11px] text-slate-800 font-semibold">{{ h.maHd }}</td>
-                        <td class="px-3 py-2.5 text-center font-mono text-[11px] text-slate-600">{{ h.maKh || '—' }}</td>
-                        <td class="px-3 py-2.5 text-center text-slate-600 whitespace-nowrap">{{ formatShortDate(h.ngayTao) }}</td>
-                        <td class="px-3 py-2.5 text-center font-mono text-[11px] text-slate-700">{{ formatMoney(h.tongTien) }}</td>
-                        <td class="px-3 py-2.5 text-center font-mono text-[11px] text-[#8c734b] font-bold">{{ formatMoney(h.thanhTien) }}</td>
-                        <td class="px-3 py-2.5 text-center text-[10px] font-bold">
-                          <span v-if="h.trangThai === 1" class="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-none border border-solid border-emerald-200">Thành công</span>
-                          <span v-else class="text-slate-500 bg-slate-50 px-2 py-0.5 rounded-none border border-solid border-slate-200">Chờ</span>
+                      <tr v-for="h in detailHoaDon" :key="h.maHd" class="border-b border-solid border-slate-100 hover:bg-slate-50/50 transition-colors">
+                        <td class="px-4 py-3 text-center font-mono text-[11px] text-slate-800 font-semibold bg-white">{{ h.maHd }}</td>
+                        <td class="px-4 py-3 text-center font-mono text-[11px] text-slate-600 bg-white">{{ h.maKh || '—' }}</td>
+                        <td class="px-4 py-3 text-center text-slate-600 whitespace-nowrap bg-white">{{ formatShortDate(h.ngayTao) }}</td>
+                        <td class="px-4 py-3 text-center font-mono text-[11px] text-slate-700 bg-white">{{ formatMoney(h.tongTien) }}</td>
+                        <td class="px-4 py-3 text-center font-mono text-[11px] text-[#8c734b] font-bold bg-white">{{ formatMoney(h.thanhTien) }}</td>
+                        <td class="px-4 py-3 text-center text-[10px] font-bold bg-white">
+                          <span v-if="h.trangThai === 1" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-solid border-emerald-200">Thành công</span>
+                          <span v-else class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 border border-solid border-slate-200">Chờ</span>
                         </td>
                       </tr>
                     </tbody>
@@ -767,5 +781,5 @@ onMounted(async () => {
         </div>
       </div>
     </Teleport>
-  </div>
+  </v-container>
 </template>
