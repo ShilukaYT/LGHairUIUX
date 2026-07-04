@@ -5,6 +5,7 @@ import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import tailwindcss from '@tailwindcss/vite'
 import vuetify from 'vite-plugin-vuetify'
+import zaloBridge from './zalo-bridge/vite-plugin-zalo-bridge.mjs'
 
 const baseURL = process.env.BASE_URL;
 // https://vite.dev/config/
@@ -18,6 +19,7 @@ export default defineConfig({
     vueDevTools(),
     tailwindcss(),
     vuetify({ autoImport: true }),
+    zaloBridge(),
   ],
   resolve: {
     alias: {
@@ -25,3 +27,4 @@ export default defineConfig({
     },
   },
 })
+
