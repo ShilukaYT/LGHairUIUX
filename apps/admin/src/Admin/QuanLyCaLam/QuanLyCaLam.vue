@@ -102,7 +102,7 @@ const headers = [
   { title: 'Hành động', key: 'actions', align: 'center', sortable: false },
 ] as const
 
-const openCreateModal = (item: any) => {
+const openCreateModal = async (item: any) => {
   editState.value.maNv = item.maNv;
   editState.value.tenNv = item.hoTenNv;
   editState.value.isCreating = true;
@@ -373,7 +373,7 @@ watch(() => route.query.search, (newSearch) => {
             clearable
             prepend-inner-icon="mdi-magnify"
             rounded="lg"
-            bg-color="white"
+            bg-color="isDarkTheme ? 'grey-darken-4' : 'grey-lighten-4'"
             class="flex-grow-1"
             style="min-width: 250px;"
           ></v-text-field>

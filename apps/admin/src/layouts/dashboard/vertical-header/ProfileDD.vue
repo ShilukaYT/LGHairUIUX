@@ -59,7 +59,7 @@ const loadUserFromStorage = () => {
 };
 
 const avatarSrc = computed(() => {
-  return userAvatar.value || new URL('@/assets/images/users/avatar-1.png', import.meta.url).href;
+  return userAvatar.value || `https://ui-avatars.com/api/?name=${encodeURIComponent(userName.value)}&background=random&color=fff&size=100`;
 });
 
 const handleThemeSelection = (selection: 'light' | 'dark' | 'system', save = true) => {
@@ -125,8 +125,8 @@ const navigateToProfile = () => {
   <!-- ---------------------------------------------- -->
   <div>
     <div class="d-flex align-center pa-5">
-      <v-avatar size="40" class="mr-2" style="overflow:hidden;">
-        <v-img :src="avatarSrc" cover width="40" height="40" />
+      <v-avatar size="40" class="mr-2">
+        <img :src="avatarSrc" style="width: 100%; height: 100%; object-fit: cover; object-position: center;" alt="Avatar" />
       </v-avatar>
       <div>
         <h6 class="text-h6 mb-0">{{ userName }}</h6>

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 // icons
 import { CheckCircleOutlined, MessageOutlined, BellOutlined } from '@ant-design/icons-vue';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, writeBatch, limit, where, addDoc } from 'firebase/firestore';
+// @ts-ignore
 import { adminDb } from '@/firebase-admin.js';
 
 const props = defineProps<{
@@ -33,7 +34,7 @@ onMounted(() => {
   }
   
   onSnapshot(q, (snapshot) => {
-    let docs = snapshot.docs.map(doc => ({
+    let docs: any[] = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
@@ -194,7 +195,7 @@ async function submitReply() {
                   <p class="text-caption text-medium-emphasis my-1" style="white-space: normal;">{{ n.description }}</p>
                   
                   <div class="text-right mt-1" v-if="props.isAdmin && n.maNv">
-                    <v-btn size="x-small" color="primary" variant="tonal" @click="(e) => openReplyDialog(n, e)">
+                    <v-btn size="x-small" color="primary" variant="tonal" @click="openReplyDialog(n, $event)">
                       Phản hồi
                     </v-btn>
                   </div>
@@ -246,7 +247,7 @@ async function submitReply() {
                   <p class="text-caption text-medium-emphasis my-1" style="white-space: normal;">{{ n.description }}</p>
                   
                   <div class="text-right mt-1" v-if="props.isAdmin && n.maNv">
-                    <v-btn size="x-small" color="primary" variant="tonal" @click="(e) => openReplyDialog(n, e)">
+                    <v-btn size="x-small" color="primary" variant="tonal" @click="openReplyDialog(n, $event)">
                       Phản hồi
                     </v-btn>
                   </div>
