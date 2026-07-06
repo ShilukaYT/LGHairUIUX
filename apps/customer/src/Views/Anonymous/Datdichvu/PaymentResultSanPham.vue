@@ -152,7 +152,7 @@ const goHome = () => {
 };
 
 const goBack = () => {
-    router.push('/product');
+    router.push('/shop');
 };
 </script>
 

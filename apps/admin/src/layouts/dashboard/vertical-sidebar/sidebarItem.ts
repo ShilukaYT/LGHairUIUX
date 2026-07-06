@@ -12,7 +12,12 @@ import {
   ScissorOutlined,
   NotificationOutlined,
   DollarOutlined,
-  MessageOutlined
+  ShopOutlined,
+  MessageOutlined,
+  HistoryOutlined,
+  ShoppingOutlined,
+  UnorderedListOutlined,
+  InboxOutlined
 } from '@ant-design/icons-vue';
 
 export interface menu {
@@ -48,7 +53,12 @@ const sidebarItem: menu[] = [
     icon: UserOutlined,
     to: '/admin/khach-hang'
   },
-  { header: 'Dịch vụ & Sản phẩm' },
+  {
+    title: 'Quản lý hoạt động',
+    icon: HistoryOutlined,
+    to: '/admin/quan-ly-hoat-dong'
+  },
+  { header: 'Dịch vụ' },
   {
     title: 'Quản lý Dịch vụ',
     icon: AppstoreOutlined,
@@ -63,6 +73,27 @@ const sidebarItem: menu[] = [
     title: 'Style & Màu tóc',
     icon: ScissorOutlined,
     to: '/admin/StyleHairXColor'
+  },
+  { header: 'Sản phẩm' },
+  {
+    title: 'Quản lý sản phẩm',
+    icon: ShoppingOutlined,
+    to: '/admin/productManager'
+  },
+  {
+    title: 'Danh mục sản phẩm',
+    icon: UnorderedListOutlined,
+    to: '/admin/categoriesProduct'
+  },
+  {
+    title: 'Nhà cung cấp',
+    icon: ShopOutlined,
+    to: '/admin/nha-cung-cap'
+  },
+  {
+    title: 'Quản lý kho',
+    icon: InboxOutlined,
+    to: '/admin/quanLyKho'
   },
   { header: 'Khuyến mãi' },
   {

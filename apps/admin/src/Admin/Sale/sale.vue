@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { Check, ChevronsUpDown, MoreHorizontal, Plus, Search, SlidersHorizontal, Trash2, Clock, X } from 'lucide-vue-next'
+import { logActivity } from '@/utils/activityLogger'
 
 // --- Import Shadcn Components ---
 import { Button } from '@/components/ui/button'
@@ -229,8 +230,12 @@ const saveForm = async () => {
 
     if (dialogMode.value === 'edit') {
       res = await axios.put(`${API_URL}/${currentItem.value.maFL}`, payload)
+      logActivity("Cập nhật khuyến mãi", `Đã cập nhật chiến dịch khuyến mãi ${currentItem.value.maFL}`, "Khuyến mãi");
     } else {
       res = await axios.post(API_URL, payload)
+      // Lấy mã khuyến mãi trả về từ response hoặc từ payload
+      const maFlNew = res.data?.data?.maFL || res.data?.maFL || currentItem.value.maFL || "mới";
+      logActivity("Thêm khuyến mãi", `Đã tạo chiến dịch khuyến mãi mới (Mã: ${maFlNew})`, "Khuyến mãi");
     }
 
     toast.success(res.data?.message || 'Lưu thành công!')
@@ -239,6 +244,12 @@ const saveForm = async () => {
   } catch (error: any) {
     console.error("Lỗi save:", error)
     const errorMsg = error.response?.data?.message || error.response?.data || 'Lưu thất bại! Hãy kiểm tra lại logic chi tiết.'
+    logActivity(
+      dialogMode.value === 'edit' ? "Cập nhật khuyến mãi" : "Thêm khuyến mãi",
+      `Thất bại khi ${dialogMode.value === 'edit' ? 'cập nhật' : 'tạo'} chiến dịch khuyến mãi - Lỗi: ${errorMsg}`,
+      "Khuyến mãi",
+      "Thất bại"
+    );
     toast.error(typeof errorMsg === 'string' ? errorMsg : "Lỗi hệ thống khi lưu")
   } finally {
     isSubmitting.value = false; // Luôn mở khóa nút sau khi gọi API xong
@@ -249,11 +260,13 @@ const saveForm = async () => {
 const confirmDelete = async () => {
   try {
     const res = await axios.delete(`${API_URL}/${currentItem.value.maFL}`)
+    logActivity("Xóa khuyến mãi", `Đã xóa chiến dịch khuyến mãi ${currentItem.value.maFL}`, "Khuyến mãi");
     toast.success(res.data?.message || 'Đã xóa Flash Sale!')
     isDeleteDialogOpen.value = false
     fetchData()
   } catch (error: any) {
     console.error("Lỗi delete:", error)
+    logActivity("Xóa khuyến mãi", `Thất bại khi xóa chiến dịch khuyến mãi ${currentItem.value.maFL} - Lỗi: ${error.message || ''}`, "Khuyến mãi", "Thất bại");
     toast.error(error.response?.data?.message || 'Xóa thất bại!')
   }
 }

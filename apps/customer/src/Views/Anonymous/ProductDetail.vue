@@ -4,6 +4,10 @@ import { useRoute, useRouter } from "vue-router";
 import axios from "axios";
 import { addToCartDB } from "@/Views/Anonymous/CSDL/cartDB";
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
+import { useWishlistStore } from "@/stores/useWishlistStore";
+import { Heart } from "lucide-vue-next";
+
+const wishlistStore = useWishlistStore();
 
 const API   = import.meta.env.VITE_API_URL;
 const route = useRoute();
@@ -126,10 +130,8 @@ const selectBienThe = (bt: any) => {
   // Xây danh sách ảnh slide: ảnh đại diện trước, rồi gallery BT
   const imgs: string[] = [];
   if (bt.hinhAnhDaiDien) imgs.push(bt.hinhAnhDaiDien);
-  if (Array.isArray(bt.hinhAnhs)) {
-    for (const h of bt.hinhAnhs) {
-      if (h.duongDan && !imgs.includes(h.duongDan)) imgs.push(h.duongDan);
-    }
+  for (const h of bt.hinhAnhs ?? []) {
+    if (h.duongDan && !imgs.includes(h.duongDan)) imgs.push(h.duongDan);
   }
   btImageList.value = imgs;
   slideIndex.value  = 0;
@@ -153,7 +155,7 @@ const addToCart = async (isBuyNow = false) => {
   const customer = getCustomerInfo();
   
   const formattedItem = {
-    id: selectedBienThe.value.maBienThe || selectedBienThe.value.id,
+    id: selectedBienThe.value.maBienThe,
     maSanPham: product.value.maSp,
     tenItem: `${product.value.tenSp} - ${selectedBienThe.value.tenBienThe}`,
     gia: selectedBienThe.value.giaBan,
@@ -368,6 +370,21 @@ watch(
                 :disabled="!canOrder"
               >
                 Mua ngay
+              </button>
+              <button
+                @click="wishlistStore.toggleProductFavorite(product)"
+                class="w-14 h-14 flex items-center justify-center rounded-full transition-all duration-300 shadow-md hover:scale-105"
+                :class="wishlistStore.isProductFavorite(product.maSp) 
+                  ? 'bg-red-500 border border-red-500 text-white hover:bg-red-600' 
+                  : 'bg-red-50 border border-red-200 text-red-500 hover:bg-red-100'"
+                :title="wishlistStore.isProductFavorite(product.maSp) ? 'Xóa khỏi yêu thích' : 'Thêm vào yêu thích'"
+              >
+                <Heart 
+                  :size="22" 
+                  :stroke-width="wishlistStore.isProductFavorite(product.maSp) ? 0 : 2" 
+                  :fill="wishlistStore.isProductFavorite(product.maSp) ? '#ffffff' : 'none'" 
+                  :class="{'animate-bounce': wishlistStore.isProductFavorite(product.maSp)}" 
+                />
               </button>
             </div>
 

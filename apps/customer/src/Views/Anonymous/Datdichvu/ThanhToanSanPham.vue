@@ -30,6 +30,60 @@ const orderData = ref({
     voucherIds: [] as string[]
 });
 
+// ==========================================
+// STATE HÓA ĐƠN ĐIỆN TỬ
+// Theo luật, mọi đơn hàng đều PHẢI xuất hóa đơn điện tử — không có tùy chọn tắt.
+// Khách chỉ chọn: xuất theo cá nhân (mặc định) hay theo doanh nghiệp (có MST).
+// ==========================================
+const invoiceInfo = ref({
+    laDoanhNghiep: false,
+    tenCongTy: '',
+    mst: '',
+    diaChiXuatHD: '',
+    emailNhanHD: ''
+});
+const mstError = ref('');
+
+const validateMst = (): boolean => {
+    if (!invoiceInfo.value.laDoanhNghiep) {
+        mstError.value = '';
+        return true;
+    }
+    const mst = (invoiceInfo.value.mst || '').trim();
+    const isValid = /^\d{10}$/.test(mst) || /^\d{10}-\d{3}$/.test(mst);
+    mstError.value = isValid ? '' : 'Mã số thuế không hợp lệ (10 số, hoặc 10 số-3 số chi nhánh)';
+    return isValid;
+};
+
+// Validate thông tin hóa đơn trước khi submit (tên công ty, địa chỉ, email...) — luôn chạy vì luôn xuất hóa đơn
+const validateInvoiceInfo = (): string | null => {
+    if (!validateMst()) return mstError.value;
+
+    if (invoiceInfo.value.laDoanhNghiep) {
+        const tenCty = (invoiceInfo.value.tenCongTy || '').trim();
+        if (tenCty.length < 3) return 'Vui lòng nhập đúng tên công ty (tối thiểu 3 ký tự)';
+    } else {
+        const ten = (orderData.value.customerName || '').trim();
+        if (ten.length < 3 || !/[a-zA-ZÀ-ỹ]/.test(ten)) return 'Vui lòng nhập đúng họ tên người mua hàng';
+    }
+
+    const diaChi = (invoiceInfo.value.diaChiXuatHD || '').trim();
+    if (diaChi.length < 5) return 'Vui lòng nhập đúng địa chỉ xuất hóa đơn (tối thiểu 5 ký tự)';
+
+    const email = (invoiceInfo.value.emailNhanHD || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Vui lòng nhập đúng định dạng email nhận hóa đơn';
+
+    return null;
+};
+
+// Tự điền địa chỉ/email xuất hóa đơn theo địa chỉ giao hàng khi khách chưa tự sửa
+watch(() => orderData.value.address, (newVal) => {
+    if (!invoiceInfo.value.diaChiXuatHD) invoiceInfo.value.diaChiXuatHD = newVal;
+});
+watch(() => orderData.value.email, (newVal) => {
+    if (!invoiceInfo.value.emailNhanHD) invoiceInfo.value.emailNhanHD = newVal;
+}, { immediate: true });
+
 const productItems = ref<any[]>([]);
 const allProductsFromApi = ref<any[]>([]);
 
@@ -284,6 +338,12 @@ const handleCheckout = async () => {
         return;
     }
 
+    const invoiceErr = validateInvoiceInfo();
+    if (invoiceErr) {
+        alert(invoiceErr);
+        return;
+    }
+
     try {
         // 2. Chuẩn bị dữ liệu gửi lên Backend
         const payload = {
@@ -300,7 +360,14 @@ const handleCheckout = async () => {
                 maBienThe: item.id, 
                 giaBan: item.gia,
                 soLuong: item.soLuong
-            }))
+            })),
+            invoiceInfo: {
+                laDoanhNghiep: invoiceInfo.value.laDoanhNghiep,
+                tenCongTy: invoiceInfo.value.laDoanhNghiep ? invoiceInfo.value.tenCongTy : null,
+                mst: invoiceInfo.value.laDoanhNghiep ? invoiceInfo.value.mst : null,
+                diaChiXuatHD: invoiceInfo.value.diaChiXuatHD,
+                emailNhanHD: invoiceInfo.value.emailNhanHD
+            }
         };
 
         // 3. Gọi API tạo đơn hàng
@@ -471,6 +538,59 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
                                     <img src="/momo-logo.png" alt="MoMo" class="method-logo-img">
                                 </div>
                             </div>
+                        </div>
+
+                        <div class="section-heading-wrapper mt-5">
+                            <h3 class="font-playfair section-heading-title font-bold gold-metallic-text">
+                                <i class="fas fa-file-invoice me-2"></i> HÓA ĐƠN ĐIỆN TỬ
+                            </h3>
+                            <div class="heading-line"></div>
+                        </div>
+                        <p class="text-black small mb-3" style="opacity: 0.6;">
+                            Theo quy định, mọi đơn hàng đều được xuất hóa đơn điện tử. Vui lòng chọn loại hóa đơn phù hợp.
+                        </p>
+
+                        <div class="mt-3">
+                            <div class="invoice-type-row mb-4">
+                                <div class="invoice-type-option" :class="{ active: !invoiceInfo.laDoanhNghiep }"
+                                    @click="invoiceInfo.laDoanhNghiep = false">
+                                    <i class="fas fa-user me-2"></i> Cá nhân
+                                </div>
+                                <div class="invoice-type-option" :class="{ active: invoiceInfo.laDoanhNghiep }"
+                                    @click="invoiceInfo.laDoanhNghiep = true">
+                                    <i class="fas fa-building me-2"></i> Doanh nghiệp (có MST)
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4" v-if="invoiceInfo.laDoanhNghiep">
+                                <div>
+                                    <label class="custom-label font-bold">Tên công ty *</label>
+                                    <input v-model="invoiceInfo.tenCongTy" type="text" class="booking-input w-full"
+                                        placeholder="Công ty TNHH ABC">
+                                </div>
+                                <div>
+                                    <label class="custom-label font-bold">Mã số thuế *</label>
+                                    <input v-model="invoiceInfo.mst" type="text" class="booking-input w-full"
+                                        @blur="validateMst" placeholder="0301234567">
+                                    <p v-if="mstError" class="text-danger small mt-1 mb-0 font-bold">{{ mstError }}</p>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                <div>
+                                    <label class="custom-label font-bold">Địa chỉ xuất hóa đơn</label>
+                                    <input v-model="invoiceInfo.diaChiXuatHD" type="text" class="booking-input w-full"
+                                        placeholder="Số nhà, đường, phường/xã, tỉnh/thành">
+                                </div>
+                                <div>
+                                    <label class="custom-label font-bold">Email nhận hóa đơn</label>
+                                    <input v-model="invoiceInfo.emailNhanHD" type="email" class="booking-input w-full"
+                                        placeholder="email@example.com">
+                                </div>
+                            </div>
+                            <p class="text-black small mt-2 mb-0" style="opacity: 0.6;">
+                                Hóa đơn điện tử sẽ được gửi tới email trên trong vòng vài phút sau khi đặt hàng thành công.
+                            </p>
                         </div>
 
                         <div class="section-heading-wrapper mt-5">
@@ -908,6 +1028,64 @@ textarea.booking-input {
     box-shadow: 0 8px 25px rgba(22, 163, 74, 0.15);
     border-width: 3px;
     transform: translateY(-2px) scale(1.02);
+}
+
+/* Invoice / Hóa đơn điện tử */
+.invoice-toggle-row {
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    background: #ffffff;
+}
+
+.invoice-toggle-row:hover {
+    border-color: var(--gold-solid);
+}
+
+.invoice-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.invoice-checkbox-label input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--gold-solid);
+    cursor: pointer;
+}
+
+.invoice-type-row {
+    display: flex;
+    gap: 12px;
+}
+
+.invoice-type-option {
+    flex: 1;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 10px 14px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    background: #ffffff;
+}
+
+.invoice-type-option:hover {
+    border-color: var(--gold-solid);
+}
+
+.invoice-type-option.active {
+    border-color: var(--gold-solid);
+    background: var(--gold-light);
+    color: var(--text-primary);
+    box-shadow: 0 4px 14px rgba(191, 167, 122, 0.15);
 }
 
 .cod-icon-wrapper {

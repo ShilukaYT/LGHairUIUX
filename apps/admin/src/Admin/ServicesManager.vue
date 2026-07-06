@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, reactive, onMounted } from "vue";
 import axios from "axios";
+import { logActivity } from "@/utils/activityLogger";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -944,12 +945,13 @@ async function saveItem() {
           fd.append("Files", base64ToFile(img, `image_${i}.png`));
       });
       deletedImages.value.forEach((img) => fd.append("DeletedImages", img));
-
       if (editingId.value) {
         await axios.put(`${API}/api/DichVu/${editingId.value}`, fd);
+        logActivity("Cập nhật dịch vụ", `Đã cập nhật thông tin dịch vụ ${form.tenDV} (Mã: ${editingId.value})`, "Dịch vụ");
         showToast("Cập nhật dịch vụ thành công!");
       } else {
         await axios.post(`${API}/api/DichVu`, fd);
+        logActivity("Thêm dịch vụ", `Đã thêm dịch vụ mới ${form.tenDV} (Mã: ${form.maDV})`, "Dịch vụ");
         showToast("Thêm dịch vụ thành công!");
       }
       deletedImages.value = [];
@@ -957,6 +959,12 @@ async function saveItem() {
       closeModal();
     } catch (err) {
       console.error("DichVu save error:", err.response?.data);
+      logActivity(
+        editingId.value ? "Cập nhật dịch vụ" : "Thêm dịch vụ",
+        `Thất bại khi ${editingId.value ? 'cập nhật' : 'thêm'} dịch vụ ${form.tenDV} - Lỗi: ${err.message || ''}`,
+        "Dịch vụ",
+        "Thất bại"
+      );
       showToast("Lỗi khi lưu dịch vụ!", "error");
     } finally {
       saving.value = false;
@@ -969,8 +977,6 @@ async function saveItem() {
     if (!validateCombo()) return;
     saving.value = true;
     try {
-      // Dùng FormData để hỗ trợ upload ảnh bìa.
-      // Backend cần: [FromForm] + IFormFile? File trong ComboDTO (xem note đầu file).
       const fd = new FormData();
       fd.append("MaCB", editingId.value || form.maCB.trim());
       fd.append("TenCombo", form.tenCombo.trim());
@@ -979,27 +985,31 @@ async function saveItem() {
       fd.append("TrangThai", Number(form.trangThai));
       form.dichvus.forEach((id) => fd.append("DichVus", id));
 
-      // Ảnh bìa
       if (form.hinhAnh && form.hinhAnh.startsWith("data:")) {
         fd.append("File", base64ToFile(form.hinhAnh, "combo_cover.png"));
       } else if (form.hinhAnh && form.hinhAnh.startsWith("http")) {
-        // Giữ nguyên ảnh cũ — gửi URL để backend biết không thay đổi
         fd.append("HinhAnhCu", form.hinhAnh);
       }
 
       if (editingId.value) {
-        // UPDATE
         await axios.put(`${API}/api/Combo/${editingId.value}`, fd);
+        logActivity("Cập nhật combo", `Đã cập nhật thông tin combo ${form.tenCombo} (Mã: ${editingId.value})`, "Dịch vụ");
         showToast("Cập nhật combo thành công!");
       } else {
-        // CREATE
         await axios.post(`${API}/api/Combo`, fd);
+        logActivity("Thêm combo", `Đã thêm combo mới ${form.tenCombo} (Mã: ${form.maCB})`, "Dịch vụ");
         showToast("Thêm combo thành công!");
       }
       await loadCombos();
       closeModal();
     } catch (err) {
       console.error("Combo save error:", err.response?.data);
+      logActivity(
+        editingId.value ? "Cập nhật combo" : "Thêm combo",
+        `Thất bại khi ${editingId.value ? 'cập nhật' : 'thêm'} combo ${form.tenCombo} - Lỗi: ${err.message || ''}`,
+        "Dịch vụ",
+        "Thất bại"
+      );
       showToast("Lỗi khi lưu combo!", "error");
     } finally {
       saving.value = false;
@@ -1017,10 +1027,12 @@ async function delDV(d) {
     return;
   try {
     await axios.delete(`${API}/api/DichVu/${d.maDV}`);
+    logActivity("Xóa dịch vụ", `Đã xóa dịch vụ ${d.tenDV} (Mã: ${d.maDV})`, "Dịch vụ");
     showToast(`Đã xóa dịch vụ "${d.tenDV}"`);
     await loadDichVu();
   } catch (err) {
     const msg = err.response?.data || "Lỗi khi xóa dịch vụ!";
+    logActivity("Xóa dịch vụ", `Thất bại khi xóa dịch vụ ${d.tenDV} (Mã: ${d.maDV}) - Lỗi: ${err.message || ''}`, "Dịch vụ", "Thất bại");
     showToast(msg, "error");
   }
 }
@@ -1029,10 +1041,12 @@ async function delCombo(c) {
   if (!confirm(`Xóa combo "${c.tenCombo}"?`)) return;
   try {
     await axios.delete(`${API}/api/Combo/${c.maCB}`);
+    logActivity("Xóa combo", `Đã xóa combo ${c.tenCombo} (Mã: ${c.maCB})`, "Dịch vụ");
     showToast(`Đã xóa combo "${c.tenCombo}"`);
     await loadCombos();
   } catch (err) {
     const msg = err.response?.data || "Lỗi khi xóa dịch vụ!";
+    logActivity("Xóa combo", `Thất bại khi xóa combo ${c.tenCombo} (Mã: ${c.maCB}) - Lỗi: ${err.message || ''}`, "Dịch vụ", "Thất bại");
     showToast(msg, "error");
   }
 }
@@ -3290,13 +3304,16 @@ tbody td {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
-  z-index: 500;
+  z-index: 9000;
   display: flex;
   align-items: center;
   justify-content: center;
-  backdrop-filter: blur(3px);
 }
 .modal {
+  position: relative; /* reset lại vì Bootstrap có sẵn .modal { position: fixed; top:0; left:0 } gây xung đột */
+  top: auto;
+  left: auto;
+  margin: 0;
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 14px;

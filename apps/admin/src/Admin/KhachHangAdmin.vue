@@ -25,13 +25,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+
 import {
   Select,
   SelectContent,
@@ -453,102 +447,66 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="w-full max-w-[1920px] space-y-8 px-2 sm:px-4 lg:px-6 font-sans select-none relative">
+  <v-container fluid class="pa-6 fill-height align-start font-sans select-none" style="min-height: 100vh;">
     <Toaster rich-colors position="top-right" />
 
-    <!-- Decorative Ambient Glows for luxury feel -->
-    <div class="absolute top-12 left-1/4 w-[350px] h-[350px] bg-[#bfa77a]/8 rounded-full blur-[100px] pointer-events-none -translate-y-1/2"></div>
-    <div class="absolute bottom-24 right-1/4 w-[350px] h-[350px] bg-[#bfa77a]/5 rounded-full blur-[120px] pointer-events-none translate-y-1/2"></div>
-
-    <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between z-10 relative">
-      <div class="flex items-center gap-4">
-        <div class="bg-[#bfa77a]/15 flex size-14 shrink-0 items-center justify-center rounded-xl border border-[#bfa77a]/30">
-          <Users class="text-[#8c734b] size-7" />
+    <v-card width="100%" elevation="2" rounded="xl" class="d-flex flex-column w-full">
+      <v-card-title class="d-flex flex-column flex-md-row align-md-center justify-space-between pa-6">
+        <div>
+          <h2 class="text-h5 font-weight-bold mb-1">Quản Lý Khách Hàng</h2>
+          <div class="text-subtitle-2 text-medium-emphasis">Quản lý danh sách, tìm kiếm và chỉnh sửa thông tin khách hàng thân thiết</div>
         </div>
-        <div class="pl-1">
-          <h1 class="text-2xl md:text-3xl font-serif text-[#8c734b] tracking-wider font-light flex items-center gap-3">
-            <span>QUẢN LÝ KHÁCH HÀNG</span>
-          </h1>
-          <p class="text-[10px] text-slate-500 mt-2 font-serif italic tracking-wide">
-            "Danh sách, tìm kiếm, thêm và chỉnh sửa thông tin khách hàng thân thiết."
-          </p>
-        </div>
-      </div>
-      <Button 
-        type="button" 
-        class="h-11 px-5 !bg-[#9d804e] !text-white hover:!bg-[#866a3d] transition-all duration-300 text-xs font-bold flex items-center justify-center gap-2 rounded-xl border !border-[#9d804e] cursor-pointer shadow-none tracking-wider shrink-0" 
-        @click="openCreate"
-      >
-        <Plus class="size-4" />
-        Thêm khách hàng
-      </Button>
-    </div>
 
-    <!-- Filter container - bg-transparent, rounded-xl, no shadow, no border -->
-    <div class="flex flex-col gap-5 bg-transparent p-1 sm:flex-row sm:items-end z-10 border-none shadow-none rounded-xl relative">
-      <div class="min-w-0 flex-1 space-y-2">
-        <Label for="kw" class="text-xs font-bold text-slate-500 tracking-wider">TÌM KIẾM</Label>
-        <div class="relative">
-          <Search class="text-slate-400 absolute top-1/2 left-3.5 size-4 -translate-y-1/2" />
-          <Input
-            id="kw"
-            v-model="keyword"
-            class="w-full h-11 pl-10 pr-8 rounded-xl border border-slate-200/80 text-xs font-medium outline-none focus:border-[#8c734b] focus:ring-1 focus:ring-[#8c734b]/15 bg-slate-50 focus:bg-white text-slate-800 placeholder:text-slate-400 transition-all shadow-none hover:border-[#bfa77a]/40"
-            placeholder="Mã KH, họ tên, SĐT, email…"
-            @input="onSearchInput"
-          />
-        </div>
-      </div>
-      <div class="w-full space-y-2 sm:w-56">
-        <Label class="text-xs font-bold text-slate-500 tracking-wider">TRẠNG THÁI</Label>
-        <Select v-model="trangThaiFilter">
-          <SelectTrigger class="h-11 text-xs font-semibold text-slate-700 bg-slate-50 rounded-xl border border-slate-200/80 shadow-none hover:border-[#bfa77a]/40 transition-colors focus:ring-0 focus:ring-offset-0 focus:outline-none">
-            <SelectValue placeholder="Tất cả" />
-          </SelectTrigger>
-          <SelectContent class="rounded-xl border border-solid !border-slate-300 !bg-white">
-            <SelectItem value="all">Tất cả</SelectItem>
-            <SelectItem value="1">Hoạt động</SelectItem>
-            <SelectItem value="0">Khóa</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div class="w-full space-y-2 sm:w-44">
-        <Label class="text-xs font-bold text-slate-500 tracking-wider">SỐ DÒNG / TRANG</Label>
-        <Select
-          :model-value="String(pageSize)"
-          @update:model-value="(v: unknown) => { pageSize = Number(v); page = 1 }"
-        >
-          <SelectTrigger class="h-11 text-xs font-semibold text-slate-700 bg-slate-50 rounded-xl border border-slate-200/80 shadow-none hover:border-[#bfa77a]/40 transition-colors focus:ring-0 focus:ring-offset-0 focus:outline-none">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent class="rounded-xl border border-solid !border-slate-300 !bg-white">
-            <SelectItem value="10">10</SelectItem>
-            <SelectItem value="20">20</SelectItem>
-            <SelectItem value="50">50</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-    </div>
+        <div class="d-flex align-center gap-3 mt-4 mt-md-0 flex-wrap">
+          <div class="relative w-full sm:w-64">
+            <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              id="kw"
+              v-model="keyword"
+              class="w-full h-10 pl-10 pr-8 rounded-lg border border-slate-300 text-xs font-medium outline-none focus:border-primary bg-white text-slate-800"
+              placeholder="Mã KH, họ tên, SĐT, email…"
+              @input="onSearchInput"
+            />
+          </div>
 
-    <!-- Table Container - Rounded corners, thin borders -->
-    <div class="bg-white rounded-2xl border border-solid !border-slate-200 shadow-sm relative overflow-hidden flex flex-col z-10">
-      <div class="overflow-x-auto">
-        <Table
-          class="w-full text-left text-xs border-separate border-spacing-0"
-        >
-          <TableHeader class="sticky top-0 bg-slate-50/95 backdrop-blur-xs z-10 border-b border-[#bfa77a]/20">
-            <TableRow class="border-b border-[#bfa77a]/20 hover:bg-transparent">
-              <TableHead class="py-5 px-6 font-bold text-[#8c734b] border-b border-[#bfa77a]/20 bg-slate-50/95 tracking-wider select-none whitespace-nowrap text-center w-[120px] min-w-[7rem]">MÃ KH</TableHead>
-              <TableHead class="py-5 px-6 font-bold text-[#8c734b] border-b border-[#bfa77a]/20 bg-slate-50/95 tracking-wider select-none whitespace-nowrap text-left min-w-[10rem]">HỌ TÊN</TableHead>
-              <TableHead class="py-5 px-6 font-bold text-[#8c734b] border-b border-[#bfa77a]/20 bg-slate-50/95 tracking-wider select-none whitespace-nowrap text-center min-w-[8rem]">SỐ ĐIỆN THOẠI</TableHead>
-              <TableHead class="py-5 px-6 font-bold text-[#8c734b] border-b border-[#bfa77a]/20 bg-slate-50/95 tracking-wider select-none whitespace-nowrap text-left min-w-[14rem]">EMAIL</TableHead>
-              <TableHead class="py-5 px-6 font-bold text-[#8c734b] border-b border-[#bfa77a]/20 bg-slate-50/95 tracking-wider select-none whitespace-nowrap text-center min-w-[7rem]">HẠNG</TableHead>
-              <TableHead class="py-5 px-6 font-bold text-[#8c734b] border-b border-[#bfa77a]/20 bg-slate-50/95 tracking-wider select-none whitespace-nowrap text-center min-w-[6rem]">ĐIỂM TÍCH LŨY</TableHead>
-              <TableHead class="py-5 px-6 font-bold text-[#8c734b] border-b border-[#bfa77a]/20 bg-slate-50/95 tracking-wider select-none whitespace-nowrap text-center min-w-[8rem]">TRẠNG THÁI</TableHead>
-              <TableHead class="py-5 px-6 font-bold text-[#8c734b] border-b border-[#bfa77a]/20 bg-slate-50/95 tracking-wider select-none whitespace-nowrap text-center min-w-[7rem]">THAO TÁC</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody class="divide-y divide-slate-100">
+          <div class="d-flex align-center gap-2 text-caption font-weight-bold text-medium-emphasis">
+            <span>TRẠNG THÁI:</span>
+            <select
+              v-model="trangThaiFilter"
+              class="h-10 px-3 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-700 outline-none cursor-pointer"
+            >
+              <option value="all">Tất cả</option>
+              <option value="1">Hoạt động</option>
+              <option value="0">Khóa</option>
+            </select>
+          </div>
+
+          <v-btn color="primary" variant="flat" rounded="lg" class="text-none font-weight-bold" @click="openCreate">
+            <template v-slot:prepend><Plus class="w-4 h-4 mr-1" /></template>
+            Thêm khách hàng
+          </v-btn>
+        </div>
+      </v-card-title>
+
+      <v-divider></v-divider>
+
+      <!-- Table -->
+      <div class="flex-1 overflow-x-auto w-full p-6 pt-2">
+        <div class="overflow-x-auto rounded-xl border border-slate-200">
+          <Table class="w-full text-left text-xs">
+            <TableHeader class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[11px]">
+              <TableRow class="hover:bg-transparent">
+                <TableHead class="py-3.5 px-4 font-bold text-center w-[120px]">MÃ KH</TableHead>
+                <TableHead class="py-3.5 px-4 font-bold text-left">HỌ TÊN</TableHead>
+                <TableHead class="py-3.5 px-4 font-bold text-center">SỐ ĐIỆN THOẠI</TableHead>
+                <TableHead class="py-3.5 px-4 font-bold text-left">EMAIL</TableHead>
+                <TableHead class="py-3.5 px-4 font-bold text-center">HẠNG</TableHead>
+                <TableHead class="py-3.5 px-4 font-bold text-center">ĐIỂM TÍCH LŨY</TableHead>
+                <TableHead class="py-3.5 px-4 font-bold text-center">TRẠNG THÁI</TableHead>
+                <TableHead class="py-3.5 px-4 font-bold text-center">THAO TÁC</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody class="divide-y divide-slate-100">
             <TableRow v-if="loading">
               <TableCell colspan="8" class="text-slate-550 py-14 text-center text-xs font-bold tracking-widest uppercase bg-white">
                 Đang tải dữ liệu khách hàng...
@@ -566,19 +524,19 @@ onMounted(() => {
               class="hover:bg-[#bfa77a]/5 border-b border-slate-100 transition-all duration-150 group cursor-pointer"
             >
               <!-- Mã KH (Center) -->
-              <TableCell class="py-5 px-6 text-center font-mono font-bold text-slate-800">{{ row.maKh }}</TableCell>
+              <TableCell class="py-5 px-4 text-center font-mono font-bold text-slate-800">{{ row.maKh }}</TableCell>
               
               <!-- Họ tên (Left) -->
-              <TableCell class="py-5 px-6 text-left font-semibold text-slate-800 group-hover:text-[#8c734b] transition-colors">{{ row.hoTen || '—' }}</TableCell>
+              <TableCell class="py-5 px-4 text-left font-semibold text-slate-800 group-hover:text-[#8c734b] transition-colors">{{ row.hoTen || '—' }}</TableCell>
               
               <!-- SĐT (Center) -->
-              <TableCell class="py-5 px-6 text-center text-slate-700 whitespace-nowrap">{{ row.sdt || '—' }}</TableCell>
+              <TableCell class="py-5 px-4 text-center text-slate-700 whitespace-nowrap">{{ row.sdt || '—' }}</TableCell>
               
               <!-- Email (Left) -->
-              <TableCell class="py-5 px-6 text-left text-slate-650 max-w-xs truncate sm:max-w-md">{{ row.email || '—' }}</TableCell>
+              <TableCell class="py-5 px-4 text-left text-slate-650 max-w-xs truncate sm:max-w-md">{{ row.email || '—' }}</TableCell>
               
               <!-- Hạng (Center) -->
-              <TableCell class="py-5 px-6 text-center">
+              <TableCell class="py-5 px-4 text-center">
                 <span 
                   v-if="row.tenRank?.toUpperCase().includes('KIM CƯƠNG') || row.maRank?.toUpperCase().includes('KIM CƯƠNG')" 
                   class="inline-flex items-center px-2.5 py-0.5 rounded-md text-[8px] font-extrabold uppercase tracking-widest bg-cyan-50 text-cyan-600 border border-cyan-150"
@@ -599,17 +557,17 @@ onMounted(() => {
                 </span>
                 <span 
                   v-else 
-                  class="inline-flex items-center px-2.5 py-0.5 rounded-md text-[8px] font-extrabold uppercase tracking-widest bg-amber-50 text-amber-700 border border-amber-100"
+                  class="inline-flex items-center px-2.5 py-0.5 rounded-md text-[8px] font-extrabold uppercase tracking-widest bg-amber-55 text-amber-700 border border-amber-100"
                 >
                   {{ row.tenRank || row.maRank || 'Đồng' }}
                 </span>
               </TableCell>
               
               <!-- Điểm (Center) -->
-              <TableCell class="py-5 px-6 text-center font-bold font-mono text-slate-700 text-xs">{{ row.diemTichLuy ?? 0 }}</TableCell>
+              <TableCell class="py-5 px-4 text-center font-bold font-mono text-slate-700 text-xs">{{ row.diemTichLuy ?? 0 }}</TableCell>
               
               <!-- Trạng thái (Center) -->
-              <TableCell class="py-5 px-6 text-center">
+              <TableCell class="py-5 px-4 text-center">
                 <span 
                   v-if="row.trangThai === 1"
                   class="inline-flex items-center px-2.5 py-0.5 rounded-md text-[8px] font-extrabold uppercase tracking-widest bg-emerald-50 text-emerald-600 border border-emerald-150"
@@ -625,403 +583,384 @@ onMounted(() => {
               </TableCell>
               
               <!-- Thao tác (Center) -->
-              <TableCell class="py-5 px-6 text-center" @click.stop>
-                <Button
-                  type="button"
-                  variant="outline"
-                  class="h-8 gap-1.5 px-3 text-xs rounded-lg border-[#8c734b]/30 hover:border-[#8c734b]/60 text-[#8c734b] hover:bg-[#bfa77a]/10 cursor-pointer"
+              <TableCell class="py-3.5 px-4 text-center" @click.stop>
+                <v-btn
+                  color="primary" variant="tonal" size="small" rounded="lg" class="text-none font-weight-bold"
                   @click="openEdit(row)"
                 >
-                  <Pencil class="size-3" />
+                  <template v-slot:prepend><Pencil class="w-3.5 h-3.5 mr-1" /></template>
                   Sửa
-                </Button>
+                </v-btn>
               </TableCell>
             </TableRow>
           </TableBody>
         </Table>
       </div>
+    </div>
 
-      <!-- Pagination - Clean design -->
-      <div
-        class="text-slate-500 flex flex-col items-center justify-between gap-4 border-t px-6 py-4 text-xs font-semibold sm:flex-row bg-slate-50/50"
-      >
+      <!-- Pagination -->
+      <div class="text-slate-500 flex flex-col items-center justify-between gap-4 border-t px-6 py-4 text-xs font-semibold sm:flex-row bg-slate-50/50">
         <span>
-          Tổng số <strong class="text-slate-800 font-mono">{{ totalCount }}</strong> khách hàng
-          · Trang {{ page }} / {{ totalPages }}
+          Tổng số <strong class="text-slate-800 font-mono">{{ totalCount }}</strong> khách hàng · Trang {{ page }} / {{ totalPages }}
         </span>
         <div class="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            class="w-9 h-9 p-0 rounded-xl border-slate-200 hover:border-[#bfa77a] hover:bg-[#bfa77a]/10 text-slate-500 hover:text-[#8c734b] cursor-pointer"
+          <v-btn
+            variant="outlined" color="grey-darken-1" size="36" rounded="lg"
             :disabled="page <= 1 || loading"
             @click="page = Math.max(1, page - 1)"
           >
-            <ChevronLeft class="size-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            class="w-9 h-9 p-0 rounded-xl border-slate-200 hover:border-[#bfa77a] hover:bg-[#bfa77a]/10 text-slate-500 hover:text-[#8c734b] cursor-pointer"
+            <ChevronLeft class="w-4 h-4" />
+          </v-btn>
+          <v-btn
+            variant="outlined" color="grey-darken-1" size="36" rounded="lg"
             :disabled="page >= totalPages || loading"
             @click="page = Math.min(totalPages, page + 1)"
           >
-            <ChevronRight class="size-4" />
-          </Button>
+            <ChevronRight class="w-4 h-4" />
+          </v-btn>
         </div>
       </div>
-    </div>
+    </v-card>
 
-    <!-- Sửa khách hàng (Dialog rounded-2xl, inputs rounded-xl) -->
-    <Dialog v-model:open="editOpen">
-      <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-3xl rounded-2xl !border-slate-300 !p-0 overflow-hidden shadow-2xl">
-        <DialogHeader class="!px-8 !pt-6 !pb-4 border-b !border-slate-200 bg-slate-50/50">
-          <DialogTitle class="text-lg font-serif text-[#8c734b] tracking-wider uppercase">Sửa thông tin khách hàng</DialogTitle>
-        </DialogHeader>
-        <div class="!px-8 !py-6 space-y-5 text-xs">
-          <p class="text-slate-500 text-xs leading-relaxed">
-            Hạng thành viên được hệ thống tự cập nhật theo điểm (giống đăng nhập khách).
-            <span v-if="editForm.tenRank" class="text-slate-800 font-bold ml-1">Hiện tại: {{ editForm.tenRank }}</span>
-          </p>
-
-          <div class="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-x-6">
-            <div class="space-y-2">
-              <Label for="ef-ten" class="text-xs font-bold text-slate-500 tracking-wider">HỌ TÊN</Label>
-              <Input id="ef-ten" v-model="editForm.hoTen" class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all" />
-            </div>
-            <div class="space-y-2">
-              <Label for="ef-sdt" class="text-xs font-bold text-slate-500 tracking-wider">SỐ ĐIỆN THOẠI</Label>
-              <Input
-                id="ef-sdt"
-                v-model="editForm.sdt"
-                class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
-                placeholder="VD: 09xxxxxxxx"
-                inputmode="tel"
-                autocomplete="tel"
-              />
-            </div>
-            <div class="space-y-2">
-              <Label for="ef-email" class="text-xs font-bold text-slate-500 tracking-wider">EMAIL *</Label>
-              <Input
-                id="ef-email"
-                v-model="editForm.email"
-                class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
-                type="email"
-                autocomplete="email"
-                placeholder="vidu@email.com"
-              />
-            </div>
-            <div class="space-y-2">
-              <Label class="text-xs font-bold text-slate-500 tracking-wider">GIỚI TÍNH</Label>
-              <Select
-                :model-value="editForm.gioiTinh.trim() ? editForm.gioiTinh.trim() : GIOI_TINH_NONE"
-                @update:model-value="
-                  (v: unknown) => {
-                    editForm.gioiTinh = v === GIOI_TINH_NONE ? '' : String(v)
-                  }
-                "
-              >
-                <SelectTrigger class="h-11 text-xs font-semibold text-slate-700 !bg-slate-50/50 rounded-xl border border-solid !border-slate-300 outline-none focus:ring-0 shadow-none transition-all">
-                  <SelectValue placeholder="Chọn giới tính" />
-                </SelectTrigger>
-                <SelectContent class="rounded-xl border border-solid !border-slate-300 !bg-white shadow-lg">
-                  <SelectItem :value="GIOI_TINH_NONE">Chưa chọn</SelectItem>
-                  <SelectItem value="Nam">Nam</SelectItem>
-                  <SelectItem value="Nữ">Nữ</SelectItem>
-                  <SelectItem value="Khác">Khác</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div class="space-y-2">
-              <Label for="ef-diem" class="text-xs font-bold text-slate-500 tracking-wider">ĐIỂM TÍCH LŨY</Label>
-              <Input id="ef-diem" v-model="editForm.diemTichLuy" class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all" type="number" min="0" />
-            </div>
-            <div class="space-y-2">
-              <Label class="text-xs font-bold text-slate-500 tracking-wider">TRẠNG THÁI</Label>
-              <Select v-model="editForm.trangThai">
-                <SelectTrigger class="h-11 text-xs font-semibold text-slate-700 !bg-slate-50/50 rounded-xl border border-solid !border-slate-300 outline-none focus:ring-0 shadow-none transition-all">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent class="rounded-xl border border-solid !border-slate-300 !bg-white shadow-lg">
-                  <SelectItem value="1">Hoạt động</SelectItem>
-                  <SelectItem value="0">Khóa</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+    <!-- Sửa khách hàng -->
+    <Teleport to="body">
+      <div
+        v-if="editOpen"
+        class="fixed inset-0 z-[2400] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edit-kh-title"
+      >
+        <button
+          type="button"
+          class="absolute inset-0 bg-transparent cursor-default"
+          aria-label="Đóng"
+          @click="editOpen = false"
+        />
+        <div
+          class="relative z-10 flex max-h-[90vh] w-full max-w-3xl min-h-0 flex-col overflow-hidden rounded-2xl border border-solid !border-slate-300 bg-white shadow-2xl transition-all"
+          @click.stop
+        >
+          <!-- Header -->
+          <div class="shrink-0 border-b border-solid !border-slate-200 !px-8 !pt-6 !pb-4 bg-slate-50/50">
+            <h2 id="edit-kh-title" class="text-lg font-serif text-[#8c734b] tracking-wider uppercase">Sửa thông tin khách hàng</h2>
           </div>
 
-          <div class="border-border space-y-3 border-t pt-4">
-            <Label class="text-xs font-bold text-slate-500 tracking-wider">ẢNH ĐẠI DIỆN</Label>
-            <p class="text-slate-450 text-[10px]">Chọn file JPG, PNG hoặc WEBP (tối đa 5MB). Không cần dán URL.</p>
-            <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
-              <div
-                class="bg-slate-50 !border-slate-300 flex size-28 shrink-0 items-center justify-center overflow-hidden rounded-xl border"
-              >
-                <img
-                  v-if="mediaUrl(editForm.hinhAnh)"
-                  :src="mediaUrl(editForm.hinhAnh)"
-                  alt=""
-                  class="size-full object-cover"
-                />
-                <span v-else class="text-slate-400 px-2 text-center text-[10px] font-semibold uppercase">Chưa có ảnh</span>
+          <!-- Body -->
+          <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain !px-8 !py-6 space-y-5 text-xs">
+            <p class="text-slate-500 text-xs leading-relaxed">
+              Hạng thành viên được hệ thống tự cập nhật theo điểm (giống đăng nhập khách).
+              <span v-if="editForm.tenRank" class="text-slate-800 font-bold ml-1">Hiện tại: {{ editForm.tenRank }}</span>
+            </p>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-x-6">
+              <div class="space-y-2">
+                <Label for="ef-ten" class="text-xs font-bold text-slate-500 tracking-wider">HỌ TÊN</Label>
+                <Input id="ef-ten" v-model="editForm.hoTen" class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all" />
               </div>
-              <div class="flex flex-wrap items-center gap-2">
-                <input
-                  ref="editAvatarFileRef"
-                  type="file"
-                  accept="image/jpeg,image/jpg,image/png,image/webp"
-                  class="hidden"
-                  @change="onPickAvatar($event, 'edit')"
+              <div class="space-y-2">
+                <Label for="ef-sdt" class="text-xs font-bold text-slate-500 tracking-wider">SỐ ĐIỆN THOẠI</Label>
+                <Input
+                  id="ef-sdt"
+                  v-model="editForm.sdt"
+                  class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
+                  placeholder="VD: 09xxxxxxxx"
+                  inputmode="tel"
+                  autocomplete="tel"
+                />
+              </div>
+              <div class="space-y-2">
+                <Label for="ef-email" class="text-xs font-bold text-slate-500 tracking-wider">EMAIL *</Label>
+                <Input
+                  id="ef-email"
+                  v-model="editForm.email"
+                  class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
+                  type="email"
+                  autocomplete="email"
+                  placeholder="vidu@email.com"
+                />
+              </div>
+              <div class="space-y-2">
+                <Label class="text-xs font-bold text-slate-500 tracking-wider">GIỚI TÍNH</Label>
+                <Select
+                  :model-value="editForm.gioiTinh.trim() ? editForm.gioiTinh.trim() : GIOI_TINH_NONE"
+                  @update:model-value="
+                    (v: unknown) => {
+                      editForm.gioiTinh = v === GIOI_TINH_NONE ? '' : String(v)
+                    }
+                  "
+                >
+                  <SelectTrigger class="h-11 text-xs font-semibold text-slate-700 !bg-slate-50/50 rounded-xl border border-solid !border-slate-300 outline-none focus:ring-0 shadow-none transition-all">
+                    <SelectValue placeholder="Chọn giới tính" />
+                  </SelectTrigger>
+                  <SelectContent class="rounded-xl border border-solid !border-slate-300 !bg-white shadow-lg">
+                    <SelectItem :value="GIOI_TINH_NONE">Chưa chọn</SelectItem>
+                    <SelectItem value="Nam">Nam</SelectItem>
+                    <SelectItem value="Nữ">Nữ</SelectItem>
+                    <SelectItem value="Khác">Khác</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div class="space-y-2">
+                <Label for="ef-diem" class="text-xs font-bold text-slate-500 tracking-wider">ĐIỂM TÍCH LŨY</Label>
+                <Input id="ef-diem" v-model="editForm.diemTichLuy" class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all" type="number" min="0" />
+              </div>
+              <div class="space-y-2">
+                <Label class="text-xs font-bold text-slate-500 tracking-wider">TRẠNG THÁI</Label>
+                <Select v-model="editForm.trangThai">
+                  <SelectTrigger class="h-11 text-xs font-semibold text-slate-700 !bg-slate-50/50 rounded-xl border border-solid !border-slate-300 outline-none focus:ring-0 shadow-none transition-all">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent class="rounded-xl border border-solid !border-slate-300 !bg-white shadow-lg">
+                    <SelectItem value="1">Hoạt động</SelectItem>
+                    <SelectItem value="0">Khóa</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div class="border-border space-y-3 border-t pt-4">
+              <Label class="text-xs font-bold text-slate-500 tracking-wider">ẢNH ĐẠI DIỆN</Label>
+              <p class="text-slate-450 text-[10px]">Chọn file JPG, PNG hoặc WEBP (tối đa 5MB). Không cần dán URL.</p>
+              <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
+                <div class="bg-slate-50 !border-slate-300 flex size-28 shrink-0 items-center justify-center overflow-hidden rounded-xl border">
+                  <img v-if="mediaUrl(editForm.hinhAnh)" :src="mediaUrl(editForm.hinhAnh)" alt="" class="size-full object-cover" />
+                  <span v-else class="text-slate-400 px-2 text-center text-[10px] font-semibold uppercase">Chưa có ảnh</span>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <input ref="editAvatarFileRef" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" class="hidden" @change="onPickAvatar($event, 'edit')" />
+                  <Button type="button" variant="outline" class="h-11 gap-2 rounded-xl text-xs font-bold !border-slate-300 hover:border-[#bfa77a] hover:bg-[#bfa77a]/10 hover:text-[#8c734b]" :disabled="avatarUploading" @click="editAvatarFileRef?.click()">
+                    <Upload class="size-4" />
+                    {{ avatarUploading ? 'Đang tải…' : 'Chọn ảnh' }}
+                  </Button>
+                  <Button v-if="editForm.hinhAnh" type="button" variant="ghost" class="h-11 rounded-xl text-xs text-rose-500 hover:bg-rose-50 hover:text-rose-600" :disabled="avatarUploading" @click="clearAvatar('edit')">
+                    Xóa ảnh
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div class="space-y-2">
+              <Label for="ef-mk" class="text-xs font-bold text-slate-500 tracking-wider">MẬT KHẨU ĐĂNG NHẬP</Label>
+              <p class="text-slate-450 text-[10px] leading-relaxed">
+                Hiển thị mật khẩu hiện tại. Sửa nội dung để đổi mật khẩu; xóa trắng ô rồi lưu = giữ nguyên mật khẩu cũ.
+              </p>
+              <div class="relative">
+                <Input
+                  id="ef-mk"
+                  v-model="editForm.matKhauMoi"
+                  class="h-11 pr-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all font-mono"
+                  :type="showEditPassword ? 'text' : 'password'"
+                  autocomplete="off"
+                  spellcheck="false"
                 />
                 <Button
-                  type="button"
-                  variant="outline"
-                  class="h-11 gap-2 rounded-xl text-xs font-bold !border-slate-300 hover:border-[#bfa77a] hover:bg-[#bfa77a]/10 hover:text-[#8c734b]"
-                  :disabled="avatarUploading"
-                  @click="editAvatarFileRef?.click()"
-                >
-                  <Upload class="size-4" />
-                  {{ avatarUploading ? 'Đang tải…' : 'Chọn ảnh' }}
-                </Button>
-                <Button
-                  v-if="editForm.hinhAnh"
                   type="button"
                   variant="ghost"
-                  class="h-11 rounded-xl text-xs text-rose-500 hover:bg-rose-50 hover:text-rose-600"
-                  :disabled="avatarUploading"
-                  @click="clearAvatar('edit')"
+                  size="icon"
+                  class="text-slate-400 absolute top-0 right-0 z-20 h-11 w-11 shrink-0 rounded-xl hover:bg-transparent"
+                  :aria-pressed="showEditPassword"
+                  :aria-label="showEditPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'"
+                  @click.stop.prevent="toggleEditPassword"
                 >
-                  Xóa ảnh
+                  <Eye v-if="!showEditPassword" class="pointer-events-none size-4" />
+                  <EyeOff v-else class="pointer-events-none size-4" />
                 </Button>
               </div>
             </div>
           </div>
 
-          <div class="space-y-2">
-            <Label for="ef-mk" class="text-xs font-bold text-slate-500 tracking-wider">MẬT KHẨU ĐĂNG NHẬP</Label>
-            <p class="text-slate-450 text-[10px] leading-relaxed">
-              Hiển thị mật khẩu hiện tại. Sửa nội dung để đổi mật khẩu; xóa trắng ô rồi lưu = giữ nguyên mật khẩu cũ.
-            </p>
-            <div class="relative">
-              <Input
-                id="ef-mk"
-                v-model="editForm.matKhauMoi"
-                class="h-11 pr-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all font-mono"
-                :type="showEditPassword ? 'text' : 'password'"
-                autocomplete="off"
-                spellcheck="false"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                class="text-slate-400 absolute top-0 right-0 z-20 h-11 w-11 shrink-0 rounded-xl hover:bg-transparent"
-                :aria-pressed="showEditPassword"
-                :aria-label="showEditPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'"
-                @click.stop.prevent="toggleEditPassword"
-              >
-                <Eye v-if="!showEditPassword" class="pointer-events-none size-4" />
-                <EyeOff v-else class="pointer-events-none size-4" />
-              </Button>
-            </div>
+          <!-- Footer -->
+          <div class="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-solid !border-slate-200 bg-slate-50/50 !px-8 !py-4">
+            <Button type="button" variant="outline" class="h-11 px-5 text-xs font-bold rounded-xl !border-slate-300 text-slate-700 hover:bg-slate-100" @click="editOpen = false">
+              Hủy
+            </Button>
+            <Button
+              type="button"
+              class="h-11 px-5 !bg-[#9d804e] !text-white hover:!bg-[#866a3d] border !border-[#9d804e] text-xs font-bold rounded-xl shadow-none cursor-pointer tracking-wider"
+              :disabled="saving"
+              @click="saveEdit"
+            >
+              Lưu
+            </Button>
           </div>
         </div>
-        <DialogFooter class="!px-8 !py-4 border-t !border-slate-200 gap-3 bg-slate-50/50">
-          <Button type="button" variant="outline" class="h-11 px-5 text-xs font-bold rounded-xl !border-slate-300 text-slate-700 hover:bg-slate-100" @click="editOpen = false">
-            Hủy
-          </Button>
-          <Button 
-            type="button" 
-            class="h-11 px-5 !bg-[#9d804e] !text-white hover:!bg-[#866a3d] border !border-[#9d804e] text-xs font-bold rounded-xl shadow-none cursor-pointer tracking-wider" 
-            :disabled="saving" 
-            @click="saveEdit"
-          >
-            Lưu
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </Teleport>
 
-    <!-- Thêm khách hàng (Dialog rounded-2xl, inputs rounded-xl) -->
-    <Dialog v-model:open="createOpen">
-      <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-3xl rounded-2xl !border-slate-300 !p-0 overflow-hidden shadow-2xl">
-        <DialogHeader class="!px-8 !pt-6 !pb-4 border-b !border-slate-200 bg-slate-50/50">
-          <DialogTitle class="text-lg font-serif text-[#8c734b] tracking-wider uppercase">Thêm khách hàng mới</DialogTitle>
-        </DialogHeader>
-        <div class="!px-8 !py-6 space-y-5 text-xs">
-          <div class="space-y-2">
-            <Label class="text-xs font-bold text-slate-500 tracking-wider">LOẠI KHÁCH</Label>
-            <Select
-              :model-value="createLoaiKhach"
-              @update:model-value="onCreateLoaiChange"
-            >
-              <SelectTrigger class="h-11 text-xs font-semibold text-slate-700 !bg-slate-50/50 rounded-xl border border-solid !border-slate-300 outline-none focus:ring-0 shadow-none transition-all">
-                <SelectValue placeholder="Chọn loại" />
-              </SelectTrigger>
-              <SelectContent class="rounded-xl border border-solid !border-slate-300 !bg-white shadow-lg">
-                <SelectItem value="vang_lai">Khách vãng lai (mặc định)</SelectItem>
-                <SelectItem value="ten_cu_the">Khách có tên cụ thể</SelectItem>
-              </SelectContent>
-            </Select>
-            <p class="text-slate-450 text-[10px]">
-              {{
-                createLoaiKhach === 'vang_lai'
-                  ? 'Họ tên đặt sẵn "Khách vãng lai" — có thể sửa nếu cần. Email bắt buộc.'
-                  : 'Nhập họ tên, số điện thoại và email đầy đủ.'
-              }}
-            </p>
+    <!-- Thêm khách hàng -->
+    <Teleport to="body">
+      <div
+        v-if="createOpen"
+        class="fixed inset-0 z-[2400] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-kh-title"
+      >
+        <button
+          type="button"
+          class="absolute inset-0 bg-transparent cursor-default"
+          aria-label="Đóng"
+          @click="createOpen = false"
+        />
+        <div
+          class="relative z-10 flex max-h-[90vh] w-full max-w-3xl min-h-0 flex-col overflow-hidden rounded-2xl border border-solid !border-slate-300 bg-white shadow-2xl transition-all"
+          @click.stop
+        >
+          <!-- Header -->
+          <div class="shrink-0 border-b border-solid !border-slate-200 !px-8 !pt-6 !pb-4 bg-slate-50/50">
+            <h2 id="create-kh-title" class="text-lg font-serif text-[#8c734b] tracking-wider uppercase">Thêm khách hàng mới</h2>
           </div>
 
-          <div class="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-x-6">
+          <!-- Body -->
+          <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain !px-8 !py-6 space-y-5 text-xs">
             <div class="space-y-2">
-              <Label for="cf-ten" class="text-xs font-bold text-slate-500 tracking-wider">HỌ TÊN *</Label>
-              <Input id="cf-ten" v-model="createForm.hoTen" class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all" />
-            </div>
-            <div class="space-y-2">
-              <Label for="cf-sdt" class="text-xs font-bold text-slate-500 tracking-wider">SỐ ĐIỆN THOẠI *</Label>
-              <Input
-                id="cf-sdt"
-                v-model="createForm.sdt"
-                class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
-                :class="createSdtError ? 'border-destructive' : ''"
-                placeholder="VD: 09xxxxxxxx hoặc +84…"
-                inputmode="tel"
-                autocomplete="tel"
-                :aria-invalid="!!createSdtError"
-                @input="createSdtError = ''"
-              />
-              <p v-if="createSdtError" class="text-rose-500 text-[10px] mt-1 font-bold">{{ createSdtError }}</p>
-            </div>
-            <div class="space-y-2">
-              <Label for="cf-email" class="text-xs font-bold text-slate-500 tracking-wider">EMAIL *</Label>
-              <Input
-                id="cf-email"
-                v-model="createForm.email"
-                class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
-                :class="createEmailError ? 'border-destructive' : ''"
-                type="email"
-                autocomplete="email"
-                placeholder="vidu@email.com"
-                :aria-invalid="!!createEmailError"
-                @input="createEmailError = ''"
-              />
-              <p v-if="createEmailError" class="text-rose-500 text-[10px] mt-1 font-bold">{{ createEmailError }}</p>
-            </div>
-            <div class="space-y-2">
-              <Label class="text-xs font-bold text-slate-500 tracking-wider">GIỚI TÍNH *</Label>
-              <Select
-                :model-value="createForm.gioiTinh.trim() ? createForm.gioiTinh.trim() : GIOI_TINH_NONE"
-                @update:model-value="onCreateGioiTinhSelect"
-              >
-                <SelectTrigger
-                  class="h-11 text-xs font-semibold text-slate-700 !bg-slate-50/50 rounded-xl border border-solid !border-slate-300 outline-none focus:ring-0 shadow-none transition-all"
-                  :class="createGioiTinhError ? 'border-destructive' : ''"
-                  :aria-invalid="!!createGioiTinhError"
-                >
-                  <SelectValue placeholder="Chọn giới tính" />
+              <Label class="text-xs font-bold text-slate-500 tracking-wider">LOẠI KHÁCH</Label>
+              <Select :model-value="createLoaiKhach" @update:model-value="onCreateLoaiChange">
+                <SelectTrigger class="h-11 text-xs font-semibold text-slate-700 !bg-slate-50/50 rounded-xl border border-solid !border-slate-300 outline-none focus:ring-0 shadow-none transition-all">
+                  <SelectValue placeholder="Chọn loại" />
                 </SelectTrigger>
                 <SelectContent class="rounded-xl border border-solid !border-slate-300 !bg-white shadow-lg">
-                  <SelectItem :value="GIOI_TINH_NONE">Chưa chọn</SelectItem>
-                  <SelectItem value="Nam">Nam</SelectItem>
-                  <SelectItem value="Nữ">Nữ</SelectItem>
-                  <SelectItem value="Khác">Khác</SelectItem>
+                  <SelectItem value="vang_lai">Khách vãng lai (mặc định)</SelectItem>
+                  <SelectItem value="ten_cu_the">Khách có tên cụ thể</SelectItem>
                 </SelectContent>
               </Select>
-              <p v-if="createGioiTinhError" class="text-rose-500 text-[10px] mt-1 font-bold">{{ createGioiTinhError }}</p>
+              <p class="text-slate-450 text-[10px]">
+                {{
+                  createLoaiKhach === 'vang_lai'
+                    ? 'Họ tên đặt sẵn "Khách vãng lai" — có thể sửa nếu cần. Email bắt buộc.'
+                    : 'Nhập họ tên, số điện thoại và email đầy đủ.'
+                }}
+              </p>
             </div>
-          </div>
 
-          <div class="border-border space-y-3 border-t pt-4">
-            <Label class="text-xs font-bold text-slate-500 tracking-wider">ẢNH ĐẠI DIỆN *</Label>
-            <p class="text-slate-450 text-[10px]">Bắt buộc — JPG, PNG, WEBP — tối đa 5MB.</p>
-            <div
-              class="flex flex-col gap-4 sm:flex-row sm:items-center"
-              :class="createAvatarError ? 'border border-rose-200 p-2 bg-rose-50/20 rounded-xl' : ''"
-            >
-              <div
-                class="bg-slate-50 !border-slate-300 flex size-28 shrink-0 items-center justify-center overflow-hidden rounded-xl border"
-              >
-                <img
-                  v-if="mediaUrl(createForm.hinhAnh)"
-                  :src="mediaUrl(createForm.hinhAnh)"
-                  alt=""
-                  class="size-full object-cover"
-                />
-                <span v-else class="text-slate-400 px-2 text-center text-[10px] font-semibold uppercase">Chưa chọn</span>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-x-6">
+              <div class="space-y-2">
+                <Label for="cf-ten" class="text-xs font-bold text-slate-500 tracking-wider">HỌ TÊN *</Label>
+                <Input id="cf-ten" v-model="createForm.hoTen" class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all" />
               </div>
-              <div class="flex flex-wrap gap-2">
-                <input
-                  ref="createAvatarFileRef"
-                  type="file"
-                  accept="image/jpeg,image/jpg,image/png,image/webp"
-                  class="hidden"
-                  @change="onPickAvatar($event, 'create')"
+              <div class="space-y-2">
+                <Label for="cf-sdt" class="text-xs font-bold text-slate-500 tracking-wider">SỐ ĐIỆN THOẠI *</Label>
+                <Input
+                  id="cf-sdt"
+                  v-model="createForm.sdt"
+                  class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
+                  :class="createSdtError ? 'border-destructive' : ''"
+                  placeholder="VD: 09xxxxxxxx hoặc +84…"
+                  inputmode="tel"
+                  autocomplete="tel"
+                  :aria-invalid="!!createSdtError"
+                  @input="createSdtError = ''"
+                />
+                <p v-if="createSdtError" class="text-rose-500 text-[10px] mt-1 font-bold">{{ createSdtError }}</p>
+              </div>
+              <div class="space-y-2">
+                <Label for="cf-email" class="text-xs font-bold text-slate-500 tracking-wider">EMAIL *</Label>
+                <Input
+                  id="cf-email"
+                  v-model="createForm.email"
+                  class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
+                  :class="createEmailError ? 'border-destructive' : ''"
+                  type="email"
+                  autocomplete="email"
+                  placeholder="vidu@email.com"
+                  :aria-invalid="!!createEmailError"
+                  @input="createEmailError = ''"
+                />
+                <p v-if="createEmailError" class="text-rose-500 text-[10px] mt-1 font-bold">{{ createEmailError }}</p>
+              </div>
+              <div class="space-y-2">
+                <Label class="text-xs font-bold text-slate-500 tracking-wider">GIỚI TÍNH *</Label>
+                <Select
+                  :model-value="createForm.gioiTinh.trim() ? createForm.gioiTinh.trim() : GIOI_TINH_NONE"
+                  @update:model-value="onCreateGioiTinhSelect"
+                >
+                  <SelectTrigger
+                    class="h-11 text-xs font-semibold text-slate-700 !bg-slate-50/50 rounded-xl border border-solid !border-slate-300 outline-none focus:ring-0 shadow-none transition-all"
+                    :class="createGioiTinhError ? 'border-destructive' : ''"
+                    :aria-invalid="!!createGioiTinhError"
+                  >
+                    <SelectValue placeholder="Chọn giới tính" />
+                  </SelectTrigger>
+                  <SelectContent class="rounded-xl border border-solid !border-slate-300 !bg-white shadow-lg">
+                    <SelectItem :value="GIOI_TINH_NONE">Chưa chọn</SelectItem>
+                    <SelectItem value="Nam">Nam</SelectItem>
+                    <SelectItem value="Nữ">Nữ</SelectItem>
+                    <SelectItem value="Khác">Khác</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p v-if="createGioiTinhError" class="text-rose-500 text-[10px] mt-1 font-bold">{{ createGioiTinhError }}</p>
+              </div>
+            </div>
+
+            <div class="border-border space-y-3 border-t pt-4">
+              <Label class="text-xs font-bold text-slate-500 tracking-wider">ẢNH ĐẠI DIỆN *</Label>
+              <p class="text-slate-450 text-[10px]">Bắt buộc — JPG, PNG, WEBP — tối đa 5MB.</p>
+              <div
+                class="flex flex-col gap-4 sm:flex-row sm:items-center"
+                :class="createAvatarError ? 'border border-rose-200 p-2 bg-rose-50/20 rounded-xl' : ''"
+              >
+                <div class="bg-slate-50 !border-slate-300 flex size-28 shrink-0 items-center justify-center overflow-hidden rounded-xl border">
+                  <img v-if="mediaUrl(createForm.hinhAnh)" :src="mediaUrl(createForm.hinhAnh)" alt="" class="size-full object-cover" />
+                  <span v-else class="text-slate-400 px-2 text-center text-[10px] font-semibold uppercase">Chưa chọn</span>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <input ref="createAvatarFileRef" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" class="hidden" @change="onPickAvatar($event, 'create')" />
+                  <Button type="button" variant="outline" class="h-11 gap-2 rounded-xl text-xs font-bold !border-slate-300 hover:border-[#bfa77a] hover:bg-[#bfa77a]/10 hover:text-[#8c734b]" :disabled="avatarUploading" @click="createAvatarFileRef?.click()">
+                    <Upload class="size-4" />
+                    {{ avatarUploading ? 'Đang tải…' : 'Chọn ảnh' }}
+                  </Button>
+                  <Button v-if="createForm.hinhAnh" type="button" variant="ghost" class="h-11 rounded-xl text-xs text-rose-500 hover:bg-rose-50 hover:text-rose-600" :disabled="avatarUploading" @click="clearAvatar('create')">
+                    Xóa ảnh
+                  </Button>
+                </div>
+              </div>
+              <p v-if="createAvatarError" class="text-rose-500 text-[10px] mt-1 font-bold">{{ createAvatarError }}</p>
+            </div>
+
+            <div class="space-y-2">
+              <Label for="cf-mk" class="text-xs font-bold text-slate-500 tracking-wider">MẬT KHẨU (ĐỂ TRỐNG = HỆ THỐNG TẠO NGẪU NHIÊN)</Label>
+              <div class="relative">
+                <Input
+                  id="cf-mk"
+                  v-model="createForm.matKhau"
+                  class="h-11 pr-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all font-mono"
+                  :type="showCreatePassword ? 'text' : 'password'"
+                  autocomplete="off"
+                  spellcheck="false"
                 />
                 <Button
-                  type="button"
-                  variant="outline"
-                  class="h-11 gap-2 rounded-xl text-xs font-bold !border-slate-300 hover:border-[#bfa77a] hover:bg-[#bfa77a]/10 hover:text-[#8c734b]"
-                  :disabled="avatarUploading"
-                  @click="createAvatarFileRef?.click()"
-                >
-                  <Upload class="size-4" />
-                  {{ avatarUploading ? 'Đang tải…' : 'Chọn ảnh' }}
-                </Button>
-                <Button
-                  v-if="createForm.hinhAnh"
                   type="button"
                   variant="ghost"
-                  class="h-11 rounded-xl text-xs text-rose-500 hover:bg-rose-50 hover:text-rose-600"
-                  :disabled="avatarUploading"
-                  @click="clearAvatar('create')"
+                  size="icon"
+                  class="text-slate-400 absolute top-0 right-0 z-20 h-11 w-11 shrink-0 rounded-xl hover:bg-transparent"
+                  :aria-pressed="showCreatePassword"
+                  :aria-label="showCreatePassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'"
+                  @click.stop.prevent="toggleCreatePassword"
                 >
-                  Xóa ảnh
+                  <Eye v-if="!showCreatePassword" class="pointer-events-none size-4" />
+                  <EyeOff v-else class="pointer-events-none size-4" />
                 </Button>
               </div>
             </div>
-            <p v-if="createAvatarError" class="text-rose-500 text-[10px] mt-1 font-bold">{{ createAvatarError }}</p>
           </div>
 
-          <div class="space-y-2">
-            <Label for="cf-mk" class="text-xs font-bold text-slate-500 tracking-wider">MẬT KHẨU (ĐỂ TRỐNG = HỆ THỐNG TẠO NGẪU NHIÊN)</Label>
-            <div class="relative">
-              <Input
-                id="cf-mk"
-                v-model="createForm.matKhau"
-                class="h-11 pr-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all font-mono"
-                :type="showCreatePassword ? 'text' : 'password'"
-                autocomplete="off"
-                spellcheck="false"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                class="text-slate-400 absolute top-0 right-0 z-20 h-11 w-11 shrink-0 rounded-xl hover:bg-transparent"
-                :aria-pressed="showCreatePassword"
-                :aria-label="showCreatePassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'"
-                @click.stop.prevent="toggleCreatePassword"
-              >
-                <Eye v-if="!showCreatePassword" class="pointer-events-none size-4" />
-                <EyeOff v-else class="pointer-events-none size-4" />
-              </Button>
-            </div>
+          <!-- Footer -->
+          <div class="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-solid !border-slate-200 bg-slate-50/50 !px-8 !py-4">
+            <Button type="button" variant="outline" class="h-11 px-5 text-xs font-bold rounded-xl !border-slate-300 text-slate-700 hover:bg-slate-100" @click="createOpen = false">
+              Hủy
+            </Button>
+            <Button
+              type="button"
+              class="h-11 px-5 !bg-[#9d804e] !text-white hover:!bg-[#866a3d] border !border-[#9d804e] text-xs font-bold rounded-xl shadow-none cursor-pointer tracking-wider"
+              :disabled="saving"
+              @click="saveCreate"
+            >
+              Tạo
+            </Button>
           </div>
         </div>
-        <DialogFooter class="!px-8 !py-4 border-t !border-slate-200 gap-3 bg-slate-50/50">
-          <Button type="button" variant="outline" class="h-11 px-5 text-xs font-bold rounded-xl !border-slate-300 text-slate-700 hover:bg-slate-100" @click="createOpen = false">
-            Hủy
-          </Button>
-          <Button 
-            type="button" 
-            class="h-11 px-5 !bg-[#9d804e] !text-white hover:!bg-[#866a3d] border !border-[#9d804e] text-xs font-bold rounded-xl shadow-none cursor-pointer tracking-wider" 
-            :disabled="saving" 
-            @click="saveCreate"
-          >
-            Tạo
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  </div>
+      </div>
+    </Teleport>
+  </v-container>
 </template>

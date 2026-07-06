@@ -25,6 +25,13 @@ const routes = [
       { path: 'bang-luong', name: 'BangLuongAdmin', component: () => import('@/Admin/QuanLyLuong/BangLuong.vue') },
       { path: 'Gui-Thong-Bao', name: 'GuiThongBao', component: () => import('@/Admin/GuiThongBao.vue') },
       { path: 'chat', name: 'AdminChat', component: () => import('@/components/AdminChat.vue') },
+      { path: 'productManager', name: 'ProductManager', component: () => import('@/Admin/Productmanager.vue') },
+      { path: 'categoriesProduct', name: 'CategoriesProduct', component: () => import('@/Admin/DanhMucSP.vue') },
+      { path: 'quanLyKho', name: 'QuanLyKho', component: () => import('@/Admin/QuanLyKho.vue') },
+      { path: 'hoaDonDienTu', name: 'HoaDonDienTu', component: () => import('@/Admin/InvoiceInfoForm.vue') },
+      { path: 'profile', name: 'AdminProfile', component: () => import('@/Admin/Profile/StaffProfile.vue') },
+      { path: 'nha-cung-cap', name: 'NhaCungCapAdmin', component: () => import('@/Admin/NhaCungCap/NhaCungCap.vue') },
+      { path: 'quan-ly-hoat-dong', name: 'QuanLyHoatDong', component: () => import('@/Admin/QuanLyHoatDong.vue') },
     ],
     meta: { requiresAdminAuth: true }
   },
@@ -43,6 +50,7 @@ const routes = [
       { path: '', name: 'NhanVienHome', component: () => import('@/NhanVien/TrangChuNhanVien.vue') },
       { path: 'ca-lam-viec', name: 'NhanVienCaLamViec', component: () => import('@/NhanVien/CaLamViec/CaLamViec.vue') },
       { path: 'lich-su-diem-danh', name: 'NhanVienLichSuDiemDanh', component: () => import('@/Admin/QuanLyCaLam/LichSuDiemDanh.vue') },
+      { path: 'profile', name: 'NhanVienProfile', component: () => import('@/Admin/Profile/StaffProfile.vue') },
     ],
     meta: { requiresStaffAuth: true }
   },

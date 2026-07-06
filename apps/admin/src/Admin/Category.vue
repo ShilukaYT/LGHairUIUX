@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, reactive, onMounted } from "vue";
 import axios from "axios";
+import { logActivity } from "@/utils/activityLogger";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -191,15 +192,23 @@ async function saveItem() {
 
     if (editingId.value) {
       await axios.put(`${API}/api/DanhMuc/${editingId.value}`, fd);
+      logActivity("Cập nhật danh mục", `Đã cập nhật thông tin danh mục dịch vụ ${form.tenDanhMuc} (Mã: ${editingId.value})`, "Dịch vụ");
       showToast("Cập nhật danh mục thành công!");
     } else {
       await axios.post(`${API}/api/DanhMuc`, fd);
+      logActivity("Thêm danh mục", `Đã thêm danh mục dịch vụ mới ${form.tenDanhMuc} (Mã: ${form.maDM.trim().toUpperCase()})`, "Dịch vụ");
       showToast("Thêm danh mục thành công!");
     }
     await loadData();
     closeModal();
   } catch (err) {
     const msg = err.response?.data?.message || "Lỗi khi lưu!";
+    logActivity(
+      editingId.value ? "Cập nhật danh mục" : "Thêm danh mục",
+      `Thất bại khi ${editingId.value ? 'cập nhật' : 'thêm'} danh mục dịch vụ ${form.tenDanhMuc} - Lỗi: ${msg}`,
+      "Dịch vụ",
+      "Thất bại"
+    );
     showToast(msg, "error");
   } finally {
     saving.value = false;
@@ -217,10 +226,12 @@ async function confirmDelete() {
   confirmModal.open = false;
   try {
     await axios.delete(`${API}/api/DanhMuc/${d.maDM}`);
+    logActivity("Xóa danh mục", `Đã xóa danh mục dịch vụ ${d.tenDanhMuc} (Mã: ${d.maDM})`, "Dịch vụ");
     showToast(`Đã xóa danh mục "${d.tenDanhMuc}"`);
     await loadData();
   } catch (err) {
     const msg = err.response?.data?.message || "Lỗi khi xóa!";
+    logActivity("Xóa danh mục", `Thất bại khi xóa danh mục dịch vụ ${d.tenDanhMuc} (Mã: ${d.maDM}) - Lỗi: ${msg}`, "Dịch vụ", "Thất bại");
     showToast(msg, "error");
   }
 }
@@ -232,9 +243,20 @@ async function toggleStatus(d) {
     await axios.patch(`${API}/api/DanhMuc/${d.maDM}/trangthai`, {
       trangThai: newStatus,
     });
+    logActivity(
+      "Đổi trạng thái danh mục",
+      `Đã chuyển trạng thái danh mục dịch vụ ${d.tenDanhMuc} (Mã: ${d.maDM}) sang ${newStatus ? 'Hoạt động' : 'Ngừng hoạt động'}`,
+      "Dịch vụ"
+    );
     d.trangThai = newStatus;
     showToast(newStatus ? "Đã kích hoạt danh mục." : "Đã ngừng danh mục.");
-  } catch {
+  } catch (err) {
+    logActivity(
+      "Đổi trạng thái danh mục",
+      `Thất bại khi chuyển trạng thái danh mục dịch vụ ${d.tenDanhMuc} (Mã: ${d.maDM}) sang ${newStatus ? 'Hoạt động' : 'Ngừng hoạt động'} - Lỗi: ${err.message || ''}`,
+      "Dịch vụ",
+      "Thất bại"
+    );
     showToast("Lỗi cập nhật trạng thái!", "error");
   }
 }
@@ -1082,13 +1104,16 @@ onMounted(loadData);
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
-  z-index: 500;
+  z-index: 9000;
   display: flex;
   align-items: center;
   justify-content: center;
-  backdrop-filter: blur(3px);
 }
 .modal {
+  position: relative;
+  top: auto;
+  left: auto;
+  margin: 0;
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 14px;

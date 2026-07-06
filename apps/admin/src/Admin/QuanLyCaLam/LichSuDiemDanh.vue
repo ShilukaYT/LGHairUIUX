@@ -116,8 +116,11 @@ const calendarGrid = computed(() => {
   const days = getDaysInMonth(year, month)
   
   const firstDay = days[0]
-  let startOffset = firstDay.getDay() - 1
-  if (startOffset === -1) startOffset = 6 // Sunday is 0, we want Monday=0, Sunday=6
+  let startOffset = 0
+  if (firstDay) {
+    startOffset = firstDay.getDay() - 1
+    if (startOffset === -1) startOffset = 6 // Sunday is 0, we want Monday=0, Sunday=6
+  }
   
   const grid = []
   let currentWeek: any[] = []

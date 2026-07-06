@@ -5,9 +5,12 @@ import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 import { ref, computed, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import axios from "axios";
+import { useWishlistStore } from "@/stores/useWishlistStore";
+import { Heart } from "lucide-vue-next";
 
 const route = useRoute();
 const routerInstance = useRouter();
+const wishlistStore = useWishlistStore();
 const cartItems = ref<any[]>([]);
 const cartRef = ref<any>(null);
 const userMaKH = ref<string | null>(null);
@@ -191,7 +194,7 @@ const addToCart = async (rawItem: any) => {
 
   // 2. Đóng gói object gửi sang Sidebar
   const formattedItem = {
-    id: isCombo ? (rawItem.maCb || rawItem.id) : (rawItem.maDv || rawItem.id),
+    id: isCombo ? rawItem.maCb : rawItem.maDv,
     tenItem: isCombo ? rawItem.tenCombo : rawItem.tenDv,
     gia: finalPrice, // Giá đã giảm (dùng để thanh toán)
     giaGoc: giaGoc, // Giá gốc (dùng để hiển thị gạch ngang)
@@ -392,12 +395,27 @@ const formatPrice = (price: number) => {
                   </template>
                 </div>
 
-                <button
-                  @click.stop.prevent="addToCart(s)"
-                  class="btn-order-now"
-                >
-                  ĐẶT NGAY
-                </button>
+                <div class="flex items-center gap-2">
+                  <button 
+                    @click.stop.prevent="wishlistStore.toggleServiceFavorite(s)" 
+                    class="btn-favorite-inline flex items-center justify-content-center transition-colors"
+                    :class="{ 'is-favorite': wishlistStore.isServiceFavorite(s.maDv) }"
+                    :title="wishlistStore.isServiceFavorite(s.maDv) ? 'Xóa khỏi yêu thích' : 'Thêm vào yêu thích'"
+                  >
+                    <Heart 
+                      :size="18" 
+                      :stroke-width="wishlistStore.isServiceFavorite(s.maDv) ? 0 : 2" 
+                      :fill="wishlistStore.isServiceFavorite(s.maDv) ? '#ffffff' : 'none'" 
+                    />
+                  </button>
+
+                  <button
+                    @click.stop.prevent="addToCart(s)"
+                    class="btn-order-now"
+                  >
+                    ĐẶT NGAY
+                  </button>
+                </div>
               </div>
             </div>
           </router-link>
@@ -565,13 +583,18 @@ const formatPrice = (price: number) => {
         </div>
       </div>
     </section>
-
+    <div class="floating-cart-btn" @click="openCart">
+      <i class="fas fa-shopping-bag"></i>
+      <span class="cart-count">{{ cartItems.length }}</span>
+    </div>
 
     <!-- <CartSidebar ref="cartRef" /> -->
   </div>
 </template>
 
 <style scoped>
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Jost:wght@200;300;400;500;600&display=swap");
+
 /* =========================================================
    ACTIVE CATEGORY BREADCRUMB BAR
    ========================================================= */
@@ -615,7 +638,6 @@ const formatPrice = (price: number) => {
 /* =========================================================
    FONT — Cormorant Garamond (heading) + Jost (body)
    ========================================================= */
-@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Jost:wght@200;300;400;500;600&display=swap");
 .pagination-btn.prev-next i {
   color: inherit !important;
   pointer-events: none;
@@ -1413,7 +1435,49 @@ const formatPrice = (price: number) => {
   flex-direction: column !important;
 }
 
+/* =========================================================
+   FLOATING CART
+   ========================================================= */
+.floating-cart-btn {
+  position: fixed;
+  bottom: 160px;
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  background: var(--ink);
+  border-radius: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #fff;
+  font-size: 22px;
+  cursor: pointer;
+  box-shadow: none;
+  z-index: 9999999;
+  transition: 0.3s;
+}
 
+.floating-cart-btn:hover {
+  transform: scale(1.05);
+  background: var(--ink-soft);
+}
+
+.cart-count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 600;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border: 1px solid var(--ink);
+}
 
 /* Misc legacy helpers (kept for compatibility) */
 .card-head {
@@ -1517,5 +1581,75 @@ const formatPrice = (price: number) => {
   .combo-white-section {
     padding: 50px 0;
   }
+}
+
+.btn-favorite-inline {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 50%;
+  width: 38px;
+  height: 38px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.1);
+}
+
+.btn-favorite-inline :deep(svg) {
+  stroke: #ef4444;
+  color: #ef4444;
+  transition: all 0.3s ease;
+}
+
+.btn-favorite-inline:hover {
+  background: #fee2e2;
+  border-color: #ef4444;
+  transform: scale(1.1);
+}
+
+.btn-favorite-inline:hover :deep(svg) {
+  stroke: #ef4444 !important;
+  fill: #ef4444 !important;
+}
+
+.btn-favorite-inline.is-favorite {
+  background: #ef4444;
+  border-color: #ef4444;
+}
+
+.btn-favorite-inline.is-favorite :deep(svg) {
+  stroke: #ffffff;
+  fill: #ffffff !important;
+  color: #ffffff;
+}
+
+.btn-favorite-inline.is-favorite:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
+.btn-favorite-inline.is-favorite:hover :deep(svg) {
+  stroke: #ffffff !important;
+  fill: #ffffff !important;
+}
+
+.price-button:hover .btn-favorite-inline:not(.is-favorite) {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+.price-button:hover .btn-favorite-inline:not(.is-favorite) :deep(svg) {
+  stroke: #ef4444;
+}
+
+.price-button:hover .btn-favorite-inline.is-favorite {
+  background: #ef4444;
+  border-color: #ef4444;
+}
+
+.price-button:hover .btn-favorite-inline.is-favorite :deep(svg) {
+  stroke: #ffffff;
 }
 </style>

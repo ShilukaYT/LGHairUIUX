@@ -2,10 +2,13 @@
 import { ref, computed, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import axios from "axios";
+import { useWishlistStore } from "@/stores/useWishlistStore";
+import { Heart } from "lucide-vue-next";
 
 const API = import.meta.env.VITE_API_URL;
 const route = useRoute();
 const router = useRouter();
+const wishlistStore = useWishlistStore();
 
 const getImageUrl = (img?: string) => {
   if (!img) return `${API}/assets/images/default.jpg`;
@@ -274,9 +277,24 @@ onMounted(async () => {
                     {{ getPriceDisplay(p).text }}
                   </span>
                 </div>
-                <button class="btn-order-now" :class="{ 'btn-disabled': p.soLuongTon === 0 }">
-                  {{ p.soLuongTon === 0 ? "Hết hàng" : "Xem ngay" }}
-                </button>
+                <div class="flex items-center gap-2">
+                  <button 
+                    @click.stop.prevent="wishlistStore.toggleProductFavorite(p)" 
+                    class="btn-favorite-inline flex items-center justify-content-center transition-colors"
+                    :class="{ 'is-favorite': wishlistStore.isProductFavorite(p.maSp) }"
+                    :title="wishlistStore.isProductFavorite(p.maSp) ? 'Xóa khỏi yêu thích' : 'Thêm vào yêu thích'"
+                  >
+                    <Heart 
+                      :size="18" 
+                      :stroke-width="wishlistStore.isProductFavorite(p.maSp) ? 0 : 2" 
+                      :fill="wishlistStore.isProductFavorite(p.maSp) ? '#ffffff' : 'none'" 
+                    />
+                  </button>
+
+                  <button class="btn-order-now" :class="{ 'btn-disabled': p.soLuongTon === 0 }">
+                    {{ p.soLuongTon === 0 ? "Hết hàng" : "Xem ngay" }}
+                  </button>
+                </div>
               </div>
 
             </div>
@@ -321,10 +339,11 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Jost:wght@200;300;400;500;600&display=swap");
+
 /* =========================================================
    FONT — Cormorant Garamond (heading) + Jost (body)
    ========================================================= */
-@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Jost:wght@200;300;400;500;600&display=swap");
 
 .font-playfair { font-family: "Cormorant Garamond", serif; }
 .font-poppins  { font-family: "Jost", sans-serif; }
@@ -714,5 +733,75 @@ onMounted(async () => {
   .product-card-item { padding: 16px; }
   :deep(.col-lg-4),
   :deep(.col-md-6) { width: 100% !important; } /* mobile: 1 cột */
+}
+
+.btn-favorite-inline {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 50%;
+  width: 38px;
+  height: 38px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.1);
+}
+
+.btn-favorite-inline :deep(svg) {
+  stroke: #ef4444;
+  color: #ef4444;
+  transition: all 0.3s ease;
+}
+
+.btn-favorite-inline:hover {
+  background: #fee2e2;
+  border-color: #ef4444;
+  transform: scale(1.1);
+}
+
+.btn-favorite-inline:hover :deep(svg) {
+  stroke: #ef4444 !important;
+  fill: #ef4444 !important;
+}
+
+.btn-favorite-inline.is-favorite {
+  background: #ef4444;
+  border-color: #ef4444;
+}
+
+.btn-favorite-inline.is-favorite :deep(svg) {
+  stroke: #ffffff;
+  fill: #ffffff !important;
+  color: #ffffff;
+}
+
+.btn-favorite-inline.is-favorite:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
+.btn-favorite-inline.is-favorite:hover :deep(svg) {
+  stroke: #ffffff !important;
+  fill: #ffffff !important;
+}
+
+.price-button:hover .btn-favorite-inline:not(.is-favorite) {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+.price-button:hover .btn-favorite-inline:not(.is-favorite) :deep(svg) {
+  stroke: #ef4444;
+}
+
+.price-button:hover .btn-favorite-inline.is-favorite {
+  background: #ef4444;
+  border-color: #ef4444;
+}
+
+.price-button:hover .btn-favorite-inline.is-favorite :deep(svg) {
+  stroke: #ffffff;
 }
 </style>

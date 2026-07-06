@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useCustomizerStore } from '../../../stores/customizer';
 // icons
 import { MenuFoldOutlined, SearchOutlined } from '@ant-design/icons-vue';
@@ -17,11 +17,13 @@ const theme = useTheme();
 const userName = ref('User');
 const isAdmin = ref(false);
 const currentUserMaNv = ref('');
+const userAvatar = ref('');
 
-onMounted(() => {
+const loadUserFromStorage = () => {
   const adminStr = sessionStorage.getItem('adminUser');
   const staffStr = sessionStorage.getItem('staffUser') || sessionStorage.getItem('nhanVienUser');
-  
+
+  let user: any = null;
   if (adminStr) {
     const admin = JSON.parse(adminStr);
     userName.value = admin.hoTen || admin.tenNhanVien || admin.username || 'Admin';
@@ -32,8 +34,37 @@ onMounted(() => {
     userName.value = staff.hoTen || staff.tenNhanVien || staff.username || 'Nhân viên';
     currentUserMaNv.value = staff.maNv || staff.id || '';
   }
+
+  if (user) {
+    const rawAvatar = user.hinhAnh || user.avatar || '';
+    if (rawAvatar) {
+      userAvatar.value = rawAvatar.startsWith('/')
+        ? `https://localhost:7196${rawAvatar}`
+        : rawAvatar;
+    } else {
+      userAvatar.value = '';
+    }
+  }
+};
+
+const avatarSrc = computed(() => {
+  return userAvatar.value || new URL('@/assets/images/users/avatar-1.png', import.meta.url).href;
 });
 
+onMounted(() => {
+  loadUserFromStorage();
+  window.addEventListener('update-staff-sidebar', loadUserFromStorage);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('update-staff-sidebar', loadUserFromStorage);
+});
+
+function toggleTheme() {
+  const newTheme = customizer.actTheme === 'dark' ? 'light' : 'dark';
+  customizer.SET_THEME(newTheme);
+  theme.global.name.value = newTheme;
+}
 </script>
 
 <template>
@@ -100,8 +131,18 @@ onMounted(() => {
     <!-- ---------------------------------------------- -->
 
     <!-- ---------------------------------------------- -->
-    <!-- Theme Toggle moved to ProfileDD -->
+    <!-- Theme Toggle -->
     <!-- ---------------------------------------------- -->
+    <v-btn
+      icon
+      class="text-secondary hidden-sm-and-down d-flex"
+      color="darkText"
+      rounded="sm"
+      variant="text"
+      @click="toggleTheme"
+    >
+      <component :is="customizer.actTheme === 'dark' ? SunIcon : MoonIcon" size="20" />
+    </v-btn>
 
     <!-- ---------------------------------------------- -->
     <!-- Notification -->
@@ -115,8 +156,8 @@ onMounted(() => {
       <template v-slot:activator="{ props }">
         <v-btn class="profileBtn" variant="text" rounded="sm" v-bind="props">
           <div class="d-flex align-center">
-            <v-avatar class="mr-sm-2 mr-0 py-2">
-              <img src="@/assets/images/users/avatar-1.png" alt="Julia" />
+            <v-avatar size="36" class="mr-sm-2 mr-0" style="overflow:hidden;">
+              <v-img :src="avatarSrc" cover width="36" height="36" />
             </v-avatar>
             <h6 class="text-subtitle-1 mb-0 d-sm-block d-none">{{ userName }}</h6>
           </div>
