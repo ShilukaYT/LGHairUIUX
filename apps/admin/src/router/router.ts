@@ -28,6 +28,7 @@ const routes = [
       { path: 'productManager', name: 'ProductManager', component: () => import('@/Admin/Productmanager.vue') },
       { path: 'categoriesProduct', name: 'CategoriesProduct', component: () => import('@/Admin/DanhMucSP.vue') },
       { path: 'quanLyKho', name: 'QuanLyKho', component: () => import('@/Admin/QuanLyKho.vue') },
+      { path: 'hoaDonDienTu', name: 'HoaDonDienTu', component: () => import('@/Admin/InvoiceInfoForm.vue') },
       { path: 'profile', name: 'AdminProfile', component: () => import('@/Admin/Profile/StaffProfile.vue') },
       { path: 'nha-cung-cap', name: 'NhaCungCapAdmin', component: () => import('@/Admin/NhaCungCap/NhaCungCap.vue') },
       { path: 'quan-ly-hoat-dong', name: 'QuanLyHoatDong', component: () => import('@/Admin/QuanLyHoatDong.vue') },

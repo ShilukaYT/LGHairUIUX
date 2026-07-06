@@ -71,6 +71,14 @@ onMounted(async () => {
             if (one) maCodes = [one];
         }
 
+        let invoiceInfo: any = null;
+        try {
+            const rawInvoice = localStorage.getItem('temp_invoice_info');
+            if (rawInvoice) invoiceInfo = JSON.parse(rawInvoice);
+        } catch {
+            invoiceInfo = null;
+        }
+
         const bookingRequest = {
             bookingId: String(route.query.vnp_TxnRef || route.query.orderId),
             maKh: getCustomerInfo().maKH || 'GUEST',
@@ -84,7 +92,8 @@ onMounted(async () => {
             totalAmount: Number(localStorage.getItem('total_bill_original') || 0),
             services: JSON.parse(localStorage.getItem('temp_services') || '[]'),
             maCode: maCodes[0] || '',
-            maCodes
+            maCodes,
+            invoiceInfo
         };
 
         try {

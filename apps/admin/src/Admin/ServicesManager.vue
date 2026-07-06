@@ -3310,6 +3310,10 @@ tbody td {
   justify-content: center;
 }
 .modal {
+  position: relative; /* reset lại vì Bootstrap có sẵn .modal { position: fixed; top:0; left:0 } gây xung đột */
+  top: auto;
+  left: auto;
+  margin: 0;
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 14px;

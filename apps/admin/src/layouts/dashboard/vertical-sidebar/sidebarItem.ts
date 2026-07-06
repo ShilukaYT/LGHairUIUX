@@ -14,7 +14,10 @@ import {
   DollarOutlined,
   ShopOutlined,
   MessageOutlined,
-  HistoryOutlined
+  HistoryOutlined,
+  ShoppingOutlined,
+  UnorderedListOutlined,
+  InboxOutlined
 } from '@ant-design/icons-vue';
 
 export interface menu {
@@ -74,12 +77,12 @@ const sidebarItem: menu[] = [
   { header: 'Sản phẩm' },
   {
     title: 'Quản lý sản phẩm',
-    icon: ScissorOutlined,
+    icon: ShoppingOutlined,
     to: '/admin/productManager'
   },
   {
     title: 'Danh mục sản phẩm',
-    icon: ScissorOutlined,
+    icon: UnorderedListOutlined,
     to: '/admin/categoriesProduct'
   },
   {
@@ -89,7 +92,7 @@ const sidebarItem: menu[] = [
   },
   {
     title: 'Quản lý kho',
-    icon: ScissorOutlined,
+    icon: InboxOutlined,
     to: '/admin/quanLyKho'
   },
   { header: 'Khuyến mãi' },
