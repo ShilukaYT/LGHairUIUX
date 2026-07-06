@@ -15,6 +15,8 @@ const customizer = useCustomizerStore();
 const theme = useTheme();
 
 const userName = ref('User');
+const isAdmin = ref(false);
+const currentUserMaNv = ref('');
 
 onMounted(() => {
   const adminStr = sessionStorage.getItem('adminUser');
@@ -23,9 +25,12 @@ onMounted(() => {
   if (adminStr) {
     const admin = JSON.parse(adminStr);
     userName.value = admin.hoTen || admin.tenNhanVien || admin.username || 'Admin';
+    isAdmin.value = true;
+    currentUserMaNv.value = admin.maNv || admin.id || '';
   } else if (staffStr) {
     const staff = JSON.parse(staffStr);
     userName.value = staff.hoTen || staff.tenNhanVien || staff.username || 'Nhân viên';
+    currentUserMaNv.value = staff.maNv || staff.id || '';
   }
 });
 
@@ -101,7 +106,7 @@ onMounted(() => {
     <!-- ---------------------------------------------- -->
     <!-- Notification -->
     <!-- ---------------------------------------------- -->
-    <NotificationDD />
+    <NotificationDD :isAdmin="isAdmin" :currentUserMaNv="currentUserMaNv" />
 
     <!-- ---------------------------------------------- -->
     <!-- User Profile -->

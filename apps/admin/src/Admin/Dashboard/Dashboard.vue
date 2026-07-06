@@ -175,7 +175,7 @@ onMounted(() => {
                 </div>
                 <div class="font-semibold text-sm text-gray-900">{{ formatCurrency(nv.doanhThuMangLai) }}</div>
               </li>
-              <li v-if="stats.topNhanVien.length === 0" class="text-gray-500 text-sm">Chưa có dữ liệu.</li>
+              <li v-if="!stats.topNhanVien || stats.topNhanVien.length === 0" class="text-gray-500 text-sm">Chưa có dữ liệu.</li>
             </ul>
           </div>
         </div>
@@ -199,7 +199,7 @@ onMounted(() => {
                   <td class="px-5 py-3 text-gray-600">{{ formatDate(hd.ngayTao) }}</td>
                   <td class="px-5 py-3 font-semibold text-gray-900 text-right">{{ formatCurrency(hd.tongTien) }}</td>
                 </tr>
-                <tr v-if="stats.hoaDonGanDay.length === 0">
+                <tr v-if="!stats.hoaDonGanDay || stats.hoaDonGanDay.length === 0">
                   <td colspan="4" class="px-5 py-8 text-center text-gray-500">Không tìm thấy hóa đơn nào khớp với bộ lọc.</td>
                 </tr>
               </tbody>

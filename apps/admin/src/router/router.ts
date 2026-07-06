@@ -38,7 +38,7 @@ const routes = [
   // --- NHÓM TRANG NHÂN VIÊN ---
   {
     path: '/nhanvien',
-    component: () => import('@/layouts/dashboard/DashboardLayout.vue'),
+    component: () => import('@/NhanVien/layout/LayoutNhanVien.vue'),
     children: [
       { path: '', name: 'NhanVienHome', component: () => import('@/NhanVien/TrangChuNhanVien.vue') },
       { path: 'ca-lam-viec', name: 'NhanVienCaLamViec', component: () => import('@/NhanVien/CaLamViec/CaLamViec.vue') },

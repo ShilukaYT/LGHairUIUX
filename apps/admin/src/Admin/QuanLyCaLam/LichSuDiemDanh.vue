@@ -83,7 +83,7 @@ const historyMap = computed(() => {
 const stats = computed(() => {
   let v = 0, m = 0, x = 0, c = 0
   lichSuData.value.forEach(item => {
-    if (item.caLam === 'Chưa xếp') return
+    if (item.caLam === 'Chưa xếp' || item.caLam === 'Nghỉ lễ') return
     if (item.trangThai === 2) v++ // Có mặt
     else if (item.trangThai === 3 || item.trangThai === 6) m++ // Rời sớm / Muộn
     else if (item.trangThai === 5) x++ // Vắng
@@ -254,9 +254,9 @@ const calendarGrid = computed(() => {
                     <span v-else class="w-8 h-8 inline-flex items-center justify-center">{{ day.date }}</span>
                   </div>
                   
-                  <div v-if="day.shift && day.shift.caLam !== 'Chưa xếp'" class="flex-1 flex flex-col items-center justify-start gap-2 w-full px-1">
+                  <div v-if="day.shift && day.shift.caLam !== 'Chưa xếp' && day.shift.caLam !== 'Nghỉ lễ'" class="flex-1 flex flex-col items-center justify-start gap-2 w-full px-1">
                     <div class="text-[11px] font-bold px-3 py-1 rounded-pill w-[85%] max-w-[120px] text-center truncate mx-auto"
-                         :class="day.shift.caLam === 'Ca ngày' || day.shift.caLam === 'Ca sáng' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'bg-purple-50 text-purple-700 border border-purple-100'">
+                         :class="(day.shift.caLam || '').toLowerCase().includes('sáng') || (day.shift.caLam || '').toLowerCase().includes('chiều') ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'bg-purple-50 text-purple-700 border border-purple-100'">
                       {{ day.shift.caLam }}
                     </div>
                     
@@ -278,17 +278,25 @@ const calendarGrid = computed(() => {
                        </div>
                     </div>
 
-                    <div v-if="day.shift.ghiChu" class="mt-1 w-full flex justify-center">
-                      <v-tooltip location="top" :text="day.shift.ghiChu">
-                        <template v-slot:activator="{ props }">
-                          <div v-bind="props" class="cursor-help inline-flex items-center justify-center bg-rose-50 text-rose-500 rounded-full w-6 h-6 hover:bg-rose-100 transition-colors border border-rose-100">
-                            <MessageSquare class="w-3.5 h-3.5" />
-                          </div>
-                        </template>
-                      </v-tooltip>
+                    <div v-if="day.shift.ghiChu" class="text-[10px] text-rose-500 flex items-start gap-1 leading-tight px-1 max-w-full overflow-hidden mt-1 line-clamp-2">
+                      <MessageSquare class="w-3 h-3 flex-shrink-0 mt-0.5" />
+                      <span :title="day.shift.ghiChu">{{ day.shift.ghiChu }}</span>
                     </div>
                   </div>
-                  <div v-else class="flex-1 flex items-center justify-center rounded-xl m-1">
+
+                  <div v-else-if="day.shift && day.shift.caLam === 'Nghỉ lễ'" class="flex-1 flex flex-col items-center justify-start gap-2 w-full px-1">
+                    <div class="text-[11px] font-bold px-3 py-1 rounded-pill w-[85%] max-w-[120px] text-center truncate mx-auto bg-error text-white shadow-sm">
+                      Nghỉ lễ
+                    </div>
+                    <div v-if="day.shift.ghiChu" class="text-[10px] text-error flex items-start gap-1 leading-tight px-1 max-w-full overflow-hidden mt-1 line-clamp-2">
+                      <MessageSquare class="w-3 h-3 flex-shrink-0 mt-0.5" />
+                      <span :title="day.shift.ghiChu">{{ day.shift.ghiChu }}</span>
+                    </div>
+                  </div>
+                  
+                  <div v-else class="flex-1 flex flex-col items-center justify-center gap-1 opacity-40">
+                    <div class="w-20 h-1.5 bg-gray-200 rounded-full"></div>
+                    <div class="w-16 h-1.5 bg-gray-200 rounded-full"></div>
                   </div>
                 </template>
               </div>

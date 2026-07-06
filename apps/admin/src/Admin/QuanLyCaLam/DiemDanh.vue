@@ -2,7 +2,11 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import axios from 'axios'
 import Swal from 'sweetalert2'
-import { Check, X, RotateCcw, Search, LogOut, Fingerprint, CalendarDays } from 'lucide-vue-next'
+import { Check, X, RotateCcw, Search, LogOut, Fingerprint, CalendarDays, QrCode } from 'lucide-vue-next'
+import QrcodeVue from 'qrcode.vue'
+import { useRoute } from 'vue-router'
+
+const route = useRoute()
 
 // --- CẤU HÌNH API ---
 const API_BASE_URL = 'https://localhost:7196/api/admin/lich-lam-viec'
@@ -27,6 +31,31 @@ const showSnackbar = (text: string, color: string = 'success') => {
 
 // --- LOGIC TÌM KIẾM ---
 const searchQuery = ref('')
+
+// --- LOGIC MÃ QR ---
+const isQrModalOpen = ref(false)
+const qrCodeText = ref('')
+const isLoadingQr = ref(false)
+
+const generateQrCode = async () => {
+  isQrModalOpen.value = true
+  isLoadingQr.value = true
+  qrCodeText.value = ''
+  try {
+    const res = await axios.get(`${API_BASE_URL}/qr-diem-danh`)
+    if (res.data.success) {
+      qrCodeText.value = res.data.qrCode
+    } else {
+      showSnackbar('Không thể tạo mã QR', 'error')
+      isQrModalOpen.value = false
+    }
+  } catch (error) {
+    showSnackbar('Lỗi kết nối khi tạo mã QR', 'error')
+    isQrModalOpen.value = false
+  } finally {
+    isLoadingQr.value = false
+  }
+}
 
 // --- LOGIC THỜI GIAN & ĐỒNG HỒ ---
 const getTodayLocal = () => new Date().toLocaleDateString('sv-SE')
@@ -97,8 +126,11 @@ const getShiftStatus = (caLam: string, ngayLam: string) => {
 
   const currentMin = now.getHours() * 60 + now.getMinutes();
   const shifts: any = {
-    "Ca ngày": { start: 7 * 60, end: 17 * 60 },
-    "Ca tối": { start: 13 * 60, end: 20 * 60 }
+    "Ca sáng (7h-17h)": { start: 7 * 60, end: 17 * 60 },
+    "Ca tối (13h-20h)": { start: 13 * 60, end: 20 * 60 },
+    "Ca sáng (Part-time)": { start: 7 * 60, end: 11 * 60 },
+    "Ca chiều (Part-time)": { start: 13 * 60, end: 17 * 60 },
+    "Ca tối (Part-time)": { start: 16 * 60, end: 20 * 60 }
   };
   const s = shifts[caLam];
   if (!s) return 'NO_SHIFT';
@@ -225,7 +257,16 @@ const submitAttendance = async () => {
 onMounted(async () => {
   isLoading.value = true
   todayStr.value = getTodayLocal()
-  await resetFilter()
+  
+  if (route.query.search) {
+    searchQuery.value = route.query.search as string
+  }
+  
+  await resetFilter() // Note: resetFilter might clear searchQuery, let's fix it if it does
+  if (route.query.search) {
+    searchQuery.value = route.query.search as string
+  }
+  
   await fetchNhanViens()
   tableDays.value = getDaysOfWeek()
   isLoading.value = false
@@ -258,6 +299,18 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
               <Search class="w-5 h-5 text-grey" />
             </template>
           </v-text-field>
+
+          <v-btn
+            color="primary"
+            variant="flat"
+            size="40"
+            rounded="lg"
+            class="mr-2"
+            @click="generateQrCode"
+            title="Tạo mã QR điểm danh"
+          >
+            <QrCode class="w-5 h-5" />
+          </v-btn>
 
           <v-btn
             variant="outlined"
@@ -358,7 +411,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
                 </v-btn>
                 
                 <v-btn
-                  v-else-if="getShiftData(item.maNv, date).caLam === 'Chưa xếp'"
+                  v-else-if="getShiftData(item.maNv, date).caLam === 'Chưa xếp' || getShiftData(item.maNv, date).caLam === 'Nghỉ lễ'"
                   variant="text"
                   size="40"
                   class="rounded-lg opacity-20"
@@ -439,6 +492,30 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
             :loading="isSubmittingAttendance"
             @click="submitAttendance"
           >Xác nhận</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Modal Mã QR -->
+    <v-dialog v-model="isQrModalOpen" max-width="400" transition="dialog-bottom-transition">
+      <v-card rounded="xl">
+        <v-card-title class="pa-6 border-b text-center text-h6 font-weight-bold">
+          Mã QR Điểm Danh Hôm Nay
+        </v-card-title>
+        <v-card-text class="pa-6 d-flex flex-column align-center justify-center">
+          <div v-if="isLoadingQr" class="py-10">
+            <v-progress-circular indeterminate color="primary"></v-progress-circular>
+          </div>
+          <div v-else-if="qrCodeText" class="text-center">
+             <div class="bg-white pa-4 rounded-lg d-inline-block mb-4 elevation-1">
+                <qrcode-vue :value="qrCodeText" :size="250" level="H" />
+             </div>
+             <div class="text-caption text-medium-emphasis">Mã này có giá trị trong ngày {{ formatDate(todayStr) }}</div>
+          </div>
+          <div v-else class="text-error">Không thể tạo mã QR.</div>
+        </v-card-text>
+        <v-card-actions class="pa-4 justify-center border-t">
+          <v-btn variant="flat" color="primary" rounded="lg" @click="isQrModalOpen = false" class="px-6 font-weight-bold text-none">Đóng</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
