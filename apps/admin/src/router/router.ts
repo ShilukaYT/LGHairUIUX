@@ -28,6 +28,7 @@ const routes = [
       { path: 'productManager', name: 'ProductManager', component: () => import('@/Admin/Productmanager.vue') },
       { path: 'categoriesProduct', name: 'CategoriesProduct', component: () => import('@/Admin/DanhMucSP.vue') },
       { path: 'quanLyKho', name: 'QuanLyKho', component: () => import('@/Admin/QuanLyKho.vue') },
+      { path: 'hoaDonDienTu', name: 'HoaDonDienTu', component: () => import('@/Admin/InvoiceInfoForm.vue') },
     ],
     meta: { requiresAdminAuth: true }
   },

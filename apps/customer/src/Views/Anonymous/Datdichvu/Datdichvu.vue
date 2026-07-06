@@ -33,6 +33,49 @@ const bookingData = ref({
     paymentMethod: 'vnpay',
     note: ''
 });
+
+// ==========================================
+// STATE HÓA ĐƠN ĐIỆN TỬ
+// Theo luật, mọi lịch hẹn đều PHẢI xuất hóa đơn điện tử — không có tùy chọn tắt.
+// Khách chỉ chọn: xuất theo cá nhân (mặc định) hay theo doanh nghiệp (có MST).
+// ==========================================
+const invoiceInfo = ref({
+    laDoanhNghiep: false,
+    tenCongTy: '',
+    mst: '',
+    diaChiXuatHD: '',
+    emailNhanHD: ''
+});
+const mstError = ref('');
+
+const validateMst = (): boolean => {
+    if (!invoiceInfo.value.laDoanhNghiep) {
+        mstError.value = '';
+        return true;
+    }
+    const mst = (invoiceInfo.value.mst || '').trim();
+    const isValid = /^\d{10}$/.test(mst) || /^\d{10}-\d{3}$/.test(mst);
+    mstError.value = isValid ? '' : 'Mã số thuế không hợp lệ (10 số, hoặc 10 số-3 số chi nhánh)';
+    return isValid;
+};
+
+const validateInvoiceInfo = (): string | null => {
+    if (!validateMst()) return mstError.value;
+
+    if (invoiceInfo.value.laDoanhNghiep) {
+        const tenCty = (invoiceInfo.value.tenCongTy || '').trim();
+        if (tenCty.length < 3) return 'Vui lòng nhập đúng tên công ty (tối thiểu 3 ký tự)';
+    } else {
+        const ten = (bookingData.value.customerName || '').trim();
+        if (ten.length < 3 || !/[a-zA-ZÀ-ỹ]/.test(ten)) return 'Vui lòng nhập đúng họ tên khách hàng';
+    }
+
+    const email = (invoiceInfo.value.emailNhanHD || bookingData.value.email || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Vui lòng nhập đúng định dạng email nhận hóa đơn';
+
+    return null;
+};
+
 // Hàm load Voucher dựa trên tổng tiền hiện tại
 const loadVouchers = async () => {
     if (!customerId.value || customerId.value === 'GUEST') return;
@@ -281,6 +324,13 @@ const handleBooking = async () => {
         alert("Vui lòng điền đầy đủ thông tin (Bao gồm cả Email để nhận mã QR)!");
         return;
     }
+
+    const invoiceErr = validateInvoiceInfo();
+    if (invoiceErr) {
+        alert(invoiceErr);
+        return;
+    }
+
     localStorage.setItem('temp_stylist_id', bookingData.value.stylistId || '');
     try {
         const mode = bookingData.value.paymentMode; // "10" hoặc "100"
@@ -295,6 +345,14 @@ const handleBooking = async () => {
         localStorage.setItem('temp_phone', bookingData.value.phone);
         localStorage.setItem('temp_name', bookingData.value.customerName);
         localStorage.setItem('temp_voucher', bookingData.value.voucherIds[0] || '');
+        // Lưu thông tin hóa đơn để trang PaymentResult.vue gửi kèm khi lưu booking
+        localStorage.setItem('temp_invoice_info', JSON.stringify({
+            laDoanhNghiep: invoiceInfo.value.laDoanhNghiep,
+            tenCongTy: invoiceInfo.value.laDoanhNghiep ? invoiceInfo.value.tenCongTy : null,
+            mst: invoiceInfo.value.laDoanhNghiep ? invoiceInfo.value.mst : null,
+            diaChiXuatHD: invoiceInfo.value.diaChiXuatHD,
+            emailNhanHD: invoiceInfo.value.emailNhanHD || bookingData.value.email
+        }));
 
         const paymentData = {
             amount: payNow.value, // 50k hoặc 500k
@@ -463,6 +521,55 @@ watch(
                                     <input v-model="bookingData.note" type="text" class="booking-input w-full"
                                         placeholder="Ghi chú yêu cầu...">
                                 </div>
+                        </div>
+
+                        <div class="section-heading-wrapper mt-10">
+                            <h3 class="font-playfair section-heading-title font-bold text-black">
+                                <i class="fas fa-file-invoice me-2"></i> HÓA ĐƠN ĐIỆN TỬ
+                            </h3>
+                            <div class="heading-line"></div>
+                        </div>
+                        <p class="text-black small mb-3" style="opacity: 0.6;">
+                            Theo quy định, mọi lịch hẹn đều được xuất hóa đơn điện tử. Vui lòng chọn loại hóa đơn phù hợp.
+                        </p>
+                        <div class="mt-3">
+                            <div class="invoice-type-row mb-4">
+                                <div class="invoice-type-option" :class="{ active: !invoiceInfo.laDoanhNghiep }"
+                                    @click="invoiceInfo.laDoanhNghiep = false">
+                                    <i class="fas fa-user me-2"></i> Cá nhân
+                                </div>
+                                <div class="invoice-type-option" :class="{ active: invoiceInfo.laDoanhNghiep }"
+                                    @click="invoiceInfo.laDoanhNghiep = true">
+                                    <i class="fas fa-building me-2"></i> Doanh nghiệp (có MST)
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4" v-if="invoiceInfo.laDoanhNghiep">
+                                <div>
+                                    <label class="custom-label font-bold">Tên công ty *</label>
+                                    <input v-model="invoiceInfo.tenCongTy" type="text" class="booking-input w-full"
+                                        placeholder="Công ty TNHH ABC">
+                                </div>
+                                <div>
+                                    <label class="custom-label font-bold">Mã số thuế *</label>
+                                    <input v-model="invoiceInfo.mst" type="text" class="booking-input w-full"
+                                        @blur="validateMst" placeholder="0301234567">
+                                    <p v-if="mstError" class="text-danger small mt-1 mb-0 font-bold">{{ mstError }}</p>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                <div>
+                                    <label class="custom-label font-bold">Địa chỉ xuất hóa đơn</label>
+                                    <input v-model="invoiceInfo.diaChiXuatHD" type="text" class="booking-input w-full"
+                                        placeholder="Số nhà, đường, phường/xã, tỉnh/thành">
+                                </div>
+                                <div>
+                                    <label class="custom-label font-bold">Email nhận hóa đơn</label>
+                                    <input v-model="invoiceInfo.emailNhanHD" type="email" class="booking-input w-full"
+                                        placeholder="email@example.com">
+                                </div>
+                            </div>
                         </div>
 
                         <div class="section-heading-wrapper mt-10">
@@ -1108,6 +1215,37 @@ select.booking-input {
 
 .method-option.active .method-logo-img {
     transform: scale(1.05);
+}
+
+/* Invoice / Hóa đơn điện tử */
+.invoice-type-row {
+    display: flex;
+    gap: 12px;
+}
+
+.invoice-type-option {
+    flex: 1;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 10px 14px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    background: #ffffff;
+}
+
+.invoice-type-option:hover {
+    border-color: var(--gold-solid);
+}
+
+.invoice-type-option.active {
+    border-color: var(--gold-solid);
+    background: var(--gold-light);
+    color: var(--text-primary);
+    box-shadow: 0 4px 14px rgba(191, 167, 122, 0.15);
 }
 
 /* Voucher ticket system */
