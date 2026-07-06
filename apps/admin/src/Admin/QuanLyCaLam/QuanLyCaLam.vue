@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import axios from 'axios'
 import Swal from 'sweetalert2'
 import { Check, X, Search, CalendarDays, Plus, Edit, RotateCcw, AlertTriangle } from 'lucide-vue-next'
@@ -28,6 +29,7 @@ const showSnackbar = (text: string, color: string = 'success') => {
 }
 
 // --- LOGIC TÌM KIẾM ---
+const route = useRoute()
 const searchQuery = ref('')
 
 // --- LOGIC THỜI GIAN ---
@@ -42,8 +44,10 @@ const formatDate = (dateStr?: string) => {
 
 // --- LOGIC CA LÀM ---
 const getEmployeeScheduleInfo = (maNv: string) => {
-  const shifts = lichLamViecs.value.filter(s => s.maNv === maNv);
-  if (shifts.length === 0) return { start: null, end: null, status: 'Chưa xếp', shifts: [] };
+  const allShifts = lichLamViecs.value.filter(s => s.maNv === maNv);
+  const shifts = allShifts.filter(s => s.caLam !== 'Chưa xếp' && s.caLam !== 'Nghỉ (Chưa xếp)' && s.caLam !== 'Nghỉ lễ');
+  
+  if (shifts.length === 0) return { start: null, end: null, status: 'Chưa xếp', shifts: allShifts };
   
   // Sắp xếp ngày tăng dần
   shifts.sort((a, b) => new Date(a.ngayLamViec).getTime() - new Date(b.ngayLamViec).getTime());
@@ -52,7 +56,7 @@ const getEmployeeScheduleInfo = (maNv: string) => {
   const futureShifts = shifts.filter(s => s.ngayLamViec >= todayStr.value);
   
   if (futureShifts.length === 0) {
-    return { start: shifts[0].ngayLamViec, end: shifts[shifts.length - 1].ngayLamViec, status: 'Đã qua', shifts };
+    return { start: shifts[0].ngayLamViec, end: shifts[shifts.length - 1].ngayLamViec, status: 'Đã qua', shifts: allShifts };
   }
 
   const start = futureShifts[0].ngayLamViec;
@@ -65,7 +69,7 @@ const getEmployeeScheduleInfo = (maNv: string) => {
   let status = 'Đã xếp';
   if (daysDiff <= 5) status = 'Sắp hết hạn';
 
-  return { start, end, status, shifts };
+  return { start, end, status, shifts: allShifts };
 }
 
 const tableData = computed(() => {
@@ -81,6 +85,15 @@ const tableData = computed(() => {
   })
 })
 
+const filteredTableData = computed(() => {
+  if (!searchQuery.value) return tableData.value;
+  const q = searchQuery.value.toLowerCase();
+  return tableData.value.filter(item => 
+    (item.hoTenNv && item.hoTenNv.toLowerCase().includes(q)) || 
+    (item.maNv && item.maNv.toLowerCase().includes(q))
+  );
+})
+
 const headers = [
   { title: 'Nhân viên', key: 'nhanvien', align: 'start', sortable: true },
   { title: 'Ngày bắt đầu lịch', key: 'ngayBatDau', align: 'center', sortable: true },
@@ -89,10 +102,12 @@ const headers = [
   { title: 'Hành động', key: 'actions', align: 'center', sortable: false },
 ] as const
 
-// --- HÀNH ĐỘNG TẠO LỊCH ---
-const handleCreateSchedule = async (item: any) => {
-  let startDate = new Date(); // Mặc định từ hôm nay
+const openCreateModal = (item: any) => {
+  editState.value.maNv = item.maNv;
+  editState.value.tenNv = item.hoTenNv;
+  editState.value.isCreating = true;
   
+  let startDate = new Date();
   if (item.ngayKetThuc && item.trangThaiLich !== 'Đã qua') {
      const lastEnd = new Date(item.ngayKetThuc);
      if (lastEnd >= new Date()) {
@@ -101,6 +116,12 @@ const handleCreateSchedule = async (item: any) => {
      }
   }
 
+  editState.value.ngayBatDauSua = startDate.toLocaleDateString('sv-SE');
+  editState.value.khoangThoiGian = 30;
+  editState.value.caLamApDung = 'Ca sáng (7h-17h)';
+  editState.value.selectedDaysOfWeek = [1, 2, 3, 4, 5, 6, 0];
+  generateEditRows();
+  isEditModalOpen.value = true;
   const confirm = await Swal.fire({
       title: 'Tạo lịch 30 ngày',
       text: `Hệ thống sẽ tạo lịch 30 ngày cho thợ ${item.hoTenNv} bắt đầu từ ${startDate.toLocaleDateString('vi-VN')}.`,
@@ -147,22 +168,47 @@ const editState = ref({
   tenNv: '',
   ngayBatDauSua: todayStr.value,
   khoangThoiGian: 1, // 1, 7, 14
-  caLamApDung: 'Ca ngày',
-  affectedDates: [] as string[]
+  caLamApDung: 'Ca sáng (7h-17h)',
+  selectedDaysOfWeek: [1, 2, 3, 4, 5, 6, 0] as number[],
+  affectedDates: [] as string[],
+  isCreating: false
 })
 
 const khoangThoiGianOptions = [
   { title: 'Trong ngày (1 ngày)', value: 1 },
   { title: '7 ngày tới', value: 7 },
-  { title: '14 ngày tới', value: 14 }
+  { title: '14 ngày tới', value: 14 },
+  { title: '30 ngày tới', value: 30 }
 ]
 
-const caLamOptions = ['Ca ngày', 'Ca tối', 'Nghỉ (Chưa xếp)']
+const dayOfWeekOptions = [
+  { title: 'T2', value: 1 },
+  { title: 'T3', value: 2 },
+  { title: 'T4', value: 3 },
+  { title: 'T5', value: 4 },
+  { title: 'T6', value: 5 },
+  { title: 'T7', value: 6 },
+  { title: 'CN', value: 0 }
+]
+
+const caLamOptions = [
+  'Ca sáng (7h-17h)',
+  'Ca tối (13h-20h)',
+  'Ca sáng (Part-time)',
+  'Ca chiều (Part-time)',
+  'Ca tối (Part-time)',
+  'Nghỉ lễ',
+  'Chưa xếp'
+]
 
 const generateEditRows = () => {
   if (!editState.value.ngayBatDauSua) return;
-  const info = getEmployeeScheduleInfo(editState.value.maNv);
-  const endLimit = info.end ? new Date(info.end) : null;
+  
+  let endLimit = null;
+  if (!editState.value.isCreating) {
+    const info = getEmployeeScheduleInfo(editState.value.maNv);
+    endLimit = info.end ? new Date(info.end) : null;
+  }
   
   const dates = [];
   const start = new Date(editState.value.ngayBatDauSua);
@@ -172,22 +218,27 @@ const generateEditRows = () => {
      
      if (endLimit && d > endLimit) break;
      
-     dates.push(d.toLocaleDateString('sv-SE'));
+     if (editState.value.khoangThoiGian === 1 || editState.value.selectedDaysOfWeek.includes(d.getDay())) {
+         dates.push(d.toLocaleDateString('sv-SE'));
+     }
   }
   editState.value.affectedDates = dates;
 }
 
-watch([() => editState.value.ngayBatDauSua, () => editState.value.khoangThoiGian], () => {
+watch([() => editState.value.ngayBatDauSua, () => editState.value.khoangThoiGian, () => editState.value.selectedDaysOfWeek], () => {
   if (isEditModalOpen.value) {
     generateEditRows()
   }
-})
+}, { deep: true })
 
 const openEditModal = (item: any) => {
   editState.value.maNv = item.maNv
   editState.value.tenNv = item.hoTenNv
+  editState.value.isCreating = false
   editState.value.ngayBatDauSua = todayStr.value > (item.ngayBatDau || todayStr.value) ? todayStr.value : (item.ngayBatDau || todayStr.value)
   editState.value.khoangThoiGian = 1
+  editState.value.caLamApDung = 'Ca sáng (7h-17h)'
+  editState.value.selectedDaysOfWeek = [1, 2, 3, 4, 5, 6, 0]
   generateEditRows()
   isEditModalOpen.value = true
 }
@@ -199,11 +250,10 @@ const submitEditSchedule = async () => {
      for (let i = 0; i < editState.value.affectedDates.length; i += chunkSize) {
         const chunk = editState.value.affectedDates.slice(i, i + chunkSize);
         await Promise.all(chunk.map(dateStr => {
-            const caLamToSave = editState.value.caLamApDung === 'Nghỉ (Chưa xếp)' ? 'Chưa xếp' : editState.value.caLamApDung;
             return axios.post(`${API_BASE_URL}/tao-moi`, { 
                maNv: editState.value.maNv, 
                ngayLamViec: dateStr, 
-               caLam: caLamToSave
+               caLam: editState.value.caLamApDung
             });
         }));
      }
@@ -216,6 +266,40 @@ const submitEditSchedule = async () => {
      showSnackbar("Lỗi cập nhật ca làm.", "error");
   } finally {
      isSubmitting.value = false;
+  }
+}
+
+// --- HÀNH ĐỘNG NGHỈ LỄ CHUNG ---
+const isHolidayModalOpen = ref(false)
+const isSubmittingHoliday = ref(false)
+const holidayState = ref({
+  tuNgay: todayStr.value,
+  denNgay: todayStr.value,
+  lyDo: ''
+})
+
+const submitHoliday = async () => {
+  if (!holidayState.value.lyDo) {
+    showSnackbar("Vui lòng nhập lý do nghỉ", "error");
+    return;
+  }
+  isSubmittingHoliday.value = true;
+  try {
+    const res = await axios.post(`${API_BASE_URL}/nghi-le-chung`, {
+      tuNgay: holidayState.value.tuNgay,
+      denNgay: holidayState.value.denNgay,
+      lyDo: holidayState.value.lyDo
+    });
+    if (res.data.success) {
+      showSnackbar(res.data.message);
+      isHolidayModalOpen.value = false;
+      holidayState.value.lyDo = '';
+      await fetchLichLamViec();
+    }
+  } catch (error: any) {
+    showSnackbar(error.response?.data?.message || "Lỗi khi thiết lập nghỉ chung.", "error");
+  } finally {
+    isSubmittingHoliday.value = false;
   }
 }
 
@@ -247,7 +331,16 @@ const loadData = async () => {
 }
 
 onMounted(() => {
+  if (route.query.search) {
+    searchQuery.value = route.query.search as string
+  }
   loadData()
+})
+
+watch(() => route.query.search, (newSearch) => {
+  if (newSearch !== undefined) {
+    searchQuery.value = newSearch as string;
+  }
 })
 </script>
 
@@ -261,19 +354,29 @@ onMounted(() => {
         </div>
         
         <div class="d-flex align-center gap-3 mt-4 mt-md-0 flex-wrap">
+          <v-btn
+            color="error"
+            variant="flat"
+            rounded="lg"
+            class="text-none font-weight-bold"
+            @click="isHolidayModalOpen = true"
+          >
+            Nghỉ Lễ Chung
+          </v-btn>
+
           <v-text-field
             v-model="searchQuery"
             label="Tìm tên thợ..."
-            density="compact"
             variant="outlined"
+            density="compact"
             hide-details
-            min-width="280"
+            clearable
+            prepend-inner-icon="mdi-magnify"
             rounded="lg"
-          >
-            <template v-slot:prepend-inner>
-              <Search class="w-5 h-5 text-grey" />
-            </template>
-          </v-text-field>
+            bg-color="white"
+            class="flex-grow-1"
+            style="min-width: 250px;"
+          ></v-text-field>
 
           <v-btn variant="outlined" color="grey-darken-1" size="40" rounded="lg" @click="loadData">
             <RotateCcw class="w-5 h-5" />
@@ -285,8 +388,7 @@ onMounted(() => {
 
       <v-data-table
         :headers="headers"
-        :items="tableData"
-        :search="searchQuery"
+        :items="filteredTableData"
         :loading="isLoading"
         items-per-page="10"
         hover
@@ -344,10 +446,10 @@ onMounted(() => {
               rounded="lg"
               class="text-none font-weight-bold"
               :loading="isSubmitting"
-              @click="handleCreateSchedule(item)"
+              @click="openCreateModal(item)"
             >
               <template v-slot:prepend><Plus class="w-4 h-4 mr-1" /></template>
-              Tạo lịch 30 ngày
+              Thêm lịch
             </v-btn>
 
             <v-btn
@@ -359,7 +461,7 @@ onMounted(() => {
               class="text-none font-weight-bold ml-2"
               :loading="isSubmitting"
               title="Gia hạn thêm 30 ngày nối tiếp"
-              @click="handleCreateSchedule(item)"
+              @click="openCreateModal(item)"
             >
               <template v-slot:prepend><Plus class="w-4 h-4 mr-1" /></template>
               Gia hạn
@@ -373,7 +475,7 @@ onMounted(() => {
     <v-dialog v-model="isEditModalOpen" max-width="500" transition="dialog-bottom-transition">
       <v-card rounded="xl">
         <v-card-title class="pa-6 border-b">
-          <div class="text-h6 font-weight-bold">Sửa Lịch Làm Việc</div>
+          <div class="text-h6 font-weight-bold">Thiết lập Lịch Làm Việc</div>
           <div class="text-subtitle-2 text-medium-emphasis mt-1">Thợ: <span class="text-primary font-weight-bold">{{ editState.tenNv }}</span></div>
         </v-card-title>
         
@@ -410,6 +512,18 @@ onMounted(() => {
                   density="comfortable"
                   rounded="lg"
                 ></v-select>
+              </v-col>
+              <v-col cols="12" class="pb-0" v-if="editState.khoangThoiGian > 1">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Các ngày áp dụng trong tuần</div>
+                <v-chip-group
+                  v-model="editState.selectedDaysOfWeek"
+                  multiple
+                  selected-class="bg-primary text-white"
+                >
+                  <v-chip v-for="day in dayOfWeekOptions" :key="day.value" :value="day.value" filter>
+                    {{ day.title }}
+                  </v-chip>
+                </v-chip-group>
               </v-col>
             </v-row>
 
@@ -458,6 +572,73 @@ onMounted(() => {
             @click="submitEditSchedule"
             :disabled="editState.affectedDates.length === 0"
           >Lưu thay đổi</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Modal Nghỉ Lễ Chung -->
+    <v-dialog v-model="isHolidayModalOpen" max-width="500" transition="dialog-bottom-transition">
+      <v-card rounded="xl">
+        <v-card-title class="pa-6 border-b">
+          <div class="text-h6 font-weight-bold text-error">Thiết lập Nghỉ Lễ Chung</div>
+          <div class="text-subtitle-2 text-medium-emphasis mt-1">Cập nhật ca làm của TOÀN BỘ nhân viên thành "Nghỉ lễ"</div>
+        </v-card-title>
+        
+        <v-card-text class="pa-6">
+          <v-form @submit.prevent="submitHoliday">
+            <v-row>
+              <v-col cols="12" sm="6" class="pb-0">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Từ ngày</div>
+                <v-text-field
+                  v-model="holidayState.tuNgay"
+                  type="date"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                  :min="todayStr"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="6" class="pb-0">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Đến ngày</div>
+                <v-text-field
+                  v-model="holidayState.denNgay"
+                  type="date"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                  :min="holidayState.tuNgay"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12" class="pb-0 pt-2">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Lý do nghỉ (Tên ngày lễ)</div>
+                <v-text-field
+                  v-model="holidayState.lyDo"
+                  placeholder="VD: Nghỉ Tết Nguyên Đán"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                ></v-text-field>
+              </v-col>
+            </v-row>
+          </v-form>
+        </v-card-text>
+
+        <v-card-actions class="pa-4 px-6 d-flex justify-end border-t">
+          <v-btn
+            variant="outlined"
+            rounded="lg"
+            class="text-none font-weight-bold mr-2"
+            color="grey-darken-2"
+            @click="isHolidayModalOpen = false"
+          >Hủy</v-btn>
+          <v-btn
+            variant="flat"
+            rounded="lg"
+            class="text-none font-weight-bold"
+            color="error"
+            :loading="isSubmittingHoliday"
+            @click="submitHoliday"
+          >Áp dụng cho toàn tiệm</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>

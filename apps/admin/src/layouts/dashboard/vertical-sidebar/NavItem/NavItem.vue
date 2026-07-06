@@ -7,6 +7,7 @@ const props = defineProps({ item: Object, level: Number });
   <v-list-item
     :to="item.type === 'external' ? '' : item.to"
     :href="item.type === 'external' ? item.to : ''"
+    :exact="item.to === '/nhanvien'"
     rounded
     class="mb-1"
     color="primary"

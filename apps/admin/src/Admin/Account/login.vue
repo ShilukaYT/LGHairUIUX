@@ -25,6 +25,17 @@ const showPassword = ref(false)
 const API_URL = 'https://localhost:7196/api/admin/auth/login'
 
 const handleLogin = async () => {
+  if (!email.value || !password.value) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Thiếu thông tin',
+      text: 'Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu!',
+      confirmButtonText: 'Đóng',
+      confirmButtonColor: '#ff7eb3'
+    })
+    return
+  }
+
   isLoading.value = true
   errorMessage.value = ''
 
@@ -40,9 +51,14 @@ const handleLogin = async () => {
       const accessToken = data.accessToken || data.token || '';
       const user = data.user || data;
 
-      // 2. Lưu Token và thông tin nhân viên vào sessionStorage (chỉ trong 1 phiên)
-      sessionStorage.setItem('adminToken', accessToken)
-      sessionStorage.setItem('adminUser', JSON.stringify(user))
+      // 2. Kiểm tra Role và lưu trữ session tương ứng
+      if (user.maRole === 'R01') {
+        sessionStorage.setItem('adminToken', accessToken)
+        sessionStorage.setItem('adminUser', JSON.stringify(user))
+      } else {
+        sessionStorage.setItem('staffToken', accessToken)
+        sessionStorage.setItem('staffUser', JSON.stringify(user))
+      }
 
       // 3. Kiểm tra Role và chuyển hướng
       if (user.maRole === 'R01') {
@@ -369,6 +385,7 @@ l-1 -383 42 -42 c24 -24 47 -43 51 -43 4 0 8 200 8 444 0 441 0 444 22 486 13
             ></v-text-field>
 
             <v-btn
+              type="button"
               icon
               variant="tonal"
               color="#ff7eb3"

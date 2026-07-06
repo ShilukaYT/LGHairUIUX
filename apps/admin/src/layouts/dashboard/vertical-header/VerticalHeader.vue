@@ -15,6 +15,8 @@ const customizer = useCustomizerStore();
 const theme = useTheme();
 
 const userName = ref('User');
+const isAdmin = ref(false);
+const currentUserMaNv = ref('');
 const userAvatar = ref('');
 
 const loadUserFromStorage = () => {
@@ -23,11 +25,14 @@ const loadUserFromStorage = () => {
 
   let user: any = null;
   if (adminStr) {
-    user = JSON.parse(adminStr);
-    userName.value = user.hoTen || user.tenNhanVien || user.username || 'Admin';
+    const admin = JSON.parse(adminStr);
+    userName.value = admin.hoTen || admin.tenNhanVien || admin.username || 'Admin';
+    isAdmin.value = true;
+    currentUserMaNv.value = admin.maNv || admin.id || '';
   } else if (staffStr) {
-    user = JSON.parse(staffStr);
-    userName.value = user.hoTen || user.tenNhanVien || user.username || 'Nhân viên';
+    const staff = JSON.parse(staffStr);
+    userName.value = staff.hoTen || staff.tenNhanVien || staff.username || 'Nhân viên';
+    currentUserMaNv.value = staff.maNv || staff.id || '';
   }
 
   if (user) {
@@ -142,7 +147,7 @@ function toggleTheme() {
     <!-- ---------------------------------------------- -->
     <!-- Notification -->
     <!-- ---------------------------------------------- -->
-    <NotificationDD />
+    <NotificationDD :isAdmin="isAdmin" :currentUserMaNv="currentUserMaNv" />
 
     <!-- ---------------------------------------------- -->
     <!-- User Profile -->

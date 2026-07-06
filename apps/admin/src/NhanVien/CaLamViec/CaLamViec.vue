@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
-import { CheckCircle2, Clock, CalendarDays, Briefcase, AlertCircle, PlayCircle, LogOut, X, RefreshCcw } from 'lucide-vue-next'
+import { CalendarDays, Briefcase, PlayCircle, LogOut, RefreshCcw, Clock, Sun, XCircle, AlertCircle, CheckCircle } from 'lucide-vue-next'
+import { Html5Qrcode } from 'html5-qrcode'
 const API_BASE_URL = 'https://localhost:7196/api/nhan-vien/ca-lam'
 axios.defaults.withCredentials = true; // Bắt buộc để gửi kèm Cookie/Token
 
@@ -32,7 +33,7 @@ const fetchShifts = async () => {
     const currentMaNv = user?.maNv || user?.MaNv
 
     if (!currentMaNv) {
-        alert("Không tìm thấy thông tin đăng nhập!")
+        showSnackbar("Không tìm thấy thông tin đăng nhập!", "error")
         return
     }
 
@@ -77,27 +78,86 @@ const fetchShifts = async () => {
         console.error("Lỗi khi tải dữ liệu:", error)
     }
 }
-// 3. Xử lý Điểm danh
-const handleCheckIn = async () => {
-    if (!todayShift.value.maLich) return
+// 3. Xử lý Điểm danh bằng QR Code
+const isScannerOpen = ref(false)
+const isScanning = ref(false)
+let html5QrCode: Html5Qrcode | null = null
 
-    const user = getCurrentUser()
-    const currentMaNv = user?.maNv || user?.MaNv
-
+const startScanner = async () => {
+  isScannerOpen.value = true
+  isScanning.value = true
+  setTimeout(async () => {
     try {
-        // THÊM PARAMS maNv VÀO ĐÂY
-        // Lưu ý cú pháp axios.patch(url, data, config), ở đây data là null
-        const res = await axios.patch(`${API_BASE_URL}/diem-danh/${todayShift.value.maLich}`, null, {
-            params: { maNv: currentMaNv }
-        })
-
-        if (res.data.success) {
-            alert("Điểm danh thành công! Chúc bạn một ngày làm việc hiệu quả.")
-            fetchShifts()
-        }
-    } catch (error: any) {
-        alert(error.response?.data?.message || "Đã xảy ra lỗi khi điểm danh.")
+      html5QrCode = new Html5Qrcode("qr-reader")
+      await html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        onScanSuccess,
+        onScanFailure
+      )
+    } catch (err) {
+      console.error("Lỗi khi mở camera: ", err)
+      showSnackbar("Không thể mở camera. Vui lòng cấp quyền truy cập camera.", "error")
+      isScannerOpen.value = false
+      isScanning.value = false
     }
+  }, 100)
+}
+
+const onScanSuccess = async (decodedText: string, decodedResult: any) => {
+  if (html5QrCode) {
+    try {
+      await html5QrCode.stop()
+      html5QrCode.clear()
+    } catch(e) {}
+  }
+  isScannerOpen.value = false
+  isScanning.value = false
+  
+  submitCheckInQR(decodedText)
+}
+
+const onScanFailure = (error: any) => {
+  // Bỏ qua lỗi scan liên tục
+}
+
+const closeScanner = async () => {
+  if (html5QrCode && isScanning.value) {
+    try {
+      await html5QrCode.stop()
+      html5QrCode.clear()
+    } catch (e) {}
+  }
+  isScannerOpen.value = false
+  isScanning.value = false
+}
+
+const submitCheckInQR = async (qrCode: string) => {
+  if (!todayShift.value.maLich) return
+
+  const user = getCurrentUser()
+  const currentMaNv = user?.maNv || user?.MaNv
+
+  try {
+      const res = await axios.patch(`${API_BASE_URL}/diem-danh-qr/${todayShift.value.maLich}`, JSON.stringify(qrCode), {
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          params: { maNv: currentMaNv }
+      })
+
+      if (res.data.success) {
+          showSnackbar("Điểm danh thành công! Chúc bạn một ngày làm việc hiệu quả.", "success")
+          fetchShifts()
+      }
+  } catch (error: any) {
+      showSnackbar(error.response?.data?.message || "Đã xảy ra lỗi khi điểm danh.", "error")
+  }
+}
+
+const handleCheckIn = () => {
+  // Mở modal quét mã thay vì gọi API trực tiếp
+  startScanner()
 }
 
 // 4. Xử lý Rời ca sớm
@@ -117,11 +177,11 @@ const handleCheckOut = async () => {
         })
 
         if (res.data.success) {
-            alert("Đã ghi nhận rời ca sớm.")
+            showSnackbar("Đã ghi nhận rời ca sớm.", "success")
             fetchShifts()
         }
     } catch (error: any) {
-        alert(error.response?.data?.message || "Đã xảy ra lỗi khi đánh dấu rời ca.")
+        showSnackbar(error.response?.data?.message || "Đã xảy ra lỗi khi đánh dấu rời ca.", "error")
     }
 }
 
@@ -139,11 +199,11 @@ const openRequestModal = () => {
 const submitRequest = async () => {
   // Validate kiểm tra xem đã chọn ca và nhập lý do chưa
   if (!selectedNewShift.value) {
-    alert("Vui lòng chọn ca muốn đổi hoặc chọn Xin nghỉ.")
+    showSnackbar("Vui lòng chọn ca muốn đổi hoặc chọn Xin nghỉ.", "error")
     return
   }
   if (!requestReason.value.trim()) {
-    alert("Vui lòng nhập lý do cụ thể.")
+    showSnackbar("Vui lòng nhập lý do cụ thể.", "error")
     return
   }
   
@@ -167,203 +227,241 @@ const submitRequest = async () => {
     )
     
     if (res.data.success) {
-      alert("Đã gửi yêu cầu thành công! Vui lòng chờ quản lý duyệt.")
+      showSnackbar("Đã gửi yêu cầu thành công! Vui lòng chờ quản lý duyệt.", "success")
       isRequestModalOpen.value = false
       fetchShifts() 
     }
   } catch (error: any) {
-    alert(error.response?.data?.message || "Đã xảy ra lỗi khi gửi yêu cầu.")
+    showSnackbar(error.response?.data?.message || "Đã xảy ra lỗi khi gửi yêu cầu.", "error")
   }
 }
 
 onMounted(() => {
     fetchShifts()
 })
+
+// --- SNACKBAR LOGIC ---
+const isSnackbarOpen = ref(false)
+const snackbarMessage = ref('')
+const snackbarColor = ref('success')
+
+const showSnackbar = (msg: string, color = 'success') => {
+  snackbarMessage.value = msg
+  snackbarColor.value = color
+  isSnackbarOpen.value = true
+}
 </script>
 
 <template>
-    <div class="space-y-6">
-        <div>
-            <h2 class="text-2xl font-bold text-slate-900">Ca làm việc của bạn</h2>
-            <p class="mt-1 text-sm text-slate-500">Xem trạng thái ca làm hôm nay và lịch sử 7 ngày gần nhất.</p>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-            <div class="md:col-span-1 space-y-6">
-                <div class="bg-white rounded-2xl border shadow-sm p-6 overflow-hidden relative">
-                    <div
-                        class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-emerald-50 rounded-full opacity-50 blur-2xl">
-                    </div>
-
-                    <div class="flex items-center gap-2 text-emerald-600 mb-6">
-                        <CalendarDays class="w-5 h-5" />
-                        <h3 class="font-bold">Hôm nay, {{ todayShift.ngay }}</h3>
-                    </div>
-
-                    <div class="space-y-4 relative z-10">
-                        <div>
-                            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Ca làm được
-                                phân công</p>
-                            <div class="flex items-center gap-2 font-bold text-slate-800 text-lg">
-                                <Briefcase class="w-5 h-5 text-indigo-500" />
-                                {{ todayShift.caLam }}
-                            </div>
-                        </div>
-
-                        <div class="pt-2">
-                            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Trạng thái
-                                hiện tại</p>
-
-                            <div v-if="todayShift.trangThai === 1"
-                                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-100 text-amber-700 font-bold text-sm">
-                                <AlertCircle class="w-4 h-4" /> Chờ điểm danh
-                            </div>
-                            <div v-else-if="todayShift.trangThai === 2"
-                                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-100 text-emerald-700 font-bold text-sm">
-                                <CheckCircle2 class="w-4 h-4" /> Đang làm việc
-                            </div>
-                            <div v-else-if="todayShift.trangThai === 3"
-                                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 font-bold text-sm border border-slate-200">
-                                <LogOut class="w-4 h-4" /> Đã rời ca
-                            </div>
-                            <div v-else-if="todayShift.trangThai === 4"
-                                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-100 text-blue-700 font-bold text-sm">
-                                <Clock class="w-4 h-4" /> Xin đổi ca
-                            </div>
-                            <div v-else
-                                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-100 text-rose-700 font-bold text-sm">
-                                <X class="w-4 h-4" /> Không có ca
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="mt-8 pt-6 border-t border-slate-100">
-                        <button v-if="todayShift.trangThai === 1" @click="handleCheckIn"
-                            class="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-100 mb-3">
-                            <PlayCircle class="w-5 h-5" /> Điểm danh vào ca
-                        </button>
-
-                        <button v-if="todayShift.trangThai === 1" @click="openRequestModal"
-                            class="w-full h-11 bg-white border-2 border-blue-500 text-blue-600 hover:bg-blue-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all">
-                            <RefreshCcw class="w-5 h-5" /> Yêu cầu đổi ca / Xin nghỉ
-                        </button>
-
-                        <button v-else-if="todayShift.trangThai === 2" @click="handleCheckOut"
-                            class="w-full h-11 bg-white border-2 border-amber-500 text-amber-600 hover:bg-amber-50 rounded-xl font-bold flex items-center justify-center gap-2 transition-all">
-                            <LogOut class="w-5 h-5" /> Đánh dấu rời ca sớm
-                        </button>
-
-                        <div v-else class="text-center text-sm font-medium text-slate-400 italic">
-                            Không có thao tác nào khả dụng.
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="md:col-span-2">
-                <div class="bg-white rounded-2xl border shadow-sm h-full flex flex-col overflow-hidden">
-                    <div class="p-5 border-b flex items-center gap-2 bg-slate-50/50">
-                        <Clock class="w-5 h-5 text-slate-400" />
-                        <h3 class="font-bold text-slate-700">Lịch sử 7 ngày gần nhất</h3>
-                    </div>
-
-                    <div class="flex-1 overflow-auto custom-scrollbar">
-                        <table class="w-full text-sm text-left">
-                            <thead class="bg-slate-50/80 text-xs text-slate-500 uppercase font-bold sticky top-0">
-                                <tr>
-                                    <th class="px-6 py-4">Ngày làm việc</th>
-                                    <th class="px-6 py-4">Ca được xếp</th>
-                                    <th class="px-6 py-4 text-center">Tình trạng</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr v-if="last7Days.length === 0">
-                                    <td colspan="3" class="px-6 py-8 text-center text-slate-400 italic">Chưa có dữ liệu
-                                        lịch làm việc.</td>
-                                </tr>
-                                <tr v-for="item in last7Days" :key="item.maLich"
-                                    class="border-b last:border-0 hover:bg-slate-50 transition-colors">
-                                    <td class="px-6 py-4 font-semibold text-slate-700">{{ item.ngay }}</td>
-                                    <td class="px-6 py-4 text-slate-600 font-medium">{{ item.caLam }}</td>
-                                    <td class="px-6 py-4 text-center">
-                                        <span v-if="item.trangThai === 2"
-                                            class="inline-flex px-2 py-1 bg-emerald-50 text-emerald-600 rounded-md text-xs font-bold border border-emerald-100">Có
-                                            mặt</span>
-                                        <span v-else-if="item.trangThai === 3"
-                                            class="inline-flex px-2 py-1 bg-amber-50 text-amber-600 rounded-md text-xs font-bold border border-amber-100">Rời
-                                            sớm</span>
-                                        <span v-else-if="item.trangThai === 1"
-                                            class="inline-flex px-2 py-1 bg-slate-100 text-slate-600 rounded-md text-xs font-bold border border-slate-200">Chưa
-                                            làm</span>
-                                        <span v-else-if="item.trangThai === 4"
-                                            class="inline-flex px-2 py-1 bg-blue-50 text-blue-600 rounded-md text-xs font-bold border border-blue-200">Xin
-                                            đổi ca</span>
-                                        <span v-else class="text-xs font-medium text-slate-400">-</span>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-        </div>
+  <v-container fluid>
+    <div class="mb-6">
+      <h2 class="text-h5 font-weight-bold">Ca làm việc của bạn</h2>
+      <p class="text-body-2 text-medium-emphasis mt-1">Xem trạng thái ca làm hôm nay và lịch sử 7 ngày gần nhất.</p>
     </div>
-    <div v-if="isRequestModalOpen" class="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-      <div class="bg-white p-6 rounded-2xl w-full max-w-md shadow-2xl border border-slate-100 transform transition-all">
-        
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="text-lg font-bold text-slate-800">Xin đổi ca / Nghỉ phép</h3>
-          <button @click="isRequestModalOpen = false" class="text-slate-400 hover:text-rose-500 transition-colors">
-            <X class="w-5 h-5" />
-          </button>
-        </div>
-        
-        <p class="text-sm text-slate-500 mb-5 pb-4 border-b border-slate-100">
-          Ca hiện tại: <span class="font-bold text-slate-700">{{ todayShift.caLam }} ({{ todayShift.ngay }})</span>
-        </p>
 
-        <div class="mb-4">
-          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Bạn muốn đổi sang ca nào?</label>
-          <select v-model="selectedNewShift" class="w-full border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 cursor-pointer text-slate-700">
-            <option value="" disabled selected>-- Chọn ca muốn làm bù --</option>
-            <option value="Ca ngày">Đổi sang Ca ngày</option>
-            <option value="Ca tối">Đổi sang Ca tối</option>
-            <option value="Nghỉ nguyên ngày">Xin nghỉ hẳn (Không làm bù)</option>
-          </select>
-        </div>
+    <v-row>
+      <!-- Cột Trái: Hôm nay -->
+      <v-col cols="12" md="4">
+        <v-card elevation="2" rounded="xl" class="h-100 position-relative overflow-hidden">
+          <div class="position-absolute" style="top: -20px; right: -20px; width: 100px; height: 100px; background-color: rgba(16, 185, 129, 0.1); border-radius: 50%; filter: blur(30px);"></div>
+          
+          <v-card-text class="pa-6 position-relative" style="z-index: 1;">
+            <div class="d-flex align-center text-success mb-6">
+              <CalendarDays class="mr-2" :size="20" />
+              <h3 class="text-subtitle-1 font-weight-bold mb-0">Hôm nay, {{ todayShift.ngay }}</h3>
+            </div>
 
-        <div>
-          <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Lý do cụ thể</label>
-          <textarea 
-            v-model="requestReason" 
-            class="w-full border border-slate-200 rounded-xl p-3 text-sm h-24 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-slate-50" 
-            placeholder="Ví dụ: Em có việc gia đình đột xuất..."></textarea>
-        </div>
+            <div class="mb-4">
+              <div class="text-caption text-uppercase text-medium-emphasis font-weight-bold mb-1">Ca làm được phân công</div>
+              <div class="d-flex align-center text-h6 font-weight-bold">
+                <Briefcase class="text-indigo mr-2" :size="20" />
+                {{ todayShift.caLam }}
+              </div>
+            </div>
+
+            <div class="mb-6">
+              <div class="text-caption text-uppercase text-medium-emphasis font-weight-bold mb-2">Trạng thái hiện tại</div>
+              
+              <v-chip v-if="todayShift.caLam === 'Nghỉ lễ'" color="error" variant="flat" class="font-weight-bold text-white">
+                <template v-slot:prepend><Sun class="mr-1" :size="16" /></template>
+                Nghỉ lễ
+              </v-chip>
+              <v-chip v-else-if="todayShift.caLam === 'Chưa xếp'" color="error" variant="tonal" class="font-weight-bold">
+                <template v-slot:prepend><XCircle class="mr-1" :size="16" /></template>
+                Không có ca
+              </v-chip>
+              <v-chip v-else-if="todayShift.trangThai === 1" color="warning" variant="tonal" class="font-weight-bold">
+                <template v-slot:prepend><AlertCircle class="mr-1" :size="16" /></template>
+                Chờ điểm danh
+              </v-chip>
+              <v-chip v-else-if="todayShift.trangThai === 2" color="success" variant="tonal" class="font-weight-bold">
+                <template v-slot:prepend><CheckCircle class="mr-1" :size="16" /></template>
+                Đang làm việc
+              </v-chip>
+              <v-chip v-else-if="todayShift.trangThai === 3" color="blue-grey" variant="outlined" class="font-weight-bold">
+                <template v-slot:prepend><LogOut class="mr-1" :size="16" /></template>
+                Đã rời ca
+              </v-chip>
+              <v-chip v-else-if="todayShift.trangThai === 4" color="info" variant="tonal" class="font-weight-bold">
+                <template v-slot:prepend><Clock class="mr-1" :size="16" /></template>
+                Xin đổi ca
+              </v-chip>
+              <v-chip v-else color="error" variant="tonal" class="font-weight-bold">
+                <template v-slot:prepend><XCircle class="mr-1" :size="16" /></template>
+                Không có ca
+              </v-chip>
+            </div>
+
+            <v-divider class="my-4"></v-divider>
+
+            <v-btn v-if="todayShift.trangThai === 1 && todayShift.caLam !== 'Chưa xếp' && todayShift.caLam !== 'Nghỉ lễ'" @click="handleCheckIn" color="success" block size="large" rounded="lg" class="mb-3 font-weight-bold text-none" elevation="2">
+              <template v-slot:prepend><PlayCircle :size="20"/></template>
+              Điểm danh vào ca
+            </v-btn>
+
+            <v-btn v-if="(todayShift.trangThai === 1 && todayShift.caLam !== 'Nghỉ lễ') || todayShift.caLam === 'Chưa xếp'" @click="openRequestModal" color="info" variant="outlined" block size="large" rounded="lg" class="font-weight-bold text-none border-opacity-100 py-3" style="height: auto; white-space: normal; line-height: 1.4;">
+              <template v-slot:prepend><RefreshCcw :size="20" class="mr-1" /></template>
+              <span class="text-center">Gửi yêu cầu <br/><small>(Xếp ca / Đổi ca / Xin nghỉ)</small></span>
+            </v-btn>
+
+            <v-btn v-else-if="todayShift.trangThai === 2" @click="handleCheckOut" color="warning" variant="outlined" block size="large" rounded="lg" class="font-weight-bold text-none border-opacity-100">
+              <template v-slot:prepend><LogOut :size="20"/></template>
+              Đánh dấu rời ca sớm
+            </v-btn>
+
+            <div v-else class="text-center text-caption text-medium-emphasis font-italic mt-2">
+              Không có thao tác nào khả dụng.
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+
+      <!-- Cột Phải: Lịch sử -->
+      <v-col cols="12" md="8">
+        <v-card elevation="2" rounded="xl" class="h-100 d-flex flex-column">
+          <v-card-title class="pa-5 d-flex align-center border-b bg-surface-light">
+            <Clock class="mr-2 text-medium-emphasis" :size="20" />
+            <span class="text-subtitle-1 font-weight-bold">Lịch sử 7 ngày gần nhất</span>
+          </v-card-title>
+          
+          <v-table class="flex-grow-1">
+            <thead>
+              <tr>
+                <th class="text-left font-weight-bold text-uppercase text-caption text-medium-emphasis">Ngày làm việc</th>
+                <th class="text-left font-weight-bold text-uppercase text-caption text-medium-emphasis">Ca được xếp</th>
+                <th class="text-center font-weight-bold text-uppercase text-caption text-medium-emphasis">Tình trạng</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="last7Days.length === 0">
+                <td colspan="3" class="text-center text-medium-emphasis font-italic py-6">Chưa có dữ liệu lịch làm việc.</td>
+              </tr>
+              <tr v-for="item in last7Days" :key="item.maLich" class="hover-row">
+                <td class="font-weight-bold">{{ item.ngay }}</td>
+                <td class="font-weight-medium text-medium-emphasis">{{ item.caLam }}</td>
+                <td class="text-center">
+                  <v-chip v-if="item.caLam === 'Nghỉ lễ'" color="error" size="small" class="font-weight-bold text-white" variant="flat">Nghỉ lễ</v-chip>
+                  <v-chip v-else-if="item.caLam === 'Chưa xếp'" color="error" size="small" class="font-weight-bold" variant="tonal">Không xếp ca</v-chip>
+                  <v-chip v-else-if="item.trangThai === 2" color="success" size="small" class="font-weight-bold" variant="tonal">Có mặt</v-chip>
+                  <v-chip v-else-if="item.trangThai === 3" color="warning" size="small" class="font-weight-bold" variant="tonal">Rời sớm</v-chip>
+                  <v-chip v-else-if="item.trangThai === 1" color="blue-grey" size="small" class="font-weight-bold" variant="tonal">Chưa làm</v-chip>
+                  <v-chip v-else-if="item.trangThai === 4" color="info" size="small" class="font-weight-bold" variant="tonal">Xin đổi ca</v-chip>
+                  <span v-else class="text-medium-emphasis font-weight-bold">-</span>
+                </td>
+              </tr>
+            </tbody>
+          </v-table>
+        </v-card>
+      </v-col>
+    </v-row>
+
+    <!-- Dialog Xin nghỉ/đổi ca -->
+    <v-dialog v-model="isRequestModalOpen" max-width="500" persistent>
+      <v-card rounded="xl">
+        <v-card-title class="d-flex align-center justify-space-between pt-4 px-6">
+          <span class="text-h6 font-weight-bold">Xin đổi ca / Nghỉ phép</span>
+          <v-btn icon="mdi-close" variant="text" size="small" @click="isRequestModalOpen = false"></v-btn>
+        </v-card-title>
         
-        <div class="flex gap-3 mt-6">
-          <button @click="isRequestModalOpen = false" class="flex-1 py-2.5 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-xl font-bold transition-colors">Hủy bỏ</button>
-          <button @click="submitRequest" class="flex-1 py-2.5 bg-blue-600 text-white hover:bg-blue-700 rounded-xl font-bold transition-colors shadow-lg shadow-blue-200 flex items-center justify-center gap-2">
-            <RefreshCcw class="w-4 h-4" /> Gửi yêu cầu
-          </button>
-        </div>
+        <v-card-text class="px-6 pb-2">
+          <p class="text-body-2 text-medium-emphasis mb-4 pb-4 border-b">
+            Ca hiện tại: <span class="font-weight-bold text-high-emphasis">{{ todayShift.caLam }} ({{ todayShift.ngay }})</span>
+          </p>
+
+          <div class="text-caption font-weight-bold text-uppercase text-medium-emphasis mb-2">Bạn muốn đổi sang ca nào?</div>
+          <v-select
+            v-model="selectedNewShift"
+            :items="[
+              {title: 'Đổi sang Ca sáng (7h-17h)', value: 'Ca sáng (7h-17h)'},
+              {title: 'Đổi sang Ca tối (13h-20h)', value: 'Ca tối (13h-20h)'},
+              {title: 'Đổi sang Ca sáng (Part-time)', value: 'Ca sáng (Part-time)'},
+              {title: 'Đổi sang Ca chiều (Part-time)', value: 'Ca chiều (Part-time)'},
+              {title: 'Đổi sang Ca tối (Part-time)', value: 'Ca tối (Part-time)'},
+              {title: 'Xin nghỉ hẳn (Không làm bù)', value: 'Nghỉ nguyên ngày'}
+            ]"
+            item-title="title"
+            item-value="value"
+            placeholder="-- Chọn ca muốn làm bù --"
+            variant="outlined"
+            density="comfortable"
+            class="mb-4"
+          ></v-select>
+
+          <div class="text-caption font-weight-bold text-uppercase text-medium-emphasis mb-2">Lý do cụ thể</div>
+          <v-textarea
+            v-model="requestReason"
+            placeholder="Ví dụ: Em có việc gia đình đột xuất..."
+            variant="outlined"
+            rows="3"
+            auto-grow
+            density="comfortable"
+          ></v-textarea>
+        </v-card-text>
         
+        <v-card-actions class="px-6 pb-6 pt-0 d-flex gap-3">
+          <v-btn @click="isRequestModalOpen = false" variant="tonal" color="blue-grey" class="flex-grow-1 font-weight-bold text-none" rounded="lg">Hủy bỏ</v-btn>
+          <v-btn @click="submitRequest" color="primary" variant="flat" class="flex-grow-1 font-weight-bold text-none" rounded="lg">Gửi yêu cầu</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Dialog Quét mã QR -->
+    <v-dialog v-model="isScannerOpen" max-width="400" persistent transition="dialog-bottom-transition">
+      <v-card rounded="xl">
+        <v-card-title class="d-flex align-center justify-space-between pt-4 px-6 border-b">
+          <span class="text-h6 font-weight-bold">Quét mã QR Điểm Danh</span>
+        </v-card-title>
+        <v-card-text class="pa-4 d-flex flex-column align-center">
+          <div id="qr-reader" style="width: 100%; border-radius: 8px; overflow: hidden;"></div>
+          <p class="text-caption mt-4 text-center text-medium-emphasis">Vui lòng quét mã QR trên màn hình của Quản lý để điểm danh.</p>
+        </v-card-text>
+        <v-card-actions class="px-6 pb-4 d-flex justify-center border-t">
+          <v-btn @click="closeScanner" color="error" variant="flat" class="font-weight-bold text-none px-6" rounded="lg">Hủy</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Snackbar Thông báo -->
+    <v-snackbar
+      v-model="isSnackbarOpen"
+      :color="snackbarColor"
+      timeout="3000"
+      location="top right"
+      elevation="24"
+    >
+      <div class="d-flex align-center">
+        <v-icon left class="mr-2">{{ snackbarColor === 'success' ? 'mdi-check-circle' : 'mdi-alert-circle' }}</v-icon>
+        <span class="font-weight-medium">{{ snackbarMessage }}</span>
       </div>
-    </div>
+      <template v-slot:actions>
+        <v-btn variant="text" @click="isSnackbarOpen = false">Đóng</v-btn>
+      </template>
+    </v-snackbar>
+  </v-container>
 </template>
 
 <style scoped>
-.custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #e2e8f0;
-    border-radius: 10px;
+.hover-row:hover {
+  background-color: rgba(var(--v-theme-on-surface), 0.04);
 }
 </style>
