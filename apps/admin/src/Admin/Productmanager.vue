@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, reactive, onMounted } from "vue";
 import axios from "axios";
+import { logActivity } from "@/utils/activityLogger";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -351,6 +352,46 @@ function openViewSP(sp) {
 
 function closeSpModal() { spModal.open = false; }
 
+async function saveSP() {
+  if (!validateSP()) { showToast("Kiểm tra lại thông tin sản phẩm!", "error"); return; }
+  saving.value = true;
+  try {
+    const fd = new FormData();
+    fd.append("MaDanhMuc", spForm.maDanhMuc);
+    fd.append("TenSp", spForm.tenSP.trim());
+    fd.append("MaTh", spForm.maTH || "");
+    fd.append("TrangThai", spForm.trangThai);
+
+    if (spForm._newAvatarFile) {
+      fd.append("File", spForm._newAvatarFile);
+    }
+    for (const g of spForm._newGalleryFiles)
+      fd.append("GalleryFiles", g.file);
+
+    if (editingSpId.value) {
+      await axios.put(`${API}/api/QuanLySanPham/${editingSpId.value}`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+      logActivity("Cập nhật sản phẩm", `Đã cập nhật sản phẩm ${spForm.tenSP} (Mã: ${editingSpId.value})`, "Sản phẩm");
+      showToast("Cập nhật sản phẩm thành công!");
+    } else {
+      fd.append("MaSp", spForm.maSP.trim());
+      await axios.post(`${API}/api/QuanLySanPham`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+      logActivity("Thêm sản phẩm", `Đã thêm sản phẩm mới ${spForm.tenSP} (Mã: ${spForm.maSP})`, "Sản phẩm");
+      showToast("Thêm sản phẩm thành công!");
+    }
+    closeSpModal(); await loadSanPham();
+  } catch (err) {
+    logActivity(
+      editingSpId.value ? "Cập nhật sản phẩm" : "Thêm sản phẩm",
+      `Thất bại khi ${editingSpId.value ? 'cập nhật' : 'thêm'} sản phẩm ${spForm.tenSP} - Lỗi: ${err.message || ''}`,
+      "Sản phẩm",
+      "Thất bại"
+    );
+    showToast("Lỗi khi lưu sản phẩm!", "error");
+  } finally {
+    saving.value = false;
+  }
+}
+
 async function saveBT() {
   if (!validateBT()) { showToast("Kiểm tra lại thông tin biến thể!", "error"); return; }
   btSaving.value = true;
@@ -363,7 +404,6 @@ async function saveBT() {
     fd.append("PhanTramHoaHong", btForm.phanTramHoaHong || 0);
     fd.append("TrangThai", btForm.trangThai);
 
-    // ghi nhận nhân viên thực hiện thao tác, dùng để log lịch sử tồn kho khi backend phát hiện SoLuong thay đổi
     const nv = getCurrentNhanVien();
     if (nv?.maNv) fd.append("MaNv", nv.maNv);
     if (btForm.ghiChu && btForm.ghiChu.trim()) fd.append("GhiChu", btForm.ghiChu.trim());
@@ -379,35 +419,53 @@ async function saveBT() {
         await axios.delete(`${API}/api/QuanLySanPham/bienthe/gallery/${id}`);
       }
       await axios.put(`${API}/api/QuanLySanPham/bienthe/${editingBtId.value}`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+      logActivity("Cập nhật biến thể", `Đã cập nhật biến thể ${btForm.tenBienThe} (Mã: ${editingBtId.value})`, "Sản phẩm");
       showToast("Cập nhật biến thể thành công!");
     } else {
       fd.append("MaBienThe", btForm.maBienThe.trim());
       await axios.post(`${API}/api/QuanLySanPham/bienthe`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+      logActivity("Thêm biến thể", `Đã thêm biến thể mới ${btForm.tenBienThe} (Mã: ${btForm.maBienThe})`, "Sản phẩm");
       showToast("Thêm biến thể thành công!");
     }
     closeBtModal(); await loadBienThe(btForm.maSanPham); await loadSanPham();
-  } catch { showToast("Lỗi khi lưu biến thể!", "error"); }
-  finally { btSaving.value = false; }
+  } catch (err) {
+    logActivity(
+      editingBtId.value ? "Cập nhật biến thể" : "Thêm biến thể",
+      `Thất bại khi ${editingBtId.value ? 'cập nhật' : 'thêm'} biến thể ${btForm.tenBienThe} - Lỗi: ${err.message || ''}`,
+      "Sản phẩm",
+      "Thất bại"
+    );
+    showToast("Lỗi khi lưu biến thể!", "error");
+  } finally {
+    btSaving.value = false;
+  }
 }
 
 async function delSP(sp) {
   if (!confirm(`Xóa sản phẩm "${sp.tenSP}"?`)) return;
   try {
     await axios.delete(`${API}/api/QuanLySanPham/${sp.maSP}`);
+    logActivity("Xóa sản phẩm", `Đã xóa sản phẩm ${sp.tenSP} (Mã: ${sp.maSP})`, "Sản phẩm");
     showToast("Đã xóa sản phẩm!"); await loadSanPham();
   } catch (err) {
-  showToast(
-    err.response?.data?.message || "Lỗi khi xóa sản phẩm!",
-    "error"
-  );
-}
+    logActivity("Xóa sản phẩm", `Thất bại khi xóa sản phẩm ${sp.tenSP} (Mã: ${sp.maSP}) - Lỗi: ${err.message || ''}`, "Sản phẩm", "Thất bại");
+    showToast(
+      err.response?.data?.message || "Lỗi khi xóa sản phẩm!",
+      "error"
+    );
+  }
 }
 
 async function toggleStatusSP(sp) {
+  const newStatus = sp.trangThai ? 0 : 1;
   try {
-    await axios.patch(`${API}/api/QuanLySanPham/${sp.maSP}/trangthai`, { trangThai: sp.trangThai ? 0 : 1 });
+    await axios.patch(`${API}/api/QuanLySanPham/${sp.maSP}/trangthai`, { trangThai: newStatus });
+    logActivity("Đổi trạng thái sản phẩm", `Đã đổi trạng thái sản phẩm ${sp.tenSP} sang ${newStatus ? 'Đang bán' : 'Ngừng bán'}`, "Sản phẩm");
     showToast("Đã cập nhật trạng thái!"); await loadSanPham();
-  } catch { showToast("Lỗi khi đổi trạng thái!", "error"); }
+  } catch (err) {
+    logActivity("Đổi trạng thái sản phẩm", `Thất bại khi đổi trạng thái sản phẩm ${sp.tenSP} - Lỗi: ${err.message || ''}`, "Sản phẩm", "Thất bại");
+    showToast("Lỗi khi đổi trạng thái!", "error");
+  }
 }
 
 // ══ BT MODAL ══════════════════════════════════════════════════════
@@ -443,13 +501,15 @@ async function deleteBT(bt) {
   if (!confirm(`Xóa biến thể "${bt.tenBienThe}"?`)) return;
   try {
     await axios.delete(`${API}/api/QuanLySanPham/bienthe/${bt.maBienThe}`);
+    logActivity("Xóa biến thể", `Đã xóa biến thể ${bt.tenBienThe} (Mã: ${bt.maBienThe})`, "Sản phẩm");
     showToast("Đã xóa biến thể!"); await loadBienThe(bt.maSanPham);
   } catch (err) {
-  showToast(
-    err.response?.data?.message || "Lỗi khi xóa biến thể!",
-    "error"
-  );
-}
+    logActivity("Xóa biến thể", `Thất bại khi xóa biến thể ${bt.tenBienThe} (Mã: ${bt.maBienThe}) - Lỗi: ${err.message || ''}`, "Sản phẩm", "Thất bại");
+    showToast(
+      err.response?.data?.message || "Lỗi khi xóa biến thể!",
+      "error"
+    );
+  }
 }
 
 // ══ INIT ═══════════════════════════════════════════════════════════
