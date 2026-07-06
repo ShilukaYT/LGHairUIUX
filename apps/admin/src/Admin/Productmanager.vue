@@ -1240,7 +1240,7 @@ tbody td { padding: 10px 14px; font-size: 13px; vertical-align: middle; }
 
 /* ── MODAL ──────────────────────────────────────────────────────── */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 9000; display: flex; align-items: center; justify-content: center; padding: 20px; }
-.modal { background: #fff; border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); display: flex; flex-direction: column; max-height: 90vh; overflow: hidden; }
+.modal { position: relative; top: auto; left: auto; margin: 0; background: #fff; border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); display: flex; flex-direction: column; max-height: 90vh; overflow: hidden; }
 .modal-wide { width: 580px; max-width: 95vw; }
 .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px 14px; border-bottom: 1px solid #f3f4f6; }
 .modal-title { font-size: 15px; font-weight: 700; color: #1a1a2e; margin: 0; }

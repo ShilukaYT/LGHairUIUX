@@ -1110,6 +1110,10 @@ onMounted(loadData);
   justify-content: center;
 }
 .modal {
+  position: relative;
+  top: auto;
+  left: auto;
+  margin: 0;
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 14px;
