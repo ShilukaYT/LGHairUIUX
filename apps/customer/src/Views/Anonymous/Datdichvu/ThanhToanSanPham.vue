@@ -268,11 +268,8 @@ function toggleVoucher(id: string) {
     const ids = orderData.value.voucherIds;
     const i = ids.indexOf(id);
     if (i >= 0) { ids.splice(i, 1); return; }
-    if (ids.length >= 2) {
-        alert('Chỉ chọn tối đa 2 voucher. Bỏ chọn một mã trước khi thêm mã khác.');
-        return;
-    }
-    ids.push(id);
+    // Chỉ chọn 1 voucher cho mỗi đơn hàng (thay thế mã cũ nếu đã chọn)
+    orderData.value.voucherIds = [id];
 }
 
 const discountAmount = computed(() => stackPreview.value.totalDiscount);
@@ -599,7 +596,6 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
                             </h3>
                             <div class="heading-line"></div>
                         </div>
-                        <p class="text-black small mb-3 font-bold">Chọn tối đa 2 mã — thứ tự chọn = thứ tự áp dụng.</p>
                         <div class="voucher-list-modern">
                             <div v-for="v in myVouchers" :key="v.id" class="voucher-ticket-item"
                                 :class="{ active: orderData.voucherIds.includes(v.id) }" @click="toggleVoucher(v.id)">

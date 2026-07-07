@@ -190,7 +190,7 @@ const exportExcel = async () => {
     const worksheet = workbook.addWorksheet(`BangLuong_T${month.value}_${year.value}`)
 
     // 1. Add Title Block
-    worksheet.mergeCells('A1:J1')
+    worksheet.mergeCells('A1:M1')
     const titleCell = worksheet.getCell('A1')
     titleCell.value = `BẢNG LƯƠNG NHÂN VIÊN - THÁNG ${month.value}/${year.value}`
     titleCell.font = { name: 'Segoe UI', size: 16, bold: true, color: { argb: 'FFFFFFFF' } }
@@ -199,7 +199,7 @@ const exportExcel = async () => {
     worksheet.getRow(1).height = 40
 
     // Subtitle
-    worksheet.mergeCells('A2:J2')
+    worksheet.mergeCells('A2:M2')
     const subtitleCell = worksheet.getCell('A2')
     subtitleCell.value = `Tổng số nhân viên: ${payrollSummary.value.tongNhanVien} | Tổng quỹ lương: ${formatVND(payrollSummary.value.tongQuyLuong)}`
     subtitleCell.font = { name: 'Segoe UI', size: 10, italic: true, color: { argb: 'FF374151' } }
@@ -210,16 +210,19 @@ const exportExcel = async () => {
 
     // 2. Add Header Row
     const headers = [
-      'STT', 
-      'Mã Nhân Viên', 
-      'Họ và Tên', 
-      'Chức Vụ', 
-      'Lương Cơ Bản', 
-      'Công Chuẩn', 
-      'Số Ca Làm', 
-      'Lương Ngày Công', 
-      'Hoa Hồng Dịch Vụ', 
-      'Thực Lĩnh'
+      'STT',              // A: col 1
+      'Mã Nhân Viên',    // B: col 2
+      'Họ và Tên',       // C: col 3
+      'Chức Vụ',         // D: col 4
+      'Lương Cơ Bản',    // E: col 5
+      'Công Chuẩn',       // F: col 6
+      'Ca Fulltime',      // G: col 7
+      'Ca Part-time',     // H: col 8
+      'Công Quy Đổi',    // I: col 9
+      'Lương Ngày Công',  // J: col 10
+      'HH Dịch Vụ',       // K: col 11
+      'HH Sản Phẩm',     // L: col 12
+      'Thực Lĩnh'         // M: col 13
     ]
     const headerRow = worksheet.addRow(headers)
     headerRow.height = 28
@@ -245,23 +248,29 @@ const exportExcel = async () => {
         item.tenLoaiNv,
         parseFloat(item.luongCoBan),
         item.soNgayCongQuyDinh,
-        item.soCaLamThucTe,
+        item.soCaFulltime ?? 0,
+        item.soCaParttime ?? 0,
+        parseFloat(item.soCaChuanQuyDoi ?? 0),
         parseFloat(item.luongTheoNgayCong),
-        parseFloat(item.tongHoaHong),
+        parseFloat(item.tongHoaHongDv ?? 0),      // HOA HỒNG DỌCH VỤ
+        parseFloat(item.tongHoaHongSp ?? 0),      // HOA HỒNG SẢN PHẨM
         parseFloat(item.tongThuNhap)
       ])
       row.height = 24
-      
+
       row.getCell(1).alignment = { horizontal: 'center' }
       row.getCell(2).alignment = { horizontal: 'center' }
       row.getCell(4).alignment = { horizontal: 'left' }
       row.getCell(6).alignment = { horizontal: 'center' }
-      row.getCell(7).alignment = { horizontal: 'center' }
+      row.getCell(7).alignment = { horizontal: 'center' }  // Ca FT
+      row.getCell(8).alignment = { horizontal: 'center' }  // Ca PT
+      row.getCell(9).alignment = { horizontal: 'center' }  // Công QĐ
 
-      row.getCell(5).numFmt = '#,##0" ₫"'
-      row.getCell(8).numFmt = '#,##0" ₫"'
-      row.getCell(9).numFmt = '#,##0" ₫"'
-      row.getCell(10).numFmt = '#,##0" ₫"'
+      row.getCell(5).numFmt  = '#,##0" ₫"'   // Lương CB
+      row.getCell(10).numFmt = '#,##0" ₫"'   // Lương ngày công
+      row.getCell(11).numFmt = '#,##0" ₫"'   // HH DV
+      row.getCell(12).numFmt = '#,##0" ₫"'   // HH SP
+      row.getCell(13).numFmt = '#,##0" ₫"'   // Thực lĩnh
 
       row.eachCell((cell) => {
         cell.font = { name: 'Segoe UI', size: 10 }
@@ -279,19 +288,19 @@ const exportExcel = async () => {
     worksheet.addRow([])
     
     const summaryRow = worksheet.addRow([
-      'Tổng cộng', '', '', '',
-      '', '', '', 
-      { formula: `=SUM(H5:H${summaryRowIdx - 1})` }, 
-      { formula: `=SUM(I5:I${summaryRowIdx - 1})` }, 
-      { formula: `=SUM(J5:J${summaryRowIdx - 1})` }
+      'Tổng cộng', '', '', '', '', '', '', '', '',
+      { formula: `=SUM(J5:J${summaryRowIdx - 1})` },   // Lương ngày công
+      { formula: `=SUM(K5:K${summaryRowIdx - 1})` },   // HH DV
+      { formula: `=SUM(L5:L${summaryRowIdx - 1})` },   // HH SP
+      { formula: `=SUM(M5:M${summaryRowIdx - 1})` }    // Thực lĩnh
     ])
     summaryRow.height = 28
-    
-    worksheet.mergeCells(`A${summaryRowIdx}:G${summaryRowIdx}`)
+
+    worksheet.mergeCells(`A${summaryRowIdx}:I${summaryRowIdx}`)
     const totalLabelCell = worksheet.getCell(`A${summaryRowIdx}`)
     totalLabelCell.value = 'TỔNG CỘNG'
     totalLabelCell.alignment = { horizontal: 'right', vertical: 'middle' }
-    
+
     summaryRow.eachCell((cell, colNum) => {
       cell.font = { name: 'Segoe UI', size: 11, bold: true }
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F4F6' } }
@@ -301,8 +310,7 @@ const exportExcel = async () => {
         bottom: { style: 'double' },
         right: { style: 'thin' }
       }
-      
-      if (colNum >= 8) {
+      if (colNum >= 10) {
         cell.numFmt = '#,##0" ₫"'
       }
     })
@@ -320,6 +328,9 @@ const exportExcel = async () => {
     worksheet.getColumn(1).width = 6
     worksheet.getColumn(3).width = 25
     worksheet.getColumn(4).width = 18
+    worksheet.getColumn(7).width = 12  // Ca FT
+    worksheet.getColumn(8).width = 13  // Ca PT
+    worksheet.getColumn(9).width = 14  // Công QĐ
 
     const buffer = await workbook.xlsx.writeBuffer()
     saveAs(new Blob([buffer]), `Bang_Luong_Thang_${month.value}_${year.value}.xlsx`)
@@ -624,14 +635,34 @@ onUnmounted(() => {
                   
                   <!-- Worked Shifts (Aligned Center) -->
                   <td class="py-5 px-6 text-center whitespace-nowrap">
-                    <div class="flex flex-col items-center justify-center">
-                      <span class="text-slate-700 font-bold text-[11px] font-mono whitespace-nowrap">{{ item.soCaLamThucTe }} ca</span>
-                      <!-- Micro progress bar -->
-                      <div class="w-16 bg-slate-100 h-1.5 rounded-full mt-1.5 overflow-hidden border border-slate-150" title="Tiến độ công chuẩn">
-                        <div 
-                          class="h-full rounded-full transition-all duration-500" 
-                          :class="item.soCaLamThucTe >= item.soNgayCongQuyDinh ? 'bg-emerald-500' : 'bg-primary'"
-                          :style="{ width: Math.min((item.soCaLamThucTe / item.soNgayCongQuyDinh) * 100, 100) + '%' }"
+                    <div class="flex flex-col items-center justify-center gap-1">
+                      <!-- FT / PT badges -->
+                      <div class="flex items-center gap-1 flex-wrap justify-center">
+                        <span
+                          v-if="item.soCaFulltime > 0"
+                          class="text-blue-700 font-extrabold text-[10px] font-mono bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded whitespace-nowrap"
+                          title="Ca full-time (× 1.0 công)"
+                        >{{ item.soCaFulltime }} FT</span>
+                        <span
+                          v-if="item.soCaParttime > 0"
+                          class="text-amber-700 font-extrabold text-[10px] font-mono bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded whitespace-nowrap"
+                          title="Ca part-time (× 0.5 công)"
+                        >{{ item.soCaParttime }} PT</span>
+                        <span
+                          v-if="item.soCaFulltime === 0 && item.soCaParttime === 0"
+                          class="text-slate-400 font-mono text-[10px]"
+                        >0 ca</span>
+                      </div>
+                      <!-- Effective days label -->
+                      <div class="text-slate-500 text-[10px] font-semibold whitespace-nowrap">
+                        = <span class="text-primary font-bold">{{ item.soCaChuanQuyDoi }}</span> công
+                      </div>
+                      <!-- Progress bar based on quy doi -->
+                      <div class="w-16 bg-slate-100 h-1.5 rounded-full overflow-hidden border border-slate-150" title="Tiến độ công chuẩn">
+                        <div
+                          class="h-full rounded-full transition-all duration-500"
+                          :class="item.soCaChuanQuyDoi >= item.soNgayCongQuyDinh ? 'bg-emerald-500' : 'bg-primary'"
+                          :style="{ width: Math.min((item.soCaChuanQuyDoi / item.soNgayCongQuyDinh) * 100, 100) + '%' }"
                         ></div>
                       </div>
                     </div>
@@ -644,10 +675,18 @@ onUnmounted(() => {
                   
                   <!-- Service commission (Aligned Right) -->
                   <td class="py-5 px-6 text-right font-bold whitespace-nowrap">
-                    <span v-if="item.tongHoaHong > 0" class="inline-flex items-center px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-100 font-mono whitespace-nowrap">
-                      +{{ formatVND(item.tongHoaHong) }}
-                    </span>
-                    <span v-else class="text-slate-450 font-mono">0 ₫</span>
+                    <div class="flex flex-col items-end gap-0.5">
+                      <!-- Hoa hồng dịch vụ -->
+                      <span v-if="item.tongHoaHongDv > 0" class="inline-flex items-center px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-100 font-mono text-[11px] whitespace-nowrap">
+                        DV +{{ formatVND(item.tongHoaHongDv) }}
+                      </span>
+                      <!-- Hoa hồng sản phẩm (chỉ thợ chính) -->
+                      <span v-if="item.laThoChinh && item.tongHoaHongSp > 0" class="inline-flex items-center px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100 font-mono text-[11px] whitespace-nowrap">
+                        SP +{{ formatVND(item.tongHoaHongSp) }}
+                      </span>
+                      <!-- Không có hoa hồng -->
+                      <span v-if="!item.tongHoaHongDv && !item.tongHoaHongSp" class="text-slate-450 font-mono">0 ₫</span>
+                    </div>
                   </td>
                   
                   <!-- Net pay receipt (Simple Text, Aligned Right) -->
@@ -744,24 +783,66 @@ onUnmounted(() => {
               <span class="font-bold text-slate-900 font-mono whitespace-nowrap">{{ selectedSalary.soNgayCongQuyDinh }} ngày công</span>
             </div>
 
-            <!-- Finished shifts -->
+            <!-- Finished shifts (total raw) -->
             <div class="flex justify-between items-center py-1 border-b border-slate-100/60">
               <span class="text-slate-600 font-medium">Ca làm thực tế:</span>
               <span class="font-bold text-slate-900 font-mono whitespace-nowrap">{{ selectedSalary.soCaLamThucTe }} ca</span>
             </div>
 
-            <!-- Wage calculated from shifts -->
+            <!-- Ca Fulltime breakdown -->
+            <div class="flex justify-between items-center py-1 border-b border-slate-100/60 pl-3">
+              <span class="text-slate-500 font-medium text-[11px]">↳ Ca full-time:</span>
+              <span class="font-bold text-blue-600 font-mono text-[11px] whitespace-nowrap"
+                title="Mỗi ca full-time = 1.0 ngày công"
+              >{{ selectedSalary.soCaFulltime }} ca × 1.0</span>
+            </div>
+
+            <!-- Ca Parttime breakdown (only if > 0) -->
+            <div v-if="selectedSalary.soCaParttime > 0" class="flex justify-between items-center py-1 border-b border-slate-100/60 pl-3">
+              <span class="text-slate-500 font-medium text-[11px]">↳ Ca part-time:</span>
+              <span class="font-bold text-amber-600 font-mono text-[11px] whitespace-nowrap"
+                title="Mỗi ca part-time (4 giờ) = 0.5 ngày công"
+              >{{ selectedSalary.soCaParttime }} ca × 0.5</span>
+            </div>
+
+            <!-- Effective work days after conversion -->
+            <div class="flex justify-between items-center py-1 border-b border-slate-100/60">
+              <span class="text-slate-600 font-medium">Công quy đổi thực tế:</span>
+              <span class="font-bold text-primary font-mono whitespace-nowrap">{{ selectedSalary.soCaChuanQuyDoi }} công</span>
+            </div>
+
+            <!-- Wage calculated from converted shifts -->
             <div class="flex justify-between items-center py-1 border-b border-slate-100/60">
               <div class="flex flex-col">
                 <span class="text-slate-600 font-medium">Lương ca thực tế:</span>
+                <span class="text-[10px] text-slate-400">(Cơ bản / {{ selectedSalary.soNgayCongQuyDinh }}) × {{ selectedSalary.soCaChuanQuyDoi }} công</span>
               </div>
               <span class="font-bold text-slate-900 font-mono whitespace-nowrap">{{ formatVND(selectedSalary.luongTheoNgayCong) }}</span>
             </div>
 
-            <!-- Commissions -->
+            <!-- Commissions (tách DV và SP) -->
             <div class="flex justify-between items-center py-1 border-b border-slate-100/60">
               <span class="text-slate-600 font-medium">Hoa hồng dịch vụ:</span>
-              <span class="font-bold text-emerald-600 font-mono whitespace-nowrap">+{{ formatVND(selectedSalary.tongHoaHong) }}</span>
+              <span class="font-bold text-emerald-600 font-mono whitespace-nowrap">+{{ formatVND(selectedSalary.tongHoaHongDv) }}</span>
+            </div>
+            <!-- Hoa hồng SP: chỉ hiện cho thợ chính -->
+            <div class="flex justify-between items-center py-1 border-b border-slate-100/60">
+              <div class="flex items-center gap-1.5">
+                <span class="text-slate-600 font-medium">Hoa hồng sản phẩm:</span>
+                <span
+                  v-if="selectedSalary.laThoChinh"
+                  class="text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded"
+                >Thợ chính</span>
+                <span
+                  v-else
+                  class="text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-slate-100 text-slate-500 border border-slate-200 rounded"
+                >Thợ phụ</span>
+              </div>
+              <span
+                v-if="selectedSalary.laThoChinh"
+                class="font-bold text-blue-600 font-mono whitespace-nowrap"
+              >+{{ formatVND(selectedSalary.tongHoaHongSp) }}</span>
+              <span v-else class="text-slate-400 font-mono text-[11px]">Không áp dụng</span>
             </div>
           </div>
 

@@ -311,11 +311,8 @@ function toggleVoucher(id: string) {
         ids.splice(i, 1);
         return;
     }
-    if (ids.length >= 2) {
-        alert('Chỉ chọn tối đa 2 voucher. Bỏ chọn một mã trước khi thêm mã khác.');
-        return;
-    }
-    ids.push(id);
+    // Chỉ chọn 1 voucher cho mỗi đơn hàng (thay thế mã cũ nếu đã chọn)
+    bookingData.value.voucherIds = [id];
 }
 
 // Tìm hàm handleBooking và thay thế nội dung:
@@ -626,8 +623,6 @@ watch(
                             </h3>
                             <div class="heading-line"></div>
                         </div>
-                        <p class="text-black small mb-3 font-bold">Chọn tối đa 2 mã — thứ tự chọn = thứ tự áp dụng (mã đầu trừ
-                            trước).</p>
                         <div class="voucher-list-modern">
                             <div v-for="v in myVouchers" :key="v.id" class="voucher-ticket-item"
                                 :class="{ active: bookingData.voucherIds.includes(v.id) }" @click="toggleVoucher(v.id)">
