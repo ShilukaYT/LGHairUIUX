@@ -15,6 +15,8 @@ const customizer = useCustomizerStore();
 const theme = useTheme();
 
 const userName = ref('User');
+const isAdmin = ref(false);
+const currentUserMaNv = ref('');
 const userAvatar = ref('');
 
 const loadUserFromStorage = () => {
@@ -25,9 +27,12 @@ const loadUserFromStorage = () => {
   if (adminStr) {
     user = JSON.parse(adminStr);
     userName.value = user.hoTen || user.tenNhanVien || user.username || 'Admin';
+    isAdmin.value = true;
+    currentUserMaNv.value = user.maNv || user.id || '';
   } else if (staffStr) {
     user = JSON.parse(staffStr);
     userName.value = user.hoTen || user.tenNhanVien || user.username || 'Nhân viên';
+    currentUserMaNv.value = user.maNv || user.id || '';
   }
 
   if (user) {
@@ -43,7 +48,7 @@ const loadUserFromStorage = () => {
 };
 
 const avatarSrc = computed(() => {
-  return userAvatar.value || new URL('@/assets/images/users/avatar-1.png', import.meta.url).href;
+  return userAvatar.value || `https://ui-avatars.com/api/?name=${encodeURIComponent(userName.value)}&background=random&color=fff&size=100`;
 });
 
 onMounted(() => {
@@ -128,7 +133,7 @@ function toggleTheme() {
     <!-- ---------------------------------------------- -->
     <!-- Theme Toggle -->
     <!-- ---------------------------------------------- -->
-    <v-btn
+    <!-- <v-btn
       icon
       class="text-secondary hidden-sm-and-down d-flex"
       color="darkText"
@@ -137,12 +142,12 @@ function toggleTheme() {
       @click="toggleTheme"
     >
       <component :is="customizer.actTheme === 'dark' ? SunIcon : MoonIcon" size="20" />
-    </v-btn>
+    </v-btn> -->
 
     <!-- ---------------------------------------------- -->
     <!-- Notification -->
     <!-- ---------------------------------------------- -->
-    <NotificationDD />
+    <NotificationDD :isAdmin="isAdmin" :currentUserMaNv="currentUserMaNv" />
 
     <!-- ---------------------------------------------- -->
     <!-- User Profile -->
@@ -151,8 +156,8 @@ function toggleTheme() {
       <template v-slot:activator="{ props }">
         <v-btn class="profileBtn" variant="text" rounded="sm" v-bind="props">
           <div class="d-flex align-center">
-            <v-avatar size="36" class="mr-sm-2 mr-0" style="overflow:hidden;">
-              <v-img :src="avatarSrc" cover width="36" height="36" />
+            <v-avatar size="36" class="mr-sm-2 mr-0">
+              <img :src="avatarSrc" style="width: 100%; height: 100%; object-fit: cover; object-position: center;" alt="Avatar" />
             </v-avatar>
             <h6 class="text-subtitle-1 mb-0 d-sm-block d-none">{{ userName }}</h6>
           </div>
