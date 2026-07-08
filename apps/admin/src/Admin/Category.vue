@@ -3,7 +3,13 @@ import { ref, computed, reactive, onMounted } from "vue";
 import axios from "axios";
 import { logActivity } from "@/utils/activityLogger";
 
+import { useTheme } from "vuetify";
+
 const API = import.meta.env.VITE_API_URL;
+
+// ── DARK / LIGHT MODE (đồng bộ với ProfileDD - Cài đặt Sáng/Tối) ──
+const vuetifyTheme = useTheme();
+const isDarkMode = computed(() => vuetifyTheme.global.name.value === "dark");
 
 // ── UTILS ─────────────────────────────────────────────────────────
 
@@ -280,7 +286,7 @@ onMounted(loadData);
 </script>
 
 <template>
-  <div class="dm-root">
+  <div class="dm-root" :class="{ 'dark-mode': isDarkMode }">
     <!-- ── STATS ───────────────────────────────────────────────── -->
     <div class="stats-row">
       <div class="stat-card stat-gold">
@@ -398,7 +404,7 @@ onMounted(loadData);
               <td style="text-align:center">
                 <span class="dv-count">{{ d.soDichVu }}</span>
               </td>
-              <td style="text-align:center; color:#6b7280; font-size:13px">{{ fmtDate(d.ngayTao) }}</td>
+              <td style="text-align:center; color:var(--dvc-text-secondary); font-size:13px">{{ fmtDate(d.ngayTao) }}</td>
               <td style="text-align:center">
                 <button
                   class="toggle-btn"
@@ -468,7 +474,7 @@ onMounted(loadData);
 
     <!-- ── MAIN MODAL (form + view) ───────────────────────────── -->
     <Teleport to="body">
-      <div v-if="modal.open" class="modal-overlay" @click.self="closeModal">
+      <div v-if="modal.open" class="modal-overlay" :class="{ 'dark-mode': isDarkMode }" @click.self="closeModal">
         <div class="modal">
           <div class="modal-head">
             <div class="modal-title">{{ modal.title }}</div>
@@ -499,7 +505,7 @@ onMounted(loadData);
                 <div class="detail-label">Tên danh mục</div>
                 <div
                   class="detail-val"
-                  style="font-size: 16px; font-weight: 700; color: #1a1a2e"
+                  style="font-size: 16px; font-weight: 700; color: var(--dvc-text)"
                 >
                   {{ form.tenDanhMuc }}
                 </div>
@@ -624,6 +630,7 @@ onMounted(loadData);
       <div
         v-if="confirmModal.open"
         class="modal-overlay"
+        :class="{ 'dark-mode': isDarkMode }"
         @click.self="confirmModal.open = false"
       >
         <div class="modal modal-sm">
@@ -634,14 +641,14 @@ onMounted(loadData);
             </button>
           </div>
           <div class="modal-body">
-            <p style="font-size: 14px; color: #374151; line-height: 1.7">
+            <p style="font-size: 14px; color: var(--dvc-text-strong); line-height: 1.7">
               Bạn có chắc muốn xóa danh mục
-              <strong style="color: #1a1a2e">{{
+              <strong style="color: var(--dvc-text)">{{
                 confirmModal.item?.tenDanhMuc
               }}</strong
               >?
             </p>
-            <p style="font-size: 12px; color: #9ca3af; margin-top: 6px">
+            <p style="font-size: 12px; color: var(--dvc-text-muted); margin-top: 6px">
               ⚠️ Danh mục có dịch vụ liên kết sẽ không thể xóa.
             </p>
           </div>
@@ -662,7 +669,7 @@ onMounted(loadData);
 
     <!-- ── TOAST ───────────────────────────────────────────────── -->
     <Teleport to="body">
-      <div class="toast" :class="[toast.show ? 'show' : '', toast.type]">
+      <div class="toast" :class="[toast.show ? 'show' : '', toast.type, isDarkMode ? 'dark-mode' : '']">
         <span>{{ toast.icon }}</span
         ><span>{{ toast.msg }}</span>
       </div>
@@ -671,14 +678,46 @@ onMounted(loadData);
 </template>
 
 <style scoped>
+/* ── THEME VARIABLES (dark mode) ─────────────────────────────── */
+.dm-root.dark-mode {
+  --dvc-card-bg: #23232f;
+  --dvc-bg-subtle: #2a2a38;
+  --dvc-bg-subtle2: #1e1e29;
+  --dvc-border: #383846;
+  --dvc-border-strong: #464656;
+  --dvc-text: #e8e8ee;
+  --dvc-text-strong: #cbcbd6;
+  --dvc-text-secondary: #a3a3b2;
+  --dvc-text-muted: #7c7c8c;
+  --dvc-accent: #4b4b6b;
+  --dvc-accent-hover: #5c5c80;
+  --dvc-shadow: rgba(0, 0, 0, 0.35);
+  --dvc-overlay: rgba(0, 0, 0, 0.6);
+}
+
 /* ── RESET ─────────────────────────────────────────────────────── */
 .dm-root {
+  /* ── THEME VARIABLES (light default) ─────────────────────────── */
+  --dvc-card-bg: #fff;
+  --dvc-bg-subtle: #f3f4f6;
+  --dvc-bg-subtle2: #f9fafb;
+  --dvc-border: #e5e7eb;
+  --dvc-border-strong: #d1d5db;
+  --dvc-text: #1a1a2e;
+  --dvc-text-strong: #374151;
+  --dvc-text-secondary: #6b7280;
+  --dvc-text-muted: #9ca3af;
+  --dvc-accent: #1a1a2e;
+  --dvc-accent-hover: #2d2d4e;
+  --dvc-shadow: rgba(0, 0, 0, 0.08);
+  --dvc-overlay: rgba(0, 0, 0, 0.45);
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
   font-family:
     "Inter",
     -apple-system,
     "Segoe UI",
     sans-serif;
-  color: #1a1a2e;
+  color: var(--dvc-text);
   background: transparent;
 }
 
@@ -690,8 +729,8 @@ onMounted(loadData);
   margin-bottom: 22px;
 }
 .stat-card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--dvc-card-bg);
+  border: 1px solid var(--dvc-border);
   border-radius: 12px;
   padding: 16px;
   position: relative;
@@ -724,7 +763,7 @@ onMounted(loadData);
 }
 .stat-label {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -748,7 +787,7 @@ onMounted(loadData);
 }
 .stat-hint {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   margin-top: 4px;
 }
 
@@ -772,8 +811,8 @@ onMounted(loadData);
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--dvc-card-bg);
+  border: 1px solid var(--dvc-border);
   border-radius: 8px;
   padding: 7px 12px;
   min-width: 200px;
@@ -782,26 +821,26 @@ onMounted(loadData);
   transition: border 0.15s;
 }
 .search-box:focus-within {
-  border-color: #6b7280;
+  border-color: var(--dvc-text-secondary);
 }
 .search-box input {
   background: transparent;
   border: none;
   outline: none;
-  color: #1a1a2e;
+  color: var(--dvc-text);
   font-size: 13px;
   font-family: inherit;
   width: 100%;
 }
 .search-box input::placeholder {
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
 }
 .filter-select {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--dvc-card-bg);
+  border: 1px solid var(--dvc-border);
   border-radius: 8px;
   padding: 7px 10px;
-  color: #374151;
+  color: var(--dvc-text-strong);
   font-size: 13px;
   font-family: inherit;
   cursor: pointer;
@@ -809,7 +848,7 @@ onMounted(loadData);
 }
 .result-count {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   white-space: nowrap;
 }
 
@@ -833,22 +872,22 @@ onMounted(loadData);
   cursor: not-allowed;
 }
 .btn-primary {
-  background: #1a1a2e;
+  background: var(--dvc-accent);
   color: #fff;
 }
 .btn-primary:hover:not(:disabled) {
-  background: #2d2d4e;
+  background: var(--dvc-accent-hover);
   transform: translateY(-1px);
 }
 .btn-ghost {
   background: transparent;
-  color: #6b7280;
-  border: 1px solid #e5e7eb;
+  color: var(--dvc-text-secondary);
+  border: 1px solid var(--dvc-border);
 }
 .btn-ghost:hover:not(:disabled) {
-  color: #1a1a2e;
-  border-color: #d1d5db;
-  background: #f9fafb;
+  color: var(--dvc-text);
+  border-color: var(--dvc-border-strong);
+  background: var(--dvc-bg-subtle2);
 }
 .btn-danger {
   background: #fef2f2;
@@ -874,7 +913,7 @@ onMounted(loadData);
   width: 13px;
   height: 13px;
   border: 2px solid rgba(255, 255, 255, 0.35);
-  border-top-color: #fff;
+  border-top-color: var(--dvc-card-bg);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
@@ -891,22 +930,22 @@ onMounted(loadData);
   justify-content: center;
   gap: 10px;
   padding: 60px;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   font-size: 14px;
 }
 .spinner-lg {
   width: 24px;
   height: 24px;
-  border: 2.5px solid #e5e7eb;
-  border-top-color: #6b7280;
+  border: 2.5px solid var(--dvc-border);
+  border-top-color: var(--dvc-text-secondary);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
 
 /* ── TABLE ──────────────────────────────────────────────────────── */
 .table-wrap {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--dvc-card-bg);
+  border: 1px solid var(--dvc-border);
   border-radius: 12px;
   overflow: hidden;
 }
@@ -916,14 +955,14 @@ onMounted(loadData);
   font-size: 13px;
 }
 .dm-table thead tr {
-  background: #f9fafb;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--dvc-bg-subtle2);
+  border-bottom: 1px solid var(--dvc-border);
 }
 .dm-table th {
   padding: 11px 14px;
   font-weight: 600;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--dvc-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   text-align: left;
@@ -931,21 +970,21 @@ onMounted(loadData);
 }
 .dm-table td {
   padding: 12px 14px;
-  border-bottom: 1px solid #f3f4f6;
-  color: #1a1a2e;
+  border-bottom: 1px solid var(--dvc-bg-subtle);
+  color: var(--dvc-text);
   vertical-align: middle;
 }
 .dm-table tbody tr:last-child td {
   border-bottom: none;
 }
 .dm-table tbody tr:hover {
-  background: #fafafa;
+  background: var(--dvc-bg-subtle2);
 }
 .dm-table tbody tr.row-inactive {
   opacity: 0.6;
 }
 .td-no {
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   font-size: 12px;
   font-weight: 500;
 }
@@ -1009,13 +1048,13 @@ onMounted(loadData);
   width: 30px;
   height: 30px;
   border-radius: 7px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--dvc-border);
   background: transparent;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   transition: all 0.15s;
 }
 .icon-btn.view:hover {
@@ -1038,7 +1077,7 @@ onMounted(loadData);
 .empty-state {
   text-align: center;
   padding: 60px 20px;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
 }
 .empty-icon {
   font-size: 42px;
@@ -1061,7 +1100,7 @@ onMounted(loadData);
   justify-content: space-between;
   padding: 14px 4px;
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   margin-top: 6px;
 }
 .pager-btns {
@@ -1072,11 +1111,11 @@ onMounted(loadData);
   min-width: 30px;
   height: 30px;
   border-radius: 7px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--dvc-border);
   background: transparent;
   cursor: pointer;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--dvc-text-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1085,14 +1124,14 @@ onMounted(loadData);
   transition: all 0.15s;
 }
 .page-btn.cur {
-  background: #1a1a2e;
+  background: var(--dvc-accent);
   color: #fff;
-  border-color: #1a1a2e;
+  border-color: var(--dvc-accent);
   font-weight: 700;
 }
 .page-btn:hover:not(.cur):not(:disabled) {
-  background: #f3f4f6;
-  color: #1a1a2e;
+  background: var(--dvc-bg-subtle);
+  color: var(--dvc-text);
 }
 .page-btn:disabled {
   opacity: 0.35;
@@ -1101,6 +1140,20 @@ onMounted(loadData);
 
 /* ── MODAL ──────────────────────────────────────────────────────── */
 .modal-overlay {
+  /* Teleport đưa modal ra ngoài .dm-root nên không thừa hưởng được biến màu từ đó -> khai báo lại tại đây */
+  --dvc-card-bg: #fff;
+  --dvc-bg-subtle: #f3f4f6;
+  --dvc-bg-subtle2: #f9fafb;
+  --dvc-border: #e5e7eb;
+  --dvc-border-strong: #d1d5db;
+  --dvc-text: #1a1a2e;
+  --dvc-text-strong: #374151;
+  --dvc-text-secondary: #6b7280;
+  --dvc-text-muted: #9ca3af;
+  --dvc-accent: #1a1a2e;
+  --dvc-accent-hover: #2d2d4e;
+  --dvc-shadow: rgba(0, 0, 0, 0.08);
+  --dvc-overlay: rgba(0, 0, 0, 0.45);
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
@@ -1109,13 +1162,28 @@ onMounted(loadData);
   align-items: center;
   justify-content: center;
 }
+.modal-overlay.dark-mode {
+  --dvc-card-bg: #23232f;
+  --dvc-bg-subtle: #2a2a38;
+  --dvc-bg-subtle2: #1e1e29;
+  --dvc-border: #383846;
+  --dvc-border-strong: #464656;
+  --dvc-text: #e8e8ee;
+  --dvc-text-strong: #cbcbd6;
+  --dvc-text-secondary: #a3a3b2;
+  --dvc-text-muted: #7c7c8c;
+  --dvc-accent: #4b4b6b;
+  --dvc-accent-hover: #5c5c80;
+  --dvc-shadow: rgba(0, 0, 0, 0.35);
+  --dvc-overlay: rgba(0, 0, 0, 0.6);
+}
 .modal {
   position: relative;
   top: auto;
   left: auto;
   margin: 0;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--dvc-card-bg);
+  border: 1px solid var(--dvc-border);
   border-radius: 14px;
   width: 500px;
   max-width: 95vw;
@@ -1129,7 +1197,7 @@ onMounted(loadData);
 }
 .modal-head {
   padding: 18px 22px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--dvc-bg-subtle);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1138,16 +1206,16 @@ onMounted(loadData);
 .modal-title {
   font-size: 15px;
   font-weight: 700;
-  color: #1a1a2e;
+  color: var(--dvc-text);
 }
 .modal-close {
   width: 30px;
   height: 30px;
   border-radius: 7px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--dvc-border);
   background: transparent;
   cursor: pointer;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   font-size: 14px;
   display: flex;
   align-items: center;
@@ -1155,8 +1223,8 @@ onMounted(loadData);
   transition: all 0.15s;
 }
 .modal-close:hover {
-  color: #1a1a2e;
-  background: #f3f4f6;
+  color: var(--dvc-text);
+  background: var(--dvc-bg-subtle);
 }
 .modal-body {
   padding: 20px 22px;
@@ -1167,12 +1235,12 @@ onMounted(loadData);
   width: 4px;
 }
 .modal-body::-webkit-scrollbar-thumb {
-  background: #e5e7eb;
+  background: var(--dvc-border);
   border-radius: 4px;
 }
 .modal-foot {
   padding: 14px 22px;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--dvc-bg-subtle);
   display: flex;
   gap: 8px;
   justify-content: flex-end;
@@ -1192,13 +1260,13 @@ onMounted(loadData);
 .form-label {
   font-size: 12px;
   font-weight: 500;
-  color: #6b7280;
+  color: var(--dvc-text-secondary);
   margin-bottom: 6px;
   display: block;
 }
 .label-hint {
   font-weight: 400;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   font-size: 11px;
 }
 .req {
@@ -1206,11 +1274,11 @@ onMounted(loadData);
 }
 .form-input {
   width: 100%;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--dvc-bg-subtle2);
+  border: 1px solid var(--dvc-border);
   border-radius: 8px;
   padding: 9px 12px;
-  color: #1a1a2e;
+  color: var(--dvc-text);
   font-size: 13px;
   font-family: inherit;
   outline: none;
@@ -1218,8 +1286,8 @@ onMounted(loadData);
   box-sizing: border-box;
 }
 .form-input:focus {
-  border-color: #6b7280;
-  background: #fff;
+  border-color: var(--dvc-text-secondary);
+  background: var(--dvc-card-bg);
   box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.1);
 }
 .form-input[readonly] {
@@ -1256,11 +1324,11 @@ onMounted(loadData);
   align-items: center;
   gap: 8px;
   padding: 9px 14px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--dvc-border);
   border-radius: 8px;
   cursor: pointer;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--dvc-text-secondary);
   transition: all 0.15s;
   user-select: none;
 }
@@ -1268,12 +1336,12 @@ onMounted(loadData);
   display: none;
 }
 .radio-item:hover {
-  border-color: #9ca3af;
+  border-color: var(--dvc-text-muted);
 }
 .radio-item.radio-active {
-  border-color: #1a1a2e;
-  background: #f8fafc;
-  color: #1a1a2e;
+  border-color: var(--dvc-accent);
+  background: var(--dvc-bg-subtle);
+  color: var(--dvc-text);
   font-weight: 500;
 }
 .radio-icon {
@@ -1296,27 +1364,27 @@ onMounted(loadData);
   gap: 10px;
 }
 .detail-item {
-  background: #f9fafb;
+  background: var(--dvc-bg-subtle2);
   border-radius: 8px;
   padding: 10px 12px;
 }
 .detail-label {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   margin-bottom: 4px;
 }
 .detail-val {
   font-size: 13px;
   font-weight: 500;
-  color: #1a1a2e;
+  color: var(--dvc-text);
 }
 .code-badge {
   font-family: "Courier New", monospace;
   font-size: 12px;
-  background: #e5e7eb;
+  background: var(--dvc-border);
   padding: 2px 8px;
   border-radius: 5px;
-  color: #374151;
+  color: var(--dvc-text-strong);
 }
 .status-pill {
   display: inline-flex;
@@ -1350,12 +1418,16 @@ onMounted(loadData);
   position: fixed;
   bottom: 24px;
   right: 24px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  /* Teleport đưa toast ra ngoài .dm-root nên không thừa hưởng được biến màu -> khai báo lại tại đây */
+  --dvc-card-bg: #fff;
+  --dvc-border: #e5e7eb;
+  --dvc-text: #1a1a2e;
+  background: var(--dvc-card-bg);
+  border: 1px solid var(--dvc-border);
   border-radius: 10px;
   padding: 12px 16px;
   font-size: 13px;
-  color: #1a1a2e;
+  color: var(--dvc-text);
   display: flex;
   align-items: center;
   gap: 9px;
@@ -1366,6 +1438,11 @@ onMounted(loadData);
   pointer-events: none;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
   max-width: 320px;
+}
+.toast.dark-mode {
+  --dvc-card-bg: #23232f;
+  --dvc-border: #383846;
+  --dvc-text: #e8e8ee;
 }
 .toast.show {
   transform: translateY(0);
