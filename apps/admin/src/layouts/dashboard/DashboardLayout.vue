@@ -3,7 +3,6 @@ import { RouterView } from 'vue-router';
 import LoaderWrapper from './LoaderWrapper.vue';
 import VerticalSidebarVue from './vertical-sidebar/VerticalSidebar.vue';
 import VerticalHeaderVue from './vertical-header/VerticalHeader.vue';
-import FooterPanel from './footer/FooterPanel.vue';
 import { useCustomizerStore } from '../../stores/customizer';
 
 const customizer = useCustomizerStore();
@@ -22,11 +21,6 @@ const customizer = useCustomizerStore();
             <LoaderWrapper />
             <!-- Loader end -->
             <RouterView />
-          </div>
-        </v-container>
-        <v-container fluid class="pt-0">
-          <div>
-            <FooterPanel />
           </div>
         </v-container>
       </v-main>

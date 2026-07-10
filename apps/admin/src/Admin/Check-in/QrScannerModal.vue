@@ -112,6 +112,8 @@ onUnmounted(async () => {
     width: 90%;
     max-width: 400px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    border: 1px solid #e2e8f0;
+    transition: background-color 0.3s, border-color 0.3s;
 }
 
 .modal-header {
@@ -140,5 +142,24 @@ onUnmounted(async () => {
     margin-top: 15px;
     color: #666;
     font-size: 14px;
+}
+
+/* Dark mode overrides using Vuetify's theme class */
+.v-theme--dark .modal-content {
+    background: #1e1e2d !important;
+    border-color: #2d2d3d !important;
+    color: #ffffff !important;
+}
+
+.v-theme--dark .modal-header h3 {
+    color: #ffffff !important;
+}
+
+.v-theme--dark .btn-close {
+    color: #a0aec0 !important;
+}
+
+.v-theme--dark .hint-text {
+    color: #a0aec0 !important;
 }
 </style>

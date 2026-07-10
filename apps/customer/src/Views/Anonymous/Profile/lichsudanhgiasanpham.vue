@@ -1,105 +1,65 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
+import axios from 'axios';
+import { getCustomerInfo } from '@/Views/Anonymous/CSDL/DuLieuNguoiDung';
 import { Star, Trash2, Camera, X, Search, ChevronLeft, ChevronRight, MessageSquare, ShoppingBag } from 'lucide-vue-next';
 
 // ------------------------------------------
-// LOCAL MOCK DATA (No API Integration)
+// API CONFIGURATION & IMAGE HELPER
 // ------------------------------------------
-const pendingOrders = ref<any[]>([
-    {
-        id: 'HD8891',
-        date: '2026-06-18T10:30:00',
-        viewMode: '',
-        products: [
-            {
-                id: 'SP001',
-                name: 'Dầu gội phục hồi hư tổn Olaplex No.4 Bond Maintenance',
-                image: 'https://images.unsplash.com/photo-1535585209827-a15fcdbc4c2d?auto=format&fit=crop&q=80&w=200',
-                rating: 0,
-                comment: '',
-                imagePreview: null,
-                imageFile: null
-            },
-            {
-                id: 'SP002',
-                name: 'Dầu xả phục hồi tóc khô xơ Olaplex No.5 Bond Maintenance',
-                image: 'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?auto=format&fit=crop&q=80&w=200',
-                rating: 0,
-                comment: '',
-                imagePreview: null,
-                imageFile: null
-            }
-        ]
-    },
-    {
-        id: 'HD8892',
-        date: '2026-06-17T15:45:00',
-        viewMode: '',
-        products: [
-            {
-                id: 'SP003',
-                name: 'Tinh dầu dưỡng tóc sâu Moroccanoil Treatment Original',
-                image: 'https://images.unsplash.com/photo-1526947425960-945c6e72858f?auto=format&fit=crop&q=80&w=200',
-                rating: 0,
-                comment: '',
-                imagePreview: null,
-                imageFile: null
-            }
-        ]
-    },
-    {
-        id: 'HD8895',
-        date: '2026-06-15T09:15:00',
-        viewMode: '',
-        products: [
-            {
-                id: 'SP005',
-                name: 'Mặt nạ phục hồi tóc Kerastase Resistance Masque Force Architecte',
-                image: 'https://images.unsplash.com/photo-1571781926291-c477ebfd024b?auto=format&fit=crop&q=80&w=200',
-                rating: 0,
-                comment: '',
-                imagePreview: null,
-                imageFile: null
-            }
-        ]
-    }
-]);
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://localhost:7196';
+const productImagesMap = ref<Record<string, string>>({});
 
-const ratedOrders = ref<any[]>([
-    {
-        id: 'HD8720',
-        date: '2026-06-10',
-        products: [
-            {
-                id: 'SP004',
-                name: 'Xịt dưỡng bảo vệ và giữ màu tóc nhuộm Kevin Murphy Everlasting Colour',
-                image: 'https://images.unsplash.com/photo-1601049541289-9b1b7bbbfe19?auto=format&fit=crop&q=80&w=200',
-                rating: 5,
-                comment: 'Sản phẩm xịt dưỡng rất thơm, tóc sau khi nhuộm giữ màu lâu và không bị khô xơ. Chai thiết kế tối giản rất đẹp mắt.',
-                imageReview: 'https://images.unsplash.com/photo-1519735008037-615236229357?auto=format&fit=crop&q=80&w=400',
-                reply: 'Cảm ơn quý khách đã tin tưởng và chọn lựa mua sắm tại Minh Tâm Hair. Chúc bạn luôn tự tin với mái tóc rạng rỡ của mình!',
-                dateStr: '10/06/2026 18:22'
-            }
-        ]
-    },
-    {
-        id: 'HD8651',
-        date: '2026-06-05',
-        products: [
-            {
-                id: 'SP006',
-                name: 'Sáp vuốt tóc nam tạo kiểu giữ nếp Claymation Hanz de Fuko',
-                image: 'https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?auto=format&fit=crop&q=80&w=200',
-                rating: 4,
-                comment: 'Sáp giữ nếp tốt, không bị bóng nhờn, tuy nhiên hơi khó gội sạch hoàn toàn ở lần gội đầu tiên. Nói chung là đáng tiền mua.',
-                imageReview: null,
-                reply: 'Dạ Minh Tâm Hair rất ghi nhận góp ý của anh ạ. Với các dòng clay giữ nếp cao, anh có thể xả tóc bằng dầu xả trước khi gội để dễ trôi sáp hơn nhé!',
-                dateStr: '05/06/2026 14:05'
-            }
-        ]
-    }
-]);
+const getImageUrl = (path?: string) => {
+  if (!path) return `${API_BASE_URL}/assets/images/default.jpg`;
+  if (path.startsWith("http")) return path;
+  if (path.startsWith("/")) return `${API_BASE_URL}${path}`;
+  return `${API_BASE_URL}/${path}`;
+};
 
+const getProductImage = (name: string) => {
+  if (!name) return getImageUrl();
+  const cleanStr = name.trim().toLowerCase();
+  
+  for (const [key, value] of Object.entries(productImagesMap.value)) {
+    if (cleanStr.includes(key) || key.includes(cleanStr)) {
+      return getImageUrl(value);
+    }
+  }
+  return getImageUrl();
+};
+
+const loadProductCache = async () => {
+  try {
+    const res = await axios.get(`${API_BASE_URL}/api/SanPham/filter`, {
+      params: {
+        search: "",
+        danhMuc: "all",
+        thuongHieu: "all",
+        priceRange: "all",
+        page: 1,
+        pageSize: 100
+      }
+    });
+    if (res.data && res.data.data) {
+      const cache: Record<string, string> = {};
+      res.data.data.forEach((prod: any) => {
+        if (prod.tenSp && prod.hinhAnhDaiDien) {
+          cache[prod.tenSp.toLowerCase()] = prod.hinhAnhDaiDien;
+        }
+      });
+      productImagesMap.value = cache;
+    }
+  } catch (err) {
+    console.error("Lỗi khi tải cache ảnh sản phẩm:", err);
+  }
+};
+
+// ------------------------------------------
+// STATE VARIABLES
+// ------------------------------------------
+const pendingOrders = ref<any[]>([]);
+const ratedOrders = ref<any[]>([]);
 const subTab = ref<'pending' | 'completed'>('pending');
 const isSubmitting = ref(false);
 
@@ -156,8 +116,8 @@ const processedRatedOrders = computed(() => {
         );
     }
     return result.sort((a, b) => {
-        const tA = a.date.includes('-') ? new Date(a.date).getTime() : 0;
-        const tB = b.date.includes('-') ? new Date(b.date).getTime() : 0;
+        const tA = getTime(a.date);
+        const tB = getTime(b.date);
         return sortOption.value === 'newest' ? tB - tA : tA - tB;
     });
 });
@@ -177,7 +137,7 @@ const changePage = (listType: 'pending' | 'rated', step: number) => {
     }
 };
 
-// Handle file change (mock image preview)
+// Handle file change
 const handleFileChange = (event: any, product: any) => {
     const file = event.target.files[0];
     if (file) {
@@ -191,72 +151,137 @@ const removeImage = (product: any) => {
     product.imagePreview = null;
 };
 
-// Submit Review locally (move to history)
-const submitAction = (order: any) => {
+// ------------------------------------------
+// API INTEGRATION FLOWS
+// ------------------------------------------
+const loadData = async () => {
+    try {
+        const user = getCustomerInfo();
+        if (!user?.maKH || user.maKH === 'GUEST') return;
+
+        // Ensure product cache is loaded first
+        if (Object.keys(productImagesMap.value).length === 0) {
+            await loadProductCache();
+        }
+
+        // 1. Tải đơn hàng/sản phẩm chưa đánh giá
+        const resPending = await axios.get(`${API_BASE_URL}/api/DanhGia/pending-products-to-rate/${user.maKH}`);
+        pendingOrders.value = resPending.data.map((order: any) => ({
+            id: order.maHd,
+            date: order.ngayTao,
+            viewMode: '',
+            products: order.products.map((p: any) => ({
+                id: p.maBienThe,
+                name: p.tenSp,
+                image: getProductImage(p.tenSp),
+                rating: 0,
+                comment: '',
+                imagePreview: null,
+                imageFile: null
+            }))
+        }));
+
+        // 2. Tải lịch sử đánh giá sản phẩm
+        const resRated = await axios.get(`${API_BASE_URL}/api/DanhGia/product-rated-history/${user.maKH}`);
+        ratedOrders.value = resRated.data.map((order: any) => ({
+            id: order.id,
+            date: order.date,
+            products: order.products.map((p: any) => ({
+                id: p.id,
+                name: p.name,
+                image: getProductImage(p.name),
+                rating: p.rating,
+                comment: p.comment,
+                imageReview: p.image ? `${API_BASE_URL}${p.image}` : null,
+                reply: p.reply,
+                dateStr: p.Ngay
+            }))
+        }));
+    } catch (error) {
+        console.error("Lỗi khi tải dữ liệu:", error);
+    }
+};
+
+onMounted(loadData);
+
+watch(subTab, async (newTab) => {
+    await loadData();
+});
+
+// Submit review
+const submitAction = async (order: any) => {
     const ratedProducts = order.products.filter((p: any) => p.rating > 0);
     if (ratedProducts.length === 0) {
         alert("Vui lòng chọn số sao cho ít nhất một sản phẩm.");
         return;
     }
 
-    isSubmitting.value = true;
-    
-    // Simulate submission delay
-    setTimeout(() => {
-        // Create new history entry
-        const now = new Date();
-        const dateStr = now.toLocaleString('vi-VN', {
-            day: '2-digit', month: '2-digit', year: 'numeric',
-            hour: '2-digit', minute: '2-digit'
+    try {
+        isSubmitting.value = true;
+        
+        const formData = new FormData();
+        formData.append('maHd', order.id);
+
+        let activeCount = 0;
+        order.products.forEach((p: any) => {
+            if (p.rating > 0) {
+                const prefix = `reviews[${activeCount}]`;
+                formData.append(`${prefix}.MaBienThe`, p.id);
+                formData.append(`${prefix}.SoSao`, String(p.rating));
+                formData.append(`${prefix}.NoiDung`, p.comment || '');
+                if (p.imageFile) {
+                    formData.append(`${prefix}.HinhAnhFile`, p.imageFile);
+                }
+                activeCount++;
+            }
         });
 
-        const newRatedOrder = {
-            id: order.id,
-            date: now.toISOString().split('T')[0],
-            products: ratedProducts.map((p: any) => ({
-                id: p.id,
-                name: p.name,
-                image: p.image,
-                rating: p.rating,
-                comment: p.comment,
-                imageReview: p.imagePreview, // keep the uploaded blob url for local visual
-                reply: null, // no reply yet
-                dateStr: dateStr
-            }))
-        };
+        const res = await axios.post(`${API_BASE_URL}/api/DanhGia/submit-product-reviews`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
 
-        // Add to history
-        ratedOrders.value.unshift(newRatedOrder);
-
-        // Remove from pending
-        pendingOrders.value = pendingOrders.value.filter(o => o.id !== order.id);
-
+        if (res.status === 200) {
+            alert('✨ Gửi đánh giá sản phẩm thành công!');
+            await loadData();
+        }
+    } catch (error) {
+        console.error("Lỗi khi gửi đánh giá:", error);
+        alert("Có lỗi xảy ra khi gửi đánh giá.");
+    } finally {
         isSubmitting.value = false;
-        alert('✨ Gửi đánh giá sản phẩm thành công (Giao diện Demo)!');
-    }, 800);
+    }
 };
 
-// Delete Review locally
-const deleteSingleProductReview = (orderId: string, productId: string) => {
+// Delete single product review
+const deleteSingleProductReview = async (orderId: string, productId: string) => {
     if (!confirm("Bạn có chắc chắn muốn xóa đánh giá của sản phẩm này?")) return;
 
-    ratedOrders.value = ratedOrders.value.map(order => {
-        if (order.id === orderId) {
-            return {
-                ...order,
-                products: order.products.filter((p: any) => p.id !== productId)
-            };
+    try {
+        const res = await axios.delete(`${API_BASE_URL}/api/DanhGia/delete-product-rating/${orderId}/${productId}`);
+        if (res.status === 200) {
+            alert("Đã xóa đánh giá sản phẩm thành công!");
+            await loadData();
         }
-        return order;
-    }).filter(order => order.products.length > 0);
-
-    alert("Đã xóa đánh giá sản phẩm thành công!");
+    } catch (error) {
+        console.error("Lỗi khi xóa đánh giá:", error);
+        alert("Không thể xóa đánh giá.");
+    }
 };
 
-const deleteFullOrderProductReview = (orderId: string) => {
+// Delete full order product review
+const deleteFullOrderProductReview = async (orderId: string) => {
     if (!confirm("Xóa toàn bộ đánh giá sản phẩm của đơn hàng này?")) return;
-    ratedOrders.value = ratedOrders.value.filter(order => order.id !== orderId);
-    alert("Đã xóa toàn bộ đánh giá sản phẩm!");
+
+    try {
+        const res = await axios.delete(`${API_BASE_URL}/api/DanhGia/delete-order-product-rating/${orderId}`);
+        if (res.status === 200) {
+            alert("Đã xóa toàn bộ đánh giá sản phẩm!");
+            await loadData();
+        }
+    } catch (error) {
+        console.error("Lỗi khi xóa đánh giá đơn hàng:", error);
+        alert("Không thể xóa đánh giá đơn hàng.");
+    }
 };
 
 const openLightbox = (img: string) => {
@@ -293,13 +318,13 @@ const openLightbox = (img: string) => {
                     type="text" 
                     v-model="searchQuery" 
                     placeholder="Tìm mã đơn hàng, tên sản phẩm..."
-                    class="w-full bg-white border border-gray-200 focus:border-black outline-none pl-10 pr-4 py-2.5 text-xs transition-all rounded-sm text-black" 
+                    class="w-full bg-white border border-gray-200 focus:border-black outline-none pl-10 pr-4 py-2.5 text-xs transition-all rounded-none text-black" 
                 />
             </div>
             <div class="w-full sm:w-56">
                 <select 
                     v-model="sortOption" 
-                    class="w-full bg-white border border-gray-200 focus:border-black outline-none px-4 py-2.5 text-xs transition-all rounded-sm text-black cursor-pointer font-medium"
+                    class="w-full bg-white border border-gray-200 focus:border-black outline-none px-4 py-2.5 text-xs transition-all rounded-none text-black cursor-pointer font-medium"
                 >
                     <option value="newest">Ngày tạo: Mới nhất</option>
                     <option value="oldest">Ngày tạo: Cũ nhất</option>
@@ -311,12 +336,12 @@ const openLightbox = (img: string) => {
         <div class="space-y-6">
             <!-- PENDING TAB -->
             <div v-if="subTab === 'pending'" class="space-y-6">
-                <div v-if="paginatedPendingOrders.length === 0" class="text-center py-16 border border-dashed border-gray-200 rounded-sm">
+                <div v-if="paginatedPendingOrders.length === 0" class="text-center py-16 border border-dashed border-gray-200 rounded-none">
                     <ShoppingBag :size="24" class="mx-auto text-gray-300 mb-3" :stroke-width="1.5" />
                     <p class="text-xs text-gray-400 uppercase tracking-widest">Không có hóa đơn sản phẩm nào chờ đánh giá.</p>
                 </div>
 
-                <div v-for="order in paginatedPendingOrders" :key="order.id" class="border border-gray-200 rounded-sm bg-white p-6 shadow-sm">
+                <div v-for="order in paginatedPendingOrders" :key="order.id" class="border border-gray-200 rounded-none bg-white p-6 shadow-sm">
                     <!-- Order Info Header -->
                     <div class="flex flex-col sm:flex-row justify-between sm:items-center border-b border-gray-100 pb-4 mb-5 gap-2">
                         <div>
@@ -337,7 +362,7 @@ const openLightbox = (img: string) => {
                     <div class="space-y-6">
                         <div v-for="p in order.products" :key="p.id" class="flex flex-col md:flex-row gap-6 border-b border-gray-50 pb-6 last:border-0 last:pb-0">
                             <!-- Product thumbnail -->
-                            <div class="w-16 h-16 shrink-0 bg-gray-50 border border-gray-100 rounded-sm overflow-hidden">
+                            <div class="w-16 h-16 shrink-0 bg-gray-50 border border-gray-100 rounded-none overflow-hidden">
                                 <img :src="p.image" :alt="p.name" class="w-full h-full object-cover" />
                             </div>
 
@@ -360,8 +385,8 @@ const openLightbox = (img: string) => {
                                         >
                                             <Star 
                                                 :size="18" 
-                                                :fill="n <= p.rating ? '#000000' : 'none'"
-                                                :stroke="n <= p.rating ? '#000000' : '#d1d5db'"
+                                                :fill="n <= p.rating ? '#f59e0b' : 'none'"
+                                                :stroke="n <= p.rating ? '#f59e0b' : '#d1d5db'"
                                                 :stroke-width="1.5"
                                             />
                                         </button>
@@ -374,13 +399,13 @@ const openLightbox = (img: string) => {
                                         v-model="p.comment" 
                                         placeholder="Để lại nhận xét về sản phẩm..."
                                         rows="2"
-                                        class="w-full bg-white border border-gray-200 focus:border-black outline-none px-4 py-3 text-xs transition-all rounded-sm text-black"
+                                        class="w-full bg-white border border-gray-200 focus:border-black outline-none px-4 py-3 text-xs transition-all rounded-none text-black"
                                     ></textarea>
                                 </div>
 
                                 <!-- Image attachment -->
                                 <div class="flex items-center gap-4 flex-wrap">
-                                    <label :for="'prod-file-' + order.id + '-' + p.id" class="inline-flex items-center gap-2 px-4 py-2 border border-gray-200 hover:border-black rounded-sm cursor-pointer transition-all text-[10px] uppercase tracking-widest text-gray-600 hover:text-black">
+                                    <label :for="'prod-file-' + order.id + '-' + p.id" class="inline-flex items-center gap-2 px-4 py-2 border border-gray-200 hover:border-black rounded-none cursor-pointer transition-all text-[10px] uppercase tracking-widest text-gray-600 hover:text-black">
                                         <Camera :size="14" />
                                         {{ p.imagePreview ? 'Thay ảnh' : 'Thêm ảnh' }}
                                     </label>
@@ -393,7 +418,7 @@ const openLightbox = (img: string) => {
                                     />
                                     
                                     <!-- Image Preview Thumbnail -->
-                                    <div v-if="p.imagePreview" class="relative w-12 h-12 border border-gray-200 rounded-sm overflow-hidden group">
+                                    <div v-if="p.imagePreview" class="relative w-12 h-12 border border-gray-200 rounded-none overflow-hidden group">
                                         <img :src="p.imagePreview" class="w-full h-full object-cover" />
                                         <button 
                                             @click="removeImage(p)"
@@ -413,7 +438,7 @@ const openLightbox = (img: string) => {
                         <button 
                             @click="submitAction(order)"
                             :disabled="isSubmitting"
-                            class="bg-black text-white px-6 py-2.5 text-[10px] uppercase tracking-widest font-semibold transition-all hover:bg-gray-900 active:scale-[0.98] disabled:opacity-40 rounded-sm cursor-pointer"
+                            class="bg-black text-white px-6 py-2.5 text-[10px] uppercase tracking-widest font-semibold transition-all hover:bg-gray-900 active:scale-[0.98] disabled:opacity-40 rounded-none cursor-pointer"
                         >
                             {{ isSubmitting ? 'Đang gửi...' : 'Gửi đánh giá' }}
                         </button>
@@ -425,7 +450,7 @@ const openLightbox = (img: string) => {
                     <button 
                         @click="changePage('pending', -1)" 
                         :disabled="currentPendingPage === 1"
-                        class="p-2 border border-gray-200 hover:border-black rounded-sm disabled:opacity-30 disabled:hover:border-gray-200 transition-all cursor-pointer"
+                        class="p-2 border border-gray-200 hover:border-black rounded-none disabled:opacity-30 disabled:hover:border-gray-200 transition-all cursor-pointer"
                     >
                         <ChevronLeft :size="14" />
                     </button>
@@ -435,7 +460,7 @@ const openLightbox = (img: string) => {
                     <button 
                         @click="changePage('pending', 1)" 
                         :disabled="currentPendingPage === totalPendingPages"
-                        class="p-2 border border-gray-200 hover:border-black rounded-sm disabled:opacity-30 disabled:hover:border-gray-200 transition-all cursor-pointer"
+                        class="p-2 border border-gray-200 hover:border-black rounded-none disabled:opacity-30 disabled:hover:border-gray-200 transition-all cursor-pointer"
                     >
                         <ChevronRight :size="14" />
                     </button>
@@ -444,12 +469,12 @@ const openLightbox = (img: string) => {
 
             <!-- COMPLETED TAB -->
             <div v-else class="space-y-6">
-                <div v-if="paginatedRatedOrders.length === 0" class="text-center py-16 border border-dashed border-gray-200 rounded-sm">
+                <div v-if="paginatedRatedOrders.length === 0" class="text-center py-16 border border-dashed border-gray-200 rounded-none">
                     <ShoppingBag :size="24" class="mx-auto text-gray-300 mb-3" :stroke-width="1.5" />
                     <p class="text-xs text-gray-400 uppercase tracking-widest">Bạn chưa có lịch sử đánh giá sản phẩm nào.</p>
                 </div>
 
-                <div v-for="order in paginatedRatedOrders" :key="order.id" class="border border-gray-200 rounded-sm bg-white p-6 shadow-sm animate-in fade-in duration-300">
+                <div v-for="order in paginatedRatedOrders" :key="order.id" class="border border-gray-200 rounded-none bg-white p-6 shadow-sm animate-in fade-in duration-300">
                     <!-- Rated Order Header -->
                     <div class="flex justify-between items-center border-b border-gray-100 pb-4 mb-5">
                         <div>
@@ -472,7 +497,7 @@ const openLightbox = (img: string) => {
                     <div class="space-y-6">
                         <div v-for="(p, idx) in order.products" :key="idx" class="flex flex-col md:flex-row gap-6 border-b border-gray-50 pb-6 last:border-0 last:pb-0">
                             <!-- Product thumbnail -->
-                            <div class="w-16 h-16 shrink-0 bg-gray-50 border border-gray-100 rounded-sm overflow-hidden">
+                            <div class="w-16 h-16 shrink-0 bg-gray-50 border border-gray-100 rounded-none overflow-hidden">
                                 <img :src="p.image" :alt="p.name" class="w-full h-full object-cover" />
                             </div>
 
@@ -488,8 +513,8 @@ const openLightbox = (img: string) => {
                                                 v-for="n in 5" 
                                                 :key="n"
                                                 :size="12"
-                                                :fill="n <= p.rating ? '#000000' : 'none'"
-                                                :stroke="n <= p.rating ? '#000000' : '#d1d5db'"
+                                                :fill="n <= p.rating ? '#f59e0b' : 'none'"
+                                                :stroke="n <= p.rating ? '#f59e0b' : '#d1d5db'"
                                                 :stroke-width="1.5"
                                             />
                                         </div>
@@ -517,14 +542,14 @@ const openLightbox = (img: string) => {
                                 <div v-if="p.imageReview" class="pt-1">
                                     <div 
                                         @click="openLightbox(p.imageReview)"
-                                        class="relative w-20 h-20 border border-gray-100 rounded-sm overflow-hidden cursor-zoom-in hover:brightness-90 transition-all group"
+                                        class="relative w-20 h-20 border border-gray-100 rounded-none overflow-hidden cursor-zoom-in hover:brightness-90 transition-all group"
                                     >
                                         <img :src="p.imageReview" class="w-full h-full object-cover" />
                                     </div>
                                 </div>
 
                                 <!-- Shop Reply block -->
-                                <div v-if="p.reply" class="bg-gray-50 border-l border-gray-300 p-4 rounded-sm mt-3 space-y-1">
+                                <div v-if="p.reply" class="bg-gray-50 border-l border-gray-300 p-4 rounded-none mt-3 space-y-1">
                                     <div class="flex items-center gap-2 text-[10px] uppercase tracking-widest text-black font-semibold">
                                         <MessageSquare :size="12" />
                                         <span>Phản hồi từ Minh Tâm Hair</span>
@@ -541,7 +566,7 @@ const openLightbox = (img: string) => {
                     <button 
                         @click="changePage('rated', -1)" 
                         :disabled="currentRatedPage === 1"
-                        class="p-2 border border-gray-200 hover:border-black rounded-sm disabled:opacity-30 disabled:hover:border-gray-200 transition-all cursor-pointer"
+                        class="p-2 border border-gray-200 hover:border-black rounded-none disabled:opacity-30 disabled:hover:border-gray-200 transition-all cursor-pointer"
                     >
                         <ChevronLeft :size="14" />
                     </button>
@@ -551,7 +576,7 @@ const openLightbox = (img: string) => {
                     <button 
                         @click="changePage('rated', 1)" 
                         :disabled="currentRatedPage === totalRatedPages"
-                        class="p-2 border border-gray-200 hover:border-black rounded-sm disabled:opacity-30 disabled:hover:border-gray-200 transition-all cursor-pointer"
+                        class="p-2 border border-gray-200 hover:border-black rounded-none disabled:opacity-30 disabled:hover:border-gray-200 transition-all cursor-pointer"
                     >
                         <ChevronRight :size="14" />
                     </button>

@@ -108,11 +108,11 @@ onMounted(async () => {
             localStorage.setItem('last_booking_ref', returnedMaLd);
             lastBookingRef.value = returnedMaLd;
             
-            // Xóa giỏ hàng sau khi lưu thành công
+            // Xóa phần dịch vụ trong giỏ hàng sau khi lưu thành công
             const customer = getCustomerInfo();
             if (customer.maKH && customer.maKH !== 'GUEST') {
-                await clearCartDB(customer.maKH);
-                console.log("Giỏ hàng đã được dọn dẹp sạch sẽ.");
+                await clearCartDB(customer.maKH, 'DICHVU');
+                console.log("Dịch vụ trong giỏ hàng đã được dọn dẹp.");
             }
             isSuccess.value = true;
         } catch (err: any) {
@@ -131,18 +131,18 @@ const goToDetail = () => {
 };
 
 const tryAgain = () => {
-    router.push('/Dat-lich');
+    router.push({ name: 'datdichvu' });
 };
 </script>
 
 <template>
-    <div class="result-page py-5 flex items-center justify-center min-h-[85vh]">
+    <div class="result-page py-12 flex items-center justify-center min-h-[85vh]">
         <div class="container mx-auto px-4">
             <div class="flex justify-center">
                 <div class="w-full max-w-lg">
                     <div v-if="isLoading" class="text-center py-10">
-                        <i class="fas fa-spinner fa-spin fa-3x text-[var(--gold-solid)] mb-4"></i>
-                        <p class="font-bold text-gray-500 uppercase tracking-widest">ĐANG XỬ LÝ GIAO DỊCH...</p>
+                        <i class="fas fa-circle-notch fa-spin fa-3x text-black mb-4"></i>
+                        <p class="font-bold text-gray-500 uppercase tracking-widest text-xs">ĐANG XỬ LÝ GIAO DỊCH...</p>
                     </div>
 
                     <div v-else class="glass-card text-center" data-aos="zoom-in">
@@ -155,13 +155,13 @@ const tryAgain = () => {
                             </div>
                         </div>
 
-                        <h2 class="font-playfair font-black text-3xl mb-2 tracking-wide" :class="isSuccess ? 'gold-metallic-text' : 'text-red-500'">
+                        <h2 class="font-heading tracking-[0.2em] font-medium text-2xl lg:text-3xl mb-2 uppercase" :class="isSuccess ? 'text-black' : 'text-red-500'">
                             {{ isSuccess ? 'THANH TOÁN THÀNH CÔNG' : 'THANH TOÁN THẤT BẠI' }}
                         </h2>
 
                         <div v-if="isSuccess" class="qr-section my-6 p-4">
-                            <p class="text-xs font-bold text-amber-900/60 mb-3 tracking-widest uppercase">Mã Hóa Đơn Điện Tử (QR)</p>
-                            <div class="flex justify-center bg-white p-3 rounded-xl border border-dashed border-[#bfa77a]/30 shadow-inner max-w-[210px] mx-auto">
+                            <p class="text-xs font-bold text-black mb-3 tracking-widest uppercase">Mã Hóa Đơn Điện Tử (QR)</p>
+                            <div class="flex justify-center bg-white p-3 border border-dashed border-gray-300 max-w-[210px] mx-auto">
                                 <qrcode-vue 
                                     :value="qrInvoiceValue" 
                                     :size="180" 
@@ -172,7 +172,7 @@ const tryAgain = () => {
                             <p class="mt-3 mb-0 text-[11px] text-gray-400 font-bold uppercase tracking-wider">Quét mã để check-in nhanh tại quầy</p>
                         </div>
                         
-                        <div class="gold-accent-line mx-auto mb-6"></div>
+                        <div class="accent-line mx-auto mb-6"></div>
 
                         <div class="transaction-details text-start p-4 mb-6">
                             <div class="flex justify-between items-center mb-3">
@@ -181,7 +181,7 @@ const tryAgain = () => {
                             </div>
                             <div class="flex justify-between items-center mb-3">
                                 <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">Số tiền:</span>
-                                <span class="font-bold text-[1.1rem]" :class="isSuccess ? 'gold-solid-text' : 'text-red-500'">{{ formatMoney(amount) }}</span>
+                                <span class="font-bold text-[1.1rem]" :class="isSuccess ? 'text-black' : 'text-red-500'">{{ formatMoney(amount) }}</span>
                             </div>
                             <div class="flex justify-between items-center">
                                 <span class="text-xs font-bold text-gray-400 uppercase tracking-wider">Trạng thái:</span>
@@ -218,51 +218,37 @@ const tryAgain = () => {
 
 <style scoped>
 .result-page {
-    --gold-metallic: linear-gradient(135deg, #a88b58 0%, #bfa77a 50%, #d8c39e 100%);
-    --gold-solid: #bfa77a;
-    --gold-hover: #a88b58;
-    --gold-light: #fbfaf7;
+    --primary-color: #000000;
+    --primary-hover: #1f2937;
+    --primary-light: #fafafa;
     --text-primary: #111827;
     --text-secondary: #4b5563;
     --text-muted: #9ca3af;
-    --border-color: #f3f4f6;
+    --border-color: #e5e7eb;
 
-    background-color: #fbfbfd;
+    background-color: #ffffff;
     font-family: 'Inter', sans-serif;
     color: var(--text-secondary);
 }
 
 /* Typography & Titles */
-.font-playfair, h2 {
+h2 {
     font-family: 'Montserrat', sans-serif !important;
-}
-
-.gold-metallic-text {
-    background: var(--gold-metallic);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    display: inline-block;
-    font-weight: 800;
-}
-
-.gold-solid-text {
-    color: var(--gold-solid);
 }
 
 .glass-card {
     background: #ffffff;
     padding: 40px;
-    border-radius: 20px;
-    border: 1px solid rgba(229, 231, 235, 0.7);
-    box-shadow: 0 10px 40px rgba(191, 167, 122, 0.04);
+    border-radius: 0px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.02);
     max-width: 480px;
     margin: 0 auto;
     transition: all 0.3s ease;
 }
 
 .glass-card:hover {
-    box-shadow: 0 15px 50px rgba(191, 167, 122, 0.08);
+    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.05);
 }
 
 /* Status Icon Wrapper */
@@ -285,57 +271,63 @@ const tryAgain = () => {
 .icon-wrapper.success {
     background: #e2fbe9;
     color: #16a34a;
-    box-shadow: 0 10px 25px rgba(22, 163, 74, 0.15);
+    box-shadow: 0 10px 25px rgba(22, 163, 74, 0.1);
 }
 
 .icon-wrapper.failure {
     background: #fde8e8;
     color: #ef4444;
-    box-shadow: 0 10px 25px rgba(239, 68, 68, 0.15);
+    box-shadow: 0 10px 25px rgba(239, 68, 68, 0.1);
 }
 
 /* QR Code Section */
 .qr-section {
-    background: #fdfaf3;
-    border: 1px solid rgba(191, 167, 122, 0.15);
-    border-radius: 16px;
+    background: #fafafa;
+    border: 1px solid var(--border-color);
+    border-radius: 0px;
 }
 
-.gold-accent-line {
+.accent-line {
     width: 60px;
-    height: 3px;
-    background: var(--gold-metallic);
-    border-radius: 2px;
+    height: 1px;
+    background: var(--primary-color);
+    border-radius: 0px;
 }
 
 /* Transaction Details */
 .transaction-details {
-    background: #fafafb;
-    border-left: 4px solid var(--gold-solid);
-    border-radius: 8px;
+    background: #fafafa;
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--primary-color);
+    border-radius: 0px;
 }
 
 /* Buttons */
 .btn-confirm-metallic-final {
     width: 100%;
     padding: 16px;
-    border: none;
-    border-radius: 8px;
-    background: var(--gold-metallic);
+    border: 1px solid var(--primary-color);
+    border-radius: 0px;
+    background: var(--primary-color);
     color: #ffffff !important;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 2px;
     font-weight: 700;
     font-size: 13px;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 4px 14px rgba(191, 167, 122, 0.3);
+    box-shadow: none;
 }
 
 .btn-confirm-metallic-final:hover {
-    background: var(--text-primary);
+    background: transparent;
+    color: var(--primary-color) !important;
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    box-shadow: none;
+}
+
+.btn-confirm-metallic-final:hover .btn-text-normal {
+    color: var(--primary-color) !important;
 }
 
 .btn-text-normal {
@@ -343,38 +335,38 @@ const tryAgain = () => {
     font-weight: 700 !important;
     font-size: 13px !important;
     color: #ffffff !important;
-    letter-spacing: 1px !important;
+    letter-spacing: 2px !important;
+    transition: color 0.3s ease;
 }
 
 .btn-try-again-outline {
     width: 100%;
     padding: 15px;
-    border: 1px solid var(--gold-solid);
+    border: 1px solid var(--primary-color);
     background: transparent;
-    color: var(--gold-solid);
+    color: var(--primary-color);
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 2px;
     font-weight: 700;
     font-size: 13px;
-    border-radius: 8px;
+    border-radius: 0px;
     cursor: pointer;
     transition: all 0.3s ease;
 }
 
 .btn-try-again-outline:hover {
-    background: var(--gold-light);
-    color: var(--gold-hover);
-    border-color: var(--gold-hover);
+    background: var(--primary-color);
+    color: #ffffff !important;
 }
 
 .secondary-home-btn {
-    border-color: #d1d5db !important;
+    border-color: var(--border-color) !important;
     color: var(--text-secondary) !important;
 }
 
 .secondary-home-btn:hover {
-    background: #f3f4f6 !important;
-    border-color: #9ca3af !important;
-    color: var(--text-primary) !important;
+    background: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+    color: #ffffff !important;
 }
 </style>

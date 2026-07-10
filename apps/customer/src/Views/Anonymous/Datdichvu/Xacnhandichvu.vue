@@ -270,16 +270,21 @@ const confirmBooking = () => {
 
 <style scoped>
 .confirm-page {
-    --gold-metallic: linear-gradient(135deg, #a88b58 0%, #bfa77a 50%, #d8c39e 100%);
-    --gold-solid: #bfa77a;
-    --gold-hover: #a88b58;
-    --gold-light: #fbfaf7;
+    --primary-metallic: linear-gradient(135deg, #1a1a1a 0%, #000000 100%);
+    --primary-color: #000000;
+    --primary-hover: #1f2937;
+    --primary-light: #fafafa;
     --text-primary: #111827;
     --text-secondary: #4b5563;
     --text-muted: #9ca3af;
-    --border-color: #f3f4f6;
+    --border-color: #e5e7eb;
 
-    background-color: #fbfbfd;
+    /* Aliases for template compatibility */
+    --gold-solid: var(--primary-color);
+    --gold-metallic: var(--primary-metallic);
+    --gold-light: var(--primary-light);
+
+    background-color: #ffffff;
     font-family: 'Inter', sans-serif;
     color: var(--text-secondary);
     min-height: 100vh;
@@ -291,7 +296,7 @@ h1, h2, h3, h4, .card-header-title {
 }
 
 .gold-metallic-text {
-    background: var(--gold-metallic);
+    background: var(--primary-metallic);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -300,15 +305,15 @@ h1, h2, h3, h4, .card-header-title {
 }
 
 .gold-solid-text {
-    color: var(--gold-solid);
+    color: var(--primary-color);
 }
 
 .gold-accent-line {
     width: 60px;
-    height: 3px;
-    background: var(--gold-solid);
+    height: 1px;
+    background: var(--primary-color);
     margin: 15px auto;
-    border-radius: 2px;
+    border-radius: 0px;
 }
 
 /* Status Confirmation Circle (Success Check) */
@@ -335,9 +340,9 @@ h1, h2, h3, h4, .card-header-title {
 .glass-card {
     background: #ffffff;
     padding: 35px;
-    border-radius: 20px;
-    border: 1px solid rgba(229, 231, 235, 0.7);
-    box-shadow: 0 10px 40px rgba(191, 167, 122, 0.04);
+    border-radius: 0px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.03);
     transition: all 0.3s ease;
 }
 
@@ -360,29 +365,29 @@ h1, h2, h3, h4, .card-header-title {
     padding: 16px;
     background: #ffffff;
     border: 1px solid var(--border-color);
-    border-radius: 12px;
+    border-radius: 0px;
     margin-bottom: 12px;
     transition: all 0.3s ease;
 }
 
 .confirm-item-row:hover {
-    border-color: rgba(191, 167, 122, 0.3);
+    border-color: rgba(0, 0, 0, 0.2);
     transform: translateX(4px);
-    box-shadow: 0 4px 12px rgba(191, 167, 122, 0.04);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
 }
 
 .item-icon-circle {
     width: 32px;
     height: 32px;
-    background: #fdfaf3;
-    color: var(--gold-solid);
+    background: #f4f4f5;
+    color: var(--primary-color);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     margin-right: 16px;
     font-size: 13px;
-    border: 1px solid rgba(191, 167, 122, 0.15);
+    border: 1px solid var(--border-color);
 }
 
 .item-info {
@@ -416,11 +421,11 @@ h1, h2, h3, h4, .card-header-title {
 .stylist-horizontal-card {
     display: flex;
     align-items: center;
-    background: #fdfaf3;
+    background: #fafafa;
     padding: 16px 20px;
-    border-radius: 12px;
-    border: 1px solid rgba(191, 167, 122, 0.15);
-    border-left: 4px solid var(--gold-solid);
+    border-radius: 0px;
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--primary-color);
 }
 
 .avatar-wrapper {
@@ -444,7 +449,7 @@ h1, h2, h3, h4, .card-header-title {
     position: absolute;
     bottom: -2px;
     right: -2px;
-    background: var(--gold-solid);
+    background: var(--primary-color);
     color: #ffffff;
     width: 16px;
     height: 16px;
@@ -459,9 +464,9 @@ h1, h2, h3, h4, .card-header-title {
 .avatar-placeholder-circle {
     width: 54px;
     height: 54px;
-    background: var(--gold-light);
-    color: var(--gold-solid);
-    border: 1px solid rgba(191, 167, 122, 0.3);
+    background: var(--primary-light);
+    color: var(--primary-color);
+    border: 1px solid var(--border-color);
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -482,7 +487,7 @@ h1, h2, h3, h4, .card-header-title {
 .role-badge {
     font-size: 10px;
     font-weight: 700;
-    color: var(--gold-solid);
+    color: var(--primary-color);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -520,10 +525,10 @@ h1, h2, h3, h4, .card-header-title {
 }
 
 .pay-now-alert {
-    background: #fdfaf3;
+    background: #fafafa;
     padding: 12px 16px;
-    border-radius: 10px;
-    border: 1px solid rgba(191, 167, 122, 0.15);
+    border-radius: 0px;
+    border: 1px solid var(--border-color);
     display: flex;
     align-items: center;
 }
@@ -532,23 +537,24 @@ h1, h2, h3, h4, .card-header-title {
 .btn-confirm-metallic-final {
     width: 100%;
     padding: 16px;
-    border: none;
-    border-radius: 8px;
-    background: var(--gold-metallic);
+    border: 1px solid var(--primary-color);
+    border-radius: 0px;
+    background: var(--primary-color);
     color: #ffffff !important;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 2px;
     font-weight: 700;
     font-size: 13px;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 4px 14px rgba(191, 167, 122, 0.3);
+    box-shadow: none;
 }
 
 .btn-confirm-metallic-final:hover {
-    background: var(--text-primary);
+    background: transparent;
+    color: var(--primary-color) !important;
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    box-shadow: none;
 }
 
 /* 9. CẤU TRÚC TRANG */
