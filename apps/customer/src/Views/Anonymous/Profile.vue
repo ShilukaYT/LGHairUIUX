@@ -5,6 +5,7 @@ import axios from 'axios';
 import { useRoute, useRouter } from 'vue-router';
 import LichSuDanhGia from './Profile/lichsudanhgia.vue';
 import LichSuDanhGiaSanPham from './Profile/lichsudanhgiasanpham.vue';
+import LichSuHoaDon from './Profile/LichSuHoaDon.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -204,7 +205,7 @@ const handleLogoutAll = async () => {
             <button @click="activeTab = 'appointments'"
               :class="['flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest transition-all rounded-sm', activeTab === 'appointments' ? 'bg-white border-l-2 border-black text-black shadow-sm font-semibold' : 'text-gray-600 hover:text-black hover:bg-gray-100/50 border-l-2 border-transparent']">
               <Calendar :size="16" :stroke-width="1.5" />
-              Lịch Hẹn
+              Lịch Hẹn & Hóa Đơn
             </button>
             <button @click="activeTab = 'reviews'"
               :class="['flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest transition-all rounded-sm', activeTab === 'reviews' ? 'bg-white border-l-2 border-black text-black shadow-sm font-semibold' : 'text-gray-600 hover:text-black hover:bg-gray-100/50 border-l-2 border-transparent']">
@@ -291,16 +292,9 @@ const handleLogoutAll = async () => {
             </router-link>
           </div>
 
-          <!-- Tab: Appointments (Empty State) -->
-          <div v-else-if="activeTab === 'appointments'"
-            class="bg-white p-8 lg:p-12 border border-gray-100 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500 text-center py-20">
-            <Calendar class="w-12 h-12 mx-auto text-gray-200 mb-6" :stroke-width="1" />
-            <h3 class="font-heading text-lg uppercase tracking-widest mb-2">Chưa Có Lịch Hẹn</h3>
-            <p class="text-xs tracking-widest text-gray-400 mb-8">Bạn chưa có lịch hẹn dịch vụ nào sắp tới.</p>
-            <router-link :to="{ name: 'services' }"
-              class="inline-block bg-black text-white px-8 py-3 text-[10px] uppercase tracking-[0.2em] hover:bg-gray-800 transition-colors">
-              Đặt lịch ngay
-            </router-link>
+          <!-- Tab: Appointments / Invoices -->
+          <div v-else-if="activeTab === 'appointments'">
+            <LichSuHoaDon />
           </div>
 
           <!-- Tab: Reviews -->

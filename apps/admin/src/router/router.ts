@@ -11,6 +11,7 @@ const routes = [
       { path: 'category', name: 'Category', component: () => import('@/Admin/Category.vue') },
       { path: 'sale', name: 'sale', component: () => import('@/Admin/Sale/sale.vue') },
       { path: 'checkin', name: 'checkin', component: () => import('@/Admin/Check-in/Checkin.vue') },
+      { path: 'checkout', name: 'checkout', component: () => import('@/Admin/Check-out/Checkout.vue') },
       { path: 'voucher', name: 'VoucherAdmin', component: () => import('@/Admin/voucher/VoucherAdmin.vue') },
       { path: 'quan-ly-ca-lam', name: 'QuanLyCaLamAdmin', component: () => import('@/Admin/QuanLyCaLam/QuanLyCaLam.vue') },
       { path: 'diem-danh', name: 'DiemDanhAdmin', component: () => import('@/Admin/QuanLyCaLam/DiemDanh.vue') },

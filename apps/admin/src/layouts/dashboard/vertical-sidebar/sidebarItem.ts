@@ -19,7 +19,8 @@ import {
   UnorderedListOutlined,
   InboxOutlined,
   AuditOutlined,
-  ReconciliationOutlined
+  ReconciliationOutlined,
+  CheckSquareOutlined
 } from '@ant-design/icons-vue';
 
 export interface menu {
@@ -44,6 +45,16 @@ const sidebarItem: menu[] = [
     title: 'Dashboard',
     icon: DashboardOutlined,
     to: '/admin/dashboard'
+  },
+  {
+    title: 'Check-in',
+    icon: CheckSquareOutlined,
+    to: '/admin/checkin'
+  },
+  {
+    title: 'Check-out',
+    icon: DollarOutlined,
+    to: '/admin/checkout'
   },
   {
     title: 'Hóa đơn',

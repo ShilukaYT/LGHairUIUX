@@ -133,10 +133,11 @@ export const removeFromCartDB = async (id: string | number, type?: string) => {
     }
 };
 
-// 🗑️ Xóa sạch giỏ hàng
-export const clearCartDB = async (maKH: string | null = null) => {
+// 🗑️ Xóa sạch giỏ hàng (hoặc theo loại mặt hàng)
+export const clearCartDB = async (maKH: string | null = null, type?: string) => {
     try {
-        await cartAxios.delete('/xoa-sach');
+        const url = type ? `/xoa-sach?loai=${type}` : '/xoa-sach';
+        await cartAxios.delete(url);
     } catch (error) {
         console.error("Lỗi dọn dẹp giỏ hàng API:", error);
     }

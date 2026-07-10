@@ -33,6 +33,14 @@ const customerId = ref(customer.maKH || 'GUEST');
 const allItemsFromApi = ref<any[]>([]);
 const allProductsFromApi = ref<any[]>([]);
 const stylists = ref<any[]>([]);
+const favoriteStylistIds = ref<string[]>([]);
+
+const isStylistFavorite = (stylistId: string) => {
+    if (!stylistId) return false;
+    const cleanId = stylistId.trim().toLowerCase();
+    return favoriteStylistIds.value.some(favId => favId.trim().toLowerCase() === cleanId);
+};
+
 const loadingStylists = ref(false);
 const stylistMessage = ref('');
 const myVouchers = ref<any[]>([]);
@@ -62,60 +70,6 @@ const productData = ref({
     deliveryNote: '',
     paymentMethod: 'vnpay'
 });
-
-// ==========================================
-// STATE HÓA ĐƠN ĐIỆN TỬ
-// Theo luật, mọi đơn hàng đều PHẢI xuất hóa đơn điện tử — không có tùy chọn tắt.
-// Khách chỉ chọn: xuất theo cá nhân (mặc định) hay theo doanh nghiệp (có MST).
-// ==========================================
-const invoiceInfo = ref({
-    laDoanhNghiep: false,
-    tenCongTy: '',
-    mst: '',
-    diaChiXuatHD: '',
-    emailNhanHD: customer.email || ''
-});
-const mstError = ref('');
-
-const validateMst = (): boolean => {
-    if (!invoiceInfo.value.laDoanhNghiep) {
-        mstError.value = '';
-        return true;
-    }
-    const mst = (invoiceInfo.value.mst || '').trim();
-    const isValid = /^\d{10}$/.test(mst) || /^\d{10}-\d{3}$/.test(mst);
-    mstError.value = isValid ? '' : 'Mã số thuế không hợp lệ (10 số, hoặc 10 số-3 số chi nhánh)';
-    return isValid;
-};
-
-// Validate thông tin hóa đơn trước khi submit — luôn chạy vì luôn xuất hóa đơn
-const validateInvoiceInfo = (): string | null => {
-    if (!validateMst()) return mstError.value;
-
-    if (invoiceInfo.value.laDoanhNghiep) {
-        const tenCty = (invoiceInfo.value.tenCongTy || '').trim();
-        if (tenCty.length < 3) return 'Vui lòng nhập đúng tên công ty (tối thiểu 3 ký tự)';
-    } else {
-        const ten = (bookingData.value.customerName || '').trim();
-        if (ten.length < 3 || !/[a-zA-ZÀ-ỹ]/.test(ten)) return 'Vui lòng nhập đúng họ tên người mua hàng';
-    }
-
-    const diaChi = (invoiceInfo.value.diaChiXuatHD || '').trim();
-    if (diaChi.length < 5) return 'Vui lòng nhập đúng địa chỉ xuất hóa đơn (tối thiểu 5 ký tự)';
-
-    const email = (invoiceInfo.value.emailNhanHD || '').trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Vui lòng nhập đúng định dạng email nhận hóa đơn';
-
-    return null;
-};
-
-// Tự điền địa chỉ xuất hóa đơn theo địa chỉ giao hàng (nếu có) khi khách chưa tự sửa
-watch(() => productData.value.address, (newVal) => {
-    if (newVal && !invoiceInfo.value.diaChiXuatHD) invoiceInfo.value.diaChiXuatHD = newVal;
-});
-watch(() => bookingData.value.email, (newVal) => {
-    if (newVal && !invoiceInfo.value.emailNhanHD) invoiceInfo.value.emailNhanHD = newVal;
-}, { immediate: true });
 
 const productItems = ref<ProductItem[]>([]);
 
@@ -156,12 +110,15 @@ const combineDateTime = () => {
 
 const normalizeStylist = (item: any) => {
     const id = String(item.id ?? item.maNV ?? item.maNhanVien ?? item.maStylist ?? item.userId ?? '');
+    const avatar = item.img ?? item.avatar ?? item.hinhAnh ?? item.anhDaiDien ?? '';
     return {
         ...item,
         id,
         name: item.name ?? item.hoTen ?? item.tenNhanVien ?? item.tenStylist ?? item.fullName ?? 'Stylist',
         phone: item.phone ?? item.sdt ?? item.soDienThoai ?? '',
-        avatar: item.avatar ?? item.hinhAnh ?? item.anhDaiDien ?? '',
+        avatar,
+        img: avatar,
+        role: item.role ?? item.tenLoai ?? 'Stylist',
         rating: item.rating ?? item.danhGia ?? null
     };
 };
@@ -441,8 +398,11 @@ function toggleVoucher(id: string) {
         ids.splice(i, 1);
         return;
     }
-    // Chỉ chọn 1 voucher cho mỗi đơn hàng (thay thế mã cũ nếu đã chọn)
-    bookingData.value.voucherIds = [id];
+    if (ids.length >= 2) {
+        alert('Chỉ chọn tối đa 2 voucher.');
+        return;
+    }
+    ids.push(id);
 }
 
 const loadAvailableStylists = async () => {
@@ -459,11 +419,11 @@ const loadAvailableStylists = async () => {
     stylistMessage.value = '';
 
     try {
-        const res = await axios.post(`${API}/api/DatDichVu/get-available-stylists`, {
+        const res = await axios.post(`${API}/api/ThanhToanTong/get-available-stylists`, {
             ngayHen: tempDate.value,
             gioBatDau: tempTime.value,
             tongThoiGian: estimatedTotalMinutes.value,
-            serviceIds: bookingData.value.selectedServices.map(s => s.id)
+            maKh: customerId.value
         });
 
         const rawList = Array.isArray(res.data)
@@ -476,14 +436,27 @@ const loadAvailableStylists = async () => {
                         ? res.data.nhanViens
                         : [];
 
-        stylists.value = rawList.map(normalizeStylist).filter((s: any) => s.id);
+        const mapped = rawList.map(normalizeStylist).filter((s: any) => s.id).map((s: any) => ({
+            ...s,
+            isFavorite: s.isFavorite || isStylistFavorite(s.id)
+        }));
 
+        // Sắp xếp: Ưu tiên thợ rảnh (isAvailable) -> Ưu tiên thợ yêu thích (isFavorite)
+        mapped.sort((a: any, b: any) => {
+            if (a.isAvailable !== b.isAvailable) {
+                return a.isAvailable ? -1 : 1;
+            }
+            const favA = a.isFavorite ? 1 : 0;
+            const favB = b.isFavorite ? 1 : 0;
+            return favB - favA;
+        });
+
+        stylists.value = mapped;
+
+        // Nếu stylist đang chọn bị bận do đổi giờ/đổi dịch vụ, reset về null
         if (bookingData.value.stylistId && !stylists.value.some(s => String(s.id) === String(bookingData.value.stylistId))) {
             bookingData.value.stylistId = null;
-        }
-
-        if (stylists.value.length === 1 && !bookingData.value.stylistId) {
-            bookingData.value.stylistId = stylists.value[0].id;
+            alert("Stylist bạn chọn đã bận vào khung giờ này do thay đổi thời gian dịch vụ. Vui lòng chọn thợ khác!");
         }
 
         if (stylists.value.length === 0) {
@@ -586,12 +559,6 @@ const handlePayment = async () => {
         return;
     }
 
-    const invoiceErr = validateInvoiceInfo();
-    if (invoiceErr) {
-        alert(invoiceErr);
-        return;
-    }
-
     try {
         const checkoutType = bookingData.value.selectedServices.length > 0 && productItems.value.length > 0
                 ? 'DAT_LICH_VA_MUA_SAN_PHAM'
@@ -638,16 +605,7 @@ const handlePayment = async () => {
             // Cấu hình phương thức thanh toán
             paymentMode: bookingData.value.paymentMode, 
             servicePaymentMethod: bookingData.value.paymentMethod,
-            productPaymentMethod: productData.value.paymentMethod,
-
-            // Hóa đơn điện tử
-            invoiceInfo: {
-                laDoanhNghiep: invoiceInfo.value.laDoanhNghiep,
-                tenCongTy: invoiceInfo.value.laDoanhNghiep ? invoiceInfo.value.tenCongTy : null,
-                mst: invoiceInfo.value.laDoanhNghiep ? invoiceInfo.value.mst : null,
-                diaChiXuatHD: invoiceInfo.value.diaChiXuatHD,
-                emailNhanHD: invoiceInfo.value.emailNhanHD
-            }
+            productPaymentMethod: productData.value.paymentMethod
         };
 
         // 3. GỌI API LƯU TẤT CẢ VÀO DATABASE BẰNG 1 LẦN GỌI
@@ -716,9 +674,10 @@ const handlePayment = async () => {
 // ==========================================
 const loadServices = async () => {
     try {
-        const resBooking = await axios.get(`${API}/api/ThanhToanTong/get-services`);
-        if (resBooking.data && resBooking.data.success) {
-            allItemsFromApi.value = resBooking.data.services;
+        const res = await axios.get(`${API}/api/ThanhToanTong/get-services`);
+        if (res.data && res.data.success) {
+            // Gộp cả 2 vào mảng hiển thị
+            allItemsFromApi.value = [...res.data.services, ...res.data.combos];
         }
     } catch (error) {
         console.error('Lỗi tải danh sách dịch vụ:', error);
@@ -741,6 +700,29 @@ const loadProducts = async (keyword = '') => {
 };
 
 onMounted(async () => {
+    if (customerId.value !== 'GUEST') {
+        // Load từ LocalStorage trước làm dự phòng
+        const saved = localStorage.getItem(`favorite_employees_${customerId.value}`);
+        if (saved) {
+            try {
+                favoriteStylistIds.value = JSON.parse(saved).map((id: string) => String(id).trim());
+            } catch (e) {
+                favoriteStylistIds.value = [];
+            }
+        }
+
+        // Sau đó gọi API để đồng bộ từ DB (nếu có)
+        try {
+            const resFav = await axios.get(`${API}/api/YeuThich/employees/${customerId.value}`);
+            if (resFav.data && Array.isArray(resFav.data)) {
+                const apiFavs = resFav.data.map((id: string) => String(id).trim());
+                favoriteStylistIds.value = Array.from(new Set([...favoriteStylistIds.value, ...apiFavs]));
+            }
+        } catch (error) {
+            console.error("Lỗi khi load thợ yêu thích:", error);
+        }
+    }
+
     await loadServices();
     await loadProducts();
 
@@ -877,41 +859,56 @@ onMounted(async () => {
 
                         <!-- Chọn Stylist -->
                         <div class="mt-8">
-                            <div class="flex items-center justify-between mt-4 mb-3 border-b pb-2">
-                                <label class="custom-label font-bold m-0"><i class="fas fa-cut me-1"></i> Chọn Stylist</label>
-                                <button type="button" class="btn-load-stylist" :disabled="!canSearchStylist || loadingStylists" @click="loadAvailableStylists">
-                                    <i class="fas fa-rotate" :class="{ spin: loadingStylists }"></i>
-                                    {{ loadingStylists ? 'Đang tìm...' : 'Tải thợ phù hợp' }}
-                                </button>
+                            <div class="section-heading-wrapper mt-4 mb-3">
+                                <h3 class="font-playfair section-heading-title font-bold text-black">
+                                    <i class="fas fa-cut me-2"></i> CHỌN STYLIST
+                                </h3>
+                                <div class="heading-line"></div>
                             </div>
                             
-                            <div v-if="loadingStylists" class="soft-message mt-2 p-3 text-center">
-                                <i class="fas fa-spinner spin me-2 text-gold"></i> Đang tải danh sách stylist trống...
+                            <div v-if="loadingStylists" class="mt-4 p-3 text-center text-gray-500 font-bold bg-gray-50 border">
+                                <i class="fas fa-spinner fa-spin me-2 text-black"></i> Đang tìm các thợ rảnh việc trong ca này...
                             </div>
                             
-                            <div v-else-if="stylists.length" class="stylist-flex mt-3">
-                                <div v-for="stylist in stylists" :key="stylist.id" class="stylist-card"
-                                    :class="{ active: String(bookingData.stylistId) === String(stylist.id) }"
-                                    @click="bookingData.stylistId = stylist.id">
+                            <div v-else class="stylist-flex mt-3">
+                                <div v-for="stylist in stylists" :key="stylist.id" class="stylist-card" :class="{
+                                    'active': String(bookingData.stylistId) === String(stylist.id),
+                                    'is-disabled': !stylist.isAvailable
+                                }" @click="stylist.isAvailable ? bookingData.stylistId = stylist.id : null"
+                                    :title="!stylist.isAvailable ? stylist.unAvailableReason : ''">
                                     <div class="avatar-box">
-                                        <img v-if="stylist.avatar" :src="stylist.avatar.startsWith('http') ? stylist.avatar : (API + stylist.avatar)" onerror="this.onerror=null; this.src='/images/no-image.png'" alt="Stylist">
-                                        <div v-else class="avatar-placeholder"><i class="fas fa-user-tie"></i></div>
+                                        <img :src="stylist.img.startsWith('http') ? stylist.img : (API + stylist.img)"
+                                            alt="Stylist" onerror="this.onerror=null; this.src='/images/no-image.png'">
                                         <div class="check-badge"><i class="fas fa-check"></i></div>
-                                    </div>
-                                    <div class="stylist-meta">
-                                        <span class="s-name font-bold">{{ stylist.name }}</span>
-                                        <span class="s-role text-muted">{{ stylist.phone || 'Còn lịch trống' }}</span>
-                                        <div class="stylist-rating-badge">
-                                            <span class="rating-val">{{ stylist.rating?.toFixed(1) || '5.0' }}</span>
-                                            <i class="fas fa-star rating-star-icon"></i>
+                                        <div v-if="stylist.isFavorite" class="favorite-heart-badge">
+                                            <i class="fas fa-heart"></i>
                                         </div>
                                     </div>
+ 
+                                    <div class="stylist-meta">
+                                        <span class="s-name font-bold">{{ stylist.name }}</span>
+ 
+                                        <template v-if="stylist.isAvailable">
+                                            <span class="s-role text-black">{{ stylist.role }}</span>
+                                            <div class="stylist-rating-badge">
+                                                <span class="rating-val">{{ stylist.rating?.toFixed(1) || '5.0' }}</span>
+                                                <i class="fas fa-star rating-star-icon"></i>
+                                            </div>
+                                        </template>
+ 
+                                        <template v-else>
+                                            <span class="font-bold mt-1 text-center"
+                                                style="color: #ef4444; font-size: 10px; line-height: 1.3;">
+                                                {{ stylist.unAvailableReason }}
+                                            </span>
+                                        </template>
+                                    </div>
                                 </div>
-                            </div>
-                            
-                            <div v-else class="soft-message mt-2 p-3">
-                                <i class="fas fa-info-circle text-gray-500 mt-1 me-2"></i>
-                                <span>{{ stylistMessage || 'Chọn đủ dịch vụ, ngày và giờ hẹn để hiển thị danh sách stylist còn trống lịch.' }}</span>
+ 
+                                <div v-if="stylists.length === 0"
+                                    class="w-full p-4 text-center text-red-500 border border-red-200 bg-red-50">
+                                    Hôm nay tiệm không có thợ nào làm việc. Bạn vui lòng chọn ngày khác nhé!
+                                </div>
                             </div>
                         </div>
 
@@ -1007,12 +1004,13 @@ onMounted(async () => {
                                 </h3>
                                 <div class="heading-line"></div>
                             </div>
+                            <p class="text-black small mb-3 font-bold">Chọn tối đa 2 mã — thứ tự chọn = thứ tự áp dụng (mã đầu trừ trước).</p>
                             <div class="voucher-list-modern">
                                 <div v-for="v in myVouchers" :key="v.id" class="voucher-ticket-item"
                                     :class="{ active: bookingData.voucherIds.includes(v.id) }" @click="toggleVoucher(v.id)">
                                     
                                     <div class="ticket-left">
-                                        <i class="fas fa-gift"></i>
+                                        <span class="ticket-brand-text">LGHAIR</span>
                                         <span class="notch top"></span>
                                         <span class="notch bottom"></span>
                                     </div>
@@ -1020,14 +1018,12 @@ onMounted(async () => {
                                     <div class="v-divider"></div>
                                     
                                     <div class="ticket-right">
-                                        <div class="flex justify-between items-start mb-1">
-                                            <span class="v-code font-bold">{{ v.code }}</span>
-                                            <span class="v-tag-gold font-bold">HSD: {{ v.expiry }}</span>
+                                        <div class="flex justify-between items-start mb-2">
+                                            <span class="v-code-badge">{{ v.code }}</span>
+                                            <span class="v-expiry-tag"><i class="far fa-calendar-alt me-1.5"></i>HSD: {{ v.expiry }}</span>
                                         </div>
-                                        
-                                        <div class="v-desc text-black mb-2">{{ v.desc }}</div>
-                                        
                                         <div class="v-price-gold font-bold">Giảm: {{ formatMoney(v.discount || 0) }}</div>
+                                        <div class="v-desc text-black mt-1">{{ v.desc }}</div>
                                     </div>
                                     
                                     <div class="v-check-icon" v-if="bookingData.voucherIds.includes(v.id)">
@@ -1244,51 +1240,6 @@ onMounted(async () => {
                                         </div>
                                     </div>
                                 </div>
-                                <!-- Hóa đơn điện tử -->
-                                <div class="payment-block mb-3">
-                                    <p class="text-black small mb-3" style="opacity: 0.6;">
-                                        Theo quy định, mọi đơn hàng đều được xuất hóa đơn điện tử. Vui lòng chọn loại hóa đơn phù hợp.
-                                    </p>
-                                    <div class="mt-3">
-                                        <div class="invoice-type-row mb-3">
-                                            <div class="invoice-type-option" :class="{ active: !invoiceInfo.laDoanhNghiep }"
-                                                @click="invoiceInfo.laDoanhNghiep = false">
-                                                <i class="fas fa-user me-2"></i> Cá nhân
-                                            </div>
-                                            <div class="invoice-type-option" :class="{ active: invoiceInfo.laDoanhNghiep }"
-                                                @click="invoiceInfo.laDoanhNghiep = true">
-                                                <i class="fas fa-building me-2"></i> Doanh nghiệp (có MST)
-                                            </div>
-                                        </div>
-
-                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3" v-if="invoiceInfo.laDoanhNghiep">
-                                            <div>
-                                                <label class="custom-label font-bold">Tên công ty *</label>
-                                                <input v-model="invoiceInfo.tenCongTy" type="text" class="booking-input w-full"
-                                                    placeholder="Công ty TNHH ABC">
-                                            </div>
-                                            <div>
-                                                <label class="custom-label font-bold">Mã số thuế *</label>
-                                                <input v-model="invoiceInfo.mst" type="text" class="booking-input w-full"
-                                                    @blur="validateMst" placeholder="0301234567">
-                                                <p v-if="mstError" class="text-danger small mt-1 mb-0 font-bold">{{ mstError }}</p>
-                                            </div>
-                                        </div>
-
-                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                                            <div>
-                                                <label class="custom-label font-bold">Địa chỉ xuất hóa đơn</label>
-                                                <input v-model="invoiceInfo.diaChiXuatHD" type="text" class="booking-input w-full"
-                                                    placeholder="Số nhà, đường, phường/xã, tỉnh/thành">
-                                            </div>
-                                            <div>
-                                                <label class="custom-label font-bold">Email nhận hóa đơn</label>
-                                                <input v-model="invoiceInfo.emailNhanHD" type="email" class="booking-input w-full"
-                                                    placeholder="email@example.com">
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
 
                             <!-- 4. CHI TIẾT TIỀN BẠC (BILL SUMMARY) -->
@@ -1373,16 +1324,22 @@ onMounted(async () => {
 
 <style scoped>
 .booking-container {
-    --gold-metallic: linear-gradient(135deg, #a88b58 0%, #bfa77a 50%, #d8c39e 100%);
-    --gold-solid: #bfa77a;
-    --gold-hover: #a88b58;
-    --gold-light: #fbfaf7;
+    --primary-metallic: linear-gradient(135deg, #1a1a1a 0%, #000000 100%);
+    --primary-color: #000000;
+    --primary-hover: #1f2937;
+    --primary-light: #fafafa;
     --text-primary: #111827;
     --text-secondary: #4b5563;
     --text-muted: #9ca3af;
-    --border-color: #f3f4f6;
+    --border-color: #e5e7eb;
     
-    background-color: #fbfbfd;
+    /* Aliases for template compatibility */
+    --gold-metallic: var(--primary-metallic);
+    --gold-solid: var(--primary-color);
+    --gold-hover: var(--primary-hover);
+    --gold-light: var(--primary-light);
+    
+    background-color: #ffffff;
     min-height: 100vh;
     font-family: 'Inter', sans-serif;
     color: var(--text-secondary);
@@ -1397,7 +1354,7 @@ onMounted(async () => {
     left: -10%;
     width: 600px;
     height: 600px;
-    background: radial-gradient(circle, rgba(191, 167, 122, 0.04) 0%, rgba(255,255,255,0) 70%);
+    background: radial-gradient(circle, rgba(0, 0, 0, 0.015) 0%, rgba(255,255,255,0) 70%);
     pointer-events: none;
     z-index: 0;
 }
@@ -1409,7 +1366,7 @@ onMounted(async () => {
     right: -10%;
     width: 800px;
     height: 800px;
-    background: radial-gradient(circle, rgba(191, 167, 122, 0.03) 0%, rgba(255,255,255,0) 70%);
+    background: radial-gradient(circle, rgba(0, 0, 0, 0.01) 0%, rgba(255,255,255,0) 70%);
     pointer-events: none;
     z-index: 0;
 }
@@ -1440,10 +1397,10 @@ h1 {
 
 .gold-accent-line {
     width: 60px;
-    height: 3px;
+    height: 1px;
     background: var(--gold-metallic);
     margin: 15px auto;
-    border-radius: 2px;
+    border-radius: 0px;
 }
 
 /* Section headings */
@@ -1504,14 +1461,14 @@ h1 {
 .glass-card {
     background: #ffffff;
     padding: 32px;
-    border-radius: 16px;
-    border: 1px solid rgba(229, 231, 235, 0.7);
-    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.015);
+    border-radius: 0px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.01);
     transition: all 0.3s ease;
 }
 
 .left-main-card:hover, .bill-card:hover {
-    box-shadow: 0 10px 40px rgba(191, 167, 122, 0.04);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.03);
 }
 
 /* Forms & Inputs */
@@ -1529,8 +1486,8 @@ h1 {
     width: 100%;
     height: 48px;
     padding: 0 16px;
-    border-radius: 8px;
-    border: 1px solid #e5e7eb;
+    border-radius: 0px;
+    border: 1px solid var(--border-color);
     background: #fcfcfd;
     outline: none;
     font-size: 14px;
@@ -1540,13 +1497,13 @@ h1 {
 
 .booking-input:focus {
     border-color: var(--gold-solid);
-    box-shadow: 0 0 0 3px rgba(191, 167, 122, 0.12);
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
     background: #ffffff;
 }
 
 select.booking-input {
     appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23bfa77a' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23111827' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 14px center;
     background-size: 14px;
@@ -1556,7 +1513,7 @@ select.booking-input {
 textarea.booking-input {
     height: auto;
     padding: 12px 16px;
-    border-radius: 8px;
+    border-radius: 0px;
 }
 
 /* Booking summary/metadata helper lines */
@@ -1596,8 +1553,8 @@ textarea.booking-input {
     text-align: center;
     cursor: pointer;
     background: #ffffff;
-    border: 1px solid #f3f4f6;
-    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 0px;
     padding: 16px 8px;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.01);
@@ -1605,14 +1562,14 @@ textarea.booking-input {
 
 .stylist-card:hover {
     transform: translateY(-4px);
-    border-color: rgba(191, 167, 122, 0.3);
-    box-shadow: 0 6px 16px rgba(191, 167, 122, 0.06);
+    border-color: rgba(0, 0, 0, 0.2);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.03);
 }
 
 .stylist-card.active {
     border-color: var(--gold-solid);
     background: var(--gold-light);
-    box-shadow: 0 6px 20px rgba(191, 167, 122, 0.15);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
 }
 
 .avatar-box {
@@ -1704,15 +1661,15 @@ textarea.booking-input {
     align-items: center;
     justify-content: center;
     background: #f9fafb;
-    border: 1px solid #f3f4f6;
+    border: 1px solid var(--border-color);
     padding: 2px 6px;
-    border-radius: 12px;
+    border-radius: 0px;
     margin-top: 4px;
 }
 
 .stylist-card.active .stylist-rating-badge {
     background: #ffffff;
-    border-color: rgba(191, 167, 122, 0.2);
+    border-color: rgba(0, 0, 0, 0.1);
 }
 
 .rating-val {
@@ -1724,14 +1681,14 @@ textarea.booking-input {
 
 .rating-star-icon {
     font-size: 9px;
-    color: #f59e0b;
+    color: var(--text-primary);
 }
 
 /* Shipping info card */
 .shipping-info-card {
-    background: #fdfaf3;
-    border: 1px solid rgba(191, 167, 122, 0.15);
-    border-radius: 12px;
+    background: var(--gold-light);
+    border: 1px solid var(--border-color);
+    border-radius: 0px;
     padding: 16px;
     margin-top: 12px;
 }
@@ -1857,64 +1814,6 @@ textarea.booking-input {
     transition: all 0.3s ease;
 }
 
-/* Invoice / Hóa đơn điện tử */
-.invoice-toggle-row {
-    border: 1px solid #e5e7eb;
-    border-radius: 14px;
-    padding: 12px 16px;
-    cursor: pointer;
-    transition: all 0.25s ease;
-    background: #ffffff;
-}
-
-.invoice-toggle-row:hover {
-    border-color: var(--gold-solid);
-}
-
-.invoice-checkbox-label {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    cursor: pointer;
-}
-
-.invoice-checkbox-label input[type="checkbox"] {
-    width: 20px;
-    height: 20px;
-    accent-color: var(--gold-solid);
-    cursor: pointer;
-}
-
-.invoice-type-row {
-    display: flex;
-    gap: 10px;
-}
-
-.invoice-type-option {
-    flex: 1;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 9px 12px;
-    text-align: center;
-    font-weight: 700;
-    font-size: 12px;
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: all 0.25s ease;
-    background: #ffffff;
-}
-
-.invoice-type-option:hover {
-    border-color: var(--gold-solid);
-}
-
-.invoice-type-option.active {
-    border-color: var(--gold-solid);
-    background: var(--gold-light);
-    color: var(--text-primary);
-    box-shadow: 0 4px 14px rgba(191, 167, 122, 0.15);
-}
-
 .method-logo-wrapper {
     display: flex;
     justify-content: center;
@@ -1955,48 +1854,54 @@ textarea.booking-input {
     display: flex;
     width: 100%;
     background: #ffffff;
-    border: 1px dashed #d1d5db;
-    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 0px;
     overflow: hidden;
     position: relative;
     cursor: pointer;
     transition: all 0.3s ease;
+    min-height: 100px;
 }
 
 .voucher-ticket-item:hover {
-    border-color: var(--gold-solid);
+    border-color: #000000;
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.04);
 }
 
 .voucher-ticket-item.active {
-    border: 1px solid var(--gold-solid);
-    background: var(--gold-light);
-    box-shadow: 0 6px 16px rgba(191, 167, 122, 0.12);
+    border: 2px solid #000000;
+    background: #fafafa;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
 }
 
 .ticket-left {
-    background: var(--gold-metallic);
-    width: 48px;
+    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+    width: 64px;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #ffffff;
     position: relative;
     flex-shrink: 0;
 }
 
-.ticket-left i {
-    font-size: 16px;
+.ticket-brand-text {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: #dfb85b;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
 }
 
 .notch {
     position: absolute;
     width: 12px;
     height: 12px;
-    background: #fbfbfd;
+    background: #ffffff;
     border-radius: 50%;
-    left: -6px;
+    right: -6px;
     z-index: 10;
 }
 
@@ -2010,57 +1915,61 @@ textarea.booking-input {
 
 .v-divider {
     width: 1px;
-    border-left: 2px dashed #e5e7eb;
-    height: 60%;
-    align-self: center;
-    margin: 0 4px;
+    border-left: 1px dashed var(--border-color);
+    height: 100%;
 }
 
 .ticket-right {
-    padding: 14px 16px;
+    padding: 16px 20px;
     flex: 1;
     display: flex;
     flex-direction: column;
+    justify-content: center;
+    background: #ffffff;
 }
 
-.v-code {
-    font-size: 13px;
+.voucher-ticket-item.active .ticket-right {
+    background: #fafafa;
+}
+
+.v-code-badge {
+    font-size: 10px;
     font-weight: 700;
-    color: var(--text-primary);
-    letter-spacing: 0.5px;
+    color: #111827;
+    background: #f3f4f6;
+    padding: 3px 8px;
+    letter-spacing: 1px;
+    border: 1px solid var(--border-color);
+    display: inline-block;
 }
 
-.v-tag-gold {
-    font-size: 9px;
-    font-weight: 600;
-    color: var(--gold-solid);
-    background: #fdfaf3;
-    padding: 2px 8px;
-    border-radius: 4px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    border: 1px solid rgba(191, 167, 122, 0.15);
+.v-expiry-tag {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
 }
 
 .v-desc {
     font-size: 11px;
     color: var(--text-secondary);
-    margin-top: 4px;
     line-height: 1.4;
+    margin-top: 4px;
 }
 
 .v-price-gold {
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--gold-solid);
-    margin-top: 6px;
+    font-size: 16px;
+    font-weight: 800;
+    color: #111827;
+    margin-top: 4px;
 }
 
 .v-check-icon {
     position: absolute;
     top: 14px;
     right: 14px;
-    color: var(--gold-solid);
+    color: #111827;
     font-size: 18px;
 }
 
@@ -2220,20 +2129,20 @@ textarea.booking-input {
     justify-content: space-between;
     align-items: center;
     padding: 10px 14px;
-    background: #fdfaf3;
-    border-radius: 10px;
+    background: #fafafb;
+    border-radius: 0px;
     margin-bottom: 8px;
-    border: 1px solid rgba(191, 167, 122, 0.15);
+    border: 1px solid var(--border-color);
     transition: all 0.3s ease;
 }
 
 .item-row:hover {
-    border-color: var(--gold-solid);
-    background: var(--gold-light);
+    border-color: rgba(0, 0, 0, 0.1);
+    background: #ffffff;
 }
 
 .item-row img {
-    border-radius: 6px;
+    border-radius: 0px;
     object-fit: cover;
 }
 
@@ -2275,8 +2184,8 @@ textarea.booking-input {
 .quantity-pill {
     display: flex;
     align-items: center;
-    border: 1px solid #e5e7eb;
-    border-radius: 20px;
+    border: 1px solid var(--border-color);
+    border-radius: 0px;
     padding: 2px 8px;
     background: #ffffff;
     height: 32px;
@@ -2321,7 +2230,7 @@ textarea.booking-input {
 .total-box {
     margin-top: 20px;
     padding-top: 16px;
-    border-top: 1px dashed #e5e7eb;
+    border-top: 1px dashed var(--border-color);
 }
 
 .total-line {
@@ -2361,7 +2270,7 @@ textarea.booking-input {
     justify-content: space-between;
     align-items: center;
     margin-top: 16px;
-    border-top: 1px dashed #e5e7eb;
+    border-top: 1px dashed var(--border-color);
     padding-top: 16px;
 }
 
@@ -2380,21 +2289,21 @@ textarea.booking-input {
 }
 
 .pay-line {
-    background: #f0fdf4;
+    background: #fafafa;
     padding: 12px;
-    border-radius: 8px;
-    border: 1px solid #bbf7d0;
+    border-radius: 0px;
+    border: 1px solid var(--border-color);
     margin-top: 12px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    color: #15803d;
+    color: var(--text-primary);
 }
 
 .pay-line span {
     font-size: 11px;
     font-weight: 700;
-    color: #15803d;
+    color: var(--text-primary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -2402,38 +2311,44 @@ textarea.booking-input {
 .pay-line b {
     font-size: 1.35rem;
     font-weight: 800;
-    color: #16a34a;
+    color: var(--text-primary);
 }
 
 /* Premium Confirmation Button */
 .btn-confirm-metallic-final {
     width: 100%;
     padding: 16px;
-    border: none;
-    border-radius: 8px;
+    border: 1px solid var(--gold-solid);
+    border-radius: 0px;
     background: var(--gold-metallic);
     color: #ffffff !important;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 2px;
     font-weight: 700;
-    font-size: 14px;
+    font-size: 13px;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 4px 14px rgba(191, 167, 122, 0.3);
+    box-shadow: none;
 }
 
 .btn-confirm-metallic-final:hover {
-    background: var(--text-primary);
+    background: transparent;
+    color: var(--gold-solid) !important;
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    box-shadow: none;
+}
+
+.btn-confirm-metallic-final:hover .btn-text-normal {
+    color: var(--gold-solid) !important;
 }
 
 .btn-text-normal {
     font-family: inherit !important;
     font-weight: 700 !important;
-    font-size: 14px !important;
+    font-size: 13px !important;
     color: #ffffff !important;
-    letter-spacing: 1px !important;
+    letter-spacing: 2px !important;
+    transition: color 0.3s ease;
 }
 
 /* Animations */
@@ -2461,13 +2376,13 @@ textarea.booking-input {
 .btn-load-stylist {
     height: 36px;
     padding: 0 16px;
-    border: 0;
-    border-radius: 999px;
+    border: 1px solid var(--gold-solid);
+    border-radius: 0px;
     background: var(--gold-metallic);
     color: #fff;
     font-weight: 700;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(191, 167, 122, 0.2);
+    box-shadow: none;
     transition: 0.22s ease;
     font-size: 12px;
 }
@@ -2478,8 +2393,8 @@ textarea.booking-input {
 }
 
 .btn-load-stylist:hover:not(:disabled) {
-    background: var(--text-primary);
-    transform: translateY(-1px);
+    background: transparent;
+    color: var(--gold-solid);
 }
 
 .btn-load-stylist:disabled {
@@ -2498,9 +2413,9 @@ textarea.booking-input {
 
 .soft-message {
     padding: 16px;
-    border-radius: 12px;
-    background: rgba(0, 0, 0, 0.03);
-    border: 1px solid rgba(0, 0, 0, 0.05);
+    border-radius: 0px;
+    background: #fafafa;
+    border: 1px solid var(--border-color);
     color: var(--text-secondary);
     display: flex;
     align-items: flex-start;
@@ -2518,15 +2433,15 @@ textarea.booking-input {
     align-items: flex-start;
     gap: 12px;
     padding: 16px;
-    border-radius: 12px;
-    background: #f0fdf4;
-    border: 1px solid #bbf7d0;
-    color: #15803d;
+    border-radius: 0px;
+    background: #fafafa;
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
 }
 
 .store-box i {
     font-size: 20px;
-    color: #16a34a;
+    color: var(--text-primary);
 }
 
 .receive-tabs {
@@ -2538,7 +2453,7 @@ textarea.booking-input {
 .receive-tabs button {
     height: 48px;
     border: 1px solid #e5e7eb;
-    border-radius: 8px;
+    border-radius: 0px;
     background: #ffffff;
     font-weight: 700;
     cursor: pointer;
@@ -2555,13 +2470,13 @@ textarea.booking-input {
     background: var(--gold-metallic);
     color: #ffffff;
     border-color: transparent;
-    box-shadow: 0 4px 14px rgba(191, 167, 122, 0.25);
+    box-shadow: none;
 }
 
 .pay-btn {
     border: 1px solid #e5e7eb;
     padding: 12px 14px;
-    border-radius: 8px;
+    border-radius: 0px;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -2572,7 +2487,7 @@ textarea.booking-input {
 }
 
 .pay-btn:hover {
-    border-color: rgba(191, 167, 122, 0.4);
+    border-color: rgba(0, 0, 0, 0.2);
 }
 
 .pay-btn.active {
@@ -2684,5 +2599,45 @@ textarea.booking-input {
     .glass-card {
         padding: 24px;
     }
+}
+
+/* Custom disabled state cho Stylist */
+.stylist-card.is-disabled {
+    opacity: 0.45;
+    filter: grayscale(100%);
+    cursor: not-allowed;
+    background: #f9fafb;
+}
+
+/* Tắt hiệu ứng nhảy lên khi hover vào thợ bận */
+.stylist-card.is-disabled:hover {
+    border-color: var(--border-color);
+    transform: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.01);
+}
+
+/* Badge trái tim cho thợ yêu thích */
+.favorite-heart-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    color: #ef4444;
+    /* Màu đỏ nổi bật */
+    background: #ffffff;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+    z-index: 2;
+    transition: transform 0.3s ease;
+}
+
+/* Hiệu ứng đập nhẹ khi hover vào thợ yêu thích */
+.stylist-card:hover .favorite-heart-badge {
+    transform: scale(1.15);
 }
 </style>

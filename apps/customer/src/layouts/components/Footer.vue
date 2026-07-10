@@ -20,7 +20,8 @@ const currentYear = new Date().getFullYear();
         <h4 class="text-[10px] uppercase tracking-[0.2em] font-medium text-white mb-2">Khám Phá</h4>
         <router-link :to="{ name: 'services' }" class="text-sm text-gray-400 font-light hover:text-white transition-colors text-left w-fit">Dịch Vụ</router-link>
         <router-link :to="{ name: 'shop' }" class="text-sm text-gray-400 font-light hover:text-white transition-colors text-left w-fit">Sản Phẩm</router-link>
-        <router-link :to="{ name: 'booking' }" class="text-sm text-gray-400 font-light hover:text-white transition-colors text-left w-fit">Đặt Lịch Hẹn</router-link>
+        <router-link :to="{ name: 'employees' }" class="text-sm text-gray-400 font-light hover:text-white transition-colors text-left w-fit">Chuyên Viên</router-link>
+        <router-link :to="{ name: 'datdichvu' }" class="text-sm text-gray-400 font-light hover:text-white transition-colors text-left w-fit">Đặt Lịch Hẹn</router-link>
         <router-link :to="{ name: 'login' }" class="text-sm text-gray-400 font-light hover:text-white transition-colors text-left w-fit">Đăng Nhập</router-link>
       </div>
 

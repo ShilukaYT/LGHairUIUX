@@ -30,60 +30,6 @@ const orderData = ref({
     voucherIds: [] as string[]
 });
 
-// ==========================================
-// STATE HÓA ĐƠN ĐIỆN TỬ
-// Theo luật, mọi đơn hàng đều PHẢI xuất hóa đơn điện tử — không có tùy chọn tắt.
-// Khách chỉ chọn: xuất theo cá nhân (mặc định) hay theo doanh nghiệp (có MST).
-// ==========================================
-const invoiceInfo = ref({
-    laDoanhNghiep: false,
-    tenCongTy: '',
-    mst: '',
-    diaChiXuatHD: '',
-    emailNhanHD: ''
-});
-const mstError = ref('');
-
-const validateMst = (): boolean => {
-    if (!invoiceInfo.value.laDoanhNghiep) {
-        mstError.value = '';
-        return true;
-    }
-    const mst = (invoiceInfo.value.mst || '').trim();
-    const isValid = /^\d{10}$/.test(mst) || /^\d{10}-\d{3}$/.test(mst);
-    mstError.value = isValid ? '' : 'Mã số thuế không hợp lệ (10 số, hoặc 10 số-3 số chi nhánh)';
-    return isValid;
-};
-
-// Validate thông tin hóa đơn trước khi submit (tên công ty, địa chỉ, email...) — luôn chạy vì luôn xuất hóa đơn
-const validateInvoiceInfo = (): string | null => {
-    if (!validateMst()) return mstError.value;
-
-    if (invoiceInfo.value.laDoanhNghiep) {
-        const tenCty = (invoiceInfo.value.tenCongTy || '').trim();
-        if (tenCty.length < 3) return 'Vui lòng nhập đúng tên công ty (tối thiểu 3 ký tự)';
-    } else {
-        const ten = (orderData.value.customerName || '').trim();
-        if (ten.length < 3 || !/[a-zA-ZÀ-ỹ]/.test(ten)) return 'Vui lòng nhập đúng họ tên người mua hàng';
-    }
-
-    const diaChi = (invoiceInfo.value.diaChiXuatHD || '').trim();
-    if (diaChi.length < 5) return 'Vui lòng nhập đúng địa chỉ xuất hóa đơn (tối thiểu 5 ký tự)';
-
-    const email = (invoiceInfo.value.emailNhanHD || '').trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Vui lòng nhập đúng định dạng email nhận hóa đơn';
-
-    return null;
-};
-
-// Tự điền địa chỉ/email xuất hóa đơn theo địa chỉ giao hàng khi khách chưa tự sửa
-watch(() => orderData.value.address, (newVal) => {
-    if (!invoiceInfo.value.diaChiXuatHD) invoiceInfo.value.diaChiXuatHD = newVal;
-});
-watch(() => orderData.value.email, (newVal) => {
-    if (!invoiceInfo.value.emailNhanHD) invoiceInfo.value.emailNhanHD = newVal;
-}, { immediate: true });
-
 const productItems = ref<any[]>([]);
 const allProductsFromApi = ref<any[]>([]);
 
@@ -268,8 +214,11 @@ function toggleVoucher(id: string) {
     const ids = orderData.value.voucherIds;
     const i = ids.indexOf(id);
     if (i >= 0) { ids.splice(i, 1); return; }
-    // Chỉ chọn 1 voucher cho mỗi đơn hàng (thay thế mã cũ nếu đã chọn)
-    orderData.value.voucherIds = [id];
+    if (ids.length >= 2) {
+        alert('Chỉ chọn tối đa 2 voucher. Bỏ chọn một mã trước khi thêm mã khác.');
+        return;
+    }
+    ids.push(id);
 }
 
 const discountAmount = computed(() => stackPreview.value.totalDiscount);
@@ -335,12 +284,6 @@ const handleCheckout = async () => {
         return;
     }
 
-    const invoiceErr = validateInvoiceInfo();
-    if (invoiceErr) {
-        alert(invoiceErr);
-        return;
-    }
-
     try {
         // 2. Chuẩn bị dữ liệu gửi lên Backend
         const payload = {
@@ -357,14 +300,7 @@ const handleCheckout = async () => {
                 maBienThe: item.id, 
                 giaBan: item.gia,
                 soLuong: item.soLuong
-            })),
-            invoiceInfo: {
-                laDoanhNghiep: invoiceInfo.value.laDoanhNghiep,
-                tenCongTy: invoiceInfo.value.laDoanhNghiep ? invoiceInfo.value.tenCongTy : null,
-                mst: invoiceInfo.value.laDoanhNghiep ? invoiceInfo.value.mst : null,
-                diaChiXuatHD: invoiceInfo.value.diaChiXuatHD,
-                emailNhanHD: invoiceInfo.value.emailNhanHD
-            }
+            }))
         };
 
         // 3. Gọi API tạo đơn hàng
@@ -424,17 +360,16 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
     <div class="booking-container">
         <div class="max-w-6xl mx-auto px-4 py-12">
             <div class="text-center mb-12" data-aos="fade-down">
-                <h1 class="font-playfair gold-metallic-text font-black text-5xl">GIAO HÀNG TẬN NƠI</h1>
-                <div class="gold-accent-line mx-auto mt-4"></div>
-                <p class="text-black mt-2">Điền thông tin địa chỉ để chúng tôi giao sản phẩm đến tay bạn</p>
+                <h1 class="font-heading tracking-[0.2em] font-medium text-black text-3xl lg:text-4xl uppercase">GIAO HÀNG TẬN NƠI</h1>
+                <p class="text-gray-400 mt-2 text-xs uppercase tracking-widest">Điền thông tin địa chỉ để chúng tôi giao sản phẩm đến tay bạn</p>
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <div class="lg:col-span-7 space-y-6" data-aos="fade-right">
                     <div class="glass-card left-main-card">
                         <div class="section-heading-wrapper mt-2">
-                            <h3 class="font-playfair section-heading-title font-bold gold-metallic-text">
-                                <i class="fas fa-shipping-fast me-2"></i> THÔNG TIN NGƯỜI NHẬN
+                            <h3 class="font-heading section-heading-title font-bold text-black text-sm uppercase tracking-wider">
+                                <i class="fas fa-shipping-fast me-2 text-black"></i> THÔNG TIN NGƯỜI NHẬN
                             </h3>
                             <div class="heading-line"></div>
                         </div>
@@ -478,8 +413,8 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
                                     
                                     <div class="flex mb-2 items-start border-l-2 ms-2 ps-4 pb-2 pt-2 border-gray-400" style="margin-left: 5px !important;">
                                         <div>
-                                            <div class="badge bg-dark text-white mb-1">
-                                                <i class="fas fa-route me-1"></i> Quãng đường: {{ isCalculatingRoute ? 'Đang tính...' : (distanceText || 'Không xác định') }}
+                                            <div class="inline-flex items-center px-2.5 py-1 bg-black text-white text-xs font-bold mb-1 shadow-sm">
+                                                <i class="fas fa-route me-1.5"></i> Quãng đường: {{ isCalculatingRoute ? 'Đang tính...' : (distanceText || 'Không xác định') }}
                                             </div>
                                         </div>
                                     </div>
@@ -502,8 +437,8 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
                         </div>
 
                         <div class="section-heading-wrapper mt-10">
-                            <h3 class="font-playfair section-heading-title font-bold gold-metallic-text">
-                                <i class="fas fa-wallet me-2"></i> PHƯƠNG THỨC THANH TOÁN
+                            <h3 class="font-heading section-heading-title font-bold text-black text-sm uppercase tracking-wider">
+                                <i class="fas fa-wallet me-2 text-black"></i> PHƯƠNG THỨC THANH TOÁN
                             </h3>
                             <div class="heading-line"></div>
                         </div>
@@ -538,79 +473,27 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
                         </div>
 
                         <div class="section-heading-wrapper mt-5">
-                            <h3 class="font-playfair section-heading-title font-bold gold-metallic-text">
-                                <i class="fas fa-file-invoice me-2"></i> HÓA ĐƠN ĐIỆN TỬ
+                            <h3 class="font-heading section-heading-title font-bold text-black text-sm uppercase tracking-wider">
+                                <i class="fas fa-ticket-alt me-2 text-black"></i> KHO VOUCHER CỦA BẠN
                             </h3>
                             <div class="heading-line"></div>
                         </div>
-                        <p class="text-black small mb-3" style="opacity: 0.6;">
-                            Theo quy định, mọi đơn hàng đều được xuất hóa đơn điện tử. Vui lòng chọn loại hóa đơn phù hợp.
-                        </p>
-
-                        <div class="mt-3">
-                            <div class="invoice-type-row mb-4">
-                                <div class="invoice-type-option" :class="{ active: !invoiceInfo.laDoanhNghiep }"
-                                    @click="invoiceInfo.laDoanhNghiep = false">
-                                    <i class="fas fa-user me-2"></i> Cá nhân
-                                </div>
-                                <div class="invoice-type-option" :class="{ active: invoiceInfo.laDoanhNghiep }"
-                                    @click="invoiceInfo.laDoanhNghiep = true">
-                                    <i class="fas fa-building me-2"></i> Doanh nghiệp (có MST)
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4" v-if="invoiceInfo.laDoanhNghiep">
-                                <div>
-                                    <label class="custom-label font-bold">Tên công ty *</label>
-                                    <input v-model="invoiceInfo.tenCongTy" type="text" class="booking-input w-full"
-                                        placeholder="Công ty TNHH ABC">
-                                </div>
-                                <div>
-                                    <label class="custom-label font-bold">Mã số thuế *</label>
-                                    <input v-model="invoiceInfo.mst" type="text" class="booking-input w-full"
-                                        @blur="validateMst" placeholder="0301234567">
-                                    <p v-if="mstError" class="text-danger small mt-1 mb-0 font-bold">{{ mstError }}</p>
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                                <div>
-                                    <label class="custom-label font-bold">Địa chỉ xuất hóa đơn</label>
-                                    <input v-model="invoiceInfo.diaChiXuatHD" type="text" class="booking-input w-full"
-                                        placeholder="Số nhà, đường, phường/xã, tỉnh/thành">
-                                </div>
-                                <div>
-                                    <label class="custom-label font-bold">Email nhận hóa đơn</label>
-                                    <input v-model="invoiceInfo.emailNhanHD" type="email" class="booking-input w-full"
-                                        placeholder="email@example.com">
-                                </div>
-                            </div>
-                            <p class="text-black small mt-2 mb-0" style="opacity: 0.6;">
-                                Hóa đơn điện tử sẽ được gửi tới email trên trong vòng vài phút sau khi đặt hàng thành công.
-                            </p>
-                        </div>
-
-                        <div class="section-heading-wrapper mt-5">
-                            <h3 class="font-playfair section-heading-title font-bold gold-metallic-text">
-                                <i class="fas fa-ticket-alt me-2"></i> KHO VOUCHER CỦA BẠN
-                            </h3>
-                            <div class="heading-line"></div>
-                        </div>
+                        <p class="text-black small mb-3 font-bold">Chọn tối đa 2 mã — thứ tự chọn = thứ tự áp dụng.</p>
                         <div class="voucher-list-modern">
                             <div v-for="v in myVouchers" :key="v.id" class="voucher-ticket-item"
                                 :class="{ active: orderData.voucherIds.includes(v.id) }" @click="toggleVoucher(v.id)">
                                 <div class="ticket-left">
-                                    <i class="fas fa-gift"></i>
+                                    <span class="ticket-brand-text">LGHAIR</span>
                                     <span class="notch top"></span><span class="notch bottom"></span>
                                 </div>
                                 <div class="v-divider"></div>
                                 <div class="ticket-right">
-                                    <div class="d-flex justify-content-between align-items-start mb-1">
-                                        <span class="v-code font-bold">{{ v.code }}</span>
-                                        <span class="v-tag-gold font-bold">HSD: {{ v.expiry }}</span>
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <span class="v-code-badge">{{ v.code }}</span>
+                                        <span class="v-expiry-tag"><i class="far fa-calendar-alt me-1.5"></i>HSD: {{ v.expiry }}</span>
                                     </div>
-                                    <div class="v-desc text-black mb-2">{{ v.desc }}</div>
                                     <div class="v-price-gold font-bold">Giảm: {{ v.discount.toLocaleString() }}đ</div>
+                                    <div class="v-desc text-black mt-1">{{ v.desc }}</div>
                                 </div>
                                 <div class="v-check-icon" v-if="orderData.voucherIds.includes(v.id)">
                                     <i class="fas fa-check-circle"></i>
@@ -624,8 +507,8 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
                     <div class="sticky-bill">
                         <div class="glass-card bill-card">
                             <div class="section-heading-wrapper justify-content-center text-center mb-4">
-                                <h3 class="font-playfair section-heading-title font-bold gold-metallic-text">
-                                    <i class="fas fa-file-invoice-dollar me-2"></i> CHI TIẾT ĐƠN HÀNG
+                                <h3 class="font-heading section-heading-title font-bold text-black text-sm uppercase tracking-wider">
+                                    <i class="fas fa-file-invoice-dollar me-2 text-black"></i> CHI TIẾT ĐƠN HÀNG
                                 </h3>
                                 <div class="heading-line mx-auto" style="width: 80px;"></div>
                             </div>
@@ -660,7 +543,7 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
                                                         <span class="item-name-text font-bold"
                                                             style="font-size: 13px;">{{ bt.tenBienThe }}</span>
                                                         <div class="d-flex align-items-center mt-1">
-                                                            <span class="item-price-text gold-solid-text font-bold">{{ formatMoney(bt.giaBan) }}</span>
+                                                            <span class="item-price-text text-black font-bold">{{ formatMoney(bt.giaBan) }}</span>
                                                             <span class="ms-2 text-black" style="font-size: 11px;">(Kho: {{ bt.soLuongTon }})</span>
                                                         </div>
                                                     </div>
@@ -685,7 +568,7 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
                                             </div>
                                             <div class="item-info flex-grow-1">
                                                 <span class="n font-bold d-block text-truncate" style="max-width: 170px;">{{ p.tenItem }}</span>
-                                                <div class="p gold-solid-text font-bold mt-1">{{ formatMoney(p.gia) }}</div>
+                                                <div class="p text-black font-bold mt-1">{{ formatMoney(p.gia) }}</div>
                                             </div>
                                         </div>
 
@@ -743,16 +626,16 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
 
 <style scoped>
 .booking-container {
-    --gold-metallic: linear-gradient(135deg, #a88b58 0%, #bfa77a 50%, #d8c39e 100%);
-    --gold-solid: #bfa77a;
-    --gold-hover: #a88b58;
-    --gold-light: #fbfaf7;
+    --primary-metallic: linear-gradient(135deg, #1a1a1a 0%, #000000 100%);
+    --primary-color: #000000;
+    --primary-hover: #1f2937;
+    --primary-light: #fafafa;
     --text-primary: #111827;
     --text-secondary: #4b5563;
     --text-muted: #9ca3af;
-    --border-color: #f3f4f6;
+    --border-color: #e5e7eb;
     
-    background-color: #fbfbfd;
+    background-color: #ffffff;
     min-height: 100vh;
     font-family: 'Inter', sans-serif;
     color: var(--text-secondary);
@@ -768,7 +651,7 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
     left: -10%;
     width: 600px;
     height: 600px;
-    background: radial-gradient(circle, rgba(191, 167, 122, 0.04) 0%, rgba(255,255,255,0) 70%);
+    background: radial-gradient(circle, rgba(0, 0, 0, 0.015) 0%, rgba(255, 255, 255, 0) 70%);
     pointer-events: none;
     z-index: 0;
 }
@@ -780,7 +663,7 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
     right: -10%;
     width: 800px;
     height: 800px;
-    background: radial-gradient(circle, rgba(191, 167, 122, 0.03) 0%, rgba(255,255,255,0) 70%);
+    background: radial-gradient(circle, rgba(0, 0, 0, 0.01) 0%, rgba(255, 255, 255, 0) 70%);
     pointer-events: none;
     z-index: 0;
 }
@@ -809,12 +692,12 @@ h1 {
     color: var(--text-primary);
 }
 
-.gold-accent-line {
+.accent-line {
     width: 60px;
-    height: 3px;
-    background: var(--gold-metallic);
+    height: 1px;
+    background: var(--primary-color);
     margin: 15px auto;
-    border-radius: 2px;
+    border-radius: 0px;
 }
 
 /* Section headings */
@@ -840,7 +723,7 @@ h1 {
 }
 
 .section-heading-title i {
-    color: var(--gold-solid);
+    color: var(--primary-color);
     font-size: 1.1rem;
 }
 
@@ -850,7 +733,7 @@ h1 {
     left: 0;
     width: 50px;
     height: 2px;
-    background: var(--gold-metallic);
+    background: var(--primary-color);
 }
 
 .section-heading-wrapper.justify-content-center .heading-line {
@@ -858,31 +741,18 @@ h1 {
     transform: translateX(-50%);
 }
 
-.gold-metallic-text {
-    background: var(--gold-metallic);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    display: inline-block;
-}
-
-.gold-solid-text {
-    color: var(--gold-solid);
-    font-weight: 600;
-}
-
 /* Main Cards - Premium Glassmorphism style */
 .glass-card {
     background: #ffffff;
     padding: 32px;
-    border-radius: 16px;
-    border: 1px solid rgba(229, 231, 235, 0.7);
-    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.015);
+    border-radius: 0px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.01);
     transition: all 0.3s ease;
 }
 
 .left-main-card:hover, .bill-card:hover {
-    box-shadow: 0 10px 40px rgba(191, 167, 122, 0.04);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.03);
 }
 
 /* Forms & Inputs */
@@ -900,9 +770,9 @@ h1 {
     width: 100%;
     height: 48px;
     padding: 0 16px;
-    border-radius: 8px;
-    border: 1px solid #e5e7eb;
-    background: #fcfcfd;
+    border-radius: 0px;
+    border: 1px solid var(--border-color);
+    background: #ffffff;
     outline: none;
     font-size: 14px;
     color: var(--text-primary);
@@ -910,14 +780,14 @@ h1 {
 }
 
 .booking-input:focus {
-    border-color: var(--gold-solid);
-    box-shadow: 0 0 0 3px rgba(191, 167, 122, 0.12);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
     background: #ffffff;
 }
 
 select.booking-input {
     appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23bfa77a' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23111827' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 14px center;
     background-size: 14px;
@@ -927,14 +797,14 @@ select.booking-input {
 textarea.booking-input {
     height: auto;
     padding: 12px 16px;
-    border-radius: 8px;
+    border-radius: 0px;
 }
 
 /* Shipping info card */
 .shipping-info-card {
-    background: #fdfaf3;
-    border: 1px solid rgba(191, 167, 122, 0.15);
-    border-radius: 12px;
+    background: #fafafa;
+    border: 1px solid var(--border-color);
+    border-radius: 0px;
     padding: 16px;
     margin-top: 12px;
 }
@@ -956,9 +826,9 @@ textarea.booking-input {
 
 .method-option {
     flex: 1;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--border-color);
     padding: 10px 16px;
-    border-radius: 14px;
+    border-radius: 0px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -966,13 +836,13 @@ textarea.booking-input {
     background: #ffffff;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     height: 80px;
-    overflow: visible;
+    overflow: hidden;
 }
 
 /* VNPay Branding */
 .method-option.vnpay {
     position: relative;
-    border: 2px solid #e5e7eb;
+    border: 1px solid var(--border-color);
 }
 
 .method-option.vnpay:hover {
@@ -982,16 +852,16 @@ textarea.booking-input {
 
 .method-option.vnpay.active {
     border-color: #006ac2;
-    background-color: #f4f9ff;
-    box-shadow: 0 8px 25px rgba(0, 106, 194, 0.15);
-    border-width: 3px;
-    transform: translateY(-2px) scale(1.02);
+    background-color: #ffffff;
+    box-shadow: 0 8px 20px rgba(0, 106, 194, 0.08);
+    border-width: 2px;
+    transform: scale(1.02);
 }
 
 /* MoMo Branding */
 .method-option.momo {
     position: relative;
-    border: 2px solid #e5e7eb;
+    border: 1px solid var(--border-color);
 }
 
 .method-option.momo:hover {
@@ -1001,16 +871,16 @@ textarea.booking-input {
 
 .method-option.momo.active {
     border-color: #d82d8b;
-    background-color: #fff5fa;
-    box-shadow: 0 8px 25px rgba(216, 45, 139, 0.15);
-    border-width: 3px;
-    transform: translateY(-2px) scale(1.02);
+    background-color: #ffffff;
+    box-shadow: 0 8px 20px rgba(216, 45, 139, 0.08);
+    border-width: 2px;
+    transform: scale(1.02);
 }
 
 /* COD Branding */
 .method-option.cod {
     position: relative;
-    border: 2px solid #e5e7eb;
+    border: 1px solid var(--border-color);
 }
 
 .method-option.cod:hover {
@@ -1020,68 +890,10 @@ textarea.booking-input {
 
 .method-option.cod.active {
     border-color: #16a34a;
-    background-color: #f0fdf4;
-    box-shadow: 0 8px 25px rgba(22, 163, 74, 0.15);
-    border-width: 3px;
-    transform: translateY(-2px) scale(1.02);
-}
-
-/* Invoice / Hóa đơn điện tử */
-.invoice-toggle-row {
-    border: 1px solid #e5e7eb;
-    border-radius: 14px;
-    padding: 14px 16px;
-    cursor: pointer;
-    transition: all 0.25s ease;
-    background: #ffffff;
-}
-
-.invoice-toggle-row:hover {
-    border-color: var(--gold-solid);
-}
-
-.invoice-checkbox-label {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    cursor: pointer;
-}
-
-.invoice-checkbox-label input[type="checkbox"] {
-    width: 20px;
-    height: 20px;
-    accent-color: var(--gold-solid);
-    cursor: pointer;
-}
-
-.invoice-type-row {
-    display: flex;
-    gap: 12px;
-}
-
-.invoice-type-option {
-    flex: 1;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 10px 14px;
-    text-align: center;
-    font-weight: 700;
-    font-size: 13px;
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: all 0.25s ease;
-    background: #ffffff;
-}
-
-.invoice-type-option:hover {
-    border-color: var(--gold-solid);
-}
-
-.invoice-type-option.active {
-    border-color: var(--gold-solid);
-    background: var(--gold-light);
-    color: var(--text-primary);
-    box-shadow: 0 4px 14px rgba(191, 167, 122, 0.15);
+    background-color: #ffffff;
+    box-shadow: 0 8px 20px rgba(22, 163, 74, 0.08);
+    border-width: 2px;
+    transform: scale(1.02);
 }
 
 .cod-icon-wrapper {
@@ -1160,48 +972,54 @@ textarea.booking-input {
     display: flex;
     width: 100%;
     background: #ffffff;
-    border: 1px dashed #d1d5db;
-    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 0px;
     overflow: hidden;
     position: relative;
     cursor: pointer;
     transition: all 0.3s ease;
+    min-height: 100px;
 }
 
 .voucher-ticket-item:hover {
-    border-color: var(--gold-solid);
+    border-color: #000000;
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.04);
 }
 
 .voucher-ticket-item.active {
-    border: 1px solid var(--gold-solid);
-    background: var(--gold-light);
-    box-shadow: 0 6px 16px rgba(191, 167, 122, 0.12);
+    border: 2px solid #000000;
+    background: #fafafa;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
 }
 
 .ticket-left {
-    background: var(--gold-metallic);
-    width: 48px;
+    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+    width: 64px;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #ffffff;
     position: relative;
     flex-shrink: 0;
 }
 
-.ticket-left i {
-    font-size: 16px;
+.ticket-brand-text {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: #dfb85b;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
 }
 
 .notch {
     position: absolute;
     width: 12px;
     height: 12px;
-    background: #fbfbfd;
+    background: #ffffff;
     border-radius: 50%;
-    left: -6px;
+    right: -6px;
     z-index: 10;
 }
 
@@ -1215,57 +1033,61 @@ textarea.booking-input {
 
 .v-divider {
     width: 1px;
-    border-left: 2px dashed #e5e7eb;
-    height: 60%;
-    align-self: center;
-    margin: 0 4px;
+    border-left: 1px dashed var(--border-color);
+    height: 100%;
 }
 
 .ticket-right {
-    padding: 14px 16px;
+    padding: 16px 20px;
     flex: 1;
     display: flex;
     flex-direction: column;
+    justify-content: center;
+    background: #ffffff;
 }
 
-.v-code {
-    font-size: 13px;
+.voucher-ticket-item.active .ticket-right {
+    background: #fafafa;
+}
+
+.v-code-badge {
+    font-size: 10px;
     font-weight: 700;
-    color: var(--text-primary);
-    letter-spacing: 0.5px;
+    color: #111827;
+    background: #f3f4f6;
+    padding: 3px 8px;
+    letter-spacing: 1px;
+    border: 1px solid var(--border-color);
+    display: inline-block;
 }
 
-.v-tag-gold {
-    font-size: 9px;
-    font-weight: 600;
-    color: var(--gold-solid);
-    background: #fdfaf3;
-    padding: 2px 8px;
-    border-radius: 4px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    border: 1px solid rgba(191, 167, 122, 0.15);
+.v-expiry-tag {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
 }
 
 .v-desc {
     font-size: 11px;
     color: var(--text-secondary);
-    margin-top: 4px;
     line-height: 1.4;
+    margin-top: 4px;
 }
 
 .v-price-gold {
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--gold-solid);
-    margin-top: 6px;
+    font-size: 16px;
+    font-weight: 800;
+    color: #111827;
+    margin-top: 4px;
 }
 
 .v-check-icon {
     position: absolute;
     top: 14px;
     right: 14px;
-    color: var(--gold-solid);
+    color: #111827;
     font-size: 18px;
 }
 
@@ -1284,8 +1106,8 @@ textarea.booking-input {
     height: 46px;
     padding-left: 44px;
     padding-right: 16px;
-    border-radius: 24px;
-    border: 1px solid #e5e7eb;
+    border-radius: 0px;
+    border: 1px solid var(--border-color);
     background: #ffffff;
     outline: none;
     font-size: 13px;
@@ -1294,8 +1116,8 @@ textarea.booking-input {
 }
 
 .search-input:focus {
-    border-color: var(--gold-solid);
-    box-shadow: 0 0 0 3px rgba(191, 167, 122, 0.15);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
 }
 
 .search-icon {
@@ -1315,10 +1137,10 @@ textarea.booking-input {
     left: 0;
     width: 100%;
     background: #ffffff;
-    border-radius: 12px;
+    border-radius: 0px;
     z-index: 1000;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-    border: 1px solid #f0f0f0;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+    border: 1px solid var(--border-color);
     overflow: hidden;
 }
 
@@ -1349,7 +1171,7 @@ textarea.booking-input {
 }
 
 .service-dropdown-item:hover {
-    background: var(--gold-light);
+    background: var(--primary-light);
 }
 
 .item-details {
@@ -1371,7 +1193,7 @@ textarea.booking-input {
 }
 
 .add-btn-icon {
-    color: var(--gold-solid);
+    color: var(--primary-color);
     font-size: 18px;
     transition: transform 0.2s ease;
 }
@@ -1420,20 +1242,20 @@ textarea.booking-input {
     justify-content: space-between;
     align-items: center;
     padding: 10px 14px;
-    background: #fafafb;
-    border-radius: 10px;
+    background: #ffffff;
+    border-radius: 0px;
     margin-bottom: 8px;
-    border: 1px solid #f3f4f6;
+    border: 1px solid var(--border-color);
     transition: all 0.3s ease;
 }
 
 .item-row:hover {
-    border-color: rgba(191, 167, 122, 0.2);
+    border-color: rgba(0, 0, 0, 0.2);
     background: #ffffff;
 }
 
 .item-row img {
-    border-radius: 6px;
+    border-radius: 0px;
     object-fit: cover;
 }
 
@@ -1454,7 +1276,7 @@ textarea.booking-input {
 .item-info .p {
     font-size: 12px;
     font-weight: 600;
-    color: var(--gold-solid);
+    color: var(--text-primary);
 }
 
 .del-btn {
@@ -1475,8 +1297,8 @@ textarea.booking-input {
 .quantity-pill {
     display: flex;
     align-items: center;
-    border: 1px solid #e5e7eb;
-    border-radius: 20px;
+    border: 1px solid var(--border-color);
+    border-radius: 0px;
     padding: 2px 8px;
     background: #ffffff;
     height: 32px;
@@ -1497,7 +1319,7 @@ textarea.booking-input {
 }
 
 .qty-btn:hover {
-    color: var(--gold-solid);
+    color: var(--primary-color);
 }
 
 .qty-input {
@@ -1582,7 +1404,7 @@ textarea.booking-input {
 .pay-line {
     background: #f0fdf4;
     padding: 12px;
-    border-radius: 8px;
+    border-radius: 0px;
     border: 1px solid #bbf7d0;
     margin-top: 12px;
     display: flex;
@@ -1609,31 +1431,37 @@ textarea.booking-input {
 .btn-confirm-metallic-final {
     width: 100%;
     padding: 16px;
-    border: none;
-    border-radius: 8px;
-    background: var(--gold-metallic);
+    border: 1px solid var(--primary-color);
+    border-radius: 0px;
+    background: var(--primary-color);
     color: #ffffff !important;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 2px;
     font-weight: 700;
-    font-size: 14px;
+    font-size: 13px;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 4px 14px rgba(191, 167, 122, 0.3);
+    box-shadow: none;
 }
 
 .btn-confirm-metallic-final:hover {
-    background: var(--text-primary);
+    background: transparent;
+    color: var(--primary-color) !important;
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    box-shadow: none;
+}
+
+.btn-confirm-metallic-final:hover .btn-text-normal {
+    color: var(--primary-color) !important;
 }
 
 .btn-text-normal {
     font-family: inherit !important;
     font-weight: 700 !important;
-    font-size: 14px !important;
+    font-size: 13px !important;
     color: #ffffff !important;
-    letter-spacing: 1px !important;
+    letter-spacing: 2px !important;
+    transition: color 0.3s ease;
 }
 
 /* Animations */

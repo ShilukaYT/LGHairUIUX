@@ -18,6 +18,8 @@ const cartCount = ref(0);
 const wishlistStore = useWishlistStore();
 const wishlistCount = computed(() => (wishlistStore.favoriteProducts?.length || 0) + (wishlistStore.favoriteServices?.length || 0));
 
+
+
 const updateCartCount = async () => {
   const user = localStorage.getItem('user');
   let maKH = 'GUEST';
@@ -97,19 +99,17 @@ const navLinks: any[] = [
     isProductMenu: true // đánh dấu để template biết render danh mục động từ API
   },
   { 
-    name: 'shop', 
-    label: 'Thương Hiệu',
+    name: 'employees', 
+    label: 'Chuyên viên',
     dropdown: true,
+    match: 'chuyen-vien',
     children: [
-      { label: 'Befor Signature', name: 'shop' },
-      { label: 'Kérastase', name: 'shop' },
-      { label: 'Olaplex', name: 'shop' },
-      { label: 'Moroccanoil', name: 'shop' },
-      { label: 'Kevin Murphy', name: 'shop' }
+      { label: 'Đội ngũ chuyên viên', name: 'employees' },
+      { label: 'Chuyên viên yêu thích', name: 'favorite_employees' }
     ]
   },
   { name: 'khuyenMai', label: 'Khuyến Mãi' },
-  { name: 'booking', label: 'Đặt lịch' }
+  { name: 'datdichvu', label: 'Đặt lịch', match: 'dat-dich-vu' }
 ];
 
 const handleScroll = () => {
@@ -212,6 +212,27 @@ onUnmounted(() => {
               >
                 {{ cat.tenDanhMuc }}
               </button>
+            </div>
+          </div>
+
+          <div v-else-if="link.children" class="flex flex-col gap-4">
+            <router-link
+              :to="{ name: link.name || 'home' }"
+              @click="mobileMenuOpen = false"
+              class="text-xl font-heading uppercase tracking-[0.2em] text-left text-black"
+            >
+              {{ link.label }}
+            </router-link>
+            <div class="flex flex-col gap-3 pl-4 border-l border-gray-200">
+              <router-link
+                v-for="sub in link.children"
+                :key="sub.label"
+                :to="{ name: sub.name }"
+                @click="mobileMenuOpen = false"
+                class="text-left text-xs uppercase tracking-widest text-gray-500 hover:text-black transition-colors"
+              >
+                {{ sub.label }}
+              </router-link>
             </div>
           </div>
 
@@ -355,6 +376,9 @@ onUnmounted(() => {
 
                   <router-link :to="{ name: 'profile' }" class="block px-6 py-2.5 text-[11px] uppercase tracking-widest text-gray-600 hover:text-black hover:bg-gray-50 transition-colors">
                     Hồ Sơ Của Tôi
+                  </router-link>
+                  <router-link :to="{ name: 'favorite_employees' }" class="block px-6 py-2.5 text-[11px] uppercase tracking-widest text-gray-600 hover:text-black hover:bg-gray-50 transition-colors">
+                    Chuyên Viên Yêu Thích
                   </router-link>
                   <router-link :to="{ name: 'profile' }" class="block px-6 py-2.5 text-[11px] uppercase tracking-widest text-gray-600 hover:text-black hover:bg-gray-50 transition-colors">
                     Đơn Hàng
