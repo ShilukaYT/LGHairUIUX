@@ -17,7 +17,9 @@ import {
   HistoryOutlined,
   ShoppingOutlined,
   UnorderedListOutlined,
-  InboxOutlined
+  InboxOutlined,
+  AuditOutlined,
+  ReconciliationOutlined
 } from '@ant-design/icons-vue';
 
 export interface menu {
@@ -74,6 +76,11 @@ const sidebarItem: menu[] = [
     icon: ScissorOutlined,
     to: '/admin/StyleHairXColor'
   },
+  {
+    title: 'Đối soát hóa đơn dịch vụ',
+    icon: AuditOutlined,
+    to: '/admin/doiSoatDV'
+  },
   { header: 'Sản phẩm' },
   {
     title: 'Quản lý sản phẩm',
@@ -94,6 +101,11 @@ const sidebarItem: menu[] = [
     title: 'Quản lý kho',
     icon: InboxOutlined,
     to: '/admin/quanLyKho'
+  },
+  {
+    title: 'Đối soát hóa đơn sản phẩm',
+    icon: ReconciliationOutlined,
+    to: '/admin/doiSoatSP'
   },
   { header: 'Khuyến mãi' },
   {

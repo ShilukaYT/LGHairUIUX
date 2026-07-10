@@ -213,52 +213,6 @@ function fmtDateTime(d) {
 }
 
 /* ════════════════════════════════════════════════════════════════
-   TAB — ĐỐI SOÁT KHO - HÓA ĐƠN ĐIỆN TỬ
-   ════════════════════════════════════════════════════════════════ */
-const doiSoatList = ref([]);
-const doiSoatTotal = ref(0);
-const doiSoatStats = ref({ tongLuot: 0, daKhop: 0, chuaKhop: 0 });
-const tuNgayDS = ref("");
-const denNgayDS = ref("");
-const filterTrangThaiDS = ref("");
-const curPageDS = ref(1);
-const perPageDS = ref(20);
-const loadingDS = ref(false);
-
-async function loadDoiSoat() {
-  loadingDS.value = true;
-  try {
-    const res = await axios.get(`${API}/api/QuanLyKho/doisoathoadon`, {
-      params: {
-        tuNgay: tuNgayDS.value || null,
-        denNgay: denNgayDS.value || null,
-        trangThai: filterTrangThaiDS.value || null,
-        page: curPageDS.value,
-        pageSize: perPageDS.value,
-      },
-    });
-    doiSoatList.value = res.data.items || [];
-    doiSoatTotal.value = res.data.total || 0;
-    doiSoatStats.value = res.data.stats || { tongLuot: 0, daKhop: 0, chuaKhop: 0 };
-  } catch { showToast("Lỗi tải dữ liệu đối soát!", "error"); }
-  finally { loadingDS.value = false; }
-}
-function onFilterDSChange() { curPageDS.value = 1; loadDoiSoat(); }
-
-const totalPagesDS = computed(() => Math.max(1, Math.ceil(doiSoatTotal.value / perPageDS.value)));
-const pageRangeDS = computed(() => {
-  const t = totalPagesDS.value, c = curPageDS.value;
-  const lo = Math.max(1, c - 2), hi = Math.min(t, lo + 4);
-  return Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
-});
-function gotoPageDS(p) { curPageDS.value = p; loadDoiSoat(); }
-
-const tyLeKhopDS = computed(() => {
-  const t = doiSoatStats.value.tongLuot;
-  return t > 0 ? Math.round((doiSoatStats.value.daKhop / t) * 100) : 100;
-});
-
-/* ════════════════════════════════════════════════════════════════
    THỐNG KÊ NHẬP KHO THEO THÁNG (nhúng trong tab Phiếu nhập)
    ════════════════════════════════════════════════════════════════ */
 const thongKeNam = ref(new Date().getFullYear());
@@ -638,7 +592,6 @@ function switchTab(tab) {
   if (tab === "nhacc" && !nccs.value.length) loadNcc();
   if (tab === "canhbao") loadCanhBao();
   if (tab === "lichsu" && !lichSuList.value.length) loadLichSu();
-  if (tab === "doisoat") loadDoiSoat();
 }
 
 // ══ INIT ═══════════════════════════════════════════════════════════
@@ -673,7 +626,6 @@ onMounted(async () => {
       <!-- <button class="tab-btn" :class="{ active: activeTab === 'nhacc' }" @click="switchTab('nhacc')">Nhà cung cấp</button> -->
       <button class="tab-btn" :class="{ active: activeTab === 'canhbao' }" @click="switchTab('canhbao')">Cảnh báo tồn</button>
       <button class="tab-btn" :class="{ active: activeTab === 'lichsu' }" @click="switchTab('lichsu')">Lịch sử tồn kho</button>
-      <button class="tab-btn" :class="{ active: activeTab === 'doisoat' }" @click="switchTab('doisoat')">Đối soát hóa đơn</button>
     </div>
 
     <!-- ════════════════════════════════════════════════════════
@@ -1167,99 +1119,6 @@ onMounted(async () => {
     <!-- ════════════════════════════════════════════════════════
          TAB: ĐỐI SOÁT KHO - HÓA ĐƠN ĐIỆN TỬ
          ════════════════════════════════════════════════════════ -->
-    <template v-if="activeTab === 'doisoat'">
-      <div class="stats-row">
-        <div class="stat-card stat-dark">
-          <div class="stat-label">Tổng lượt bán</div>
-          <div class="stat-value">{{ doiSoatStats.tongLuot }}</div>
-          <div class="stat-hint">Trong khoảng thời gian lọc</div>
-        </div>
-        <div class="stat-card stat-green">
-          <div class="stat-label">Đã có hóa đơn</div>
-          <div class="stat-value">{{ doiSoatStats.daKhop }}</div>
-          <div class="stat-hint">Xuất hóa đơn thành công</div>
-        </div>
-        <div class="stat-card stat-red">
-          <div class="stat-label">Chưa khớp hóa đơn</div>
-          <div class="stat-value">{{ doiSoatStats.chuaKhop }}</div>
-          <div class="stat-hint">Chưa xuất / lỗi / đang chờ</div>
-        </div>
-        <div class="stat-card stat-orange">
-          <div class="stat-label">Tỷ lệ khớp</div>
-          <div class="stat-value">{{ tyLeKhopDS }}%</div>
-          <div class="stat-hint">Kho ↔ Hóa đơn điện tử</div>
-        </div>
-      </div>
-
-      <div class="toolbar">
-        <input type="date" v-model="tuNgayDS" class="form-input" style="width:auto" @change="onFilterDSChange" />
-        <span style="color:var(--dvc-text-muted)">đến</span>
-        <input type="date" v-model="denNgayDS" class="form-input" style="width:auto" @change="onFilterDSChange" />
-        <select v-model="filterTrangThaiDS" class="filter-select" @change="onFilterDSChange">
-          <option value="">Tất cả trạng thái</option>
-          <option value="khop">Đã có hóa đơn</option>
-          <option value="thieu">Chưa khớp hóa đơn</option>
-        </select>
-        <span class="result-count">{{ doiSoatTotal }} kết quả</span>
-        <button type="button" class="btn-refresh" :class="{ spinning: loadingDS }" title="Tải lại dữ liệu" @click="loadDoiSoat">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3.6h-3.6"/></svg>
-        </button>
-      </div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Thời gian</th>
-              <th>Sản phẩm / Biến thể</th>
-              <th>SL bán</th>
-              <th>Mã đơn hàng</th>
-              <th>Trạng thái hóa đơn</th>
-              <th>Số hóa đơn</th>
-              <th>Hóa đơn PDF</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="!loadingDS && doiSoatList.length === 0">
-              <td colspan="7"><div class="empty-state"><div class="empty-icon">🧾</div><div class="empty-text">Không có dữ liệu đối soát</div></div></td>
-            </tr>
-            <tr v-for="d in doiSoatList" :key="d.maLich">
-              <td>{{ fmtDateTime(d.thoiGian) }}</td>
-              <td>
-                <div class="sp-name">{{ d.tenSanPham || "—" }}</div>
-                <div class="bt-subname">{{ d.tenBienThe }} <span class="code-text">{{ d.maBienThe }}</span></div>
-              </td>
-              <td>
-                <span class="stock-badge stock-zero">{{ d.soLuongThayDoi }}</span>
-              </td>
-              <td><span class="code-text">{{ d.maDonHang || "—" }}</span></td>
-              <td>
-                <span v-if="d.trangThaiHoaDon === 1" class="status-pill active"><span class="status-dot"></span>Đã xuất</span>
-                <span v-else-if="d.trangThaiHoaDon === 2" class="status-pill cancelled" :title="d.ghiChuLoi"><span class="status-dot"></span>Lỗi</span>
-                <span v-else-if="d.coHoaDon" class="status-pill pending"><span class="status-dot"></span>Đang chờ</span>
-                <span v-else class="status-pill inactive"><span class="status-dot"></span>Không xuất HĐ</span>
-              </td>
-              <td>{{ d.soHoaDon || "—" }}</td>
-              <td>
-                <a v-if="d.linkPdf" :href="d.linkPdf" target="_blank" class="icon-btn view" title="Xem PDF">
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8s2.5-5 6-5 6 5 6 5-2.5 5-6 5-6-5-6-5Z"/><circle cx="8" cy="8" r="2"/></svg>
-                </a>
-                <span v-else>—</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <div v-if="doiSoatTotal > 0" class="pager-wrap">
-          <span>Hiển thị {{ (curPageDS - 1) * perPageDS + 1 }}–{{ Math.min(curPageDS * perPageDS, doiSoatTotal) }} / {{ doiSoatTotal }} mục</span>
-          <div class="pager-btns">
-            <button class="page-btn" :disabled="curPageDS <= 1" @click="gotoPageDS(curPageDS - 1)">‹</button>
-            <button v-for="p in pageRangeDS" :key="p" class="page-btn" :class="{ cur: p === curPageDS }" @click="gotoPageDS(p)">{{ p }}</button>
-            <button class="page-btn" :disabled="curPageDS >= totalPagesDS" @click="gotoPageDS(curPageDS + 1)">›</button>
-          </div>
-        </div>
-      </div>
-    </template>
-
     <!-- ══ MODAL PHIẾU NHẬP (THÊM / XEM) ══════════════════════════════ -->
     <Teleport to="body">
       <div v-if="pnModal.open" class="modal-overlay" :class="{ 'dark-mode': isDarkMode }" @click.self="closePnModal">

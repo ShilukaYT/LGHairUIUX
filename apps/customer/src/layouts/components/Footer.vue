@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import component from '../../Views/Anonymous/tryon/component.vue';
+
 const currentYear = new Date().getFullYear();
 </script>
 
 <template>
+  <component />
   <footer class="w-full bg-[#111] text-white py-20 px-6 lg:px-12 mt-auto">
     <div class="max-w-[1440px] mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-12">
       

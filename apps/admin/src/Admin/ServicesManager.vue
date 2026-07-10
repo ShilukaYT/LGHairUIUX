@@ -160,6 +160,7 @@ async function loadDichVu() {
       tenDV: d.tenDv,
       maDM: d.maDm,
       gia: d.gia,
+      phanTramHoaHong: d.phanTramHoaHong,
       thoiGianLam: d.thoiGianLam,
       moTa: d.moTa,
       trangThai: d.trangThai,
@@ -225,6 +226,7 @@ const form = reactive({
   maDM: "",
   gia: "",
   giaGoc: "",
+  phanTramHoaHong: "",
   thoiGianLam: "",
   moTa: "",
   trangThai: 1,
@@ -239,6 +241,7 @@ const errors = reactive({
   tenDV: "",
   maDM: "",
   gia: "",
+  phanTramHoaHong: "",
   thoiGianLam: "",
   moTa: "",
   maCB: "",
@@ -313,6 +316,18 @@ function validateDV() {
   } else if (tgl > 480) {
     errors.thoiGianLam = "Thời gian tối đa 480 phút (8 giờ).";
     ok = false;
+  }
+
+  // phanTramHoaHong (không bắt buộc)
+  if (form.phanTramHoaHong !== "" && form.phanTramHoaHong != null) {
+    const pth = Number(form.phanTramHoaHong);
+    if (isNaN(pth)) {
+      errors.phanTramHoaHong = "% hoa hồng phải là số.";
+      ok = false;
+    } else if (pth < 0 || pth > 100) {
+      errors.phanTramHoaHong = "% hoa hồng phải trong khoảng 0–100.";
+      ok = false;
+    }
   }
 
   // moTa
@@ -458,6 +473,8 @@ const pageRange = computed(() => {
 const fmt = (n) => new Intl.NumberFormat("vi-VN").format(n) + "₫";
 const fmtMin = (m) =>
   m >= 60 ? Math.floor(m / 60) + "g" + (m % 60 ? (m % 60) + "p" : "") : m + "p";
+const fmtPercent = (p) =>
+  p === null || p === undefined || p === "" ? "—" : Number(p) + "%";
 const getDMName = (id) =>
   danhMucs.value.find((x) => x.maDM === id)?.tenDanhMuc ?? "---";
 const getDV = (id) => dichvus.value.find((x) => x.maDV === id);
@@ -684,7 +701,8 @@ async function saveTieuDe(dvMaDv, formObj) {
     const afterList = tieudes.value.filter(
       (t) => sameMaDv(t.maDv, dvMaDv) && !t._newFor,
     );
-    const inserted = afterList.length > beforeCount ||
+    const inserted =
+      afterList.length > beforeCount ||
       afterList.some(
         (t) =>
           (t.tenTieuDe || "").trim() === tenTieuDe &&
@@ -695,7 +713,8 @@ async function saveTieuDe(dvMaDv, formObj) {
       const apiMsg =
         res?.data?.message || res?.data?.msg || res?.data?.error || "";
       showToast(
-        apiMsg || "API chưa lưu tiêu đề vào cơ sở dữ liệu. Vui lòng kiểm tra backend.",
+        apiMsg ||
+          "API chưa lưu tiêu đề vào cơ sở dữ liệu. Vui lòng kiểm tra backend.",
         "error",
       );
       return;
@@ -803,7 +822,7 @@ async function addChiTiet(td) {
     ctTenTieuDe: td._ctTen,
     ctMoTaTieuDe: td._ctDesc,
     ctSoThuTu: td._ctStt,
-    ctFile: td._pendingCtFile
+    ctFile: td._pendingCtFile,
   };
 
   await saveChiTiet(td.maTd, td.maDv, fd);
@@ -816,16 +835,16 @@ async function addChiTiet(td) {
 }
 async function editChiTiet(maCttd, tdMaTd, tdMaDv, ctItem) {
   const formObj = {
-  ctTenTieuDe: ctItem.tenTieuDe?.trim() || "",
-  ctMoTaTieuDe: ctItem.moTaTieuDe || "",
-  ctSoThuTu: ctItem.soThuTu != null ? Number(ctItem.soThuTu) : 0,
-  ctFile: ctItem._newFile || ctItem.hinhAnh || null // nếu validate cần
-};
+    ctTenTieuDe: ctItem.tenTieuDe?.trim() || "",
+    ctMoTaTieuDe: ctItem.moTaTieuDe || "",
+    ctSoThuTu: ctItem.soThuTu != null ? Number(ctItem.soThuTu) : 0,
+    ctFile: ctItem._newFile || ctItem.hinhAnh || null, // nếu validate cần
+  };
 
-if (!validateChiTiet(formObj)) {
-  showToast("Vui lòng kiểm tra lại thông tin chi tiết!", "error");
-  return;
-}
+  if (!validateChiTiet(formObj)) {
+    showToast("Vui lòng kiểm tra lại thông tin chi tiết!", "error");
+    return;
+  }
 
   tdSaving.value = true;
   try {
@@ -876,6 +895,7 @@ function openModal() {
     maDM: danhMucs.value[0]?.maDM ?? "",
     gia: "",
     giaGoc: "",
+    phanTramHoaHong: "",
     thoiGianLam: "",
     moTa: "",
     trangThai: 1,
@@ -942,6 +962,12 @@ async function saveItem() {
       fd.append("TenDv", form.tenDV.trim());
       fd.append("MoTa", form.moTa || "");
       fd.append("Gia", Number(form.gia));
+      fd.append(
+        "PhanTramHoaHong",
+        form.phanTramHoaHong === "" || form.phanTramHoaHong == null
+          ? ""
+          : Number(form.phanTramHoaHong)
+      );
       fd.append("ThoiGianLam", Number(form.thoiGianLam));
       fd.append("TrangThai", Number(form.trangThai));
 
@@ -952,11 +978,19 @@ async function saveItem() {
       deletedImages.value.forEach((img) => fd.append("DeletedImages", img));
       if (editingId.value) {
         await axios.put(`${API}/api/DichVu/${editingId.value}`, fd);
-        logActivity("Cập nhật dịch vụ", `Đã cập nhật thông tin dịch vụ ${form.tenDV} (Mã: ${editingId.value})`, "Dịch vụ");
+        logActivity(
+          "Cập nhật dịch vụ",
+          `Đã cập nhật thông tin dịch vụ ${form.tenDV} (Mã: ${editingId.value})`,
+          "Dịch vụ",
+        );
         showToast("Cập nhật dịch vụ thành công!");
       } else {
         await axios.post(`${API}/api/DichVu`, fd);
-        logActivity("Thêm dịch vụ", `Đã thêm dịch vụ mới ${form.tenDV} (Mã: ${form.maDV})`, "Dịch vụ");
+        logActivity(
+          "Thêm dịch vụ",
+          `Đã thêm dịch vụ mới ${form.tenDV} (Mã: ${form.maDV})`,
+          "Dịch vụ",
+        );
         showToast("Thêm dịch vụ thành công!");
       }
       deletedImages.value = [];
@@ -966,9 +1000,9 @@ async function saveItem() {
       console.error("DichVu save error:", err.response?.data);
       logActivity(
         editingId.value ? "Cập nhật dịch vụ" : "Thêm dịch vụ",
-        `Thất bại khi ${editingId.value ? 'cập nhật' : 'thêm'} dịch vụ ${form.tenDV} - Lỗi: ${err.message || ''}`,
+        `Thất bại khi ${editingId.value ? "cập nhật" : "thêm"} dịch vụ ${form.tenDV} - Lỗi: ${err.message || ""}`,
         "Dịch vụ",
-        "Thất bại"
+        "Thất bại",
       );
       showToast("Lỗi khi lưu dịch vụ!", "error");
     } finally {
@@ -998,11 +1032,19 @@ async function saveItem() {
 
       if (editingId.value) {
         await axios.put(`${API}/api/Combo/${editingId.value}`, fd);
-        logActivity("Cập nhật combo", `Đã cập nhật thông tin combo ${form.tenCombo} (Mã: ${editingId.value})`, "Dịch vụ");
+        logActivity(
+          "Cập nhật combo",
+          `Đã cập nhật thông tin combo ${form.tenCombo} (Mã: ${editingId.value})`,
+          "Dịch vụ",
+        );
         showToast("Cập nhật combo thành công!");
       } else {
         await axios.post(`${API}/api/Combo`, fd);
-        logActivity("Thêm combo", `Đã thêm combo mới ${form.tenCombo} (Mã: ${form.maCB})`, "Dịch vụ");
+        logActivity(
+          "Thêm combo",
+          `Đã thêm combo mới ${form.tenCombo} (Mã: ${form.maCB})`,
+          "Dịch vụ",
+        );
         showToast("Thêm combo thành công!");
       }
       await loadCombos();
@@ -1011,9 +1053,9 @@ async function saveItem() {
       console.error("Combo save error:", err.response?.data);
       logActivity(
         editingId.value ? "Cập nhật combo" : "Thêm combo",
-        `Thất bại khi ${editingId.value ? 'cập nhật' : 'thêm'} combo ${form.tenCombo} - Lỗi: ${err.message || ''}`,
+        `Thất bại khi ${editingId.value ? "cập nhật" : "thêm"} combo ${form.tenCombo} - Lỗi: ${err.message || ""}`,
         "Dịch vụ",
-        "Thất bại"
+        "Thất bại",
       );
       showToast("Lỗi khi lưu combo!", "error");
     } finally {
@@ -1032,12 +1074,21 @@ async function delDV(d) {
     return;
   try {
     await axios.delete(`${API}/api/DichVu/${d.maDV}`);
-    logActivity("Xóa dịch vụ", `Đã xóa dịch vụ ${d.tenDV} (Mã: ${d.maDV})`, "Dịch vụ");
+    logActivity(
+      "Xóa dịch vụ",
+      `Đã xóa dịch vụ ${d.tenDV} (Mã: ${d.maDV})`,
+      "Dịch vụ",
+    );
     showToast(`Đã xóa dịch vụ "${d.tenDV}"`);
     await loadDichVu();
   } catch (err) {
     const msg = err.response?.data || "Lỗi khi xóa dịch vụ!";
-    logActivity("Xóa dịch vụ", `Thất bại khi xóa dịch vụ ${d.tenDV} (Mã: ${d.maDV}) - Lỗi: ${err.message || ''}`, "Dịch vụ", "Thất bại");
+    logActivity(
+      "Xóa dịch vụ",
+      `Thất bại khi xóa dịch vụ ${d.tenDV} (Mã: ${d.maDV}) - Lỗi: ${err.message || ""}`,
+      "Dịch vụ",
+      "Thất bại",
+    );
     showToast(msg, "error");
   }
 }
@@ -1046,12 +1097,21 @@ async function delCombo(c) {
   if (!confirm(`Xóa combo "${c.tenCombo}"?`)) return;
   try {
     await axios.delete(`${API}/api/Combo/${c.maCB}`);
-    logActivity("Xóa combo", `Đã xóa combo ${c.tenCombo} (Mã: ${c.maCB})`, "Dịch vụ");
+    logActivity(
+      "Xóa combo",
+      `Đã xóa combo ${c.tenCombo} (Mã: ${c.maCB})`,
+      "Dịch vụ",
+    );
     showToast(`Đã xóa combo "${c.tenCombo}"`);
     await loadCombos();
   } catch (err) {
     const msg = err.response?.data || "Lỗi khi xóa dịch vụ!";
-    logActivity("Xóa combo", `Thất bại khi xóa combo ${c.tenCombo} (Mã: ${c.maCB}) - Lỗi: ${err.message || ''}`, "Dịch vụ", "Thất bại");
+    logActivity(
+      "Xóa combo",
+      `Thất bại khi xóa combo ${c.tenCombo} (Mã: ${c.maCB}) - Lỗi: ${err.message || ""}`,
+      "Dịch vụ",
+      "Thất bại",
+    );
     showToast(msg, "error");
   }
 }
@@ -1172,7 +1232,11 @@ onMounted(async () => {
           </svg>
           Xuất CSV
         </button> -->
-        <button type="button" class="btn btn-primary btn-sm" @click="openModal()">
+        <button
+          type="button"
+          class="btn btn-primary btn-sm"
+          @click="openModal()"
+        >
           <svg
             width="13"
             height="13"
@@ -1230,7 +1294,12 @@ onMounted(async () => {
         <option value="0">Ngừng hoạt động</option>
       </select>
       <span class="result-count">{{ filteredData.length }} kết quả</span>
-      <select v-model.number="perPage" class="filter-select" style="width:auto;min-width:110px" @change="curPage = 1">
+      <select
+        v-model.number="perPage"
+        class="filter-select"
+        style="width: auto; min-width: 110px"
+        @change="curPage = 1"
+      >
         <option :value="10">10 / trang</option>
         <option :value="20">20 / trang</option>
         <option :value="50">50 / trang</option>
@@ -1255,6 +1324,10 @@ onMounted(async () => {
                 Giá <span class="sort-icon">{{ sortIcon("gia") }}</span>
               </th>
               <th>Thời gian</th>
+              <th class="sortable" @click="setSort('phanTramHoaHong')">
+                Hoa hồng
+                <span class="sort-icon">{{ sortIcon("phanTramHoaHong") }}</span>
+              </th>
               <th>Trạng thái</th>
               <th>Thao tác</th>
             </tr>
@@ -1308,7 +1381,9 @@ onMounted(async () => {
                     type="button"
                     class="expand-btn"
                     @click="toggleExpand(d.maDV)"
-                    :title="isExpanded(d.maDV) ? 'Thu gọn' : 'Mở tiêu đề & chi tiết'"
+                    :title="
+                      isExpanded(d.maDV) ? 'Thu gọn' : 'Mở tiêu đề & chi tiết'
+                    "
                   >
                     <svg
                       class="expand-icon"
@@ -1336,6 +1411,7 @@ onMounted(async () => {
                 </td>
                 <td class="price-cell">{{ fmt(d.gia) }}</td>
                 <td class="time-cell">⏱ {{ fmtMin(d.thoiGianLam) }}</td>
+                <td class="commission-cell">{{ fmtPercent(d.phanTramHoaHong) }}</td>
                 <td>
                   <span
                     class="status-pill"
@@ -1436,7 +1512,8 @@ onMounted(async () => {
                         v-for="td in tieudes"
                         :key="td.maTd || td._newFor + td.tenTieuDe"
                         v-show="
-                          sameMaDv(td.maDv, d.maDV) && (!td._newFor || td._editing)
+                          sameMaDv(td.maDv, d.maDV) &&
+                          (!td._newFor || td._editing)
                         "
                         class="td-item"
                         :class="{ 'td-new': td._newFor }"
@@ -1448,31 +1525,61 @@ onMounted(async () => {
                               <input
                                 v-model="td.tenTieuDe"
                                 class="td-input"
-                                :class="{ 'input-error': getTdError('_tdform', 'tenTieuDe') }"
+                                :class="{
+                                  'input-error': getTdError(
+                                    '_tdform',
+                                    'tenTieuDe',
+                                  ),
+                                }"
                                 placeholder="Tên tiêu đề"
                               />
-                              <p v-if="getTdError('_tdform', 'tenTieuDe')" class="td-field-error">{{ getTdError('_tdform', 'tenTieuDe') }}</p>
+                              <p
+                                v-if="getTdError('_tdform', 'tenTieuDe')"
+                                class="td-field-error"
+                              >
+                                {{ getTdError("_tdform", "tenTieuDe") }}
+                              </p>
                             </div>
                             <div class="td-form-field">
                               <input
                                 v-model="td.moTaTieuDe"
                                 class="td-input"
-                                :class="{ 'input-error': getTdError('_tdform', 'moTaTieuDe') }"
+                                :class="{
+                                  'input-error': getTdError(
+                                    '_tdform',
+                                    'moTaTieuDe',
+                                  ),
+                                }"
                                 placeholder="Mô tả (optional)"
                                 style="flex: 1.5"
                               />
-                              <p v-if="getTdError('_tdform', 'moTaTieuDe')" class="td-field-error">{{ getTdError('_tdform', 'moTaTieuDe') }}</p>
+                              <p
+                                v-if="getTdError('_tdform', 'moTaTieuDe')"
+                                class="td-field-error"
+                              >
+                                {{ getTdError("_tdform", "moTaTieuDe") }}
+                              </p>
                             </div>
                             <div class="td-form-field">
                               <input
                                 v-model="td.soThuTu"
                                 class="td-input td-sm"
-                                :class="{ 'input-error': getTdError('_tdform', 'soThuTu') }"
+                                :class="{
+                                  'input-error': getTdError(
+                                    '_tdform',
+                                    'soThuTu',
+                                  ),
+                                }"
                                 type="number"
                                 placeholder="STT"
                                 style="width: 60px"
                               />
-                              <p v-if="getTdError('_tdform', 'soThuTu')" class="td-field-error">{{ getTdError('_tdform', 'soThuTu') }}</p>
+                              <p
+                                v-if="getTdError('_tdform', 'soThuTu')"
+                                class="td-field-error"
+                              >
+                                {{ getTdError("_tdform", "soThuTu") }}
+                              </p>
                             </div>
                             <select
                               v-model.number="td.trangThai"
@@ -1492,7 +1599,9 @@ onMounted(async () => {
                                   : saveTieuDe(d.maDV, td)
                               "
                             >
-                              {{ tdSaving ? "..." : td.maTd ? "Cập nhật" : "Lưu" }}
+                              {{
+                                tdSaving ? "..." : td.maTd ? "Cập nhật" : "Lưu"
+                              }}
                             </button>
                             <button
                               type="button"
@@ -1542,7 +1651,12 @@ onMounted(async () => {
                                 class="icon-btn edit icon-btn-xs"
                                 title="Sửa tiêu đề"
                                 @click.stop="
-                                  td._snapshot = { tenTieuDe: td.tenTieuDe, moTaTieuDe: td.moTaTieuDe, soThuTu: td.soThuTu, trangThai: td.trangThai };
+                                  td._snapshot = {
+                                    tenTieuDe: td.tenTieuDe,
+                                    moTaTieuDe: td.moTaTieuDe,
+                                    soThuTu: td.soThuTu,
+                                    trangThai: td.trangThai,
+                                  };
                                   td._editing = true;
                                 "
                               >
@@ -1580,7 +1694,10 @@ onMounted(async () => {
                           </div>
 
                           <!-- Chi tiết section -->
-                          <div v-if="isTitleExpanded(td.maTd)" class="ct-section">
+                          <div
+                            v-if="isTitleExpanded(td.maTd)"
+                            class="ct-section"
+                          >
                             <div class="ct-form" style="margin-bottom: 8px">
                               <input
                                 v-model="td._ctTen"
@@ -1611,26 +1728,64 @@ onMounted(async () => {
                                   type="file"
                                   accept="image/*"
                                   style="display: none"
-                                  @change="(e) => (td._pendingCtFile = e.target.files[0])"
+                                  @change="
+                                    (e) =>
+                                      (td._pendingCtFile = e.target.files[0])
+                                  "
                                 />
                               </label>
 
-                              <button type="button" class="td-btn td-btn-save" @click="addChiTiet(td)">
+                              <button
+                                type="button"
+                                class="td-btn td-btn-save"
+                                @click="addChiTiet(td)"
+                              >
                                 + Thêm CT
                               </button>
                             </div>
 
-                            <div v-if="td.chiTiet && td.chiTiet.length" class="ct-list">
-                              <div v-for="ct in td.chiTiet" :key="ct.maCttd" class="ct-item">
-                                
+                            <div
+                              v-if="td.chiTiet && td.chiTiet.length"
+                              class="ct-list"
+                            >
+                              <div
+                                v-for="ct in td.chiTiet"
+                                :key="ct.maCttd"
+                                class="ct-item"
+                              >
                                 <!-- Editing -->
                                 <div
                                   v-if="ct._editing"
                                   class="ct-display"
-                                  style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap"
+                                  style="
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 6px;
+                                    flex-wrap: wrap;
+                                  "
                                 >
-                                  <input v-model="ct.tenTieuDe" class="td-input" :class="{ 'input-error': getCtError('_ctform', 'ctTenTieuDe') }" style="flex: 1" />
-                                  <input v-model="ct.moTaTieuDe" class="td-input" :class="{ 'input-error': getCtError('_ctform', 'ctMoTaTieuDe') }" style="flex: 1" />
+                                  <input
+                                    v-model="ct.tenTieuDe"
+                                    class="td-input"
+                                    :class="{
+                                      'input-error': getCtError(
+                                        '_ctform',
+                                        'ctTenTieuDe',
+                                      ),
+                                    }"
+                                    style="flex: 1"
+                                  />
+                                  <input
+                                    v-model="ct.moTaTieuDe"
+                                    class="td-input"
+                                    :class="{
+                                      'input-error': getCtError(
+                                        '_ctform',
+                                        'ctMoTaTieuDe',
+                                      ),
+                                    }"
+                                    style="flex: 1"
+                                  />
                                   <input
                                     v-model.number="ct.soThuTu"
                                     class="td-input td-sm"
@@ -1644,20 +1799,30 @@ onMounted(async () => {
                                       type="file"
                                       accept="image/*"
                                       style="display: none"
-                                      @change="(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (!file) return;
+                                      @change="
+                                        (e) => {
+                                          const file = e.target.files?.[0];
+                                          if (!file) return;
 
-                                        ct._newFile = file;
-                                        ct._imgPreview = URL.createObjectURL(file);
-                                      }"
+                                          ct._newFile = file;
+                                          ct._imgPreview =
+                                            URL.createObjectURL(file);
+                                        }
+                                      "
                                     />
                                   </label>
 
                                   <button
                                     type="button"
                                     class="td-btn td-btn-save"
-                                    @click="editChiTiet(ct.maCttd, td.maTd, td.maDv, ct)"
+                                    @click="
+                                      editChiTiet(
+                                        ct.maCttd,
+                                        td.maTd,
+                                        td.maDv,
+                                        ct,
+                                      )
+                                    "
                                   >
                                     Cập nhật
                                   </button>
@@ -1665,7 +1830,16 @@ onMounted(async () => {
                                   <button
                                     type="button"
                                     class="td-btn td-btn-cancel"
-                                    @click="ct._editing = false; ct._newFile = null; ct._imgPreview = null; if (ct._snapshot) { ct.tenTieuDe = ct._snapshot.tenTieuDe; ct.moTaTieuDe = ct._snapshot.moTaTieuDe; ct.soThuTu = ct._snapshot.soThuTu; }"
+                                    @click="
+                                      ct._editing = false;
+                                      ct._newFile = null;
+                                      ct._imgPreview = null;
+                                      if (ct._snapshot) {
+                                        ct.tenTieuDe = ct._snapshot.tenTieuDe;
+                                        ct.moTaTieuDe = ct._snapshot.moTaTieuDe;
+                                        ct.soThuTu = ct._snapshot.soThuTu;
+                                      }
+                                    "
                                   >
                                     Hủy
                                   </button>
@@ -1675,25 +1849,35 @@ onMounted(async () => {
                                 <div v-else class="ct-display">
                                   <div v-if="ct.hinhAnh" class="ct-img-wrap">
                                     <img
-                                      :src="ct._imgPreview || toAbsUrl(ct.hinhAnh)"
+                                      :src="
+                                        ct._imgPreview || toAbsUrl(ct.hinhAnh)
+                                      "
                                       class="ct-img"
                                     />
                                   </div>
 
                                   <div class="ct-info">
-                                    <span class="ct-name">{{ ct.tenTieuDe }}</span>
+                                    <span class="ct-name">{{
+                                      ct.tenTieuDe
+                                    }}</span>
                                     <span v-if="ct.moTaTieuDe" class="ct-desc">
                                       {{ ct.moTaTieuDe }}
                                     </span>
                                   </div>
 
-                                  <div class="actions" style="flex-shrink:0">
+                                  <div class="actions" style="flex-shrink: 0">
                                     <button
                                       class="icon-btn edit icon-btn-xs"
                                       @click.stop="
-                                        ct._snapshot = { tenTieuDe: ct.tenTieuDe, moTaTieuDe: ct.moTaTieuDe, soThuTu: ct.soThuTu };
+                                        ct._snapshot = {
+                                          tenTieuDe: ct.tenTieuDe,
+                                          moTaTieuDe: ct.moTaTieuDe,
+                                          soThuTu: ct.soThuTu,
+                                        };
                                         ct._editing = true;
-                                        ct._imgPreview = ct.hinhAnh ? toAbsUrl(ct.hinhAnh) : '';
+                                        ct._imgPreview = ct.hinhAnh
+                                          ? toAbsUrl(ct.hinhAnh)
+                                          : '';
                                       "
                                     >
                                       ✏️
@@ -1701,7 +1885,9 @@ onMounted(async () => {
 
                                     <button
                                       class="icon-btn del icon-btn-xs"
-                                      @click.stop="deleteChiTiet(ct.maCttd, td.maDv)"
+                                      @click.stop="
+                                        deleteChiTiet(ct.maCttd, td.maDv)
+                                      "
                                     >
                                       🗑️
                                     </button>
@@ -1711,7 +1897,8 @@ onMounted(async () => {
                             </div>
 
                             <div v-else class="ct-empty">
-                              Chưa có chi tiết. Nhập thông tin phía trên để thêm.
+                              Chưa có chi tiết. Nhập thông tin phía trên để
+                              thêm.
                             </div>
                           </div>
                         </div>
@@ -1723,7 +1910,10 @@ onMounted(async () => {
             </template>
           </tbody>
         </table>
-        <div v-if="filteredData.length > 0 && perPage < 9999" class="pager-wrap">
+        <div
+          v-if="filteredData.length > 0 && perPage < 9999"
+          class="pager-wrap"
+        >
           <span
             >Hiển thị {{ (curPage - 1) * perPage + 1 }}–{{
               Math.min(curPage * perPage, filteredData.length)
@@ -1937,7 +2127,12 @@ onMounted(async () => {
 
     <!-- ── MODAL ───────────────────────────────────────────────── -->
     <Teleport to="body">
-      <div v-if="modal.open" class="modal-overlay" :class="{ 'dark-mode': isDarkMode }" @click.self="closeModal">
+      <div
+        v-if="modal.open"
+        class="modal-overlay"
+        :class="{ 'dark-mode': isDarkMode }"
+        @click.self="closeModal"
+      >
         <div
           class="modal"
           :class="{
@@ -2001,6 +2196,12 @@ onMounted(async () => {
                   </div>
                 </div>
                 <div class="detail-item">
+                  <div class="detail-label">Hoa hồng NV</div>
+                  <div class="detail-val">
+                    {{ fmtPercent(modal.data.phanTramHoaHong) }}
+                  </div>
+                </div>
+                <div class="detail-item">
                   <div class="detail-label">Trạng thái</div>
                   <div class="detail-val">
                     <span
@@ -2025,7 +2226,13 @@ onMounted(async () => {
               >
                 {{ modal.data.tenDV }}
               </div>
-              <div style="font-size: 13px; color: var(--dvc-text-secondary); line-height: 1.7">
+              <div
+                style="
+                  font-size: 13px;
+                  color: var(--dvc-text-secondary);
+                  line-height: 1.7;
+                "
+              >
                 {{ modal.data.moTa }}
               </div>
             </div>
@@ -2100,7 +2307,10 @@ onMounted(async () => {
                   <div class="detail-label">Giá gốc (tổng DV)</div>
                   <div
                     class="detail-val"
-                    style="text-decoration: line-through; color: var(--dvc-text-muted)"
+                    style="
+                      text-decoration: line-through;
+                      color: var(--dvc-text-muted);
+                    "
                   >
                     {{ fmt(modal.data.giaGoc) }}
                   </div>
@@ -2123,7 +2333,13 @@ onMounted(async () => {
             </div>
             <div class="detail-section">
               <div class="detail-title">Mô tả</div>
-              <div style="font-size: 13px; color: var(--dvc-text-secondary); line-height: 1.7">
+              <div
+                style="
+                  font-size: 13px;
+                  color: var(--dvc-text-secondary);
+                  line-height: 1.7;
+                "
+              >
                 {{ modal.data.moTa }}
               </div>
             </div>
@@ -2232,6 +2448,27 @@ onMounted(async () => {
                   {{ errors.thoiGianLam }}
                 </p>
               </div>
+            </div>
+            <div class="dvc-form-row">
+              <label class="form-label"
+                >% Hoa hồng nhân viên
+                <span class="label-hint">— để trống nếu không áp dụng</span></label
+              >
+              <input
+                class="form-input"
+                :class="{ 'input-error': errors.phanTramHoaHong }"
+                v-model="form.phanTramHoaHong"
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                style="max-width: 160px"
+                placeholder="0"
+                @input="errors.phanTramHoaHong = ''"
+              />
+              <p v-if="errors.phanTramHoaHong" class="field-error">
+                {{ errors.phanTramHoaHong }}
+              </p>
             </div>
             <div class="dvc-form-row">
               <label class="form-label"
@@ -2413,9 +2650,30 @@ onMounted(async () => {
                 </p>
               </div>
               <div>
-                <label class="form-label">Giá gốc <span class="label-hint">— tự tính từ tổng dịch vụ</span></label>
-                <div class="form-input" style="background:var(--dvc-bg-subtle2); color:var(--dvc-text-secondary); cursor:default;">
-                  {{ form.dichvus.length ? fmt(form.dichvus.reduce((s, id) => s + (getDV(id)?.gia || 0), 0)) : '—' }}
+                <label class="form-label"
+                  >Giá gốc
+                  <span class="label-hint"
+                    >— tự tính từ tổng dịch vụ</span
+                  ></label
+                >
+                <div
+                  class="form-input"
+                  style="
+                    background: var(--dvc-bg-subtle2);
+                    color: var(--dvc-text-secondary);
+                    cursor: default;
+                  "
+                >
+                  {{
+                    form.dichvus.length
+                      ? fmt(
+                          form.dichvus.reduce(
+                            (s, id) => s + (getDV(id)?.gia || 0),
+                            0,
+                          ),
+                        )
+                      : "—"
+                  }}
                 </div>
               </div>
             </div>
@@ -2479,7 +2737,9 @@ onMounted(async () => {
                   PNG, JPG, WEBP
                 </div>
               </div>
-              <p v-if="errors.hinhAnh" class="field-error">{{ errors.hinhAnh }}</p>
+              <p v-if="errors.hinhAnh" class="field-error">
+                {{ errors.hinhAnh }}
+              </p>
               <div v-else class="cb-img-preview">
                 <img
                   :src="form.hinhAnh"
@@ -2519,7 +2779,11 @@ onMounted(async () => {
               >
                 <div
                   v-if="!dichvus.filter((x) => x.trangThai).length"
-                  style="font-size: 12px; color: var(--dvc-text-muted); padding: 4px"
+                  style="
+                    font-size: 12px;
+                    color: var(--dvc-text-muted);
+                    padding: 4px;
+                  "
                 >
                   Không có dịch vụ đang hoạt động.
                 </div>
@@ -2623,7 +2887,14 @@ onMounted(async () => {
 
     <!-- ── TOAST ───────────────────────────────────────────────── -->
     <Teleport to="body">
-      <div class="toast" :class="[toast.show ? 'show' : '', toast.type, isDarkMode ? 'dark-mode' : '']">
+      <div
+        class="toast"
+        :class="[
+          toast.show ? 'show' : '',
+          toast.type,
+          isDarkMode ? 'dark-mode' : '',
+        ]"
+      >
         <span>{{ toast.icon }}</span
         ><span>{{ toast.msg }}</span>
       </div>
@@ -2632,7 +2903,6 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-
 /* ── THEME VARIABLES (dark mode) ─────────────────────────────── */
 .dvc-root.dark-mode {
   --dvc-card-bg: #23232f;
@@ -2665,7 +2935,10 @@ onMounted(async () => {
   --dvc-accent-hover: #2d2d4e;
   --dvc-shadow: rgba(0, 0, 0, 0.08);
   --dvc-overlay: rgba(0, 0, 0, 0.45);
-  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
   font-family:
     "Inter",
     -apple-system,
@@ -4124,7 +4397,7 @@ tbody td {
 }
 .td-input:focus {
   border-color: var(--dvc-text-secondary);
-  box-shadow: 0 0 0 2px rgba(107,114,128,0.08);
+  box-shadow: 0 0 0 2px rgba(107, 114, 128, 0.08);
 }
 .td-input.td-sm {
   font-size: 11px;
