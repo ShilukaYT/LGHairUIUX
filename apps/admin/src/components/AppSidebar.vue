@@ -79,6 +79,10 @@ const data = {
           url: "/admin/checkin",
         },
         {
+          title: "Checkout",
+          url: "/admin/checkout",
+        },
+        {
           title: "Hóa đơn",
           url: "/admin/hoa-don",
         },

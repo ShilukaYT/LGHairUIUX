@@ -1,12 +1,12 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch } from 'vue';
 import axios from 'axios';
 import Swal from 'sweetalert2';
-import { X, Search, Plus, Trash2, UserPlus } from 'lucide-vue-next'; // Icon
+import { X, Search, Trash2, UserPlus } from 'lucide-vue-next'; // Icon
 
 const props = defineProps({
     isOpen: Boolean,
-    stylists: Array // Nhận danh sách thợ từ component cha truyền vào
+    stylists: Array
 });
 
 const emit = defineEmits(['close', 'success']);
@@ -20,16 +20,32 @@ const form = ref({
 });
 
 const isSubmitting = ref(false);
-const serviceSearch = ref('');
 const allServices = ref([]);
-const showDropdown = ref(false);
+const selectedServiceId = ref(null);
+
+const stylistItems = computed(() => {
+    return (props.stylists || []).map(s => ({
+        title: s.name,
+        value: s.id
+    }));
+});
+
+const serviceItems = computed(() => {
+    const selectedIds = new Set(form.value.services.map(s => s.Id));
+    return (allServices.value || [])
+        .filter(s => !selectedIds.has(s.id || s.Id))
+        .map(s => ({
+            title: `${s.name || s.Name} - ${(s.price || s.Price).toLocaleString()}đ`,
+            value: s.id || s.Id
+        }));
+});
 
 // Reset form mỗi khi mở modal
 watch(() => props.isOpen, (newVal) => {
     if (newVal) {
         form.value = { tenKhach: 'Khách vãng lai', sdt: '', maStylist: '', services: [] };
-        serviceSearch.value = '';
-        fetchServices(); // Tải danh sách dịch vụ mỗi khi mở
+        selectedServiceId.value = null;
+        fetchServices();
     }
 });
 
@@ -43,20 +59,15 @@ const fetchServices = async () => {
     }
 };
 
-// Lọc dịch vụ theo ô tìm kiếm (Fix lỗi chữ hoa/chữ thường)
-const filteredServices = computed(() => {
-    const q = serviceSearch.value.toLowerCase().trim();
-    
-    // Quét tìm kiếm (hỗ trợ cả Name và name)
-    let list = allServices.value.filter(s => {
-        const tenDichVu = s.name || s.Name || '';
-        return tenDichVu.toLowerCase().includes(q);
-    });
-    
-    // Bỏ qua những dịch vụ đã được chọn vào giỏ
-    const selectedIds = new Set(form.value.services.map(s => s.Id));
-    return list.filter(item => !selectedIds.has(item.id || item.Id)).slice(0, 5); 
-});
+const onServiceSelect = (id) => {
+    if (!id) return;
+    const service = allServices.value.find(s => (s.id || s.Id) === id);
+    if (service) {
+        addService(service);
+    }
+    // Reset selection to allow searching again
+    selectedServiceId.value = null;
+};
 
 // Thêm dịch vụ vào giỏ
 const addService = (s) => {
@@ -64,11 +75,8 @@ const addService = (s) => {
         Id: s.id || s.Id, 
         Ten: s.name || s.Name, 
         Gia: s.price || s.Price,
-        // HỨNG DỮ LIỆU GIÁ GỐC
         OriginalPrice: s.originalPrice || s.OriginalPrice || s.price || s.Price
     });
-    serviceSearch.value = '';
-    showDropdown.value = false;
 };
 
 // Tính tổng tiền
@@ -76,7 +84,7 @@ const tongTien = computed(() => {
     return form.value.services.reduce((sum, item) => sum + item.Gia, 0);
 });
 
-// Gửi dữ liệu lên API C#
+// Gửi dữ liệu lên API
 const submitWalkIn = async () => {
     if (form.value.services.length === 0) {
         Swal.fire('Thiếu thông tin', 'Vui lòng chọn ít nhất 1 dịch vụ!', 'warning');
@@ -100,7 +108,7 @@ const submitWalkIn = async () => {
             showConfirmButton: false
         });
         
-        emit('success'); // Báo cho Checkin.vue biết để tải lại bảng
+        emit('success');
     } catch (error) {
         Swal.fire('Lỗi', error.response?.data || 'Không thể tạo đơn.', 'error');
     } finally {
@@ -112,99 +120,166 @@ const closeModal = () => emit('close');
 </script>
 
 <template>
-    <div v-if="isOpen" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4" @click.self="closeModal">
-        <div class="bg-white w-full max-w-lg rounded-[2rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div class="p-6 border-b flex justify-between items-center bg-slate-50">
-                <h3 class="font-bold flex items-center gap-2 text-lg">
-                    <UserPlus class="w-6 h-6 text-indigo-600"/> Tiếp nhận Khách Vãng Lai
-                </h3>
-                <button @click="closeModal" class="p-2 bg-white rounded-full hover:bg-slate-200 transition">
-                    <X class="w-5 h-5 text-slate-400"/>
-                </button>
-            </div>
-            
-            <div class="p-6 space-y-5">
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="space-y-1">
-                        <label class="text-xs font-bold text-slate-500 uppercase">Tên khách</label>
-                        <input v-model="form.tenKhach" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold focus:border-indigo-500 outline-none" />
-                    </div>
-                    <div class="space-y-1">
-                        <label class="text-xs font-bold text-slate-500 uppercase">Số điện thoại (Tuỳ chọn)</label>
-                        <input v-model="form.sdt" placeholder="Trống nếu khách không cho" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold focus:border-indigo-500 outline-none" />
-                    </div>
+    <v-dialog :model-value="isOpen" @update:model-value="val => !val && closeModal()" max-width="600px" persistent>
+        <v-card class="rounded-xl">
+            <!-- Header -->
+            <v-card-title class="d-flex align-center justify-space-between pa-5 border-b">
+                <div class="d-flex align-center gap-2 font-weight-bold text-h6 text-high-emphasis">
+                    <UserPlus class="w-6 h-6 text-primary header-icon" />
+                    Tiếp nhận Khách Vãng Lai
                 </div>
+                <v-btn icon variant="text" density="comfortable" @click="closeModal">
+                    <X class="w-5 h-5 text-medium-emphasis" />
+                </v-btn>
+            </v-card-title>
 
-                <div class="space-y-1">
-                    <label class="text-xs font-bold text-slate-500 uppercase">Chọn thợ làm *</label>
-                    <select v-model="form.maStylist" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-bold focus:border-indigo-500 outline-none cursor-pointer">
-                        <option value="" disabled>-- Chọn Stylist --</option>
-                        <option v-for="s in stylists" :key="s.id" :value="s.id">{{ s.name }}</option>
-                    </select>
-                </div>
+            <!-- Content -->
+            <v-card-text class="pa-6">
+                <v-row>
+                    <!-- Tên khách -->
+                    <v-col cols="12" sm="6" class="py-1">
+                        <label class="text-[10px] font-weight-bold text-medium-emphasis uppercase d-block mb-1.5 tracking-wider">Tên khách *</label>
+                        <v-text-field
+                            v-model="form.tenKhach"
+                            variant="outlined"
+                            density="comfortable"
+                            placeholder="Nhập tên khách"
+                            hide-details
+                            class="rounded-lg"
+                        />
+                    </v-col>
 
-                <div class="space-y-1 relative">
-                    <label class="text-xs font-bold text-slate-500 uppercase">Dịch vụ yêu cầu *</label>
-                    <div class="relative">
-                        <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"/>
-                        <input v-model="serviceSearch" @focus="showDropdown = true" placeholder="Tìm dịch vụ..." class="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 p-3 text-sm font-bold focus:border-indigo-500 outline-none" />
-                    </div>
+                    <!-- Số điện thoại -->
+                    <v-col cols="12" sm="6" class="py-1">
+                        <label class="text-[10px] font-weight-bold text-medium-emphasis uppercase d-block mb-1.5 tracking-wider">Số điện thoại (Tùy chọn)</label>
+                        <v-text-field
+                            v-model="form.sdt"
+                            variant="outlined"
+                            density="comfortable"
+                            placeholder="Trống nếu khách không cho"
+                            hide-details
+                            class="rounded-lg"
+                        />
+                    </v-col>
+
+                    <!-- Chọn Stylist -->
+                    <v-col cols="12" class="py-2">
+                        <label class="text-[10px] font-weight-bold text-medium-emphasis uppercase d-block mb-1.5 tracking-wider">Chọn thợ làm *</label>
+                        <v-select
+                            v-model="form.maStylist"
+                            :items="stylistItems"
+                            placeholder="-- Chọn Stylist --"
+                            variant="outlined"
+                            density="comfortable"
+                            hide-details
+                            class="rounded-lg"
+                        />
+                    </v-col>
+
+                    <!-- Tìm dịch vụ -->
+                    <v-col cols="12" class="py-2">
+                        <label class="text-[10px] font-weight-bold text-medium-emphasis uppercase d-block mb-1.5 tracking-wider">Dịch vụ yêu cầu *</label>
+                        <v-autocomplete
+                            v-model="selectedServiceId"
+                            :items="serviceItems"
+                            placeholder="Tìm và chọn dịch vụ..."
+                            variant="outlined"
+                            density="comfortable"
+                            hide-details
+                            class="rounded-lg"
+                            no-data-text="Không tìm thấy dịch vụ"
+                            @update:model-value="onServiceSelect"
+                        >
+                            <template #prepend-inner>
+                                <Search class="w-4 h-4 text-medium-emphasis mr-2" />
+                            </template>
+                        </v-autocomplete>
+                    </v-col>
+                </v-row>
+
+                <!-- Giỏ dịch vụ -->
+                <label class="text-[10px] font-weight-bold text-medium-emphasis uppercase d-block mt-4 mb-2 tracking-wider">Danh sách dịch vụ đã chọn ({{ form.services.length }})</label>
+                <div class="selected-services-container rounded-xl pa-3 max-h-40 overflow-y-auto border">
+                    <div v-if="form.services.length === 0" class="text-center text-xs font-weight-bold text-medium-emphasis py-4 uppercase">Chưa chọn dịch vụ nào</div>
                     
-                    <div v-if="showDropdown && filteredServices.length > 0" class="absolute top-full w-full bg-white border border-slate-100 rounded-xl shadow-xl z-10 mt-1 max-h-48 overflow-y-auto">
-                        <div v-for="s in filteredServices" :key="s.id || s.Id" @click="addService(s)" class="p-3 hover:bg-indigo-50 cursor-pointer flex justify-between items-center transition">
-                            <span class="font-bold text-sm text-slate-700">{{ s.name || s.Name }}</span>
-                            
-                            <div class="flex items-center gap-2">
-                                <span v-if="(s.originalPrice || s.OriginalPrice) > (s.price || s.Price)" 
-                                      class="text-slate-400 line-through text-xs font-semibold">
-                                    {{ (s.originalPrice || s.OriginalPrice).toLocaleString() }}đ
-                                </span>
-                                <span class="text-indigo-600 font-black text-sm">
-                                    {{ (s.price || s.Price).toLocaleString() }}đ
-                                </span>
-                            </div>
-
-                        </div>
-                        <div @click="showDropdown = false" class="p-2 text-center text-xs font-bold text-slate-400 hover:text-slate-600 cursor-pointer border-t">ĐÓNG</div>
-                    </div>
-                </div>
-
-                <div class="bg-slate-50 rounded-xl p-3 max-h-40 overflow-y-auto space-y-2 border border-slate-100">
-                    <div v-if="form.services.length === 0" class="text-center text-xs font-bold text-slate-400 py-3 uppercase">Chưa chọn dịch vụ nào</div>
-                    
-                    <div v-for="(s, i) in form.services" :key="i" class="flex justify-between items-center bg-white p-2.5 rounded-lg text-sm shadow-sm border border-slate-100">
-                        <span class="font-bold text-slate-700">{{ s.Ten }}</span>
-                        
-                        <div class="flex items-center gap-3">
-                            <div class="flex items-center gap-2">
-                                <span v-if="s.OriginalPrice && s.OriginalPrice > s.Gia" 
-                                      class="text-slate-400 line-through text-xs font-semibold">
+                    <div v-for="(s, i) in form.services" :key="i" class="selected-service-item d-flex justify-space-between align-center pa-3 rounded-lg text-sm shadow-sm mb-2">
+                        <span class="font-weight-semibold item-name-text">{{ s.Ten }}</span>
+                        <div class="d-flex align-center gap-3">
+                            <div class="d-flex align-center gap-2">
+                                <span v-if="s.OriginalPrice && s.OriginalPrice > s.Gia" class="text-slate-400 line-through text-xs font-semibold">
                                     {{ s.OriginalPrice.toLocaleString() }}đ
                                 </span>
-                                <span class="font-black">{{ s.Gia.toLocaleString() }}đ</span>
+                                <span class="font-weight-bold text-body-2">{{ s.Gia.toLocaleString() }}đ</span>
                             </div>
-
-                            <button @click="form.services.splice(i, 1)" class="text-rose-400 hover:text-rose-600 bg-rose-50 p-1.5 rounded-md">
-                                <Trash2 class="w-4 h-4"/>
-                            </button>
+                            <v-btn icon variant="text" color="red" density="compact" @click="form.services.splice(i, 1)">
+                                <Trash2 class="w-4.5 h-4.5 text-error" />
+                            </v-btn>
                         </div>
                     </div>
                 </div>
-                
-                <div class="flex justify-between items-center pt-2">
-                    <span class="font-bold text-slate-500 uppercase text-xs">Tổng tiền dự kiến</span>
-                    <span class="font-black text-xl text-slate-900">{{ tongTien.toLocaleString() }}đ</span>
-                </div>
-            </div>
 
-            <div class="p-6 bg-slate-50 border-t flex gap-3">
-                <button @click="closeModal" class="flex-1 bg-white border border-slate-200 text-slate-600 p-3.5 rounded-xl font-bold text-sm hover:bg-slate-100 transition" :disabled="isSubmitting">
+                <!-- Tổng cộng -->
+                <div class="d-flex align-center justify-space-between mt-5 pt-2">
+                    <span class="font-weight-bold text-medium-emphasis uppercase text-caption tracking-wider">Tổng tiền dự kiến</span>
+                    <span class="font-weight-black text-h6 text-high-emphasis">{{ tongTien.toLocaleString() }}đ</span>
+                </div>
+            </v-card-text>
+
+            <!-- Actions -->
+            <v-card-actions class="pa-5 border-t">
+                <v-spacer />
+                <v-btn variant="outlined" class="rounded-lg text-none px-5" @click="closeModal" :disabled="isSubmitting">
                     Hủy
-                </button>
-                <button @click="submitWalkIn" class="flex-[2] bg-indigo-600 text-white p-3.5 rounded-xl font-black text-sm uppercase tracking-widest hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition disabled:opacity-70 flex justify-center items-center" :disabled="isSubmitting">
+                </v-btn>
+                <v-btn color="primary" variant="flat" class="rounded-lg text-none px-6 primary-btn" @click="submitWalkIn" :disabled="isSubmitting">
                     {{ isSubmitting ? 'Đang tạo...' : 'Tạo Lịch Nhanh' }}
-                </button>
-            </div>
-        </div>
-    </div>
+                </v-btn>
+            </v-card-actions>
+        </v-card>
+    </v-dialog>
 </template>
+
+<style scoped>
+.selected-services-container {
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+}
+.v-theme--dark .selected-services-container {
+    background-color: #151521;
+    border-color: #2d2d3d;
+}
+.selected-service-item {
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+}
+.v-theme--dark .selected-service-item {
+    background-color: #1e1e2d;
+    border-color: #2d2d3d;
+}
+.gap-3 {
+    gap: 12px;
+}
+.gap-2 {
+    gap: 8px;
+}
+
+.item-name-text {
+    color: #334155;
+}
+.v-theme--dark .item-name-text {
+    color: #e2e8f0;
+}
+
+.primary-btn {
+    background-color: #1a1a2e !important;
+    color: #ffffff !important;
+}
+.v-theme--dark .primary-btn {
+    background-color: #3b82f6 !important;
+    color: #ffffff !important;
+}
+
+.header-icon {
+    color: var(--v-theme-primary) !important;
+}
+</style>
