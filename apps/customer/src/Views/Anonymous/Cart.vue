@@ -79,7 +79,12 @@
                         <span v-if="item.type === 'SANPHAM'">Sản phẩm</span>
                         <span v-else>Dịch vụ &middot; {{ item.duration || 30 }} phút</span>
                     </p>
-                    <p class="md:hidden text-lg font-bold text-black mt-2">{{ formatMoney(item.gia) }}</p>
+                    <div class="md:hidden flex items-center gap-2 mt-2">
+                        <span v-if="item.giaGoc && item.giaGoc > item.gia" class="text-xs text-gray-400 line-through">
+                            {{ formatMoney(item.giaGoc) }}
+                        </span>
+                        <p class="text-lg font-bold text-black">{{ formatMoney(item.gia) }}</p>
+                    </div>
                   </div>
                 </div>
 
@@ -103,7 +108,10 @@
                 </div>
 
                 <!-- Giá (desktop) -->
-                <div class="hidden md:block text-right w-full">
+                <div class="hidden md:flex flex-col items-end justify-center text-right w-full">
+                  <span v-if="item.giaGoc && item.giaGoc > item.gia" class="text-xs text-gray-400 line-through mb-1">
+                    {{ formatMoney((item.giaGoc || 0) * (item.type === 'SANPHAM' ? (item.soLuong || 1) : 1)) }}
+                  </span>
                   <span class="text-lg font-bold text-black">{{ formatMoney((item.gia || 0) * (item.type === 'SANPHAM' ? (item.soLuong || 1) : 1)) }}</span>
                 </div>
 
@@ -145,6 +153,10 @@
               <div v-if="totalProduct > 0" class="flex justify-between items-center">
                 <span class="text-gray-600 font-medium">Tổng sản phẩm</span>
                 <span class="font-bold">{{ formatMoney(totalProduct) }}</span>
+              </div>
+              <div v-if="totalSavings > 0" class="flex justify-between items-center">
+                <span class="text-green-600 font-medium">Tiết kiệm được (Flash Sale)</span>
+                <span class="font-bold text-green-600">-{{ formatMoney(totalSavings) }}</span>
               </div>
               <div class="flex justify-between items-center pt-6 border-t-2 border-gray-100 mt-2">
                 <span class="font-bold text-black uppercase tracking-widest text-lg">Tổng cộng</span>
@@ -275,6 +287,23 @@ const totalProduct = computed(() => {
 const totalAmount = computed(() => {
     return totalService.value + totalProduct.value;
 });
+
+// Tổng giá gốc (trước khuyến mãi) — dùng để hiển thị số tiền tiết kiệm được (giống CartSidebar.vue cũ)
+const totalOriginalService = computed(() => {
+    return serviceItems.value.reduce((sum, item) => {
+        return sum + Number(item.giaGoc || item.gia || 0) * Number(item.soLuong || 1);
+    }, 0);
+});
+
+const totalOriginalProduct = computed(() => {
+    return productItems.value.reduce((sum, item) => {
+        return sum + Number(item.giaGoc || item.gia || 0) * Number(item.soLuong || 1);
+    }, 0);
+});
+
+const totalOriginalAmount = computed(() => totalOriginalService.value + totalOriginalProduct.value);
+
+const totalSavings = computed(() => Math.max(0, totalOriginalAmount.value - totalAmount.value));
 
 const checkoutButtonText = computed(() => {
     if (hasService.value && hasProduct.value) return "Đặt lịch & mua sản phẩm";

@@ -33,6 +33,8 @@ const routes = [
       { path: 'profile', name: 'AdminProfile', component: () => import('@/Admin/Profile/StaffProfile.vue') },
       { path: 'nha-cung-cap', name: 'NhaCungCapAdmin', component: () => import('@/Admin/NhaCungCap/NhaCungCap.vue') },
       { path: 'quan-ly-hoat-dong', name: 'QuanLyHoatDong', component: () => import('@/Admin/QuanLyHoatDong.vue') },
+      { path: 'doiSoatDV', name: 'DoiSoatDV', component: () => import('@/Admin/QuanLyDoiSoatDichVu.vue') },
+      { path: 'doiSoatSP', name: 'DoiSoatSP', component: () => import('@/Admin/DoiSoatHoaDon.vue') },
     ],
     meta: { requiresAdminAuth: true }
   },

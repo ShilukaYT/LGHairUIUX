@@ -2,8 +2,13 @@
 import { ref, computed, reactive, onMounted } from "vue";
 import axios from "axios";
 import { logActivity } from "@/utils/activityLogger";
+import { useTheme } from "vuetify";
 
 const API = import.meta.env.VITE_API_URL;
+
+// ── DARK / LIGHT MODE (đồng bộ với ProfileDD - Cài đặt Sáng/Tối) ──
+const vuetifyTheme = useTheme();
+const isDarkMode = computed(() => vuetifyTheme.global.name.value === "dark");
 
 function base64ToFile(base64, filename) {
   const arr = base64.split(",");
@@ -155,6 +160,7 @@ async function loadDichVu() {
       tenDV: d.tenDv,
       maDM: d.maDm,
       gia: d.gia,
+      phanTramHoaHong: d.phanTramHoaHong,
       thoiGianLam: d.thoiGianLam,
       moTa: d.moTa,
       trangThai: d.trangThai,
@@ -220,6 +226,7 @@ const form = reactive({
   maDM: "",
   gia: "",
   giaGoc: "",
+  phanTramHoaHong: "",
   thoiGianLam: "",
   moTa: "",
   trangThai: 1,
@@ -234,6 +241,7 @@ const errors = reactive({
   tenDV: "",
   maDM: "",
   gia: "",
+  phanTramHoaHong: "",
   thoiGianLam: "",
   moTa: "",
   maCB: "",
@@ -308,6 +316,18 @@ function validateDV() {
   } else if (tgl > 480) {
     errors.thoiGianLam = "Thời gian tối đa 480 phút (8 giờ).";
     ok = false;
+  }
+
+  // phanTramHoaHong (không bắt buộc)
+  if (form.phanTramHoaHong !== "" && form.phanTramHoaHong != null) {
+    const pth = Number(form.phanTramHoaHong);
+    if (isNaN(pth)) {
+      errors.phanTramHoaHong = "% hoa hồng phải là số.";
+      ok = false;
+    } else if (pth < 0 || pth > 100) {
+      errors.phanTramHoaHong = "% hoa hồng phải trong khoảng 0–100.";
+      ok = false;
+    }
   }
 
   // moTa
@@ -453,6 +473,8 @@ const pageRange = computed(() => {
 const fmt = (n) => new Intl.NumberFormat("vi-VN").format(n) + "₫";
 const fmtMin = (m) =>
   m >= 60 ? Math.floor(m / 60) + "g" + (m % 60 ? (m % 60) + "p" : "") : m + "p";
+const fmtPercent = (p) =>
+  p === null || p === undefined || p === "" ? "—" : Number(p) + "%";
 const getDMName = (id) =>
   danhMucs.value.find((x) => x.maDM === id)?.tenDanhMuc ?? "---";
 const getDV = (id) => dichvus.value.find((x) => x.maDV === id);
@@ -679,7 +701,8 @@ async function saveTieuDe(dvMaDv, formObj) {
     const afterList = tieudes.value.filter(
       (t) => sameMaDv(t.maDv, dvMaDv) && !t._newFor,
     );
-    const inserted = afterList.length > beforeCount ||
+    const inserted =
+      afterList.length > beforeCount ||
       afterList.some(
         (t) =>
           (t.tenTieuDe || "").trim() === tenTieuDe &&
@@ -690,7 +713,8 @@ async function saveTieuDe(dvMaDv, formObj) {
       const apiMsg =
         res?.data?.message || res?.data?.msg || res?.data?.error || "";
       showToast(
-        apiMsg || "API chưa lưu tiêu đề vào cơ sở dữ liệu. Vui lòng kiểm tra backend.",
+        apiMsg ||
+          "API chưa lưu tiêu đề vào cơ sở dữ liệu. Vui lòng kiểm tra backend.",
         "error",
       );
       return;
@@ -798,7 +822,7 @@ async function addChiTiet(td) {
     ctTenTieuDe: td._ctTen,
     ctMoTaTieuDe: td._ctDesc,
     ctSoThuTu: td._ctStt,
-    ctFile: td._pendingCtFile
+    ctFile: td._pendingCtFile,
   };
 
   await saveChiTiet(td.maTd, td.maDv, fd);
@@ -811,16 +835,16 @@ async function addChiTiet(td) {
 }
 async function editChiTiet(maCttd, tdMaTd, tdMaDv, ctItem) {
   const formObj = {
-  ctTenTieuDe: ctItem.tenTieuDe?.trim() || "",
-  ctMoTaTieuDe: ctItem.moTaTieuDe || "",
-  ctSoThuTu: ctItem.soThuTu != null ? Number(ctItem.soThuTu) : 0,
-  ctFile: ctItem._newFile || ctItem.hinhAnh || null // nếu validate cần
-};
+    ctTenTieuDe: ctItem.tenTieuDe?.trim() || "",
+    ctMoTaTieuDe: ctItem.moTaTieuDe || "",
+    ctSoThuTu: ctItem.soThuTu != null ? Number(ctItem.soThuTu) : 0,
+    ctFile: ctItem._newFile || ctItem.hinhAnh || null, // nếu validate cần
+  };
 
-if (!validateChiTiet(formObj)) {
-  showToast("Vui lòng kiểm tra lại thông tin chi tiết!", "error");
-  return;
-}
+  if (!validateChiTiet(formObj)) {
+    showToast("Vui lòng kiểm tra lại thông tin chi tiết!", "error");
+    return;
+  }
 
   tdSaving.value = true;
   try {
@@ -871,6 +895,7 @@ function openModal() {
     maDM: danhMucs.value[0]?.maDM ?? "",
     gia: "",
     giaGoc: "",
+    phanTramHoaHong: "",
     thoiGianLam: "",
     moTa: "",
     trangThai: 1,
@@ -937,6 +962,12 @@ async function saveItem() {
       fd.append("TenDv", form.tenDV.trim());
       fd.append("MoTa", form.moTa || "");
       fd.append("Gia", Number(form.gia));
+      fd.append(
+        "PhanTramHoaHong",
+        form.phanTramHoaHong === "" || form.phanTramHoaHong == null
+          ? ""
+          : Number(form.phanTramHoaHong)
+      );
       fd.append("ThoiGianLam", Number(form.thoiGianLam));
       fd.append("TrangThai", Number(form.trangThai));
 
@@ -947,11 +978,19 @@ async function saveItem() {
       deletedImages.value.forEach((img) => fd.append("DeletedImages", img));
       if (editingId.value) {
         await axios.put(`${API}/api/DichVu/${editingId.value}`, fd);
-        logActivity("Cập nhật dịch vụ", `Đã cập nhật thông tin dịch vụ ${form.tenDV} (Mã: ${editingId.value})`, "Dịch vụ");
+        logActivity(
+          "Cập nhật dịch vụ",
+          `Đã cập nhật thông tin dịch vụ ${form.tenDV} (Mã: ${editingId.value})`,
+          "Dịch vụ",
+        );
         showToast("Cập nhật dịch vụ thành công!");
       } else {
         await axios.post(`${API}/api/DichVu`, fd);
-        logActivity("Thêm dịch vụ", `Đã thêm dịch vụ mới ${form.tenDV} (Mã: ${form.maDV})`, "Dịch vụ");
+        logActivity(
+          "Thêm dịch vụ",
+          `Đã thêm dịch vụ mới ${form.tenDV} (Mã: ${form.maDV})`,
+          "Dịch vụ",
+        );
         showToast("Thêm dịch vụ thành công!");
       }
       deletedImages.value = [];
@@ -961,9 +1000,9 @@ async function saveItem() {
       console.error("DichVu save error:", err.response?.data);
       logActivity(
         editingId.value ? "Cập nhật dịch vụ" : "Thêm dịch vụ",
-        `Thất bại khi ${editingId.value ? 'cập nhật' : 'thêm'} dịch vụ ${form.tenDV} - Lỗi: ${err.message || ''}`,
+        `Thất bại khi ${editingId.value ? "cập nhật" : "thêm"} dịch vụ ${form.tenDV} - Lỗi: ${err.message || ""}`,
         "Dịch vụ",
-        "Thất bại"
+        "Thất bại",
       );
       showToast("Lỗi khi lưu dịch vụ!", "error");
     } finally {
@@ -993,11 +1032,19 @@ async function saveItem() {
 
       if (editingId.value) {
         await axios.put(`${API}/api/Combo/${editingId.value}`, fd);
-        logActivity("Cập nhật combo", `Đã cập nhật thông tin combo ${form.tenCombo} (Mã: ${editingId.value})`, "Dịch vụ");
+        logActivity(
+          "Cập nhật combo",
+          `Đã cập nhật thông tin combo ${form.tenCombo} (Mã: ${editingId.value})`,
+          "Dịch vụ",
+        );
         showToast("Cập nhật combo thành công!");
       } else {
         await axios.post(`${API}/api/Combo`, fd);
-        logActivity("Thêm combo", `Đã thêm combo mới ${form.tenCombo} (Mã: ${form.maCB})`, "Dịch vụ");
+        logActivity(
+          "Thêm combo",
+          `Đã thêm combo mới ${form.tenCombo} (Mã: ${form.maCB})`,
+          "Dịch vụ",
+        );
         showToast("Thêm combo thành công!");
       }
       await loadCombos();
@@ -1006,9 +1053,9 @@ async function saveItem() {
       console.error("Combo save error:", err.response?.data);
       logActivity(
         editingId.value ? "Cập nhật combo" : "Thêm combo",
-        `Thất bại khi ${editingId.value ? 'cập nhật' : 'thêm'} combo ${form.tenCombo} - Lỗi: ${err.message || ''}`,
+        `Thất bại khi ${editingId.value ? "cập nhật" : "thêm"} combo ${form.tenCombo} - Lỗi: ${err.message || ""}`,
         "Dịch vụ",
-        "Thất bại"
+        "Thất bại",
       );
       showToast("Lỗi khi lưu combo!", "error");
     } finally {
@@ -1027,12 +1074,21 @@ async function delDV(d) {
     return;
   try {
     await axios.delete(`${API}/api/DichVu/${d.maDV}`);
-    logActivity("Xóa dịch vụ", `Đã xóa dịch vụ ${d.tenDV} (Mã: ${d.maDV})`, "Dịch vụ");
+    logActivity(
+      "Xóa dịch vụ",
+      `Đã xóa dịch vụ ${d.tenDV} (Mã: ${d.maDV})`,
+      "Dịch vụ",
+    );
     showToast(`Đã xóa dịch vụ "${d.tenDV}"`);
     await loadDichVu();
   } catch (err) {
     const msg = err.response?.data || "Lỗi khi xóa dịch vụ!";
-    logActivity("Xóa dịch vụ", `Thất bại khi xóa dịch vụ ${d.tenDV} (Mã: ${d.maDV}) - Lỗi: ${err.message || ''}`, "Dịch vụ", "Thất bại");
+    logActivity(
+      "Xóa dịch vụ",
+      `Thất bại khi xóa dịch vụ ${d.tenDV} (Mã: ${d.maDV}) - Lỗi: ${err.message || ""}`,
+      "Dịch vụ",
+      "Thất bại",
+    );
     showToast(msg, "error");
   }
 }
@@ -1041,12 +1097,21 @@ async function delCombo(c) {
   if (!confirm(`Xóa combo "${c.tenCombo}"?`)) return;
   try {
     await axios.delete(`${API}/api/Combo/${c.maCB}`);
-    logActivity("Xóa combo", `Đã xóa combo ${c.tenCombo} (Mã: ${c.maCB})`, "Dịch vụ");
+    logActivity(
+      "Xóa combo",
+      `Đã xóa combo ${c.tenCombo} (Mã: ${c.maCB})`,
+      "Dịch vụ",
+    );
     showToast(`Đã xóa combo "${c.tenCombo}"`);
     await loadCombos();
   } catch (err) {
     const msg = err.response?.data || "Lỗi khi xóa dịch vụ!";
-    logActivity("Xóa combo", `Thất bại khi xóa combo ${c.tenCombo} (Mã: ${c.maCB}) - Lỗi: ${err.message || ''}`, "Dịch vụ", "Thất bại");
+    logActivity(
+      "Xóa combo",
+      `Thất bại khi xóa combo ${c.tenCombo} (Mã: ${c.maCB}) - Lỗi: ${err.message || ""}`,
+      "Dịch vụ",
+      "Thất bại",
+    );
     showToast(msg, "error");
   }
 }
@@ -1103,7 +1168,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="dvc-root">
+  <div class="dvc-root" :class="{ 'dark-mode': isDarkMode }">
     <!-- ── STATS ───────────────────────────────────────────────── -->
     <div class="stats-row">
       <div class="stat-card stat-gold">
@@ -1167,7 +1232,11 @@ onMounted(async () => {
           </svg>
           Xuất CSV
         </button> -->
-        <button type="button" class="btn btn-primary btn-sm" @click="openModal()">
+        <button
+          type="button"
+          class="btn btn-primary btn-sm"
+          @click="openModal()"
+        >
           <svg
             width="13"
             height="13"
@@ -1225,7 +1294,12 @@ onMounted(async () => {
         <option value="0">Ngừng hoạt động</option>
       </select>
       <span class="result-count">{{ filteredData.length }} kết quả</span>
-      <select v-model.number="perPage" class="filter-select" style="width:auto;min-width:110px" @change="curPage = 1">
+      <select
+        v-model.number="perPage"
+        class="filter-select"
+        style="width: auto; min-width: 110px"
+        @change="curPage = 1"
+      >
         <option :value="10">10 / trang</option>
         <option :value="20">20 / trang</option>
         <option :value="50">50 / trang</option>
@@ -1250,6 +1324,10 @@ onMounted(async () => {
                 Giá <span class="sort-icon">{{ sortIcon("gia") }}</span>
               </th>
               <th>Thời gian</th>
+              <th class="sortable" @click="setSort('phanTramHoaHong')">
+                Hoa hồng
+                <span class="sort-icon">{{ sortIcon("phanTramHoaHong") }}</span>
+              </th>
               <th>Trạng thái</th>
               <th>Thao tác</th>
             </tr>
@@ -1303,7 +1381,9 @@ onMounted(async () => {
                     type="button"
                     class="expand-btn"
                     @click="toggleExpand(d.maDV)"
-                    :title="isExpanded(d.maDV) ? 'Thu gọn' : 'Mở tiêu đề & chi tiết'"
+                    :title="
+                      isExpanded(d.maDV) ? 'Thu gọn' : 'Mở tiêu đề & chi tiết'
+                    "
                   >
                     <svg
                       class="expand-icon"
@@ -1331,6 +1411,7 @@ onMounted(async () => {
                 </td>
                 <td class="price-cell">{{ fmt(d.gia) }}</td>
                 <td class="time-cell">⏱ {{ fmtMin(d.thoiGianLam) }}</td>
+                <td class="commission-cell">{{ fmtPercent(d.phanTramHoaHong) }}</td>
                 <td>
                   <span
                     class="status-pill"
@@ -1431,7 +1512,8 @@ onMounted(async () => {
                         v-for="td in tieudes"
                         :key="td.maTd || td._newFor + td.tenTieuDe"
                         v-show="
-                          sameMaDv(td.maDv, d.maDV) && (!td._newFor || td._editing)
+                          sameMaDv(td.maDv, d.maDV) &&
+                          (!td._newFor || td._editing)
                         "
                         class="td-item"
                         :class="{ 'td-new': td._newFor }"
@@ -1443,31 +1525,61 @@ onMounted(async () => {
                               <input
                                 v-model="td.tenTieuDe"
                                 class="td-input"
-                                :class="{ 'input-error': getTdError('_tdform', 'tenTieuDe') }"
+                                :class="{
+                                  'input-error': getTdError(
+                                    '_tdform',
+                                    'tenTieuDe',
+                                  ),
+                                }"
                                 placeholder="Tên tiêu đề"
                               />
-                              <p v-if="getTdError('_tdform', 'tenTieuDe')" class="td-field-error">{{ getTdError('_tdform', 'tenTieuDe') }}</p>
+                              <p
+                                v-if="getTdError('_tdform', 'tenTieuDe')"
+                                class="td-field-error"
+                              >
+                                {{ getTdError("_tdform", "tenTieuDe") }}
+                              </p>
                             </div>
                             <div class="td-form-field">
                               <input
                                 v-model="td.moTaTieuDe"
                                 class="td-input"
-                                :class="{ 'input-error': getTdError('_tdform', 'moTaTieuDe') }"
+                                :class="{
+                                  'input-error': getTdError(
+                                    '_tdform',
+                                    'moTaTieuDe',
+                                  ),
+                                }"
                                 placeholder="Mô tả (optional)"
                                 style="flex: 1.5"
                               />
-                              <p v-if="getTdError('_tdform', 'moTaTieuDe')" class="td-field-error">{{ getTdError('_tdform', 'moTaTieuDe') }}</p>
+                              <p
+                                v-if="getTdError('_tdform', 'moTaTieuDe')"
+                                class="td-field-error"
+                              >
+                                {{ getTdError("_tdform", "moTaTieuDe") }}
+                              </p>
                             </div>
                             <div class="td-form-field">
                               <input
                                 v-model="td.soThuTu"
                                 class="td-input td-sm"
-                                :class="{ 'input-error': getTdError('_tdform', 'soThuTu') }"
+                                :class="{
+                                  'input-error': getTdError(
+                                    '_tdform',
+                                    'soThuTu',
+                                  ),
+                                }"
                                 type="number"
                                 placeholder="STT"
                                 style="width: 60px"
                               />
-                              <p v-if="getTdError('_tdform', 'soThuTu')" class="td-field-error">{{ getTdError('_tdform', 'soThuTu') }}</p>
+                              <p
+                                v-if="getTdError('_tdform', 'soThuTu')"
+                                class="td-field-error"
+                              >
+                                {{ getTdError("_tdform", "soThuTu") }}
+                              </p>
                             </div>
                             <select
                               v-model.number="td.trangThai"
@@ -1487,7 +1599,9 @@ onMounted(async () => {
                                   : saveTieuDe(d.maDV, td)
                               "
                             >
-                              {{ tdSaving ? "..." : td.maTd ? "Cập nhật" : "Lưu" }}
+                              {{
+                                tdSaving ? "..." : td.maTd ? "Cập nhật" : "Lưu"
+                              }}
                             </button>
                             <button
                               type="button"
@@ -1537,7 +1651,12 @@ onMounted(async () => {
                                 class="icon-btn edit icon-btn-xs"
                                 title="Sửa tiêu đề"
                                 @click.stop="
-                                  td._snapshot = { tenTieuDe: td.tenTieuDe, moTaTieuDe: td.moTaTieuDe, soThuTu: td.soThuTu, trangThai: td.trangThai };
+                                  td._snapshot = {
+                                    tenTieuDe: td.tenTieuDe,
+                                    moTaTieuDe: td.moTaTieuDe,
+                                    soThuTu: td.soThuTu,
+                                    trangThai: td.trangThai,
+                                  };
                                   td._editing = true;
                                 "
                               >
@@ -1575,7 +1694,10 @@ onMounted(async () => {
                           </div>
 
                           <!-- Chi tiết section -->
-                          <div v-if="isTitleExpanded(td.maTd)" class="ct-section">
+                          <div
+                            v-if="isTitleExpanded(td.maTd)"
+                            class="ct-section"
+                          >
                             <div class="ct-form" style="margin-bottom: 8px">
                               <input
                                 v-model="td._ctTen"
@@ -1606,26 +1728,64 @@ onMounted(async () => {
                                   type="file"
                                   accept="image/*"
                                   style="display: none"
-                                  @change="(e) => (td._pendingCtFile = e.target.files[0])"
+                                  @change="
+                                    (e) =>
+                                      (td._pendingCtFile = e.target.files[0])
+                                  "
                                 />
                               </label>
 
-                              <button type="button" class="td-btn td-btn-save" @click="addChiTiet(td)">
+                              <button
+                                type="button"
+                                class="td-btn td-btn-save"
+                                @click="addChiTiet(td)"
+                              >
                                 + Thêm CT
                               </button>
                             </div>
 
-                            <div v-if="td.chiTiet && td.chiTiet.length" class="ct-list">
-                              <div v-for="ct in td.chiTiet" :key="ct.maCttd" class="ct-item">
-                                
+                            <div
+                              v-if="td.chiTiet && td.chiTiet.length"
+                              class="ct-list"
+                            >
+                              <div
+                                v-for="ct in td.chiTiet"
+                                :key="ct.maCttd"
+                                class="ct-item"
+                              >
                                 <!-- Editing -->
                                 <div
                                   v-if="ct._editing"
                                   class="ct-display"
-                                  style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap"
+                                  style="
+                                    display: flex;
+                                    align-items: center;
+                                    gap: 6px;
+                                    flex-wrap: wrap;
+                                  "
                                 >
-                                  <input v-model="ct.tenTieuDe" class="td-input" :class="{ 'input-error': getCtError('_ctform', 'ctTenTieuDe') }" style="flex: 1" />
-                                  <input v-model="ct.moTaTieuDe" class="td-input" :class="{ 'input-error': getCtError('_ctform', 'ctMoTaTieuDe') }" style="flex: 1" />
+                                  <input
+                                    v-model="ct.tenTieuDe"
+                                    class="td-input"
+                                    :class="{
+                                      'input-error': getCtError(
+                                        '_ctform',
+                                        'ctTenTieuDe',
+                                      ),
+                                    }"
+                                    style="flex: 1"
+                                  />
+                                  <input
+                                    v-model="ct.moTaTieuDe"
+                                    class="td-input"
+                                    :class="{
+                                      'input-error': getCtError(
+                                        '_ctform',
+                                        'ctMoTaTieuDe',
+                                      ),
+                                    }"
+                                    style="flex: 1"
+                                  />
                                   <input
                                     v-model.number="ct.soThuTu"
                                     class="td-input td-sm"
@@ -1639,20 +1799,30 @@ onMounted(async () => {
                                       type="file"
                                       accept="image/*"
                                       style="display: none"
-                                      @change="(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (!file) return;
+                                      @change="
+                                        (e) => {
+                                          const file = e.target.files?.[0];
+                                          if (!file) return;
 
-                                        ct._newFile = file;
-                                        ct._imgPreview = URL.createObjectURL(file);
-                                      }"
+                                          ct._newFile = file;
+                                          ct._imgPreview =
+                                            URL.createObjectURL(file);
+                                        }
+                                      "
                                     />
                                   </label>
 
                                   <button
                                     type="button"
                                     class="td-btn td-btn-save"
-                                    @click="editChiTiet(ct.maCttd, td.maTd, td.maDv, ct)"
+                                    @click="
+                                      editChiTiet(
+                                        ct.maCttd,
+                                        td.maTd,
+                                        td.maDv,
+                                        ct,
+                                      )
+                                    "
                                   >
                                     Cập nhật
                                   </button>
@@ -1660,7 +1830,16 @@ onMounted(async () => {
                                   <button
                                     type="button"
                                     class="td-btn td-btn-cancel"
-                                    @click="ct._editing = false; ct._newFile = null; ct._imgPreview = null; if (ct._snapshot) { ct.tenTieuDe = ct._snapshot.tenTieuDe; ct.moTaTieuDe = ct._snapshot.moTaTieuDe; ct.soThuTu = ct._snapshot.soThuTu; }"
+                                    @click="
+                                      ct._editing = false;
+                                      ct._newFile = null;
+                                      ct._imgPreview = null;
+                                      if (ct._snapshot) {
+                                        ct.tenTieuDe = ct._snapshot.tenTieuDe;
+                                        ct.moTaTieuDe = ct._snapshot.moTaTieuDe;
+                                        ct.soThuTu = ct._snapshot.soThuTu;
+                                      }
+                                    "
                                   >
                                     Hủy
                                   </button>
@@ -1670,25 +1849,35 @@ onMounted(async () => {
                                 <div v-else class="ct-display">
                                   <div v-if="ct.hinhAnh" class="ct-img-wrap">
                                     <img
-                                      :src="ct._imgPreview || toAbsUrl(ct.hinhAnh)"
+                                      :src="
+                                        ct._imgPreview || toAbsUrl(ct.hinhAnh)
+                                      "
                                       class="ct-img"
                                     />
                                   </div>
 
                                   <div class="ct-info">
-                                    <span class="ct-name">{{ ct.tenTieuDe }}</span>
+                                    <span class="ct-name">{{
+                                      ct.tenTieuDe
+                                    }}</span>
                                     <span v-if="ct.moTaTieuDe" class="ct-desc">
                                       {{ ct.moTaTieuDe }}
                                     </span>
                                   </div>
 
-                                  <div class="actions" style="flex-shrink:0">
+                                  <div class="actions" style="flex-shrink: 0">
                                     <button
                                       class="icon-btn edit icon-btn-xs"
                                       @click.stop="
-                                        ct._snapshot = { tenTieuDe: ct.tenTieuDe, moTaTieuDe: ct.moTaTieuDe, soThuTu: ct.soThuTu };
+                                        ct._snapshot = {
+                                          tenTieuDe: ct.tenTieuDe,
+                                          moTaTieuDe: ct.moTaTieuDe,
+                                          soThuTu: ct.soThuTu,
+                                        };
                                         ct._editing = true;
-                                        ct._imgPreview = ct.hinhAnh ? toAbsUrl(ct.hinhAnh) : '';
+                                        ct._imgPreview = ct.hinhAnh
+                                          ? toAbsUrl(ct.hinhAnh)
+                                          : '';
                                       "
                                     >
                                       ✏️
@@ -1696,7 +1885,9 @@ onMounted(async () => {
 
                                     <button
                                       class="icon-btn del icon-btn-xs"
-                                      @click.stop="deleteChiTiet(ct.maCttd, td.maDv)"
+                                      @click.stop="
+                                        deleteChiTiet(ct.maCttd, td.maDv)
+                                      "
                                     >
                                       🗑️
                                     </button>
@@ -1706,7 +1897,8 @@ onMounted(async () => {
                             </div>
 
                             <div v-else class="ct-empty">
-                              Chưa có chi tiết. Nhập thông tin phía trên để thêm.
+                              Chưa có chi tiết. Nhập thông tin phía trên để
+                              thêm.
                             </div>
                           </div>
                         </div>
@@ -1718,7 +1910,10 @@ onMounted(async () => {
             </template>
           </tbody>
         </table>
-        <div v-if="filteredData.length > 0 && perPage < 9999" class="pager-wrap">
+        <div
+          v-if="filteredData.length > 0 && perPage < 9999"
+          class="pager-wrap"
+        >
           <span
             >Hiển thị {{ (curPage - 1) * perPage + 1 }}–{{
               Math.min(curPage * perPage, filteredData.length)
@@ -1860,8 +2055,8 @@ onMounted(async () => {
         class="pager-wrap"
         style="
           margin-top: 14px;
-          background: #fff;
-          border: 1px solid #e5e7eb;
+          background: var(--dvc-card-bg);
+          border: 1px solid var(--dvc-border);
           border-radius: 10px;
         "
       >
@@ -1932,7 +2127,12 @@ onMounted(async () => {
 
     <!-- ── MODAL ───────────────────────────────────────────────── -->
     <Teleport to="body">
-      <div v-if="modal.open" class="modal-overlay" @click.self="closeModal">
+      <div
+        v-if="modal.open"
+        class="modal-overlay"
+        :class="{ 'dark-mode': isDarkMode }"
+        @click.self="closeModal"
+      >
         <div
           class="modal"
           :class="{
@@ -1996,6 +2196,12 @@ onMounted(async () => {
                   </div>
                 </div>
                 <div class="detail-item">
+                  <div class="detail-label">Hoa hồng NV</div>
+                  <div class="detail-val">
+                    {{ fmtPercent(modal.data.phanTramHoaHong) }}
+                  </div>
+                </div>
+                <div class="detail-item">
                   <div class="detail-label">Trạng thái</div>
                   <div class="detail-val">
                     <span
@@ -2014,13 +2220,19 @@ onMounted(async () => {
                 style="
                   font-size: 15px;
                   font-weight: 600;
-                  color: #1a1a2e;
+                  color: var(--dvc-text);
                   margin-bottom: 6px;
                 "
               >
                 {{ modal.data.tenDV }}
               </div>
-              <div style="font-size: 13px; color: #6b7280; line-height: 1.7">
+              <div
+                style="
+                  font-size: 13px;
+                  color: var(--dvc-text-secondary);
+                  line-height: 1.7;
+                "
+              >
                 {{ modal.data.moTa }}
               </div>
             </div>
@@ -2095,7 +2307,10 @@ onMounted(async () => {
                   <div class="detail-label">Giá gốc (tổng DV)</div>
                   <div
                     class="detail-val"
-                    style="text-decoration: line-through; color: #9ca3af"
+                    style="
+                      text-decoration: line-through;
+                      color: var(--dvc-text-muted);
+                    "
                   >
                     {{ fmt(modal.data.giaGoc) }}
                   </div>
@@ -2118,7 +2333,13 @@ onMounted(async () => {
             </div>
             <div class="detail-section">
               <div class="detail-title">Mô tả</div>
-              <div style="font-size: 13px; color: #6b7280; line-height: 1.7">
+              <div
+                style="
+                  font-size: 13px;
+                  color: var(--dvc-text-secondary);
+                  line-height: 1.7;
+                "
+              >
                 {{ modal.data.moTa }}
               </div>
             </div>
@@ -2130,11 +2351,11 @@ onMounted(async () => {
                     <div style="font-size: 13px; font-weight: 500">
                       {{ getDV(id).tenDV }}
                     </div>
-                    <div style="font-size: 11px; color: #9ca3af">
+                    <div style="font-size: 11px; color: var(--dvc-text-muted)">
                       ⏱ {{ fmtMin(getDV(id).thoiGianLam) }}
                     </div>
                   </div>
-                  <span style="color: #9ca3af; font-size: 13px">{{
+                  <span style="color: var(--dvc-text-muted); font-size: 13px">{{
                     fmt(getDV(id).gia)
                   }}</span>
                 </div>
@@ -2181,7 +2402,7 @@ onMounted(async () => {
                 <p v-if="errors.maDM" class="field-error">{{ errors.maDM }}</p>
               </div>
             </div>
-            <div class="form-row">
+            <div class="dvc-form-row">
               <label class="form-label"
                 >Tên dịch vụ <span class="req">*</span></label
               >
@@ -2228,7 +2449,28 @@ onMounted(async () => {
                 </p>
               </div>
             </div>
-            <div class="form-row">
+            <div class="dvc-form-row">
+              <label class="form-label"
+                >% Hoa hồng nhân viên
+                <span class="label-hint">— để trống nếu không áp dụng</span></label
+              >
+              <input
+                class="form-input"
+                :class="{ 'input-error': errors.phanTramHoaHong }"
+                v-model="form.phanTramHoaHong"
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                style="max-width: 160px"
+                placeholder="0"
+                @input="errors.phanTramHoaHong = ''"
+              />
+              <p v-if="errors.phanTramHoaHong" class="field-error">
+                {{ errors.phanTramHoaHong }}
+              </p>
+            </div>
+            <div class="dvc-form-row">
               <label class="form-label"
                 >Mô tả <span class="label-hint">— tối đa 500 ký tự</span></label
               >
@@ -2249,7 +2491,7 @@ onMounted(async () => {
             </div>
 
             <!-- MULTI IMAGE -->
-            <div class="form-row">
+            <div class="dvc-form-row">
               <label class="form-label">
                 Hình ảnh dịch vụ
                 <span class="label-hint"
@@ -2277,7 +2519,7 @@ onMounted(async () => {
                   height="28"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="#9ca3af"
+                  stroke="var(--dvc-text-muted)"
                   stroke-width="1.5"
                 >
                   <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -2287,7 +2529,7 @@ onMounted(async () => {
                 <div class="upload-hint">
                   Kéo thả hoặc <span class="upload-link">chọn ảnh</span>
                 </div>
-                <div style="font-size: 11px; color: #d1d5db">
+                <div style="font-size: 11px; color: var(--dvc-border-strong)">
                   PNG, JPG, WEBP
                 </div>
               </div>
@@ -2347,7 +2589,7 @@ onMounted(async () => {
               </div>
             </div>
 
-            <div class="form-row">
+            <div class="dvc-form-row">
               <label class="form-label">Trạng thái</label>
               <select class="form-select" v-model.number="form.trangThai">
                 <option :value="1">✅ Hoạt động</option>
@@ -2408,13 +2650,34 @@ onMounted(async () => {
                 </p>
               </div>
               <div>
-                <label class="form-label">Giá gốc <span class="label-hint">— tự tính từ tổng dịch vụ</span></label>
-                <div class="form-input" style="background:#f9fafb; color:#6b7280; cursor:default;">
-                  {{ form.dichvus.length ? fmt(form.dichvus.reduce((s, id) => s + (getDV(id)?.gia || 0), 0)) : '—' }}
+                <label class="form-label"
+                  >Giá gốc
+                  <span class="label-hint"
+                    >— tự tính từ tổng dịch vụ</span
+                  ></label
+                >
+                <div
+                  class="form-input"
+                  style="
+                    background: var(--dvc-bg-subtle2);
+                    color: var(--dvc-text-secondary);
+                    cursor: default;
+                  "
+                >
+                  {{
+                    form.dichvus.length
+                      ? fmt(
+                          form.dichvus.reduce(
+                            (s, id) => s + (getDV(id)?.gia || 0),
+                            0,
+                          ),
+                        )
+                      : "—"
+                  }}
                 </div>
               </div>
             </div>
-            <div class="form-row">
+            <div class="dvc-form-row">
               <label class="form-label"
                 >Mô tả <span class="label-hint">— tối đa 500 ký tự</span></label
               >
@@ -2435,7 +2698,7 @@ onMounted(async () => {
             </div>
 
             <!-- SINGLE IMAGE -->
-            <div class="form-row">
+            <div class="dvc-form-row">
               <label class="form-label">
                 Ảnh bìa combo <span class="req">*</span>
                 <span class="label-hint">— 1 ảnh duy nhất, ≤ 5MB</span>
@@ -2460,7 +2723,7 @@ onMounted(async () => {
                   height="28"
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="#9ca3af"
+                  stroke="var(--dvc-text-muted)"
                   stroke-width="1.5"
                 >
                   <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -2470,11 +2733,13 @@ onMounted(async () => {
                 <div class="upload-hint">
                   Kéo thả hoặc <span class="upload-link">chọn ảnh bìa</span>
                 </div>
-                <div style="font-size: 11px; color: #d1d5db">
+                <div style="font-size: 11px; color: var(--dvc-border-strong)">
                   PNG, JPG, WEBP
                 </div>
               </div>
-              <p v-if="errors.hinhAnh" class="field-error">{{ errors.hinhAnh }}</p>
+              <p v-if="errors.hinhAnh" class="field-error">
+                {{ errors.hinhAnh }}
+              </p>
               <div v-else class="cb-img-preview">
                 <img
                   :src="form.hinhAnh"
@@ -2503,7 +2768,7 @@ onMounted(async () => {
             </div>
 
             <!-- CHỌN DỊCH VỤ -->
-            <div class="form-row">
+            <div class="dvc-form-row">
               <label class="form-label">
                 Dịch vụ trong combo <span class="req">*</span>
                 <span class="label-hint">— click để chọn / bỏ chọn</span>
@@ -2514,7 +2779,11 @@ onMounted(async () => {
               >
                 <div
                   v-if="!dichvus.filter((x) => x.trangThai).length"
-                  style="font-size: 12px; color: #9ca3af; padding: 4px"
+                  style="
+                    font-size: 12px;
+                    color: var(--dvc-text-muted);
+                    padding: 4px;
+                  "
                 >
                   Không có dịch vụ đang hoạt động.
                 </div>
@@ -2566,7 +2835,7 @@ onMounted(async () => {
               </div>
             </div>
 
-            <div class="form-row">
+            <div class="dvc-form-row">
               <label class="form-label">Trạng thái</label>
               <select class="form-select" v-model.number="form.trangThai">
                 <option :value="1">✅ Hoạt động</option>
@@ -2618,7 +2887,14 @@ onMounted(async () => {
 
     <!-- ── TOAST ───────────────────────────────────────────────── -->
     <Teleport to="body">
-      <div class="toast" :class="[toast.show ? 'show' : '', toast.type]">
+      <div
+        class="toast"
+        :class="[
+          toast.show ? 'show' : '',
+          toast.type,
+          isDarkMode ? 'dark-mode' : '',
+        ]"
+      >
         <span>{{ toast.icon }}</span
         ><span>{{ toast.msg }}</span>
       </div>
@@ -2627,14 +2903,48 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+/* ── THEME VARIABLES (dark mode) ─────────────────────────────── */
+.dvc-root.dark-mode {
+  --dvc-card-bg: #23232f;
+  --dvc-bg-subtle: #2a2a38;
+  --dvc-bg-subtle2: #1e1e29;
+  --dvc-border: #383846;
+  --dvc-border-strong: #464656;
+  --dvc-text: #e8e8ee;
+  --dvc-text-strong: #cbcbd6;
+  --dvc-text-secondary: #a3a3b2;
+  --dvc-text-muted: #7c7c8c;
+  --dvc-accent: #4b4b6b;
+  --dvc-accent-hover: #5c5c80;
+  --dvc-shadow: rgba(0, 0, 0, 0.35);
+  --dvc-overlay: rgba(0, 0, 0, 0.6);
+}
 /* ── RESET ─────────────────────────────────────────────────────── */
 .dvc-root {
+  /* ── THEME VARIABLES (light default) ─────────────────────────── */
+  --dvc-card-bg: #fff;
+  --dvc-bg-subtle: #f3f4f6;
+  --dvc-bg-subtle2: #f9fafb;
+  --dvc-border: #e5e7eb;
+  --dvc-border-strong: #d1d5db;
+  --dvc-text: #1a1a2e;
+  --dvc-text-strong: #374151;
+  --dvc-text-secondary: #6b7280;
+  --dvc-text-muted: #9ca3af;
+  --dvc-accent: #1a1a2e;
+  --dvc-accent-hover: #2d2d4e;
+  --dvc-shadow: rgba(0, 0, 0, 0.08);
+  --dvc-overlay: rgba(0, 0, 0, 0.45);
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
   font-family:
     "Inter",
     -apple-system,
     "Segoe UI",
     sans-serif;
-  color: #1a1a2e;
+  color: var(--dvc-text);
   background: transparent;
 }
 
@@ -2646,8 +2956,8 @@ onMounted(async () => {
   margin-bottom: 22px;
 }
 .stat-card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--dvc-card-bg);
+  border: 1px solid var(--dvc-border);
   border-radius: 12px;
   padding: 16px;
   position: relative;
@@ -2680,7 +2990,7 @@ onMounted(async () => {
 }
 .stat-label {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -2704,7 +3014,7 @@ onMounted(async () => {
 }
 .stat-hint {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   margin-top: 4px;
 }
 
@@ -2720,7 +3030,7 @@ onMounted(async () => {
 .tabs {
   display: flex;
   gap: 4px;
-  background: #f3f4f6;
+  background: var(--dvc-bg-subtle);
   padding: 4px;
   border-radius: 10px;
 }
@@ -2733,27 +3043,27 @@ onMounted(async () => {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--dvc-text-secondary);
   border: none;
   background: transparent;
   transition: all 0.15s;
 }
 .tab.active {
-  background: #fff;
-  color: #1a1a2e;
+  background: var(--dvc-card-bg);
+  color: var(--dvc-text);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 .tab-count {
-  background: #e5e7eb;
-  color: #6b7280;
+  background: var(--dvc-border);
+  color: var(--dvc-text-secondary);
   font-size: 11px;
   font-weight: 600;
   padding: 1px 6px;
   border-radius: 10px;
 }
 .tab.active .tab-count {
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--dvc-bg-subtle);
+  color: var(--dvc-text-strong);
 }
 .header-actions {
   display: flex;
@@ -2780,22 +3090,22 @@ onMounted(async () => {
   cursor: not-allowed;
 }
 .btn-primary {
-  background: #1a1a2e;
+  background: var(--dvc-accent);
   color: #fff;
 }
 .btn-primary:hover:not(:disabled) {
-  background: #2d2d4e;
+  background: var(--dvc-accent-hover);
   transform: translateY(-1px);
 }
 .btn-ghost {
   background: transparent;
-  color: #6b7280;
-  border: 1px solid #e5e7eb;
+  color: var(--dvc-text-secondary);
+  border: 1px solid var(--dvc-border);
 }
 .btn-ghost:hover:not(:disabled) {
-  color: #1a1a2e;
-  border-color: #d1d5db;
-  background: #f9fafb;
+  color: var(--dvc-text);
+  border-color: var(--dvc-border-strong);
+  background: var(--dvc-bg-subtle2);
 }
 .btn-sm {
   padding: 6px 12px;
@@ -2815,7 +3125,7 @@ onMounted(async () => {
   width: 13px;
   height: 13px;
   border: 2px solid rgba(255, 255, 255, 0.35);
-  border-top-color: #fff;
+  border-top-color: var(--dvc-card-bg);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
   flex-shrink: 0;
@@ -2838,8 +3148,8 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--dvc-card-bg);
+  border: 1px solid var(--dvc-border);
   border-radius: 8px;
   padding: 7px 12px;
   min-width: 200px;
@@ -2848,26 +3158,26 @@ onMounted(async () => {
   transition: border 0.15s;
 }
 .search-box:focus-within {
-  border-color: #6b7280;
+  border-color: var(--dvc-text-secondary);
 }
 .search-box input {
   background: transparent;
   border: none;
   outline: none;
-  color: #1a1a2e;
+  color: var(--dvc-text);
   font-size: 13px;
   font-family: inherit;
   width: 100%;
 }
 .search-box input::placeholder {
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
 }
 .filter-select {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--dvc-card-bg);
+  border: 1px solid var(--dvc-border);
   border-radius: 8px;
   padding: 7px 10px;
-  color: #374151;
+  color: var(--dvc-text-strong);
   font-size: 13px;
   font-family: inherit;
   cursor: pointer;
@@ -2875,14 +3185,14 @@ onMounted(async () => {
 }
 .result-count {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   margin-left: auto;
 }
 
 /* ── TABLE ──────────────────────────────────────────────────────── */
 .table-wrap {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--dvc-card-bg);
+  border: 1px solid var(--dvc-border);
   border-radius: 12px;
   overflow: hidden;
 }
@@ -2895,10 +3205,10 @@ thead th {
   text-align: left;
   font-size: 11px;
   font-weight: 600;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   letter-spacing: 0.5px;
-  border-bottom: 1px solid #f3f4f6;
-  background: #fafafa;
+  border-bottom: 1px solid var(--dvc-bg-subtle);
+  background: var(--dvc-bg-subtle2);
   white-space: nowrap;
   text-transform: uppercase;
 }
@@ -2907,20 +3217,20 @@ thead th {
   user-select: none;
 }
 .sortable:hover {
-  color: #374151;
+  color: var(--dvc-text-strong);
 }
 .sort-icon {
   font-size: 10px;
 }
 tbody tr {
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--dvc-bg-subtle);
   transition: background 0.12s;
 }
 tbody tr:last-child {
   border-bottom: none;
 }
 tbody tr:hover {
-  background: #fafafa;
+  background: var(--dvc-bg-subtle2);
 }
 tbody td {
   padding: 10px 14px;
@@ -2929,19 +3239,19 @@ tbody td {
 }
 .code-text {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--dvc-text-secondary);
   font-family: "Courier New", monospace;
-  background: #f3f4f6;
+  background: var(--dvc-bg-subtle);
   padding: 2px 7px;
   border-radius: 4px;
 }
 .dv-name {
   font-weight: 500;
-  color: #1a1a2e;
+  color: var(--dvc-text);
 }
 .dv-sub {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   margin-top: 2px;
   max-width: 220px;
   white-space: nowrap;
@@ -2954,7 +3264,7 @@ tbody td {
 }
 .time-cell {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   white-space: nowrap;
 }
 
@@ -2971,7 +3281,7 @@ tbody td {
   height: 42px;
   object-fit: cover;
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--dvc-border);
   display: block;
   transition: opacity 0.15s;
 }
@@ -2982,18 +3292,18 @@ tbody td {
   width: 42px;
   height: 42px;
   border-radius: 8px;
-  border: 1.5px dashed #d1d5db;
-  background: #f9fafb;
+  border: 1.5px dashed var(--dvc-border-strong);
+  background: var(--dvc-bg-subtle2);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d1d5db;
+  color: var(--dvc-border-strong);
 }
 .thumb-count {
   position: absolute;
   bottom: -5px;
   right: -5px;
-  background: #1a1a2e;
+  background: var(--dvc-accent);
   color: #fff;
   font-size: 9px;
   font-weight: 700;
@@ -3072,13 +3382,13 @@ tbody td {
   width: 30px;
   height: 30px;
   border-radius: 7px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--dvc-border);
   background: transparent;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   transition: all 0.15s;
 }
 .icon-btn.view:hover {
@@ -3103,9 +3413,9 @@ tbody td {
   align-items: center;
   justify-content: space-between;
   padding: 12px 18px;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--dvc-bg-subtle);
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
 }
 .pager-btns {
   display: flex;
@@ -3115,11 +3425,11 @@ tbody td {
   min-width: 30px;
   height: 30px;
   border-radius: 7px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--dvc-border);
   background: transparent;
   cursor: pointer;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--dvc-text-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3128,14 +3438,14 @@ tbody td {
   transition: all 0.15s;
 }
 .page-btn.cur {
-  background: #1a1a2e;
+  background: var(--dvc-accent);
   color: #fff;
-  border-color: #1a1a2e;
+  border-color: var(--dvc-accent);
   font-weight: 700;
 }
 .page-btn:hover:not(.cur):not(:disabled) {
-  background: #f3f4f6;
-  color: #1a1a2e;
+  background: var(--dvc-bg-subtle);
+  color: var(--dvc-text);
 }
 .page-btn:disabled {
   opacity: 0.35;
@@ -3149,8 +3459,8 @@ tbody td {
   gap: 14px;
 }
 .combo-card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--dvc-card-bg);
+  border: 1px solid var(--dvc-border);
   border-radius: 13px;
   overflow: hidden;
   transition: all 0.2s;
@@ -3158,7 +3468,7 @@ tbody td {
   flex-direction: column;
 }
 .combo-card:hover {
-  border-color: #6b7280;
+  border-color: var(--dvc-text-secondary);
   transform: translateY(-3px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
@@ -3220,9 +3530,9 @@ tbody td {
 }
 .combo-code {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   font-family: "Courier New", monospace;
-  background: #f3f4f6;
+  background: var(--dvc-bg-subtle);
   padding: 2px 6px;
   border-radius: 4px;
   display: inline-block;
@@ -3232,12 +3542,12 @@ tbody td {
   font-size: 14px;
   font-weight: 700;
   margin-bottom: 4px;
-  color: #1a1a2e;
+  color: var(--dvc-text);
   line-height: 1.3;
 }
 .combo-desc {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--dvc-text-secondary);
   line-height: 1.6;
   margin-bottom: 9px;
   display: -webkit-box;
@@ -3252,11 +3562,11 @@ tbody td {
 }
 .combo-tag {
   font-size: 11px;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  background: var(--dvc-bg-subtle);
+  border: 1px solid var(--dvc-border);
   padding: 2px 8px;
   border-radius: 20px;
-  color: #6b7280;
+  color: var(--dvc-text-secondary);
   white-space: nowrap;
 }
 .combo-footer {
@@ -3264,8 +3574,8 @@ tbody td {
   align-items: center;
   justify-content: space-between;
   padding: 10px 13px;
-  border-top: 1px solid #f3f4f6;
-  background: #fafafa;
+  border-top: 1px solid var(--dvc-bg-subtle);
+  background: var(--dvc-bg-subtle2);
 }
 .combo-price {
   font-size: 17px;
@@ -3274,7 +3584,7 @@ tbody td {
 }
 .combo-price-orig {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   text-decoration: line-through;
   margin-top: 1px;
 }
@@ -3288,7 +3598,7 @@ tbody td {
 .empty-state {
   text-align: center;
   padding: 48px 20px;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
 }
 .empty-icon {
   font-size: 38px;
@@ -3301,6 +3611,20 @@ tbody td {
 
 /* ── MODAL ──────────────────────────────────────────────────────── */
 .modal-overlay {
+  /* Teleport đưa modal ra ngoài .dvc-root nên không thừa hưởng được biến màu từ đó -> khai báo lại tại đây */
+  --dvc-card-bg: #fff;
+  --dvc-bg-subtle: #f3f4f6;
+  --dvc-bg-subtle2: #f9fafb;
+  --dvc-border: #e5e7eb;
+  --dvc-border-strong: #d1d5db;
+  --dvc-text: #1a1a2e;
+  --dvc-text-strong: #374151;
+  --dvc-text-secondary: #6b7280;
+  --dvc-text-muted: #9ca3af;
+  --dvc-accent: #1a1a2e;
+  --dvc-accent-hover: #2d2d4e;
+  --dvc-shadow: rgba(0, 0, 0, 0.08);
+  --dvc-overlay: rgba(0, 0, 0, 0.45);
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
@@ -3309,13 +3633,28 @@ tbody td {
   align-items: center;
   justify-content: center;
 }
+.modal-overlay.dark-mode {
+  --dvc-card-bg: #23232f;
+  --dvc-bg-subtle: #2a2a38;
+  --dvc-bg-subtle2: #1e1e29;
+  --dvc-border: #383846;
+  --dvc-border-strong: #464656;
+  --dvc-text: #e8e8ee;
+  --dvc-text-strong: #cbcbd6;
+  --dvc-text-secondary: #a3a3b2;
+  --dvc-text-muted: #7c7c8c;
+  --dvc-accent: #4b4b6b;
+  --dvc-accent-hover: #5c5c80;
+  --dvc-shadow: rgba(0, 0, 0, 0.35);
+  --dvc-overlay: rgba(0, 0, 0, 0.6);
+}
 .modal {
   position: relative; /* reset lại vì Bootstrap có sẵn .modal { position: fixed; top:0; left:0 } gây xung đột */
   top: auto;
   left: auto;
   margin: 0;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--dvc-card-bg);
+  border: 1px solid var(--dvc-border);
   border-radius: 14px;
   width: 540px;
   max-width: 95vw;
@@ -3329,7 +3668,7 @@ tbody td {
 }
 .modal-head {
   padding: 18px 22px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--dvc-bg-subtle);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3338,16 +3677,16 @@ tbody td {
 .modal-title {
   font-size: 15px;
   font-weight: 700;
-  color: #1a1a2e;
+  color: var(--dvc-text);
 }
 .modal-close {
   width: 30px;
   height: 30px;
   border-radius: 7px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--dvc-border);
   background: transparent;
   cursor: pointer;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   font-size: 14px;
   display: flex;
   align-items: center;
@@ -3355,8 +3694,8 @@ tbody td {
   transition: all 0.15s;
 }
 .modal-close:hover {
-  color: #1a1a2e;
-  background: #f3f4f6;
+  color: var(--dvc-text);
+  background: var(--dvc-bg-subtle);
 }
 .modal-body {
   padding: 20px 22px;
@@ -3367,12 +3706,12 @@ tbody td {
   width: 4px;
 }
 .modal-body::-webkit-scrollbar-thumb {
-  background: #e5e7eb;
+  background: var(--dvc-border);
   border-radius: 4px;
 }
 .modal-foot {
   padding: 14px 22px;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--dvc-bg-subtle);
   display: flex;
   gap: 8px;
   justify-content: flex-end;
@@ -3380,7 +3719,7 @@ tbody td {
 }
 
 /* ── FORM ───────────────────────────────────────────────────────── */
-.form-row {
+.dvc-form-row {
   margin-bottom: 16px;
 }
 .form-row-2 {
@@ -3392,13 +3731,13 @@ tbody td {
 .form-label {
   font-size: 12px;
   font-weight: 500;
-  color: #6b7280;
+  color: var(--dvc-text-secondary);
   margin-bottom: 6px;
   display: block;
 }
 .label-hint {
   font-weight: 400;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   font-size: 11px;
 }
 .req {
@@ -3408,11 +3747,11 @@ tbody td {
 .form-select,
 .form-textarea {
   width: 100%;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--dvc-bg-subtle2);
+  border: 1px solid var(--dvc-border);
   border-radius: 8px;
   padding: 9px 12px;
-  color: #1a1a2e;
+  color: var(--dvc-text);
   font-size: 13px;
   font-family: inherit;
   outline: none;
@@ -3421,8 +3760,8 @@ tbody td {
 .form-input:focus,
 .form-select:focus,
 .form-textarea:focus {
-  border-color: #6b7280;
-  background: #fff;
+  border-color: var(--dvc-text-secondary);
+  background: var(--dvc-card-bg);
   box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.1);
 }
 .form-input[readonly] {
@@ -3437,7 +3776,7 @@ tbody td {
 /* Error states */
 .input-error {
   border-color: #dc2626 !important;
-  background: #fff !important;
+  background: var(--dvc-card-bg) !important;
 }
 .input-error:focus {
   box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1) !important;
@@ -3468,7 +3807,7 @@ tbody td {
 /* Char count */
 .char-count {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   text-align: right;
   margin-top: 3px;
 }
@@ -3478,7 +3817,7 @@ tbody td {
 
 /* ── IMAGE UPLOAD ───────────────────────────────────────────────── */
 .img-upload-zone {
-  border: 2px dashed #d1d5db;
+  border: 2px dashed var(--dvc-border-strong);
   border-radius: 10px;
   padding: 22px;
   display: flex;
@@ -3486,16 +3825,16 @@ tbody td {
   align-items: center;
   gap: 7px;
   cursor: pointer;
-  background: #fafafa;
+  background: var(--dvc-bg-subtle2);
   transition: all 0.15s;
 }
 .img-upload-zone:hover {
-  border-color: #6b7280;
-  background: #f3f4f6;
+  border-color: var(--dvc-text-secondary);
+  background: var(--dvc-bg-subtle);
 }
 .upload-hint {
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
 }
 .upload-link {
   color: #2563eb;
@@ -3519,7 +3858,7 @@ tbody td {
   height: 76px;
   object-fit: cover;
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--dvc-border);
   display: block;
   cursor: pointer;
   transition: opacity 0.15s;
@@ -3576,23 +3915,23 @@ tbody td {
 .preview-add {
   width: 76px;
   height: 76px;
-  border: 2px dashed #d1d5db;
+  border: 2px dashed var(--dvc-border-strong);
   border-radius: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   flex-shrink: 0;
   transition: all 0.15s;
   font-size: 11px;
   gap: 3px;
 }
 .preview-add:hover {
-  border-color: #6b7280;
-  color: #374151;
-  background: #f3f4f6;
+  border-color: var(--dvc-text-secondary);
+  color: var(--dvc-text-strong);
+  background: var(--dvc-bg-subtle);
 }
 .cb-img-preview {
   display: flex;
@@ -3604,7 +3943,7 @@ tbody td {
   height: 76px;
   object-fit: cover;
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--dvc-border);
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -3623,8 +3962,8 @@ tbody td {
   flex-wrap: wrap;
   gap: 6px;
   padding: 10px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--dvc-bg-subtle2);
+  border: 1px solid var(--dvc-border);
   border-radius: 8px;
   min-height: 56px;
   max-height: 140px;
@@ -3635,7 +3974,7 @@ tbody td {
   width: 4px;
 }
 .dv-picker::-webkit-scrollbar-thumb {
-  background: #e5e7eb;
+  background: var(--dvc-border);
   border-radius: 4px;
 }
 .picker-error {
@@ -3653,19 +3992,19 @@ tbody td {
   user-select: none;
 }
 .dv-chip.sel {
-  background: #1a1a2e;
-  border: 1px solid #1a1a2e;
+  background: var(--dvc-accent);
+  border: 1px solid var(--dvc-accent);
   color: #fff;
   font-weight: 500;
 }
 .dv-chip.unsel {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  color: #6b7280;
+  background: var(--dvc-card-bg);
+  border: 1px solid var(--dvc-border);
+  color: var(--dvc-text-secondary);
 }
 .dv-chip.unsel:hover {
-  border-color: #6b7280;
-  color: #1a1a2e;
+  border-color: var(--dvc-text-secondary);
+  color: var(--dvc-text);
 }
 .chip-price {
   opacity: 0.65;
@@ -3673,7 +4012,7 @@ tbody td {
 }
 .combo-price-preview {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--dvc-text-secondary);
   margin-top: 8px;
   padding: 8px 12px;
   background: #f0fdf4;
@@ -3693,13 +4032,13 @@ tbody td {
 }
 .detail-title {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   font-weight: 600;
   letter-spacing: 0.7px;
   text-transform: uppercase;
   margin-bottom: 10px;
   padding-bottom: 6px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--dvc-bg-subtle);
 }
 .detail-grid {
   display: grid;
@@ -3707,26 +4046,26 @@ tbody td {
   gap: 8px;
 }
 .detail-item {
-  background: #f9fafb;
+  background: var(--dvc-bg-subtle2);
   border-radius: 7px;
   padding: 10px 12px;
 }
 .detail-label {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   margin-bottom: 3px;
 }
 .detail-val {
   font-size: 13px;
   font-weight: 500;
-  color: #1a1a2e;
+  color: var(--dvc-text);
 }
 .dv-list-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  background: #f9fafb;
+  background: var(--dvc-bg-subtle2);
   border-radius: 7px;
   margin-bottom: 6px;
 }
@@ -3735,8 +4074,8 @@ tbody td {
 }
 .no-img-notice {
   font-size: 13px;
-  color: #9ca3af;
-  background: #f9fafb;
+  color: var(--dvc-text-muted);
+  background: var(--dvc-bg-subtle2);
   border-radius: 7px;
   padding: 12px 16px;
   text-align: center;
@@ -3756,7 +4095,7 @@ tbody td {
   overflow: hidden;
   cursor: pointer;
   flex-shrink: 0;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--dvc-border);
 }
 .gallery-thumb img {
   width: 100%;
@@ -3883,12 +4222,16 @@ tbody td {
   position: fixed;
   bottom: 24px;
   right: 24px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  /* Teleport đưa toast ra ngoài .dvc-root nên không thừa hưởng được biến màu -> khai báo lại tại đây */
+  --dvc-card-bg: #fff;
+  --dvc-border: #e5e7eb;
+  --dvc-text: #1a1a2e;
+  background: var(--dvc-card-bg);
+  border: 1px solid var(--dvc-border);
   border-radius: 10px;
   padding: 12px 16px;
   font-size: 13px;
-  color: #1a1a2e;
+  color: var(--dvc-text);
   display: flex;
   align-items: center;
   gap: 9px;
@@ -3899,6 +4242,11 @@ tbody td {
   pointer-events: none;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
   max-width: 320px;
+}
+.toast.dark-mode {
+  --dvc-card-bg: #23232f;
+  --dvc-border: #383846;
+  --dvc-text: #e8e8ee;
 }
 .toast.show {
   transform: translateY(0);
@@ -3948,13 +4296,13 @@ tbody td {
 
 /* ── NESTED CRUD: TIÊU ĐỀ + CHI TIẾT ─────────────────────────── */
 .dv-main-row.row-expanded {
-  background: #f8fafc;
+  background: var(--dvc-bg-subtle);
 }
 .expand-btn {
   background: none;
   border: none;
   cursor: pointer;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   padding: 2px 4px;
   margin-right: 6px;
   display: inline-flex;
@@ -3963,7 +4311,7 @@ tbody td {
   vertical-align: middle;
 }
 .expand-btn:hover {
-  color: #1a1a2e;
+  color: var(--dvc-text);
 }
 .expand-icon {
   transition: transform 0.2s;
@@ -3972,15 +4320,15 @@ tbody td {
   transform: rotate(180deg);
 }
 .dv-detail-row {
-  background: #fafbfc;
+  background: var(--dvc-bg-subtle2);
 }
 .dv-detail-row td {
   padding: 0 !important;
 }
 .nested-panel {
   padding: 14px 18px;
-  border-top: 1px solid #e5e7eb;
-  background: #fafbfc;
+  border-top: 1px solid var(--dvc-border);
+  background: var(--dvc-bg-subtle2);
 }
 .nested-header {
   display: flex;
@@ -3991,11 +4339,11 @@ tbody td {
 .nested-title {
   font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: var(--dvc-text-strong);
   margin: 0;
 }
 .nested-count {
-  background: #e5e7eb;
+  background: var(--dvc-border);
   font-size: 11px;
   padding: 1px 8px;
   border-radius: 10px;
@@ -4012,7 +4360,7 @@ tbody td {
 }
 .nested-empty {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   text-align: center;
   padding: 16px;
 }
@@ -4022,7 +4370,7 @@ tbody td {
   margin-bottom: 8px;
 }
 .td-new {
-  background: #fff;
+  background: var(--dvc-card-bg);
   border: 1px dashed #2563eb;
   border-radius: 8px;
   padding: 8px 10px;
@@ -4037,19 +4385,19 @@ tbody td {
   flex-wrap: wrap;
 }
 .td-input {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--dvc-card-bg);
+  border: 1px solid var(--dvc-border);
   border-radius: 6px;
   padding: 6px 10px;
   font-size: 12px;
-  color: #1a1a2e;
+  color: var(--dvc-text);
   font-family: inherit;
   outline: none;
   transition: border 0.15s;
 }
 .td-input:focus {
-  border-color: #6b7280;
-  box-shadow: 0 0 0 2px rgba(107,114,128,0.08);
+  border-color: var(--dvc-text-secondary);
+  box-shadow: 0 0 0 2px rgba(107, 114, 128, 0.08);
 }
 .td-input.td-sm {
   font-size: 11px;
@@ -4063,30 +4411,30 @@ tbody td {
   align-items: center;
   gap: 6px;
   padding: 6px 8px;
-  background: #fff;
+  background: var(--dvc-card-bg);
   border-radius: 7px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--dvc-border);
 }
 .td-toggle {
   background: none;
   border: none;
   cursor: pointer;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   padding: 2px;
   display: flex;
   align-items: center;
 }
 .td-toggle:hover {
-  color: #374151;
+  color: var(--dvc-text-strong);
 }
 .td-name {
   font-size: 13px;
   font-weight: 600;
-  color: #1a1a2e;
+  color: var(--dvc-text);
 }
 .td-desc {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   margin-left: 4px;
 }
 
@@ -4100,9 +4448,9 @@ tbody td {
   font-size: 11px;
   font-weight: 500;
   cursor: pointer;
-  border: 1px solid #e5e7eb;
-  background: #fff;
-  color: #6b7280;
+  border: 1px solid var(--dvc-border);
+  background: var(--dvc-card-bg);
+  color: var(--dvc-text-secondary);
   font-family: inherit;
   transition: all 0.12s;
   white-space: nowrap;
@@ -4112,28 +4460,28 @@ tbody td {
   cursor: not-allowed;
 }
 .td-btn-save {
-  background: #1a1a2e;
+  background: var(--dvc-accent);
   color: #fff;
-  border-color: #1a1a2e;
+  border-color: var(--dvc-accent);
 }
 .td-btn-save:hover:not(:disabled) {
-  background: #2d2d4e;
+  background: var(--dvc-accent-hover);
 }
 .td-btn-cancel {
   background: transparent;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
 }
 .td-btn-cancel:hover {
-  background: #f3f4f6;
+  background: var(--dvc-bg-subtle);
 }
 .td-img-upload {
   cursor: pointer;
-  background: #f9fafb;
-  border: 1px dashed #d1d5db;
+  background: var(--dvc-bg-subtle2);
+  border: 1px dashed var(--dvc-border-strong);
 }
 .td-img-upload:hover {
-  background: #f3f4f6;
-  border-color: #9ca3af;
+  background: var(--dvc-bg-subtle);
+  border-color: var(--dvc-text-muted);
 }
 
 /* Chi tiết section */
@@ -4141,9 +4489,9 @@ tbody td {
   margin-top: 6px;
   margin-left: 20px;
   padding: 8px 10px;
-  background: #f9fafb;
+  background: var(--dvc-bg-subtle2);
   border-radius: 7px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--dvc-border);
 }
 .ct-form {
   display: flex;
@@ -4165,8 +4513,8 @@ tbody td {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--dvc-card-bg);
+  border: 1px solid var(--dvc-border);
   border-radius: 8px;
   padding: 5px 8px 5px 6px;
   min-width: 0;
@@ -4180,7 +4528,7 @@ tbody td {
   height: 36px;
   object-fit: cover;
   border-radius: 5px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--dvc-border);
   display: block;
 }
 .ct-info {
@@ -4191,7 +4539,7 @@ tbody td {
 .ct-name {
   font-size: 12px;
   font-weight: 500;
-  color: #374151;
+  color: var(--dvc-text-strong);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4199,7 +4547,7 @@ tbody td {
 }
 .ct-desc {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   display: block;
   white-space: nowrap;
   overflow: hidden;
@@ -4207,7 +4555,7 @@ tbody td {
 }
 .ct-empty {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--dvc-text-muted);
   text-align: center;
   padding: 10px;
 }
