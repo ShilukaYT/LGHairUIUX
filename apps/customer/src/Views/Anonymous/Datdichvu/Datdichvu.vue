@@ -42,6 +42,44 @@ const bookingData = ref({
     paymentMethod: 'vnpay',
     note: ''
 });
+
+// ==========================================
+// HÓA ĐƠN ĐIỆN TỬ
+// Mặc định luôn xuất hóa đơn cá nhân, dùng Email đã nhập ở trên (không hỏi lại).
+// Chỉ mở rộng khi khách cần hóa đơn công ty (có MST).
+// ==========================================
+const showInvoiceCompanyForm = ref(false);
+const invoiceCompany = ref({ tenCongTy: '', mst: '' });
+const mstError = ref('');
+
+const validateMst = (): boolean => {
+    if (!showInvoiceCompanyForm.value) {
+        mstError.value = '';
+        return true;
+    }
+    const mst = (invoiceCompany.value.mst || '').trim();
+    const isValid = /^\d{10}$/.test(mst) || /^\d{10}-\d{3}$/.test(mst);
+    mstError.value = isValid ? '' : 'Mã số thuế không hợp lệ (10 số, hoặc 10 số-3 số chi nhánh)';
+    return isValid;
+};
+
+const validateInvoiceInfo = (): string | null => {
+    if (!showInvoiceCompanyForm.value) return null;
+    if (!validateMst()) return mstError.value;
+    const tenCty = (invoiceCompany.value.tenCongTy || '').trim();
+    if (tenCty.length < 3) return 'Vui lòng nhập đúng tên công ty (tối thiểu 3 ký tự)';
+    return null;
+};
+
+function buildInvoiceInfoPayload() {
+    return {
+        laDoanhNghiep: showInvoiceCompanyForm.value,
+        tenCongTy: showInvoiceCompanyForm.value ? invoiceCompany.value.tenCongTy : null,
+        mst: showInvoiceCompanyForm.value ? invoiceCompany.value.mst : null,
+        diaChiXuatHD: null, // Dịch vụ làm tại salon, không có địa chỉ giao hàng riêng
+        emailNhanHD: bookingData.value.email || null
+    };
+}
 // Hàm load Voucher dựa trên tổng tiền hiện tại
 const loadVouchers = async () => {
     if (!customerId.value || customerId.value === 'GUEST') return;
@@ -335,6 +373,13 @@ const handleBooking = async () => {
         alert("Vui lòng điền đầy đủ thông tin (Bao gồm cả Email để nhận mã QR)!");
         return;
     }
+
+    const invoiceErr = validateInvoiceInfo();
+    if (invoiceErr) {
+        alert(invoiceErr);
+        return;
+    }
+
     localStorage.setItem('temp_stylist_id', bookingData.value.stylistId || '');
     try {
         const mode = bookingData.value.paymentMode; // "10" hoặc "100"
@@ -349,6 +394,8 @@ const handleBooking = async () => {
         localStorage.setItem('temp_phone', bookingData.value.phone);
         localStorage.setItem('temp_name', bookingData.value.customerName);
         localStorage.setItem('temp_voucher', bookingData.value.voucherIds[0] || '');
+        // Lưu thông tin hóa đơn để trang PaymentResult.vue gửi kèm khi lưu booking
+        localStorage.setItem('temp_invoice_info', JSON.stringify(buildInvoiceInfoPayload()));
 
         const paymentData = {
             amount: payNow.value, // 50k hoặc 500k
@@ -546,6 +593,29 @@ watch(
                                     placeholder="Ghi chú yêu cầu...">
                             </div>
                         </div>
+
+                        <!-- HÓA ĐƠN CÔNG TY (thu gọn, mặc định đóng) -->
+                        <div class="invoice-toggle-line mt-4" @click="showInvoiceCompanyForm = !showInvoiceCompanyForm">
+                            <span class="font-bold text-black" style="font-size: 14px;">
+                                <i class="fas fa-building me-2"></i> Cần hóa đơn công ty (có MST)?
+                            </span>
+                            <i class="fas fa-chevron-down invoice-toggle-arrow" :class="{ open: showInvoiceCompanyForm }"></i>
+                        </div>
+                        <transition name="list-fade">
+                            <div v-if="showInvoiceCompanyForm" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                                <div>
+                                    <label class="custom-label font-bold">Tên công ty *</label>
+                                    <input v-model="invoiceCompany.tenCongTy" type="text" class="booking-input w-full"
+                                        placeholder="Công ty TNHH ABC">
+                                </div>
+                                <div>
+                                    <label class="custom-label font-bold">Mã số thuế *</label>
+                                    <input v-model="invoiceCompany.mst" type="text" class="booking-input w-full"
+                                        @blur="validateMst" placeholder="0301234567">
+                                    <p v-if="mstError" class="text-danger small mt-1 mb-0 font-bold">{{ mstError }}</p>
+                                </div>
+                            </div>
+                        </transition>
 
                         <div class="section-heading-wrapper mt-10">
                             <h3 class="font-playfair section-heading-title font-bold text-black">
@@ -1165,6 +1235,32 @@ select.booking-input {
 .payment-method-row {
     display: flex;
     gap: 16px;
+}
+
+.invoice-toggle-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px 16px;
+    cursor: pointer;
+    background: #ffffff;
+    transition: all 0.25s ease;
+}
+
+.invoice-toggle-line:hover {
+    border-color: var(--primary-color);
+}
+
+.invoice-toggle-arrow {
+    font-size: 12px;
+    color: var(--text-muted);
+    transition: transform 0.25s ease;
+}
+
+.invoice-toggle-arrow.open {
+    transform: rotate(180deg);
 }
 
 .method-option {

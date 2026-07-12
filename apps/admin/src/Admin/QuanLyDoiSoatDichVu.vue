@@ -164,14 +164,17 @@ onMounted(() => { loadDoiSoat(); });
             </td>
             <td>{{ fmt(d.tongTien) }}</td>
             <td>
-              <span v-if="d.trangThaiHoaDon === 1" class="status-pill active"><span class="status-dot"></span>Đã xuất</span>
-              <span v-else-if="d.trangThaiHoaDon === 2" class="status-pill cancelled" :title="d.ghiChuLoi"><span class="status-dot"></span>Lỗi</span>
-              <span v-else-if="d.coHoaDon" class="status-pill pending"><span class="status-dot"></span>Đang chờ</span>
+              <!-- ĐÃ SỬA: trước đây bind d.trangThaiHoaDon / d.coHoaDon / d.ghiChuLoi - các field này
+                   KHÔNG tồn tại trong response backend (backend trả TrangThaiHddtDichVu/CoHoaDon...),
+                   nên luôn ra undefined -> rơi vào nhánh "Đang chờ" dù thực tế đã xuất hóa đơn. -->
+              <span v-if="d.trangThaiHddtDichVu === 1" class="status-pill active"><span class="status-dot"></span>Đã xuất</span>
+              <span v-else-if="d.trangThaiHddtDichVu === 2" class="status-pill cancelled" :title="d.ghiChuLoiDichVu"><span class="status-dot"></span>Lỗi</span>
+              <span v-else-if="d.trangThaiHddtDichVu === 3 || d.trangThaiHddtDichVu === 0" class="status-pill pending"><span class="status-dot"></span>Đang chờ</span>
               <span v-else class="status-pill inactive"><span class="status-dot"></span>Không xuất HĐ</span>
             </td>
-            <td>{{ d.soHoaDon || "—" }}</td>
+            <td>{{ d.soHoaDonDichVu || "—" }}</td>
             <td>
-              <a v-if="d.linkPdf" :href="d.linkPdf" target="_blank" class="icon-btn view" title="Xem PDF">
+              <a v-if="d.linkPdfDichVu" :href="d.linkPdfDichVu" target="_blank" class="icon-btn view" title="Xem PDF">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8s2.5-5 6-5 6 5 6 5-2.5 5-6 5-6-5-6-5Z"/><circle cx="8" cy="8" r="2"/></svg>
               </a>
               <span v-else>—</span>
