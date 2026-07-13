@@ -252,8 +252,8 @@ function toggleVoucher(id: string) {
     const ids = orderData.value.voucherIds;
     const i = ids.indexOf(id);
     if (i >= 0) { ids.splice(i, 1); return; }
-    if (ids.length >= 2) {
-        alert('Chỉ chọn tối đa 2 voucher. Bỏ chọn một mã trước khi thêm mã khác.');
+    if (ids.length >= 1) {
+        ids.splice(0, ids.length, id);
         return;
     }
     ids.push(id);

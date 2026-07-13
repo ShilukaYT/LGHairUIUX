@@ -360,8 +360,8 @@ function toggleVoucher(id: string) {
         ids.splice(i, 1);
         return;
     }
-    if (ids.length >= 2) {
-        alert('Chỉ chọn tối đa 2 voucher. Bỏ chọn một mã trước khi thêm mã khác.');
+    if (ids.length >= 1) {
+        ids.splice(0, ids.length, id);
         return;
     }
     ids.push(id);

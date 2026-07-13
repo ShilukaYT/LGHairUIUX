@@ -5,6 +5,7 @@ import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, u
 import { db } from '@/firebase'
 import { useRouter, useRoute } from 'vue-router'
 import axios from 'axios'
+import { useAuthStore } from '@/stores/useAuthStore'
 
 // ── Config ──────────────────────────────────────────────
 const API_BASE = 'https://localhost:7196/api/chat' // API cho live chat nhân viên
@@ -198,16 +199,21 @@ const startChat = async () => {
 }
 
 const handleStartChatClick = async () => {
-  const { name } = getCustomerInfo()
-  
-  // Nếu là tài khoản thực (không phải 'Khách') hoặc đã điền tên tùy chỉnh trước đó
-  if (name && name !== 'Khách') {
-    await startChat()
-  } else {
-    // Hiện khung nhập tên
-    showNamePrompt.value = true
-  }
+  await startChat()
 }
+
+// Lắng nghe signal từ store để tự động mở và kết nối trực tiếp với nhân viên
+const authStore = useAuthStore()
+watch(() => authStore.openChatWithStaffSignal, async (newVal) => {
+  if (newVal) {
+    isOpen.value = true
+    authStore.openChatWithStaffSignal = false
+    await nextTick()
+    if (!isConnected.value) {
+      await startChat()
+    }
+  }
+})
 
 const submitNameAndStartChat = async () => {
   const enteredName = tempCustomerName.value.trim()

@@ -2,9 +2,12 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { toast } from 'vue-sonner'
+import Swal from 'sweetalert2'
+import { logActivity } from '@/utils/activityLogger'
 import {
   Plus,
   Pencil,
+  Trash2,
   Search,
   ChevronLeft,
   ChevronRight,
@@ -433,6 +436,31 @@ function onSearchInput() {
   }, 400)
 }
 
+async function confirmDelete(row: KhachHangRow) {
+  const res = await Swal.fire({
+    title: 'Xác nhận xóa?',
+    text: `Bạn có chắc chắn muốn xóa khách hàng "${row.hoTen || row.maKh}" không?`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    cancelButtonColor: '#3085d6',
+    confirmButtonText: 'Xóa ngay',
+    cancelButtonText: 'Hủy'
+  })
+
+  if (!res.isConfirmed) return
+
+  try {
+    await axios.delete(`${BASE}/${encodeURIComponent(row.maKh)}`, { withCredentials: true })
+    toast.success('Đã xóa khách hàng thành công.')
+    logActivity("Xóa khách hàng", `Đã xóa khách hàng ${row.hoTen || row.maKh}`, "Quản lý khách hàng")
+    await fetchList()
+  } catch (e: unknown) {
+    const msg = axios.isAxiosError(e) ? (e.response?.data as { message?: string })?.message : null
+    toast.error(msg || 'Xóa thất bại.')
+  }
+}
+
 watch(trangThaiFilter, () => {
   page.value = 1
 })
@@ -492,28 +520,28 @@ onMounted(() => {
 
       <!-- Table -->
       <div class="flex-1 overflow-x-auto w-full p-6 pt-2">
-        <div class="overflow-x-auto rounded-xl border border-slate-200">
+        <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
           <Table class="w-full text-left text-xs">
-            <TableHeader class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[11px]">
+            <TableHeader class="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 uppercase tracking-wider text-[11px]">
               <TableRow class="hover:bg-transparent">
-                <TableHead class="py-3.5 px-4 font-bold text-center w-[120px]">MÃ KH</TableHead>
-                <TableHead class="py-3.5 px-4 font-bold text-left">HỌ TÊN</TableHead>
-                <TableHead class="py-3.5 px-4 font-bold text-center">SỐ ĐIỆN THOẠI</TableHead>
-                <TableHead class="py-3.5 px-4 font-bold text-left">EMAIL</TableHead>
-                <TableHead class="py-3.5 px-4 font-bold text-center">HẠNG</TableHead>
-                <TableHead class="py-3.5 px-4 font-bold text-center">ĐIỂM TÍCH LŨY</TableHead>
-                <TableHead class="py-3.5 px-4 font-bold text-center">TRẠNG THÁI</TableHead>
-                <TableHead class="py-3.5 px-4 font-bold text-center">THAO TÁC</TableHead>
+                <TableHead class="py-3.5 px-4 font-bold text-center w-[120px] dark:text-slate-400">MÃ KH</TableHead>
+                <TableHead class="py-3.5 px-4 font-bold text-left dark:text-slate-400">HỌ TÊN</TableHead>
+                <TableHead class="py-3.5 px-4 font-bold text-center dark:text-slate-400">SỐ ĐIỆN THOẠI</TableHead>
+                <TableHead class="py-3.5 px-4 font-bold text-left dark:text-slate-400">EMAIL</TableHead>
+                <TableHead class="py-3.5 px-4 font-bold text-center dark:text-slate-400">HẠNG</TableHead>
+                <TableHead class="py-3.5 px-4 font-bold text-center dark:text-slate-400">ĐIỂM TÍCH LŨY</TableHead>
+                <TableHead class="py-3.5 px-4 font-bold text-center dark:text-slate-400">TRẠNG THÁI</TableHead>
+                <TableHead class="py-3.5 px-4 font-bold text-center dark:text-slate-400">THAO TÁC</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody class="divide-y divide-slate-100">
+            <TableBody class="divide-y divide-slate-100 dark:divide-slate-800">
             <TableRow v-if="loading">
-              <TableCell colspan="8" class="text-slate-550 py-14 text-center text-xs font-bold tracking-widest uppercase bg-white">
+              <TableCell colspan="8" class="text-slate-550 dark:text-slate-400 py-14 text-center text-xs font-bold tracking-widest uppercase bg-white dark:bg-[#1e1e2d]">
                 Đang tải dữ liệu khách hàng...
               </TableCell>
             </TableRow>
             <TableRow v-else-if="!list.length">
-              <TableCell colspan="8" class="text-slate-450 py-14 text-center text-xs font-semibold bg-white">
+              <TableCell colspan="8" class="text-slate-450 dark:text-slate-500 py-14 text-center text-xs font-semibold bg-white dark:bg-[#1e1e2d]">
                 Không có dữ liệu khách hàng.
               </TableCell>
             </TableRow>
@@ -521,25 +549,25 @@ onMounted(() => {
               v-else 
               v-for="row in list" 
               :key="row.maKh"
-              class="hover:bg-[#bfa77a]/5 border-b border-slate-100 transition-all duration-150 group cursor-pointer"
+              class="hover:bg-[#bfa77a]/5 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-[#1e1e2d] transition-all duration-150 group cursor-pointer"
             >
               <!-- Mã KH (Center) -->
-              <TableCell class="py-5 px-4 text-center font-mono font-bold text-slate-800">{{ row.maKh }}</TableCell>
+              <TableCell class="py-5 px-4 text-center font-mono font-bold text-slate-800 dark:text-slate-200 bg-transparent">{{ row.maKh }}</TableCell>
               
               <!-- Họ tên (Left) -->
-              <TableCell class="py-5 px-4 text-left font-semibold text-slate-800 group-hover:text-[#8c734b] transition-colors">{{ row.hoTen || '—' }}</TableCell>
+              <TableCell class="py-5 px-4 text-left font-semibold text-slate-800 dark:text-slate-200 group-hover:text-[#8c734b] bg-transparent transition-colors">{{ row.hoTen || '—' }}</TableCell>
               
               <!-- SĐT (Center) -->
-              <TableCell class="py-5 px-4 text-center text-slate-700 whitespace-nowrap">{{ row.sdt || '—' }}</TableCell>
+              <TableCell class="py-5 px-4 text-center text-slate-700 dark:text-slate-350 bg-transparent whitespace-nowrap">{{ row.sdt || '—' }}</TableCell>
               
               <!-- Email (Left) -->
-              <TableCell class="py-5 px-4 text-left text-slate-650 max-w-xs truncate sm:max-w-md">{{ row.email || '—' }}</TableCell>
+              <TableCell class="py-5 px-4 text-left text-slate-650 dark:text-slate-400 bg-transparent max-w-xs truncate sm:max-w-md">{{ row.email || '—' }}</TableCell>
               
               <!-- Hạng (Center) -->
-              <TableCell class="py-5 px-4 text-center">
+              <TableCell class="py-5 px-4 text-center bg-transparent">
                 <span 
                   v-if="row.tenRank?.toUpperCase().includes('KIM CƯƠNG') || row.maRank?.toUpperCase().includes('KIM CƯƠNG')" 
-                  class="inline-flex items-center px-2.5 py-0.5 rounded-md text-[8px] font-extrabold uppercase tracking-widest bg-cyan-50 text-cyan-600 border border-cyan-150"
+                  class="inline-flex items-center px-2.5 py-0.5 rounded-md text-[8px] font-extrabold uppercase tracking-widest bg-cyan-50 dark:bg-cyan-950/30 text-cyan-600 dark:text-cyan-400 border border-cyan-150 dark:border-cyan-900/50"
                 >
                   {{ row.tenRank || row.maRank }}
                 </span>
@@ -551,46 +579,55 @@ onMounted(() => {
                 </span>
                 <span 
                   v-else-if="row.tenRank?.toUpperCase().includes('BẠC') || row.maRank?.toUpperCase().includes('BẠC') || row.tenRank?.toUpperCase().includes('SILVER')" 
-                  class="inline-flex items-center px-2.5 py-0.5 rounded-md text-[8px] font-extrabold uppercase tracking-widest bg-slate-100 text-slate-600 border border-slate-200"
+                  class="inline-flex items-center px-2.5 py-0.5 rounded-md text-[8px] font-extrabold uppercase tracking-widest bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
                 >
                   {{ row.tenRank || row.maRank }}
                 </span>
                 <span 
                   v-else 
-                  class="inline-flex items-center px-2.5 py-0.5 rounded-md text-[8px] font-extrabold uppercase tracking-widest bg-amber-55 text-amber-700 border border-amber-100"
+                  class="inline-flex items-center px-2.5 py-0.5 rounded-md text-[8px] font-extrabold uppercase tracking-widest bg-amber-55 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-900/55"
                 >
                   {{ row.tenRank || row.maRank || 'Đồng' }}
                 </span>
               </TableCell>
               
               <!-- Điểm (Center) -->
-              <TableCell class="py-5 px-4 text-center font-bold font-mono text-slate-700 text-xs">{{ row.diemTichLuy ?? 0 }}</TableCell>
+              <TableCell class="py-5 px-4 text-center font-bold font-mono text-slate-700 dark:text-slate-300 bg-transparent text-xs">{{ row.diemTichLuy ?? 0 }}</TableCell>
               
               <!-- Trạng thái (Center) -->
-              <TableCell class="py-5 px-4 text-center">
+              <TableCell class="py-5 px-4 text-center bg-transparent">
                 <span 
                   v-if="row.trangThai === 1"
-                  class="inline-flex items-center px-2.5 py-0.5 rounded-md text-[8px] font-extrabold uppercase tracking-widest bg-emerald-50 text-emerald-600 border border-emerald-150"
+                  class="inline-flex items-center px-2.5 py-0.5 rounded-md text-[8px] font-extrabold uppercase tracking-widest bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border border-emerald-150 dark:border-emerald-900/50"
                 >
                   Hoạt động
                 </span>
                 <span 
                   v-else
-                  class="inline-flex items-center px-2.5 py-0.5 rounded-md text-[8px] font-extrabold uppercase tracking-widest bg-rose-50 text-rose-600 border border-rose-150"
+                  class="inline-flex items-center px-2.5 py-0.5 rounded-md text-[8px] font-extrabold uppercase tracking-widest bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border border-rose-150 dark:border-rose-900/50"
                 >
                   Khóa
                 </span>
               </TableCell>
               
               <!-- Thao tác (Center) -->
-              <TableCell class="py-3.5 px-4 text-center" @click.stop>
-                <v-btn
-                  color="primary" variant="tonal" size="small" rounded="lg" class="text-none font-weight-bold"
-                  @click="openEdit(row)"
-                >
-                  <template v-slot:prepend><Pencil class="w-3.5 h-3.5 mr-1" /></template>
-                  Sửa
-                </v-btn>
+              <TableCell class="py-3.5 px-4 text-center bg-transparent" @click.stop>
+                <div class="flex items-center justify-center gap-1.5">
+                  <v-btn
+                    color="primary" variant="tonal" size="small" rounded="lg" class="text-none font-weight-bold"
+                    @click="openEdit(row)"
+                  >
+                    <template v-slot:prepend><Pencil class="w-3.5 h-3.5 mr-1" /></template>
+                    Sửa
+                  </v-btn>
+                  <v-btn
+                    color="error" variant="tonal" size="small" rounded="lg" class="text-none font-weight-bold"
+                    @click="confirmDelete(row)"
+                  >
+                    <template v-slot:prepend><Trash2 class="w-3.5 h-3.5 mr-1" /></template>
+                    Xóa
+                  </v-btn>
+                </div>
               </TableCell>
             </TableRow>
           </TableBody>
@@ -598,35 +635,35 @@ onMounted(() => {
       </div>
     </div>
 
-      <!-- Pagination -->
-      <div class="text-slate-500 flex flex-col items-center justify-between gap-4 border-t px-6 py-4 text-xs font-semibold sm:flex-row bg-slate-50/50">
-        <span>
-          Tổng số <strong class="text-slate-800 font-mono">{{ totalCount }}</strong> khách hàng · Trang {{ page }} / {{ totalPages }}
-        </span>
-        <div class="flex items-center gap-2">
-          <v-btn
-            variant="outlined" color="grey-darken-1" size="36" rounded="lg"
-            :disabled="page <= 1 || loading"
-            @click="page = Math.max(1, page - 1)"
-          >
-            <ChevronLeft class="w-4 h-4" />
-          </v-btn>
-          <v-btn
-            variant="outlined" color="grey-darken-1" size="36" rounded="lg"
-            :disabled="page >= totalPages || loading"
-            @click="page = Math.min(totalPages, page + 1)"
-          >
-            <ChevronRight class="w-4 h-4" />
-          </v-btn>
-        </div>
+    <!-- Pagination -->
+    <div class="text-slate-500 dark:text-slate-400 flex flex-col items-center justify-between gap-4 border-t border-slate-200 dark:border-slate-800 px-6 py-4 text-xs font-semibold sm:flex-row bg-slate-50/50 dark:bg-slate-900/30">
+      <span>
+        Tổng số <strong class="text-slate-800 dark:text-slate-200 font-mono">{{ totalCount }}</strong> khách hàng · Trang {{ page }} / {{ totalPages }}
+      </span>
+      <div class="flex items-center gap-2">
+        <v-btn
+          variant="outlined" color="grey-darken-1" size="36" rounded="lg"
+          :disabled="page <= 1 || loading"
+          @click="page = Math.max(1, page - 1)"
+        >
+          <ChevronLeft class="w-4 h-4" />
+        </v-btn>
+        <v-btn
+          variant="outlined" color="grey-darken-1" size="36" rounded="lg"
+          :disabled="page >= totalPages || loading"
+          @click="page = Math.min(totalPages, page + 1)"
+        >
+          <ChevronRight class="w-4 h-4" />
+        </v-btn>
       </div>
-    </v-card>
+    </div>
+  </v-card>
 
     <!-- Sửa khách hàng -->
     <Teleport to="body">
       <div
         v-if="editOpen"
-        class="fixed inset-0 z-[2400] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+        class="fixed inset-0 z-[2400] flex items-center justify-center p-4 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs transition-opacity"
         role="dialog"
         aria-modal="true"
         aria-labelledby="edit-kh-title"
@@ -638,50 +675,50 @@ onMounted(() => {
           @click="editOpen = false"
         />
         <div
-          class="relative z-10 flex max-h-[90vh] w-full max-w-3xl min-h-0 flex-col overflow-hidden rounded-2xl border border-solid !border-slate-300 bg-white shadow-2xl transition-all"
+          class="relative z-10 flex max-h-[90vh] w-full max-w-3xl min-h-0 flex-col overflow-hidden rounded-2xl border border-solid border-slate-300 dark:border-slate-800 bg-white dark:bg-[#1e1e2d] shadow-2xl transition-all"
           @click.stop
         >
           <!-- Header -->
-          <div class="shrink-0 border-b border-solid !border-slate-200 !px-8 !pt-6 !pb-4 bg-slate-50/50">
+          <div class="shrink-0 border-b border-solid border-slate-200 dark:border-slate-800 px-8 pt-6 pb-4 bg-slate-50/50 dark:bg-slate-800/40">
             <h2 id="edit-kh-title" class="text-lg font-serif text-[#8c734b] tracking-wider uppercase">Sửa thông tin khách hàng</h2>
           </div>
 
           <!-- Body -->
-          <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain !px-8 !py-6 space-y-5 text-xs">
-            <p class="text-slate-500 text-xs leading-relaxed">
+          <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-8 py-6 space-y-5 text-xs">
+            <p class="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">
               Hạng thành viên được hệ thống tự cập nhật theo điểm (giống đăng nhập khách).
-              <span v-if="editForm.tenRank" class="text-slate-800 font-bold ml-1">Hiện tại: {{ editForm.tenRank }}</span>
+              <span v-if="editForm.tenRank" class="text-slate-800 dark:text-slate-200 font-bold ml-1">Hiện tại: {{ editForm.tenRank }}</span>
             </p>
 
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-x-6">
               <div class="space-y-2">
-                <Label for="ef-ten" class="text-xs font-bold text-slate-500 tracking-wider">HỌ TÊN</Label>
-                <Input id="ef-ten" v-model="editForm.hoTen" class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all" />
+                <Label for="ef-ten" class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">HỌ TÊN</Label>
+                <Input id="ef-ten" v-model="editForm.hoTen" class="h-11 text-xs rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:border-[#8c734b] bg-slate-50/50 dark:bg-slate-850/50 focus:bg-white dark:focus:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-none transition-all" />
               </div>
               <div class="space-y-2">
-                <Label for="ef-sdt" class="text-xs font-bold text-slate-500 tracking-wider">SỐ ĐIỆN THOẠI</Label>
+                <Label for="ef-sdt" class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">SỐ ĐIỆN THOẠI</Label>
                 <Input
                   id="ef-sdt"
                   v-model="editForm.sdt"
-                  class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
+                  class="h-11 text-xs rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:border-[#8c734b] bg-slate-50/50 dark:bg-slate-850/50 focus:bg-white dark:focus:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-none transition-all"
                   placeholder="VD: 09xxxxxxxx"
                   inputmode="tel"
                   autocomplete="tel"
                 />
               </div>
               <div class="space-y-2">
-                <Label for="ef-email" class="text-xs font-bold text-slate-500 tracking-wider">EMAIL *</Label>
+                <Label for="ef-email" class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">EMAIL *</Label>
                 <Input
                   id="ef-email"
                   v-model="editForm.email"
-                  class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
+                  class="h-11 text-xs rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:border-[#8c734b] bg-slate-50/50 dark:bg-slate-850/50 focus:bg-white dark:focus:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-none transition-all"
                   type="email"
                   autocomplete="email"
                   placeholder="vidu@email.com"
                 />
               </div>
               <div class="space-y-2">
-                <Label class="text-xs font-bold text-slate-500 tracking-wider">GIỚI TÍNH</Label>
+                <Label class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">GIỚI TÍNH</Label>
                 <Select
                   :model-value="editForm.gioiTinh.trim() ? editForm.gioiTinh.trim() : GIOI_TINH_NONE"
                   @update:model-value="
@@ -690,10 +727,10 @@ onMounted(() => {
                     }
                   "
                 >
-                  <SelectTrigger class="h-11 text-xs font-semibold text-slate-700 !bg-slate-50/50 rounded-xl border border-solid !border-slate-300 outline-none focus:ring-0 shadow-none transition-all">
-                    <SelectValue placeholder="Chọn giới tính" />
+                  <SelectTrigger class="h-11 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-50/50 dark:bg-slate-850/50 rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:ring-0 shadow-none transition-all">
+                     <SelectValue placeholder="Chọn giới tính" />
                   </SelectTrigger>
-                  <SelectContent class="rounded-xl border border-solid !border-slate-300 !bg-white shadow-lg">
+                  <SelectContent class="!z-[3000] rounded-xl border border-solid border-slate-300 dark:border-slate-800 bg-white dark:bg-[#1e1e2d] shadow-lg">
                     <SelectItem :value="GIOI_TINH_NONE">Chưa chọn</SelectItem>
                     <SelectItem value="Nam">Nam</SelectItem>
                     <SelectItem value="Nữ">Nữ</SelectItem>
@@ -702,16 +739,16 @@ onMounted(() => {
                 </Select>
               </div>
               <div class="space-y-2">
-                <Label for="ef-diem" class="text-xs font-bold text-slate-500 tracking-wider">ĐIỂM TÍCH LŨY</Label>
-                <Input id="ef-diem" v-model="editForm.diemTichLuy" class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all" type="number" min="0" />
+                <Label for="ef-diem" class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">ĐIỂM TÍCH LŨY</Label>
+                <Input id="ef-diem" v-model="editForm.diemTichLuy" class="h-11 text-xs rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:border-[#8c734b] bg-slate-50/50 dark:bg-slate-850/50 focus:bg-white dark:focus:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-none transition-all" type="number" min="0" />
               </div>
               <div class="space-y-2">
-                <Label class="text-xs font-bold text-slate-500 tracking-wider">TRẠNG THÁI</Label>
+                <Label class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">TRẠNG THÁI</Label>
                 <Select v-model="editForm.trangThai">
-                  <SelectTrigger class="h-11 text-xs font-semibold text-slate-700 !bg-slate-50/50 rounded-xl border border-solid !border-slate-300 outline-none focus:ring-0 shadow-none transition-all">
+                  <SelectTrigger class="h-11 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-50/50 dark:bg-slate-850/50 rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:ring-0 shadow-none transition-all">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent class="rounded-xl border border-solid !border-slate-300 !bg-white shadow-lg">
+                  <SelectContent class="!z-[3000] rounded-xl border border-solid border-slate-300 dark:border-slate-800 bg-white dark:bg-[#1e1e2d] shadow-lg">
                     <SelectItem value="1">Hoạt động</SelectItem>
                     <SelectItem value="0">Khóa</SelectItem>
                   </SelectContent>
@@ -719,21 +756,21 @@ onMounted(() => {
               </div>
             </div>
 
-            <div class="border-border space-y-3 border-t pt-4">
-              <Label class="text-xs font-bold text-slate-500 tracking-wider">ẢNH ĐẠI DIỆN</Label>
-              <p class="text-slate-450 text-[10px]">Chọn file JPG, PNG hoặc WEBP (tối đa 5MB). Không cần dán URL.</p>
+            <div class="border-border dark:border-slate-800 space-y-3 border-t pt-4">
+              <Label class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">ẢNH ĐẠI DIỆN</Label>
+              <p class="text-slate-450 dark:text-slate-500 text-[10px]">Chọn file JPG, PNG hoặc WEBP (tối đa 5MB). Không cần dán URL.</p>
               <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
-                <div class="bg-slate-50 !border-slate-300 flex size-28 shrink-0 items-center justify-center overflow-hidden rounded-xl border">
+                <div class="bg-slate-50 dark:bg-slate-850 border-slate-300 dark:border-slate-700 flex size-28 shrink-0 items-center justify-center overflow-hidden rounded-xl border">
                   <img v-if="mediaUrl(editForm.hinhAnh)" :src="mediaUrl(editForm.hinhAnh)" alt="" class="size-full object-cover" />
-                  <span v-else class="text-slate-400 px-2 text-center text-[10px] font-semibold uppercase">Chưa có ảnh</span>
+                  <span v-else class="text-slate-400 dark:text-slate-500 px-2 text-center text-[10px] font-semibold uppercase">Chưa có ảnh</span>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
                   <input ref="editAvatarFileRef" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" class="hidden" @change="onPickAvatar($event, 'edit')" />
-                  <Button type="button" variant="outline" class="h-11 gap-2 rounded-xl text-xs font-bold !border-slate-300 hover:border-[#bfa77a] hover:bg-[#bfa77a]/10 hover:text-[#8c734b]" :disabled="avatarUploading" @click="editAvatarFileRef?.click()">
+                  <Button type="button" variant="outline" class="h-11 gap-2 rounded-xl text-xs font-bold border-slate-300 dark:border-slate-700 hover:border-[#bfa77a] hover:bg-[#bfa77a]/10 hover:text-[#8c734b]" :disabled="avatarUploading" @click="editAvatarFileRef?.click()">
                     <Upload class="size-4" />
                     {{ avatarUploading ? 'Đang tải…' : 'Chọn ảnh' }}
                   </Button>
-                  <Button v-if="editForm.hinhAnh" type="button" variant="ghost" class="h-11 rounded-xl text-xs text-rose-500 hover:bg-rose-50 hover:text-rose-600" :disabled="avatarUploading" @click="clearAvatar('edit')">
+                  <Button v-if="editForm.hinhAnh" type="button" variant="ghost" class="h-11 rounded-xl text-xs text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 hover:text-rose-600" :disabled="avatarUploading" @click="clearAvatar('edit')">
                     Xóa ảnh
                   </Button>
                 </div>
@@ -741,15 +778,15 @@ onMounted(() => {
             </div>
 
             <div class="space-y-2">
-              <Label for="ef-mk" class="text-xs font-bold text-slate-500 tracking-wider">MẬT KHẨU ĐĂNG NHẬP</Label>
-              <p class="text-slate-450 text-[10px] leading-relaxed">
+              <Label for="ef-mk" class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">MẬT KHẨU ĐĂNG NHẬP</Label>
+              <p class="text-slate-450 dark:text-slate-500 text-[10px] leading-relaxed">
                 Hiển thị mật khẩu hiện tại. Sửa nội dung để đổi mật khẩu; xóa trắng ô rồi lưu = giữ nguyên mật khẩu cũ.
               </p>
               <div class="relative">
                 <Input
                   id="ef-mk"
                   v-model="editForm.matKhauMoi"
-                  class="h-11 pr-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all font-mono"
+                  class="h-11 pr-11 text-xs rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:border-[#8c734b] bg-slate-50/50 dark:bg-slate-850/50 focus:bg-white dark:focus:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-none transition-all font-mono"
                   :type="showEditPassword ? 'text' : 'password'"
                   autocomplete="off"
                   spellcheck="false"
@@ -771,8 +808,8 @@ onMounted(() => {
           </div>
 
           <!-- Footer -->
-          <div class="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-solid !border-slate-200 bg-slate-50/50 !px-8 !py-4">
-            <Button type="button" variant="outline" class="h-11 px-5 text-xs font-bold rounded-xl !border-slate-300 text-slate-700 hover:bg-slate-100" @click="editOpen = false">
+          <div class="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-solid border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 px-8 py-4">
+            <Button type="button" variant="outline" class="h-11 px-5 text-xs font-bold rounded-xl border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800" @click="editOpen = false">
               Hủy
             </Button>
             <Button
@@ -792,7 +829,7 @@ onMounted(() => {
     <Teleport to="body">
       <div
         v-if="createOpen"
-        class="fixed inset-0 z-[2400] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+        class="fixed inset-0 z-[2400] flex items-center justify-center p-4 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs transition-opacity"
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-kh-title"
@@ -804,28 +841,28 @@ onMounted(() => {
           @click="createOpen = false"
         />
         <div
-          class="relative z-10 flex max-h-[90vh] w-full max-w-3xl min-h-0 flex-col overflow-hidden rounded-2xl border border-solid !border-slate-300 bg-white shadow-2xl transition-all"
+          class="relative z-10 flex max-h-[90vh] w-full max-w-3xl min-h-0 flex-col overflow-hidden rounded-2xl border border-solid border-slate-300 dark:border-slate-800 bg-white dark:bg-[#1e1e2d] shadow-2xl transition-all"
           @click.stop
         >
           <!-- Header -->
-          <div class="shrink-0 border-b border-solid !border-slate-200 !px-8 !pt-6 !pb-4 bg-slate-50/50">
+          <div class="shrink-0 border-b border-solid border-slate-200 dark:border-slate-800 px-8 pt-6 pb-4 bg-slate-50/50 dark:bg-slate-800/40">
             <h2 id="create-kh-title" class="text-lg font-serif text-[#8c734b] tracking-wider uppercase">Thêm khách hàng mới</h2>
           </div>
 
           <!-- Body -->
-          <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain !px-8 !py-6 space-y-5 text-xs">
+          <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-8 py-6 space-y-5 text-xs">
             <div class="space-y-2">
-              <Label class="text-xs font-bold text-slate-500 tracking-wider">LOẠI KHÁCH</Label>
+              <Label class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">LOẠI KHÁCH</Label>
               <Select :model-value="createLoaiKhach" @update:model-value="onCreateLoaiChange">
-                <SelectTrigger class="h-11 text-xs font-semibold text-slate-700 !bg-slate-50/50 rounded-xl border border-solid !border-slate-300 outline-none focus:ring-0 shadow-none transition-all">
+                <SelectTrigger class="h-11 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-50/50 dark:bg-slate-850/50 rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:ring-0 shadow-none transition-all">
                   <SelectValue placeholder="Chọn loại" />
                 </SelectTrigger>
-                <SelectContent class="rounded-xl border border-solid !border-slate-300 !bg-white shadow-lg">
+                <SelectContent class="!z-[3000] rounded-xl border border-solid border-slate-300 dark:border-slate-800 bg-white dark:bg-[#1e1e2d] shadow-lg">
                   <SelectItem value="vang_lai">Khách vãng lai (mặc định)</SelectItem>
                   <SelectItem value="ten_cu_the">Khách có tên cụ thể</SelectItem>
                 </SelectContent>
               </Select>
-              <p class="text-slate-450 text-[10px]">
+              <p class="text-slate-450 dark:text-slate-500 text-[10px]">
                 {{
                   createLoaiKhach === 'vang_lai'
                     ? 'Họ tên đặt sẵn "Khách vãng lai" — có thể sửa nếu cần. Email bắt buộc.'
@@ -836,15 +873,15 @@ onMounted(() => {
 
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-x-6">
               <div class="space-y-2">
-                <Label for="cf-ten" class="text-xs font-bold text-slate-500 tracking-wider">HỌ TÊN *</Label>
-                <Input id="cf-ten" v-model="createForm.hoTen" class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all" />
+                <Label for="cf-ten" class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">HỌ TÊN *</Label>
+                <Input id="cf-ten" v-model="createForm.hoTen" class="h-11 text-xs rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:border-[#8c734b] bg-slate-50/50 dark:bg-slate-850/50 focus:bg-white dark:focus:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-none transition-all" />
               </div>
               <div class="space-y-2">
-                <Label for="cf-sdt" class="text-xs font-bold text-slate-500 tracking-wider">SỐ ĐIỆN THOẠI *</Label>
+                <Label for="cf-sdt" class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">SỐ ĐIỆN THOẠI *</Label>
                 <Input
                   id="cf-sdt"
                   v-model="createForm.sdt"
-                  class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
+                  class="h-11 text-xs rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:border-[#8c734b] bg-slate-50/50 dark:bg-slate-850/50 focus:bg-white dark:focus:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-none transition-all"
                   :class="createSdtError ? 'border-destructive' : ''"
                   placeholder="VD: 09xxxxxxxx hoặc +84…"
                   inputmode="tel"
@@ -855,11 +892,11 @@ onMounted(() => {
                 <p v-if="createSdtError" class="text-rose-500 text-[10px] mt-1 font-bold">{{ createSdtError }}</p>
               </div>
               <div class="space-y-2">
-                <Label for="cf-email" class="text-xs font-bold text-slate-500 tracking-wider">EMAIL *</Label>
+                <Label for="cf-email" class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">EMAIL *</Label>
                 <Input
                   id="cf-email"
                   v-model="createForm.email"
-                  class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
+                  class="h-11 text-xs rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:border-[#8c734b] bg-slate-50/50 dark:bg-slate-850/50 focus:bg-white dark:focus:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-none transition-all"
                   :class="createEmailError ? 'border-destructive' : ''"
                   type="email"
                   autocomplete="email"
@@ -870,19 +907,19 @@ onMounted(() => {
                 <p v-if="createEmailError" class="text-rose-500 text-[10px] mt-1 font-bold">{{ createEmailError }}</p>
               </div>
               <div class="space-y-2">
-                <Label class="text-xs font-bold text-slate-500 tracking-wider">GIỚI TÍNH *</Label>
+                <Label class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">GIỚI TÍNH *</Label>
                 <Select
                   :model-value="createForm.gioiTinh.trim() ? createForm.gioiTinh.trim() : GIOI_TINH_NONE"
                   @update:model-value="onCreateGioiTinhSelect"
                 >
                   <SelectTrigger
-                    class="h-11 text-xs font-semibold text-slate-700 !bg-slate-50/50 rounded-xl border border-solid !border-slate-300 outline-none focus:ring-0 shadow-none transition-all"
+                    class="h-11 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-50/50 dark:bg-slate-850/50 rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:ring-0 shadow-none transition-all"
                     :class="createGioiTinhError ? 'border-destructive' : ''"
                     :aria-invalid="!!createGioiTinhError"
                   >
                     <SelectValue placeholder="Chọn giới tính" />
                   </SelectTrigger>
-                  <SelectContent class="rounded-xl border border-solid !border-slate-300 !bg-white shadow-lg">
+                  <SelectContent class="!z-[3000] rounded-xl border border-solid border-slate-300 dark:border-slate-850 bg-white dark:bg-[#1e1e2d] shadow-lg">
                     <SelectItem :value="GIOI_TINH_NONE">Chưa chọn</SelectItem>
                     <SelectItem value="Nam">Nam</SelectItem>
                     <SelectItem value="Nữ">Nữ</SelectItem>
@@ -893,24 +930,24 @@ onMounted(() => {
               </div>
             </div>
 
-            <div class="border-border space-y-3 border-t pt-4">
-              <Label class="text-xs font-bold text-slate-500 tracking-wider">ẢNH ĐẠI DIỆN *</Label>
-              <p class="text-slate-450 text-[10px]">Bắt buộc — JPG, PNG, WEBP — tối đa 5MB.</p>
+            <div class="border-border dark:border-slate-800 space-y-3 border-t pt-4">
+              <Label class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">ẢNH ĐẠI DIỆN *</Label>
+              <p class="text-slate-450 dark:text-slate-500 text-[10px]">Bắt buộc — JPG, PNG, WEBP — tối đa 5MB.</p>
               <div
                 class="flex flex-col gap-4 sm:flex-row sm:items-center"
-                :class="createAvatarError ? 'border border-rose-200 p-2 bg-rose-50/20 rounded-xl' : ''"
+                :class="createAvatarError ? 'border border-rose-200 p-2 bg-rose-50/20 dark:bg-rose-950/20 rounded-xl' : ''"
               >
-                <div class="bg-slate-50 !border-slate-300 flex size-28 shrink-0 items-center justify-center overflow-hidden rounded-xl border">
+                <div class="bg-slate-50 dark:bg-slate-850 border-slate-300 dark:border-slate-700 flex size-28 shrink-0 items-center justify-center overflow-hidden rounded-xl border">
                   <img v-if="mediaUrl(createForm.hinhAnh)" :src="mediaUrl(createForm.hinhAnh)" alt="" class="size-full object-cover" />
-                  <span v-else class="text-slate-400 px-2 text-center text-[10px] font-semibold uppercase">Chưa chọn</span>
+                  <span v-else class="text-slate-400 dark:text-slate-500 px-2 text-center text-[10px] font-semibold uppercase">Chưa chọn</span>
                 </div>
                 <div class="flex flex-wrap gap-2">
                   <input ref="createAvatarFileRef" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" class="hidden" @change="onPickAvatar($event, 'create')" />
-                  <Button type="button" variant="outline" class="h-11 gap-2 rounded-xl text-xs font-bold !border-slate-300 hover:border-[#bfa77a] hover:bg-[#bfa77a]/10 hover:text-[#8c734b]" :disabled="avatarUploading" @click="createAvatarFileRef?.click()">
+                  <Button type="button" variant="outline" class="h-11 gap-2 rounded-xl text-xs font-bold border-slate-300 dark:border-slate-700 hover:border-[#bfa77a] hover:bg-[#bfa77a]/10 hover:text-[#8c734b]" :disabled="avatarUploading" @click="createAvatarFileRef?.click()">
                     <Upload class="size-4" />
                     {{ avatarUploading ? 'Đang tải…' : 'Chọn ảnh' }}
                   </Button>
-                  <Button v-if="createForm.hinhAnh" type="button" variant="ghost" class="h-11 rounded-xl text-xs text-rose-500 hover:bg-rose-50 hover:text-rose-600" :disabled="avatarUploading" @click="clearAvatar('create')">
+                  <Button v-if="createForm.hinhAnh" type="button" variant="ghost" class="h-11 rounded-xl text-xs text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 hover:text-rose-600" :disabled="avatarUploading" @click="clearAvatar('create')">
                     Xóa ảnh
                   </Button>
                 </div>
@@ -919,12 +956,12 @@ onMounted(() => {
             </div>
 
             <div class="space-y-2">
-              <Label for="cf-mk" class="text-xs font-bold text-slate-500 tracking-wider">MẬT KHẨU (ĐỂ TRỐNG = HỆ THỐNG TẠO NGẪU NHIÊN)</Label>
+              <Label for="cf-mk" class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">MẬT KHẨU (ĐỂ TRỐNG = HỆ THỐNG TẠO NGẪU NHIÊN)</Label>
               <div class="relative">
                 <Input
                   id="cf-mk"
                   v-model="createForm.matKhau"
-                  class="h-11 pr-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all font-mono"
+                  class="h-11 pr-11 text-xs rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:border-[#8c734b] bg-slate-50/50 dark:bg-slate-850/50 focus:bg-white dark:focus:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-none transition-all font-mono"
                   :type="showCreatePassword ? 'text' : 'password'"
                   autocomplete="off"
                   spellcheck="false"
@@ -946,8 +983,8 @@ onMounted(() => {
           </div>
 
           <!-- Footer -->
-          <div class="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-solid !border-slate-200 bg-slate-50/50 !px-8 !py-4">
-            <Button type="button" variant="outline" class="h-11 px-5 text-xs font-bold rounded-xl !border-slate-300 text-slate-700 hover:bg-slate-100" @click="createOpen = false">
+          <div class="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-solid border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 px-8 py-4">
+            <Button type="button" variant="outline" class="h-11 px-5 text-xs font-bold rounded-xl border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800" @click="createOpen = false">
               Hủy
             </Button>
             <Button
