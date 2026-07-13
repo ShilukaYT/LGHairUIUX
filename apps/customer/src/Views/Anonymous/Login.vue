@@ -3,6 +3,10 @@ import { ref, onMounted, onUnmounted, reactive } from 'vue';
 import { CheckCircle, AlertCircle, X } from 'lucide-vue-next';
 import axios from 'axios';
 import { syncCartAfterLoginDB } from '@/Views/Anonymous/CSDL/cartDB';
+import { useAuthStore } from '@/stores/useAuthStore';
+
+const authStore = useAuthStore();
+
 
 const isLogin = ref(true);
 const isForgotPassword = ref(false);
@@ -40,6 +44,7 @@ const modal = reactive({
   message: '',
   type: 'error' as 'error' | 'success'
 });
+
 
 const forgotForm = reactive({
   email: '',
@@ -125,8 +130,9 @@ const handleLogin = async () => {
     }
   } catch (err: any) {
     const serverMessage = err.response?.data?.message || "Thông tin tài khoản không chính xác.";
-    if (serverMessage.includes("khóa")) {
-      showStatus("Tài khoản bị khóa", serverMessage, "error");
+    if (serverMessage.toLowerCase().includes("khóa") || serverMessage.toLowerCase().includes("bị khoá")) {
+      // Dùng store toàn cục để hiện modal khóa tài khoản (App.vue)
+      authStore.triggerLockedAccount();
     } else {
       showStatus("Đăng nhập thất bại", serverMessage, "error");
     }

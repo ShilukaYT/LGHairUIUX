@@ -20,7 +20,8 @@ import {
   InboxOutlined,
   AuditOutlined,
   ReconciliationOutlined,
-  CheckSquareOutlined
+  CheckSquareOutlined,
+  IdcardOutlined
 } from '@ant-design/icons-vue';
 
 export interface menu {
@@ -134,6 +135,11 @@ const sidebarItem: menu[] = [
     title: 'Nhân viên',
     icon: TeamOutlined,
     to: '/admin/nhan-vien'
+  },
+  {
+    title: 'Chức vụ',
+    icon: IdcardOutlined,
+    to: '/admin/chuc-vu'
   },
   {
     title: 'Ca làm việc',
