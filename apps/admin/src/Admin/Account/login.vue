@@ -51,6 +51,15 @@ const handleLogin = async () => {
       const accessToken = data.accessToken || data.token || '';
       const user = data.user || data;
 
+      // Xóa tất cả các phiên đăng nhập cũ để tránh việc 1 trình duyệt lưu 2 tài khoản cùng lúc
+      sessionStorage.removeItem('adminToken')
+      sessionStorage.removeItem('adminUser')
+      sessionStorage.removeItem('staffToken')
+      sessionStorage.removeItem('staffUser')
+      sessionStorage.removeItem('nhanVienUser')
+      localStorage.removeItem('staffUser')
+      localStorage.removeItem('nhanVienUser')
+
       // 2. Kiểm tra Role và lưu trữ session tương ứng
       if (user.maRole === 'R01') {
         sessionStorage.setItem('adminToken', accessToken)

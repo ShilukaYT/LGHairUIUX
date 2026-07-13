@@ -19,7 +19,11 @@ const router = useRouter();
 
 const collectionName = computed(() => props.isAdmin ? 'AdminNotifications' : 'EmployeeNotifications');
 
-onMounted(() => {
+import { watchEffect } from 'vue';
+
+let unsubscribe: any = null;
+
+watchEffect((onCleanup) => {
   let q;
   if (props.isAdmin) {
     q = query(collection(adminDb, 'AdminNotifications'), orderBy('createdAt', 'desc'), limit(20));
@@ -33,7 +37,7 @@ onMounted(() => {
     return;
   }
   
-  onSnapshot(q, (snapshot) => {
+  unsubscribe = onSnapshot(q, (snapshot) => {
     let docs: any[] = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -47,6 +51,13 @@ onMounted(() => {
     notifications.value = docs;
   }, (error) => {
     console.error("Firebase Snapshot Error:", error);
+  });
+
+  onCleanup(() => {
+    if (unsubscribe) {
+      unsubscribe();
+      unsubscribe = null;
+    }
   });
 });
 
@@ -165,7 +176,7 @@ async function submitReply() {
           </div>
         </div>
         <v-divider></v-divider>
-        <perfect-scrollbar style="height: calc(100vh - 300px); max-height: 265px">
+        <perfect-scrollbar style="height: calc(100vh - 300px); max-height: 265px; overscroll-behavior: contain;">
           <v-list class="py-0" lines="two" aria-label="notification list" aria-busy="true">
             
             <v-list-item v-if="unreadNotifications.length === 0" class="text-center py-4">
@@ -222,7 +233,7 @@ async function submitReply() {
           <v-btn icon="mdi-close" variant="text" @click="isViewAllDialogOpen = false" size="small"></v-btn>
         </v-card-title>
         <v-divider></v-divider>
-        <v-card-text class="pa-0">
+        <v-card-text class="pa-0" style="max-height: 60vh; overflow-y: auto; overscroll-behavior: contain;">
           <v-list lines="two" v-if="notifications.length > 0">
             <template v-for="(n, index) in notifications" :key="'all-'+n.id">
               <v-list-item 

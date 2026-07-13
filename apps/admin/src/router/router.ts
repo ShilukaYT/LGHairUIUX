@@ -81,8 +81,7 @@ router.beforeEach((to, from, next) => {
   const isAdminLoggedIn = sessionStorage.getItem('adminUser') !== null;
   const isStaffLoggedIn = 
     localStorage.getItem('staffUser') !== null || sessionStorage.getItem('staffUser') !== null || 
-    localStorage.getItem('nhanVienUser') !== null || sessionStorage.getItem('nhanVienUser') !== null ||
-    sessionStorage.getItem('adminUser') !== null;
+    localStorage.getItem('nhanVienUser') !== null || sessionStorage.getItem('nhanVienUser') !== null;
 
   // 1. Kiểm tra quyền Admin
   if (to.matched.some(record => record.meta.requiresAdminAuth)) {

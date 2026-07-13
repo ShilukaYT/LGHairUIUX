@@ -15,6 +15,7 @@ const todayShift = ref({
 })
 
 const last7Days = ref<any[]>([])
+const next7Days = ref<any[]>([])
 
 // 1. Hàm lấy thông tin nhân viên đang đăng nhập từ LocalStorage
 const getCurrentUser = () => {
@@ -45,10 +46,21 @@ const fetchShifts = async () => {
 
         if (res.data.success) {
             const allShifts = res.data.data
-            const todayStr = new Date().toLocaleDateString('sv-SE') // Định dạng: yyyy-MM-dd
+            
+            const today = new Date();
+            const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
             // 1. Cập nhật bảng lịch sử 7 ngày
-            last7Days.value = allShifts.map((l: any) => ({
+            const pastAndToday = allShifts.filter((l: any) => l.ngayLamViec && l.ngayLamViec.substring(0, 10) <= todayStr).slice(-7);
+            last7Days.value = pastAndToday.map((l: any) => ({
+                maLich: l.maLich,
+                ngay: new Date(l.ngayLamViec).toLocaleDateString('vi-VN'),
+                caLam: l.caLam,
+                trangThai: l.trangThai
+            }))
+
+            const future = allShifts.filter((l: any) => l.ngayLamViec && l.ngayLamViec.substring(0, 10) > todayStr).reverse().slice(0, 7);
+            next7Days.value = future.map((l: any) => ({
                 maLich: l.maLich,
                 ngay: new Date(l.ngayLamViec).toLocaleDateString('vi-VN'),
                 caLam: l.caLam,
@@ -56,7 +68,7 @@ const fetchShifts = async () => {
             }))
 
             // 2. Cập nhật thẻ trạng thái Hôm nay
-            const tShift = allShifts.find((l: any) => l.ngayLamViec === todayStr)
+            const tShift = allShifts.find((l: any) => l.ngayLamViec && l.ngayLamViec.substring(0, 10) === todayStr)
             if (tShift) {
                 todayShift.value = {
                     maLich: tShift.maLich,
@@ -161,12 +173,16 @@ const handleCheckIn = () => {
 }
 
 // 4. Xử lý Rời ca sớm
-const handleCheckOut = async () => {
-    if (!todayShift.value.maLich) return
+const isCheckoutModalOpen = ref(false)
 
-    const confirmLeave = confirm("Bạn có chắc chắn muốn đánh dấu rời ca sớm không?")
-    if (!confirmLeave) return
+const openCheckoutModal = () => {
+  if (!todayShift.value.maLich) return
+  isCheckoutModalOpen.value = true
+}
 
+const submitCheckOut = async () => {
+    isCheckoutModalOpen.value = false
+    
     const user = getCurrentUser()
     const currentMaNv = user?.maNv || user?.MaNv
 
@@ -234,6 +250,23 @@ const submitRequest = async () => {
   } catch (error: any) {
     showSnackbar(error.response?.data?.message || "Đã xảy ra lỗi khi gửi yêu cầu.", "error")
   }
+}
+
+const isCheckInTimeValid = () => {
+  const caLam = todayShift.value.caLam || '';
+  const currentHour = new Date().getHours();
+  
+  if (caLam.includes('Ca sáng')) {
+    // Sáng: Cho phép từ 6h đến trước 17h
+    return currentHour >= 6 && currentHour < 17;
+  } else if (caLam.includes('Ca chiều')) {
+    // Chiều: Cho phép từ 11h đến trước 18h
+    return currentHour >= 11 && currentHour < 18;
+  } else if (caLam.includes('Ca tối')) {
+    // Tối: Cho phép từ 12h đến trước 23h
+    return currentHour >= 12 && currentHour < 23;
+  }
+  return true;
 }
 
 onMounted(() => {
@@ -306,6 +339,14 @@ const showSnackbar = (msg: string, color = 'success') => {
                 <template v-slot:prepend><Clock class="mr-1" :size="16" /></template>
                 Xin đổi ca
               </v-chip>
+              <v-chip v-else-if="todayShift.trangThai === 5" color="error" variant="flat" class="font-weight-bold text-white">
+                <template v-slot:prepend><XCircle class="mr-1" :size="16" /></template>
+                Vắng mặt
+              </v-chip>
+              <v-chip v-else-if="todayShift.trangThai === 6" color="warning" variant="flat" class="font-weight-bold text-white">
+                <template v-slot:prepend><AlertCircle class="mr-1" :size="16" /></template>
+                Điểm danh muộn
+              </v-chip>
               <v-chip v-else color="error" variant="tonal" class="font-weight-bold">
                 <template v-slot:prepend><XCircle class="mr-1" :size="16" /></template>
                 Không có ca
@@ -314,9 +355,14 @@ const showSnackbar = (msg: string, color = 'success') => {
 
             <v-divider class="my-4"></v-divider>
 
-            <v-btn v-if="todayShift.trangThai === 1 && todayShift.caLam !== 'Chưa xếp' && todayShift.caLam !== 'Nghỉ lễ'" @click="handleCheckIn" color="success" block size="large" rounded="lg" class="mb-3 font-weight-bold text-none" elevation="2">
+            <v-btn v-if="todayShift.trangThai === 1 && todayShift.caLam !== 'Chưa xếp' && todayShift.caLam !== 'Nghỉ lễ' && isCheckInTimeValid()" @click="handleCheckIn" color="success" block size="large" rounded="lg" class="mb-3 font-weight-bold text-none" elevation="2">
               <template v-slot:prepend><PlayCircle :size="20"/></template>
               Điểm danh vào ca
+            </v-btn>
+
+            <v-btn v-else-if="todayShift.trangThai === 1 && todayShift.caLam !== 'Chưa xếp' && todayShift.caLam !== 'Nghỉ lễ' && !isCheckInTimeValid()" disabled color="grey" block size="large" rounded="lg" class="mb-3 font-weight-bold text-none" elevation="2">
+              <template v-slot:prepend><Clock :size="20"/></template>
+              Chưa đến hoặc đã quá giờ điểm danh
             </v-btn>
 
             <v-btn v-if="(todayShift.trangThai === 1 && todayShift.caLam !== 'Nghỉ lễ') || todayShift.caLam === 'Chưa xếp'" @click="openRequestModal" color="info" variant="outlined" block size="large" rounded="lg" class="font-weight-bold text-none border-opacity-100 py-3" style="height: auto; white-space: normal; line-height: 1.4;">
@@ -324,7 +370,7 @@ const showSnackbar = (msg: string, color = 'success') => {
               <span class="text-center">Gửi yêu cầu <br/><small>(Xếp ca / Đổi ca / Xin nghỉ)</small></span>
             </v-btn>
 
-            <v-btn v-else-if="todayShift.trangThai === 2" @click="handleCheckOut" color="warning" variant="outlined" block size="large" rounded="lg" class="font-weight-bold text-none border-opacity-100">
+            <v-btn v-else-if="todayShift.trangThai === 2 || todayShift.trangThai === 6" @click="openCheckoutModal" color="warning" variant="outlined" block size="large" rounded="lg" class="font-weight-bold text-none border-opacity-100">
               <template v-slot:prepend><LogOut :size="20"/></template>
               Đánh dấu rời ca sớm
             </v-btn>
@@ -339,7 +385,7 @@ const showSnackbar = (msg: string, color = 'success') => {
       <!-- Cột Phải: Lịch sử -->
       <v-col cols="12" md="8">
         <v-card elevation="2" rounded="xl" class="h-100 d-flex flex-column">
-          <v-card-title class="pa-5 d-flex align-center border-b bg-surface-light">
+          <v-card-title class="pa-5 d-flex align-center border-b bg-surface-light rounded-t-xl">
             <Clock class="mr-2 text-medium-emphasis" :size="20" />
             <span class="text-subtitle-1 font-weight-bold">Lịch sử 7 ngày gần nhất</span>
           </v-card-title>
@@ -366,7 +412,45 @@ const showSnackbar = (msg: string, color = 'success') => {
                   <v-chip v-else-if="item.trangThai === 3" color="warning" size="small" class="font-weight-bold" variant="tonal">Rời sớm</v-chip>
                   <v-chip v-else-if="item.trangThai === 1" color="blue-grey" size="small" class="font-weight-bold" variant="tonal">Chưa làm</v-chip>
                   <v-chip v-else-if="item.trangThai === 4" color="info" size="small" class="font-weight-bold" variant="tonal">Xin đổi ca</v-chip>
+                  <v-chip v-else-if="item.trangThai === 5" color="error" size="small" class="font-weight-bold text-white" variant="flat">Vắng mặt</v-chip>
+                  <v-chip v-else-if="item.trangThai === 6" color="warning" size="small" class="font-weight-bold text-white" variant="flat">Muộn</v-chip>
                   <span v-else class="text-medium-emphasis font-weight-bold">-</span>
+                </td>
+              </tr>
+            </tbody>
+          </v-table>
+        </v-card>
+      </v-col>
+    </v-row>
+
+    <!-- HÀNG MỚI: Ca làm sắp tới -->
+    <v-row class="mt-4">
+      <v-col cols="12">
+        <v-card elevation="2" rounded="xl" class="d-flex flex-column">
+          <v-card-title class="pa-5 d-flex align-center border-b bg-surface-light rounded-t-xl">
+            <CalendarDays class="mr-2 text-medium-emphasis" :size="20" />
+            <span class="text-subtitle-1 font-weight-bold">Ca làm sắp tới (7 ngày kế tiếp)</span>
+          </v-card-title>
+          
+          <v-table>
+            <thead>
+              <tr>
+                <th class="text-left font-weight-bold text-uppercase text-caption text-medium-emphasis">Ngày làm việc</th>
+                <th class="text-left font-weight-bold text-uppercase text-caption text-medium-emphasis">Ca được xếp</th>
+                <th class="text-center font-weight-bold text-uppercase text-caption text-medium-emphasis">Tình trạng</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="next7Days.length === 0">
+                <td colspan="3" class="text-center text-medium-emphasis font-italic py-6">Chưa có lịch làm việc sắp tới.</td>
+              </tr>
+              <tr v-for="item in next7Days" :key="item.maLich" class="hover-row">
+                <td class="font-weight-bold">{{ item.ngay }}</td>
+                <td class="font-weight-medium text-medium-emphasis">{{ item.caLam }}</td>
+                <td class="text-center">
+                  <v-chip v-if="item.caLam === 'Nghỉ lễ'" color="error" size="small" class="font-weight-bold text-white" variant="flat">Nghỉ lễ</v-chip>
+                  <v-chip v-else-if="item.caLam === 'Chưa xếp'" color="error" size="small" class="font-weight-bold" variant="tonal">Không xếp ca</v-chip>
+                  <v-chip v-else color="info" size="small" class="font-weight-bold" variant="tonal">Chờ đến ngày</v-chip>
                 </td>
               </tr>
             </tbody>
@@ -437,6 +521,23 @@ const showSnackbar = (msg: string, color = 'success') => {
         </v-card-text>
         <v-card-actions class="px-6 pb-4 d-flex justify-center border-t">
           <v-btn @click="closeScanner" color="error" variant="flat" class="font-weight-bold text-none px-6" rounded="lg">Hủy</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Dialog Xác nhận Rời ca -->
+    <v-dialog v-model="isCheckoutModalOpen" max-width="400">
+      <v-card rounded="xl">
+        <v-card-title class="d-flex align-center pt-4 px-6">
+          <AlertCircle class="mr-2 text-warning" :size="24" />
+          <span class="text-h6 font-weight-bold">Xác nhận rời ca</span>
+        </v-card-title>
+        <v-card-text class="px-6 py-4 text-body-1 text-medium-emphasis">
+          Bạn có chắc chắn muốn đánh dấu rời ca sớm không?
+        </v-card-text>
+        <v-card-actions class="px-6 pb-4 pt-0 d-flex gap-3 justify-end">
+          <v-btn @click="isCheckoutModalOpen = false" variant="outlined" color="grey-darken-1" class="font-weight-bold text-none" rounded="lg">Hủy</v-btn>
+          <v-btn @click="submitCheckOut" color="warning" variant="flat" class="font-weight-bold text-none" rounded="lg">Xác nhận</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
