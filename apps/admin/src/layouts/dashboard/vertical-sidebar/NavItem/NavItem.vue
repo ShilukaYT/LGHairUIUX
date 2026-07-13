@@ -5,14 +5,14 @@ const props = defineProps({ item: Object, level: Number });
 <template>
   <!---Single Item-->
   <v-list-item
-    :to="item.type === 'external' ? '' : item.to"
-    :href="item.type === 'external' ? item.to : ''"
+    :to="item.type === 'external' ? undefined : item.to"
+    :href="item.type === 'external' ? item.to : undefined"
     :exact="item.to === '/nhanvien'"
     rounded
     class="mb-1"
     color="primary"
     :disabled="item.disabled"
-    :target="item.type === 'external' ? '_blank' : ''"
+    :target="item.type === 'external' ? '_blank' : undefined"
   >
     <!---If icon-->
     <template v-slot:prepend>

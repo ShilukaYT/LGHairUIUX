@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import axios from 'axios'
 import Swal from 'sweetalert2'
-import { Check, X, RotateCcw, Search, LogOut, Fingerprint, CalendarDays, QrCode } from 'lucide-vue-next'
+import { Check, X, RotateCcw, Search, LogOut, Fingerprint, CalendarDays, QrCode, Clock, Printer } from 'lucide-vue-next'
 import QrcodeVue from 'qrcode.vue'
 import { useRoute } from 'vue-router'
 
@@ -58,6 +58,59 @@ const generateQrCode = async () => {
   }
 }
 
+const printQrCode = () => {
+  const qrElement = document.getElementById('printable-qr-code')
+  if (!qrElement) {
+    showSnackbar('Không tìm thấy mã QR để in', 'error')
+    return
+  }
+
+  const svgElement = qrElement.querySelector('svg')
+  const qrContent = svgElement ? svgElement.outerHTML : qrElement.innerHTML
+
+  const printWindow = window.open('', '', 'height=600,width=800')
+  if (!printWindow) {
+    showSnackbar('Vui lòng cho phép popup để in', 'error')
+    return
+  }
+
+  const dateParts = todayStr.value.split('-')
+  const dateStr = dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}` : todayStr.value
+
+  const html = `
+    <html>
+      <head>
+        <title>In mã QR Điểm Danh</title>
+        <style>
+          body { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: sans-serif; }
+          .qr-container { text-align: center; border: 2px solid #000; padding: 40px; border-radius: 16px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+          h2 { margin-bottom: 30px; font-size: 28px; text-transform: uppercase; color: #333; }
+          .footer { margin-top: 30px; font-size: 18px; color: #555; font-weight: bold; }
+          svg { width: 300px; height: 300px; }
+          @media print {
+            body { -webkit-print-color-adjust: exact; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="qr-container">
+          <h2>Mã QR Điểm Danh</h2>
+          ${qrContent}
+          <div class="footer">Ngày áp dụng: ${dateStr}</div>
+        </div>
+        <script>
+          setTimeout(() => {
+            window.print();
+            window.close();
+          }, 250);
+        <\/script>
+      </body>
+    </html>`;
+
+  printWindow.document.write(html)
+  printWindow.document.close()
+};
+
 // --- LOGIC THỜI GIAN & ĐỒNG HỒ ---
 const getTodayLocal = () => new Date().toLocaleDateString('sv-SE')
 const todayStr = ref(getTodayLocal())
@@ -106,6 +159,11 @@ const formatDate = (dateStr?: string) => {
   return parts.length < 3 ? dateStr : `${parts[2]}/${parts[1]}`
 }
 
+const getDayOfWeek = (dateStr: string) => {
+  const day = new Date(dateStr).getDay();
+  return day === 0 ? 'Chủ Nhật' : `Thứ ${day + 1}`;
+}
+
 // --- LOGIC CA LÀM & ĐIỂM DANH ---
 const shiftMap = computed(() => {
   const map = new Map<string, any>()
@@ -116,6 +174,9 @@ const shiftMap = computed(() => {
 })
 
 const getShiftData = (maNv: string, date: string) => {
+  if (new Date(date).getDay() === 0) {
+    return { caLam: 'Nghỉ', trangThai: 7, ghiChu: 'Nghỉ cuối tuần' };
+  }
   return shiftMap.value.get(`${maNv}_${date}`)
 }
 
@@ -241,7 +302,8 @@ const submitAttendance = async () => {
     2: "Có mặt",
     3: "Rời ca",
     5: "Vắng mặt",
-    6: "Muộn"
+    6: "Muộn",
+    7: "Nghỉ lễ"
   };
   const label = statusLabels[attendanceForm.value.trangThai] || String(attendanceForm.value.trangThai);
   try {
@@ -356,7 +418,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
         <!-- Custom Header for Dates -->
         <template v-for="date in tableDays" :key="'header_'+date" v-slot:[`header.${date}`]="{ column }">
            <div class="text-center py-2">
-             <div class="text-caption text-uppercase opacity-60">{{ date === todayStr ? 'Hôm nay' : 'Ngày' }}</div>
+             <div class="text-caption text-uppercase opacity-60">{{ date === todayStr ? 'Hôm nay' : getDayOfWeek(date) }}</div>
              <div class="text-subtitle-1 font-weight-bold" :class="date === todayStr ? 'text-amber-darken-4' : ''">{{ formatDate(date) }}</div>
            </div>
         </template>
@@ -396,15 +458,37 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
                  </template>
                </v-tooltip>
 
-               <v-btn
-                  v-else-if="getShiftData(item.maNv, date).trangThai === 3 || getShiftData(item.maNv, date).trangThai === 5 || getShiftData(item.maNv, date).trangThai === 6"
+                <v-btn
+                  v-else-if="getShiftData(item.maNv, date).trangThai === 3"
                   color="warning"
-                  variant="flat"
+                  variant="tonal"
                   size="40"
-                  class="rounded-lg elevation-2 bg-grey-darken-4 text-warning"
-                  disabled
+                  class="rounded-lg"
+                  style="pointer-events: none;"
                 >
                   <LogOut class="w-5 h-5" />
+                </v-btn>
+
+                <v-btn
+                  v-else-if="getShiftData(item.maNv, date).trangThai === 5"
+                  color="error"
+                  variant="tonal"
+                  size="40"
+                  class="rounded-lg"
+                  style="pointer-events: none;"
+                >
+                  <X class="w-5 h-5" />
+                </v-btn>
+
+                <v-btn
+                  v-else-if="getShiftData(item.maNv, date).trangThai === 6"
+                  color="info"
+                  variant="tonal"
+                  size="40"
+                  class="rounded-lg"
+                  style="pointer-events: none;"
+                >
+                  <Clock class="w-5 h-5" />
                 </v-btn>
 
                 <v-btn
@@ -430,7 +514,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
                 </v-btn>
                 
                 <v-btn
-                  v-else-if="getShiftData(item.maNv, date).caLam === 'Chưa xếp' || getShiftData(item.maNv, date).caLam === 'Nghỉ lễ'"
+                  v-else-if="getShiftData(item.maNv, date).caLam === 'Chưa xếp' || getShiftData(item.maNv, date).caLam === 'Nghỉ lễ' || getShiftData(item.maNv, date).caLam === 'Nghỉ'"
                   variant="text"
                   size="40"
                   class="rounded-lg opacity-20"
@@ -450,7 +534,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
     </v-card>
 
     <!-- Modal Cập nhật Điểm danh -->
-    <v-dialog v-model="isAttendanceModalOpen" max-width="450" transition="dialog-bottom-transition">
+    <v-dialog v-model="isAttendanceModalOpen" max-width="450">
       <v-card rounded="xl">
         <v-card-title class="pa-6 border-b" style="white-space: normal;">
           <div class="text-h6 font-weight-bold">Cập Nhật Trạng Thái</div>
@@ -516,7 +600,7 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
     </v-dialog>
 
     <!-- Modal Mã QR -->
-    <v-dialog v-model="isQrModalOpen" max-width="400" transition="dialog-bottom-transition">
+    <v-dialog v-model="isQrModalOpen" max-width="400">
       <v-card rounded="xl">
         <v-card-title class="pa-6 border-b text-center text-h6 font-weight-bold">
           Mã QR Điểm Danh Hôm Nay
@@ -526,15 +610,18 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
             <v-progress-circular indeterminate color="primary"></v-progress-circular>
           </div>
           <div v-else-if="qrCodeText" class="text-center">
-             <div class="bg-white pa-4 rounded-lg d-inline-block mb-4 elevation-1">
-                <qrcode-vue :value="qrCodeText" :size="250" level="H" />
+             <div id="printable-qr-code" class="bg-white pa-4 rounded-lg d-inline-block mb-4 elevation-1">
+                <qrcode-vue :value="qrCodeText" :size="250" level="H" render-as="svg" />
              </div>
              <div class="text-caption text-medium-emphasis">Mã này có giá trị trong ngày {{ formatDate(todayStr) }}</div>
           </div>
           <div v-else class="text-error">Không thể tạo mã QR.</div>
         </v-card-text>
-        <v-card-actions class="pa-4 justify-center border-t">
-          <v-btn variant="flat" color="primary" rounded="lg" @click="isQrModalOpen = false" class="px-6 font-weight-bold text-none">Đóng</v-btn>
+        <v-card-actions class="pa-4 justify-center gap-3 border-t">
+          <v-btn variant="flat" color="primary" rounded="lg" @click="printQrCode" class="px-6 font-weight-bold text-none">
+            <Printer class="w-5 h-5 mr-2" /> In mã QR
+          </v-btn>
+          <v-btn variant="tonal" color="grey-darken-1" rounded="lg" @click="isQrModalOpen = false" class="px-6 font-weight-bold text-none">Đóng</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>

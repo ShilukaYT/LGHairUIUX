@@ -51,8 +51,9 @@ const avatarSrc = computed(() => {
   return userAvatar.value || `https://ui-avatars.com/api/?name=${encodeURIComponent(userName.value)}&background=random&color=fff&size=100`;
 });
 
+loadUserFromStorage();
+
 onMounted(() => {
-  loadUserFromStorage();
   window.addEventListener('update-staff-sidebar', loadUserFromStorage);
 });
 

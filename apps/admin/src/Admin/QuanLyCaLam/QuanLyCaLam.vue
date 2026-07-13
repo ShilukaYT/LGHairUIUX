@@ -119,46 +119,9 @@ const openCreateModal = async (item: any) => {
   editState.value.ngayBatDauSua = startDate.toLocaleDateString('sv-SE');
   editState.value.khoangThoiGian = 30;
   editState.value.caLamApDung = 'Ca sáng (7h-17h)';
-  editState.value.selectedDaysOfWeek = [1, 2, 3, 4, 5, 6, 0];
+  editState.value.selectedDaysOfWeek = [1, 2, 3, 4, 5, 6];
   generateEditRows();
   isEditModalOpen.value = true;
-  const confirm = await Swal.fire({
-      title: 'Tạo lịch 30 ngày',
-      text: `Hệ thống sẽ tạo lịch 30 ngày cho thợ ${item.hoTenNv} bắt đầu từ ${startDate.toLocaleDateString('vi-VN')}.`,
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: 'Tạo ngay',
-      cancelButtonText: 'Hủy'
-  });
-
-  if (!confirm.isConfirmed) return;
-
-  isSubmitting.value = true;
-  try {
-    const dates = [];
-    for(let i=0; i<30; i++) {
-      const d = new Date(startDate);
-      d.setDate(startDate.getDate() + i);
-      dates.push(d.toLocaleDateString('sv-SE'));
-    }
-
-    const chunkSize = 5;
-    for (let i = 0; i < dates.length; i += chunkSize) {
-        const chunk = dates.slice(i, i + chunkSize);
-        await Promise.all(chunk.map(dateStr => 
-            axios.post(`${API_BASE_URL}/tao-moi`, { maNv: item.maNv, ngayLamViec: dateStr, caLam: 'Ca ngày' })
-        ));
-    }
-
-    logActivity("Xếp lịch ca làm", `Đã tạo/gia hạn lịch làm việc 30 ngày cho thợ ${item.hoTenNv} (Mã: ${item.maNv}) từ ngày ${startDate.toLocaleDateString('vi-VN')}`, "Ca làm");
-    showSnackbar(`Đã tạo lịch 30 ngày cho thợ!`);
-    await fetchLichLamViec();
-  } catch (error: any) {
-    logActivity("Xếp lịch ca làm", `Thất bại khi xếp lịch làm việc cho thợ ${item.hoTenNv} - Lỗi: ${error.message || ''}`, "Ca làm", "Thất bại");
-    showSnackbar('Có lỗi xảy ra khi tạo lịch', 'error');
-  } finally {
-    isSubmitting.value = false;
-  }
 }
 
 // --- HÀNH ĐỘNG SỬA LỊCH ---
@@ -174,12 +137,35 @@ const editState = ref({
   isCreating: false
 })
 
-const khoangThoiGianOptions = [
-  { title: 'Trong ngày (1 ngày)', value: 1 },
-  { title: '7 ngày tới', value: 7 },
-  { title: '14 ngày tới', value: 14 },
-  { title: '30 ngày tới', value: 30 }
-]
+const khoangThoiGianOptions = computed(() => {
+  if (editState.value.isCreating) {
+    return [
+      { title: '30 ngày tới', value: 30 }
+    ]
+  }
+  if (editState.value.caLamApDung === 'Nghỉ lễ') {
+    return [
+      { title: 'Trong ngày (1 ngày)', value: 1 },
+      { title: '7 ngày tới', value: 7 }
+    ]
+  }
+  return [
+    { title: 'Trong ngày (1 ngày)', value: 1 },
+    { title: '7 ngày tới', value: 7 },
+    { title: '14 ngày tới', value: 14 },
+    { title: '30 ngày tới', value: 30 }
+  ]
+})
+
+watch(() => editState.value.caLamApDung, (newVal) => {
+  if (editState.value.isCreating) {
+    editState.value.khoangThoiGian = 30;
+    return;
+  }
+  if (newVal === 'Nghỉ lễ' && editState.value.khoangThoiGian > 7) {
+    editState.value.khoangThoiGian = 7;
+  }
+})
 
 const dayOfWeekOptions = [
   { title: 'T2', value: 1 },
@@ -187,8 +173,7 @@ const dayOfWeekOptions = [
   { title: 'T4', value: 3 },
   { title: 'T5', value: 4 },
   { title: 'T6', value: 5 },
-  { title: 'T7', value: 6 },
-  { title: 'CN', value: 0 }
+  { title: 'T7', value: 6 }
 ]
 
 const caLamOptions = [
@@ -238,7 +223,7 @@ const openEditModal = (item: any) => {
   editState.value.ngayBatDauSua = todayStr.value > (item.ngayBatDau || todayStr.value) ? todayStr.value : (item.ngayBatDau || todayStr.value)
   editState.value.khoangThoiGian = 1
   editState.value.caLamApDung = 'Ca sáng (7h-17h)'
-  editState.value.selectedDaysOfWeek = [1, 2, 3, 4, 5, 6, 0]
+  editState.value.selectedDaysOfWeek = [1, 2, 3, 4, 5, 6]
   generateEditRows()
   isEditModalOpen.value = true
 }
@@ -278,7 +263,39 @@ const holidayState = ref({
   lyDo: ''
 })
 
+const maxHolidayDate = computed(() => {
+  if (!holidayState.value.tuNgay) return '';
+  const start = new Date(holidayState.value.tuNgay);
+  start.setDate(start.getDate() + 6);
+  return start.toLocaleDateString('sv-SE');
+})
+
+watch(() => holidayState.value.tuNgay, (newVal) => {
+  if (!newVal) return;
+  const start = new Date(newVal);
+  const end = new Date(holidayState.value.denNgay);
+  if (end < start) {
+    holidayState.value.denNgay = newVal;
+  } else {
+    const maxEnd = new Date(start);
+    maxEnd.setDate(maxEnd.getDate() + 6);
+    if (end > maxEnd) {
+      holidayState.value.denNgay = maxEnd.toLocaleDateString('sv-SE');
+    }
+  }
+})
+
 const submitHoliday = async () => {
+  const tuNgayDate = new Date(holidayState.value.tuNgay);
+  const denNgayDate = new Date(holidayState.value.denNgay);
+  const diffTime = denNgayDate.getTime() - tuNgayDate.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  
+  if (diffDays > 7) {
+    showSnackbar("Chỉ được phép thiết lập nghỉ chung tối đa 7 ngày.", "error");
+    return;
+  }
+
   if (!holidayState.value.lyDo) {
     showSnackbar("Vui lòng nhập lý do nghỉ", "error");
     return;
@@ -371,12 +388,15 @@ watch(() => route.query.search, (newSearch) => {
             density="compact"
             hide-details
             clearable
-            prepend-inner-icon="mdi-magnify"
             rounded="lg"
             bg-color="isDarkTheme ? 'grey-darken-4' : 'grey-lighten-4'"
             class="flex-grow-1"
             style="min-width: 250px;"
-          ></v-text-field>
+          >
+            <template v-slot:prepend-inner>
+              <Search class="w-5 h-5 text-grey-darken-1 mr-2" />
+            </template>
+          </v-text-field>
 
           <v-btn variant="outlined" color="grey-darken-1" size="40" rounded="lg" @click="loadData">
             <RotateCcw class="w-5 h-5" />
@@ -472,7 +492,7 @@ watch(() => route.query.search, (newSearch) => {
     </v-card>
 
     <!-- Modal Sửa Lịch -->
-    <v-dialog v-model="isEditModalOpen" max-width="500" transition="dialog-bottom-transition">
+    <v-dialog v-model="isEditModalOpen" max-width="500">
       <v-card rounded="xl">
         <v-card-title class="pa-6 border-b">
           <div class="text-h6 font-weight-bold">Thiết lập Lịch Làm Việc</div>
@@ -501,6 +521,7 @@ watch(() => route.query.search, (newSearch) => {
                   variant="outlined"
                   density="comfortable"
                   rounded="lg"
+                  :readonly="editState.isCreating"
                 ></v-select>
               </v-col>
               <v-col cols="12" class="pb-0 pt-2">
@@ -577,7 +598,7 @@ watch(() => route.query.search, (newSearch) => {
     </v-dialog>
 
     <!-- Modal Nghỉ Lễ Chung -->
-    <v-dialog v-model="isHolidayModalOpen" max-width="500" transition="dialog-bottom-transition">
+    <v-dialog v-model="isHolidayModalOpen" max-width="500">
       <v-card rounded="xl">
         <v-card-title class="pa-6 border-b">
           <div class="text-h6 font-weight-bold text-error">Thiết lập Nghỉ Lễ Chung</div>
@@ -607,6 +628,7 @@ watch(() => route.query.search, (newSearch) => {
                   density="comfortable"
                   rounded="lg"
                   :min="holidayState.tuNgay"
+                  :max="maxHolidayDate"
                 ></v-text-field>
               </v-col>
               <v-col cols="12" class="pb-0 pt-2">
