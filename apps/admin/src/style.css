@@ -120,4 +120,12 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Global SweetAlert2 button text styling for readability */
+.swal2-popup .swal2-confirm,
+.swal2-popup .swal2-cancel {
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
   

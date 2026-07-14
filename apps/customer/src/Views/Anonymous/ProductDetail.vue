@@ -6,6 +6,7 @@ import { addToCartDB } from "@/Views/Anonymous/CSDL/cartDB";
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 import { useWishlistStore } from "@/stores/useWishlistStore";
 import { Heart } from "lucide-vue-next";
+import ProductReviews from "./ProductReviews.vue";
 
 const wishlistStore = useWishlistStore();
 
@@ -440,6 +441,11 @@ watch(
             </div>
           </section>
         </template>
+
+        <!-- ══════════════════════════════════════════════════
+             ĐÁNH GIÁ SẢN PHẨM
+        ══════════════════════════════════════════════════ -->
+        <ProductReviews :ma-sp="product.maSp" />
 
         <!-- ══════════════════════════════════════════════════
              SẢN PHẨM GỢI Ý

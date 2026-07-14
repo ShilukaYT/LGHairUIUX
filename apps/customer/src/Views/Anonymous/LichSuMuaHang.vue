@@ -439,7 +439,7 @@ const handleLogout = () => {
             <button @click="router.push({ name: 'profile', query: { tab: 'appointments' } })"
               class="flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest transition-all rounded-sm text-gray-600 hover:text-black hover:bg-gray-100/50 border-l-2 border-transparent">
               <Calendar :size="16" :stroke-width="1.5" />
-              Lịch Hẹn
+              Lịch Hẹn & Hóa Đơn
             </button>
             <button @click="router.push({ name: 'profile', query: { tab: 'reviews' } })"
               class="flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest transition-all rounded-sm text-gray-600 hover:text-black hover:bg-gray-100/50 border-l-2 border-transparent">

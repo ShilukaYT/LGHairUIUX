@@ -247,7 +247,7 @@ const formatDate = (isoString: string) => {
 const getModuleBadgeClass = (module: string) => {
   switch (module) {
     case 'Nhân sự':
-      return 'bg-[#bfa77a]/15 text-[#8c734b] border-[#bfa77a]/25'
+      return 'bg-[#1677ff]/15 text-[#0F172A] border-[#1677ff]/25'
     case 'Lương':
       return 'bg-emerald-50 text-emerald-600 border-emerald-200'
     case 'Tài khoản':
@@ -267,7 +267,7 @@ const clearLogs = () => {
     text: 'Bạn có chắc chắn muốn xóa toàn bộ nhật ký hoạt động này không?',
     icon: 'warning',
     showCancelButton: true,
-    confirmButtonColor: '#9d804e',
+    confirmButtonColor: '#0F172A',
     cancelButtonColor: '#64748b',
     confirmButtonText: 'Đồng ý xóa',
     cancelButtonText: 'Hủy bỏ'
@@ -304,18 +304,18 @@ onMounted(() => {
   <div class="activity-container min-h-[calc(100vh-64px)] w-full flex flex-col bg-[#fcfbfc] text-slate-850 overflow-hidden p-4 md:p-6 select-none-print font-sans antialiased relative">
     
     <!-- Decorative Ambient Glows for luxury feel -->
-    <div class="absolute top-12 left-1/4 w-[350px] h-[350px] bg-[#bfa77a]/8 rounded-full blur-[100px] pointer-events-none -translate-y-1/2"></div>
-    <div class="absolute bottom-24 right-1/4 w-[350px] h-[350px] bg-[#bfa77a]/5 rounded-full blur-[120px] pointer-events-none translate-y-1/2"></div>
+    <div class="absolute top-12 left-1/4 w-[350px] h-[350px] bg-[#1677ff]/8 rounded-full blur-[100px] pointer-events-none -translate-y-1/2"></div>
+    <div class="absolute bottom-24 right-1/4 w-[350px] h-[350px] bg-[#1677ff]/5 rounded-full blur-[120px] pointer-events-none translate-y-1/2"></div>
 
     <!-- Header area -->
     <div class="flex-shrink-0 w-full bg-transparent py-4 px-1 mb-6 print:hidden z-10">
       <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div class="pl-1">
-          <h1 class="text-2xl md:text-3xl font-serif text-[#8c734b] tracking-wider font-light flex items-center gap-3">
-            <Activity class="w-8 h-8 text-[#8c734b] flex-shrink-0" />
+          <h1 class="text-2xl md:text-3xl font-sans text-[#0F172A] font-black tracking-tight flex items-center gap-3">
+            <Activity class="w-8 h-8 text-[#0F172A] flex-shrink-0" />
             <span>NHẬT KÝ HOẠT ĐỘNG</span>
           </h1>
-          <p class="text-[10px] text-slate-500 mt-2 font-serif italic tracking-wide">
+          <p class="text-[10px] text-slate-500 mt-2 font-sans  tracking-wide">
             "Hệ thống tự động ghi nhận và lưu vết hoạt động vận hành salon Minh Tâm."
           </p>
         </div>
@@ -324,7 +324,7 @@ onMounted(() => {
           <button 
             @click="clearLogs" 
             :disabled="rawLogs.length === 0"
-            class="flex-1 sm:flex-initial h-11 px-4 bg-transparent hover:bg-red-50 text-red-600 text-xs font-bold rounded-none border border-red-200 hover:border-red-400 transition-all cursor-pointer shadow-none disabled:opacity-50 disabled:cursor-not-allowed"
+            class="flex-1 sm:flex-initial h-11 px-4 bg-transparent hover:bg-red-50 text-red-600 text-xs font-bold rounded-md border border-red-200 hover:border-red-400 transition-all cursor-pointer shadow-none disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div class="flex items-center justify-center gap-2">
               <Trash2 class="w-4 h-4" /> Dọn sạch nhật ký
@@ -337,29 +337,29 @@ onMounted(() => {
     <!-- Quick Stats Cards -->
     <div class="flex-shrink-0 grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 z-10">
       <!-- Card 1: Today Logs -->
-      <div class="p-5 rounded-none bg-white border border-slate-150 shadow-none flex items-center justify-between relative overflow-hidden transition-all duration-300 hover:scale-[1.01]">
+      <div class="p-5 rounded-md bg-white border border-slate-150 shadow-none flex items-center justify-between relative overflow-hidden transition-all duration-300 hover:scale-[1.01]">
         <div class="z-10">
           <p class="text-[9px] font-bold text-slate-400 tracking-wider mb-2">HOẠT ĐỘNG HÔM NAY</p>
           <h2 class="text-2xl font-bold text-slate-800 leading-tight font-mono">{{ stats.today }} <span class="text-xs font-sans font-normal text-slate-450">mục</span></h2>
         </div>
         <div class="p-3 bg-slate-50 border border-slate-150 hidden sm:block">
-          <Clock class="w-5 h-5 text-[#8c734b]" />
+          <Clock class="w-5 h-5 text-[#0F172A]" />
         </div>
       </div>
 
       <!-- Card 2: Total Logs -->
-      <div class="p-5 rounded-none bg-white border border-slate-150 shadow-none flex items-center justify-between relative overflow-hidden transition-all duration-300 hover:scale-[1.01]">
+      <div class="p-5 rounded-md bg-white border border-slate-150 shadow-none flex items-center justify-between relative overflow-hidden transition-all duration-300 hover:scale-[1.01]">
         <div class="z-10">
           <p class="text-[9px] font-bold text-slate-400 tracking-wider mb-2">TỔNG GHI NHẬN</p>
-          <h2 class="text-2xl font-bold text-[#8c734b] leading-tight font-mono">{{ stats.total }} <span class="text-xs font-sans font-normal text-slate-450">mục</span></h2>
+          <h2 class="text-2xl font-bold text-[#0F172A] leading-tight font-mono">{{ stats.total }} <span class="text-xs font-sans font-normal text-slate-450">mục</span></h2>
         </div>
         <div class="p-3 bg-slate-50 border border-slate-150 hidden sm:block">
-          <Activity class="w-5 h-5 text-[#8c734b]" />
+          <Activity class="w-5 h-5 text-[#0F172A]" />
         </div>
       </div>
 
       <!-- Card 3: Success Logs -->
-      <div class="p-5 rounded-none bg-white border border-slate-150 shadow-none flex items-center justify-between relative overflow-hidden transition-all duration-300 hover:scale-[1.01]">
+      <div class="p-5 rounded-md bg-white border border-slate-150 shadow-none flex items-center justify-between relative overflow-hidden transition-all duration-300 hover:scale-[1.01]">
         <div class="z-10">
           <p class="text-[9px] font-bold text-slate-400 tracking-wider mb-2">THÀNH CÔNG</p>
           <h2 class="text-2xl font-bold text-emerald-600 leading-tight font-mono">{{ stats.success }}</h2>
@@ -370,7 +370,7 @@ onMounted(() => {
       </div>
 
       <!-- Card 4: Failed Logs -->
-      <div class="p-5 rounded-none bg-white border border-slate-150 shadow-none flex items-center justify-between relative overflow-hidden transition-all duration-300 hover:scale-[1.01]">
+      <div class="p-5 rounded-md bg-white border border-slate-150 shadow-none flex items-center justify-between relative overflow-hidden transition-all duration-300 hover:scale-[1.01]">
         <div class="z-10">
           <p class="text-[9px] font-bold text-slate-400 tracking-wider mb-2">THẤT BẠI / CẢNH BÁO</p>
           <h2 class="text-2xl font-bold text-red-600 leading-tight font-mono">{{ stats.failed }}</h2>
@@ -385,8 +385,8 @@ onMounted(() => {
     <div class="flex-shrink-0 bg-white p-5 border border-slate-150 mb-6 z-10">
       <div class="flex flex-col gap-4">
         <div class="flex items-center gap-2 border-b border-slate-100 pb-2 mb-1">
-          <Filter class="w-4 h-4 text-[#8c734b]" />
-          <span class="text-xs font-bold text-[#8c734b] uppercase tracking-wider">Bộ lọc tìm kiếm</span>
+          <Filter class="w-4 h-4 text-[#0F172A]" />
+          <span class="text-xs font-bold text-[#0F172A] uppercase tracking-wider">Bộ lọc tìm kiếm</span>
         </div>
         
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
@@ -398,7 +398,7 @@ onMounted(() => {
               <input 
                 v-model="searchQuery" 
                 placeholder="Người thực hiện, mô tả..." 
-                class="w-full h-10 pl-9 pr-7 rounded-none border border-slate-200 text-xs font-medium outline-none focus:border-[#8c734b] bg-slate-50 focus:bg-white text-slate-800"
+                class="w-full h-10 pl-9 pr-7 rounded-md border border-slate-200 text-xs font-medium outline-none focus:border-[#0F172A] bg-slate-50 focus:bg-white text-slate-800"
               >
               <button v-if="searchQuery" @click="searchQuery = ''" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-450 hover:text-slate-700">
                 <X class="w-3.5 h-3.5" />
@@ -410,7 +410,7 @@ onMounted(() => {
           <div class="flex flex-col gap-1.5">
             <label class="text-[10px] font-bold text-slate-400 uppercase">Phân hệ</label>
             <div class="relative flex items-center">
-              <select v-model="selectedModule" class="w-full h-10 px-3 rounded-none border border-slate-200 text-xs font-medium outline-none focus:border-[#8c734b] bg-slate-50 appearance-none cursor-pointer text-slate-800">
+              <select v-model="selectedModule" class="w-full h-10 px-3 rounded-md border border-slate-200 text-xs font-medium outline-none focus:border-[#0F172A] bg-slate-50 appearance-none cursor-pointer text-slate-800">
                 <option value="">Tất cả phân hệ</option>
                 <option value="Nhân sự">Nhân sự</option>
                 <option value="Lương">Lương</option>
@@ -418,7 +418,7 @@ onMounted(() => {
                 <option value="Dịch vụ">Dịch vụ</option>
                 <option value="Ca làm">Ca làm việc</option>
               </select>
-              <span class="pointer-events-none absolute right-3 text-[8px] text-[#8c734b]">▼</span>
+              <span class="pointer-events-none absolute right-3 text-[8px] text-[#0F172A]">▼</span>
             </div>
           </div>
 
@@ -426,32 +426,32 @@ onMounted(() => {
           <div class="flex flex-col gap-1.5">
             <label class="text-[10px] font-bold text-slate-400 uppercase">Trạng thái</label>
             <div class="relative flex items-center">
-              <select v-model="selectedStatus" class="w-full h-10 px-3 rounded-none border border-slate-200 text-xs font-medium outline-none focus:border-[#8c734b] bg-slate-50 appearance-none cursor-pointer text-slate-800">
+              <select v-model="selectedStatus" class="w-full h-10 px-3 rounded-md border border-slate-200 text-xs font-medium outline-none focus:border-[#0F172A] bg-slate-50 appearance-none cursor-pointer text-slate-800">
                 <option value="">Tất cả trạng thái</option>
                 <option value="Thành công">Thành công</option>
                 <option value="Thất bại">Thất bại / Lỗi</option>
               </select>
-              <span class="pointer-events-none absolute right-3 text-[8px] text-[#8c734b]">▼</span>
+              <span class="pointer-events-none absolute right-3 text-[8px] text-[#0F172A]">▼</span>
             </div>
           </div>
 
           <!-- Date filters -->
           <div class="flex flex-col gap-1.5">
             <label class="text-[10px] font-bold text-slate-400 uppercase">Từ ngày</label>
-            <input type="date" v-model="startDate" class="w-full h-10 px-3 rounded-none border border-slate-200 text-xs font-medium outline-none focus:border-[#8c734b] bg-slate-50 text-slate-800">
+            <input type="date" v-model="startDate" class="w-full h-10 px-3 rounded-md border border-slate-200 text-xs font-medium outline-none focus:border-[#0F172A] bg-slate-50 text-slate-800">
           </div>
 
           <div class="flex flex-col gap-1.5">
             <label class="text-[10px] font-bold text-slate-400 uppercase">Đến ngày</label>
-            <input type="date" v-model="endDate" class="w-full h-10 px-3 rounded-none border border-slate-200 text-xs font-medium outline-none focus:border-[#8c734b] bg-slate-50 text-slate-800">
+            <input type="date" v-model="endDate" class="w-full h-10 px-3 rounded-md border border-slate-200 text-xs font-medium outline-none focus:border-[#0F172A] bg-slate-50 text-slate-800">
           </div>
         </div>
 
         <div class="flex justify-end gap-3 border-t border-slate-100 pt-3 mt-1">
           <button 
             @click="resetFilters" 
-            class="h-9 px-4 text-xs font-bold rounded-none border transition-all cursor-pointer shadow-none hover:opacity-90"
-            style="background-color: #bfa77a !important; color: #000000 !important; border-color: #bfa77a !important;"
+            class="h-9 px-4 text-xs font-bold rounded-md border transition-all cursor-pointer shadow-none hover:opacity-90"
+            style="background-color: #1677ff !important; color: #000000 !important; border-color: #1677ff !important;"
           >
             Đặt lại bộ lọc
           </button>
@@ -460,11 +460,11 @@ onMounted(() => {
     </div>
 
     <!-- Table content -->
-    <div class="flex-1 w-full bg-white rounded-none border border-slate-150 shadow-none relative overflow-hidden flex flex-col z-10">
+    <div class="flex-1 w-full bg-white rounded-md border border-slate-150 shadow-none relative overflow-hidden flex flex-col z-10">
       <!-- Loader Overlay -->
       <div v-if="isLoading" class="absolute inset-0 bg-white/85 backdrop-blur-xs z-50 flex items-center justify-center transition-all">
         <div class="flex flex-col items-center gap-3">
-          <div class="w-10 h-10 border-2 border-slate-200 border-t-[#8c734b] rounded-full animate-spin"></div>
+          <div class="w-10 h-10 border-2 border-slate-200 border-t-[#0F172A] rounded-full animate-spin"></div>
           <span class="text-[10px] font-bold text-slate-500 tracking-wider">ĐANG NẠP NHẬT KÝ...</span>
         </div>
       </div>
@@ -472,26 +472,26 @@ onMounted(() => {
       <!-- Table Body -->
       <div class="flex-grow overflow-auto custom-scrollbar">
         <table class="w-full text-left text-xs border-separate border-spacing-0">
-          <thead class="sticky top-0 bg-slate-50/95 backdrop-blur-xs z-10 border-b border-[#bfa77a]/20">
-            <tr class="border-b border-[#bfa77a]/20">
-              <th class="py-4 px-5 font-bold text-[#8c734b] border-b border-[#bfa77a]/20 w-32 bg-slate-50/95 tracking-wider select-none whitespace-nowrap">Thời Gian</th>
-              <th class="py-4 px-5 font-bold text-[#8c734b] border-b border-[#bfa77a]/20 w-44 bg-slate-50/95 tracking-wider select-none whitespace-nowrap">Người Thực Hiện</th>
-              <th class="py-4 px-5 font-bold text-[#8c734b] border-b border-[#bfa77a]/20 w-36 bg-slate-50/95 tracking-wider select-none whitespace-nowrap">Hành Động</th>
-              <th class="py-4 px-5 font-bold text-[#8c734b] border-b border-[#bfa77a]/20 bg-slate-50/95 tracking-wider select-none whitespace-nowrap">Chi Tiết</th>
-              <th class="py-4 px-5 font-bold text-[#8c734b] border-b border-[#bfa77a]/20 w-28 text-center bg-slate-50/95 tracking-wider select-none whitespace-nowrap">Phân Hệ</th>
-              <th class="py-4 px-5 font-bold text-[#8c734b] border-b border-[#bfa77a]/20 w-24 text-center bg-slate-50/95 tracking-wider select-none whitespace-nowrap">Kết Quả</th>
+          <thead class="sticky top-0 bg-slate-50/95 backdrop-blur-xs z-10 border-b border-[#1677ff]/20">
+            <tr class="border-b border-[#1677ff]/20">
+              <th class="py-4 px-5 font-bold text-[#0F172A] border-b border-[#1677ff]/20 w-32 bg-slate-50/95 tracking-wider select-none whitespace-nowrap">Thời Gian</th>
+              <th class="py-4 px-5 font-bold text-[#0F172A] border-b border-[#1677ff]/20 w-44 bg-slate-50/95 tracking-wider select-none whitespace-nowrap">Người Thực Hiện</th>
+              <th class="py-4 px-5 font-bold text-[#0F172A] border-b border-[#1677ff]/20 w-36 bg-slate-50/95 tracking-wider select-none whitespace-nowrap">Hành Động</th>
+              <th class="py-4 px-5 font-bold text-[#0F172A] border-b border-[#1677ff]/20 bg-slate-50/95 tracking-wider select-none whitespace-nowrap">Chi Tiết</th>
+              <th class="py-4 px-5 font-bold text-[#0F172A] border-b border-[#1677ff]/20 w-28 text-center bg-slate-50/95 tracking-wider select-none whitespace-nowrap">Phân Hệ</th>
+              <th class="py-4 px-5 font-bold text-[#0F172A] border-b border-[#1677ff]/20 w-24 text-center bg-slate-50/95 tracking-wider select-none whitespace-nowrap">Kết Quả</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
             <tr v-if="!isLoading && pagedLogs.length === 0">
               <td colspan="6" class="p-16 text-center text-slate-500">
                 <div class="flex flex-col items-center gap-3 max-w-sm mx-auto">
-                  <div class="w-12 h-12 bg-slate-50 rounded-none flex items-center justify-center text-slate-400 border border-slate-200 mb-1">
+                  <div class="w-12 h-12 bg-slate-50 rounded-md flex items-center justify-center text-slate-400 border border-slate-200 mb-1">
                     <Activity class="w-6 h-6 stroke-[1.5px]" />
                   </div>
                   <p class="font-bold text-slate-800 text-xs">Không tìm thấy bản ghi nào</p>
                   <p class="text-[11px] text-slate-400 leading-relaxed">Không tìm thấy hoạt động nào trùng khớp với bộ lọc tìm kiếm hiện tại của bạn.</p>
-                  <button @click="resetFilters" class="mt-2 text-xs font-bold text-[#8c734b] hover:text-[#6a532e] transition-colors">Đặt lại</button>
+                  <button @click="resetFilters" class="mt-2 text-xs font-bold text-[#0F172A] hover:text-[#334155] transition-colors">Đặt lại</button>
                 </div>
               </td>
             </tr>
@@ -499,7 +499,7 @@ onMounted(() => {
             <tr 
               v-for="log in pagedLogs" 
               :key="log.id"
-              class="hover:bg-[#bfa77a]/3 border-b border-slate-100 transition-all duration-150"
+              class="hover:bg-[#1677ff]/3 border-b border-slate-100 transition-all duration-150"
             >
               <!-- Time -->
               <td class="py-4 px-5 text-slate-450 font-medium font-mono whitespace-nowrap">
@@ -509,7 +509,7 @@ onMounted(() => {
               <!-- Actor -->
               <td class="py-4 px-5">
                 <div class="flex items-center gap-2.5">
-                  <div class="w-8 h-8 rounded-none bg-slate-50 border border-slate-200 text-[#8c734b] flex items-center justify-center font-bold text-xs">
+                  <div class="w-8 h-8 rounded-md bg-slate-50 border border-slate-200 text-[#0F172A] flex items-center justify-center font-bold text-xs">
                     <User class="w-4 h-4" />
                   </div>
                   <div>
@@ -532,7 +532,7 @@ onMounted(() => {
               <!-- Module Badge -->
               <td class="py-4 px-5 text-center">
                 <span 
-                  class="inline-flex items-center px-2 py-0.5 rounded-none text-[8px] font-extrabold uppercase tracking-widest border"
+                  class="inline-flex items-center px-2 py-0.5 rounded-md text-[8px] font-extrabold uppercase tracking-widest border"
                   :class="getModuleBadgeClass(log.module)"
                 >
                   {{ log.module }}
@@ -578,7 +578,7 @@ onMounted(() => {
               :key="p" 
               @click="changePage(p)"
               class="w-8 h-8 text-[11px] font-bold transition-all"
-              :class="currentPage === p ? 'bg-[#9d804e] text-white border border-[#9d804e]' : 'bg-white text-slate-650 border border-slate-200 hover:border-slate-350'"
+              :class="currentPage === p ? 'bg-[#0F172A] text-white border border-[#0F172A]' : 'bg-white text-slate-650 border border-slate-200 hover:border-slate-350'"
             >
               {{ p }}
             </button>

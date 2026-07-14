@@ -369,6 +369,29 @@ const confirmPayment = async () => {
 
 onMounted(async () => {
     await fetchData();
+
+    // Kiểm tra kết quả thanh toán online (VNPay/MoMo) từ các tham số trên URL
+    const params = new URLSearchParams(window.location.search);
+    const vnpCode = params.get('vnp_ResponseCode');
+    const momoCode = params.get('resultCode');
+
+    if (vnpCode !== null || momoCode !== null) {
+        const isSuccess = vnpCode === '00' || momoCode === '0';
+        const message = isSuccess 
+            ? 'Thanh toán trực tuyến thành công và hóa đơn đã hoàn tất!' 
+            : 'Thanh toán trực tuyến thất bại hoặc giao dịch đã bị hủy.';
+
+        await Swal.fire({
+            title: isSuccess ? 'Thanh toán thành công' : 'Thanh toán thất bại',
+            text: message,
+            icon: isSuccess ? 'success' : 'error',
+            confirmButtonText: 'Đồng ý',
+            confirmButtonColor: '#1a1a2e'
+        });
+
+        // Xóa tham số truy vấn khỏi URL để tránh hiển thị lại thông báo khi F5/reload trang
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
 });
 watch(filterDate, fetchData);
 </script>

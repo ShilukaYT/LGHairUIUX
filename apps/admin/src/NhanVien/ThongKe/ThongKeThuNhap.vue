@@ -111,12 +111,16 @@ const computedGoalsList = computed(() => {
   const details = dashboardData.value?.thangHienTai
   const workedDays = details?.soNgayDiLam || 0
   const prodComm = details?.hoaHongSanPham || 0
-  const totalInc = details?.tongThuNhap || 0
+  const servComm = details?.hoaHongDichVu || 0
+  const totalComm = prodComm + servComm
+  const rank = dashboardData.value?.xepHangTrongThang || 0
+  const likes = dashboardData.value?.luotYeuThich || 0
 
   return [
     { id: 1, text: 'Ngày công chuẩn', subtext: 'Tối thiểu 22 ngày', done: workedDays >= 22, current: `${workedDays}/22` },
-    { id: 2, text: 'Doanh số sản phẩm', subtext: 'Mục tiêu 1.500.000đ', done: prodComm >= 1500000, current: prodComm > 0 ? formatVND(prodComm) : '0 đ' },
-    { id: 3, text: 'Mốc thu nhập', subtext: 'Vượt 15.000.000đ', done: totalInc >= 15000000, current: totalInc > 0 ? formatVND(totalInc) : '0 đ' }
+    { id: 2, text: 'Hoa hồng DV & SP', subtext: 'Mục tiêu 5.000.000đ', done: totalComm >= 5000000, current: totalComm > 0 ? formatVND(totalComm) : '0 đ' },
+    { id: 3, text: 'Xếp hạng nhân viên', subtext: 'Đạt Top 3', done: rank > 0 && rank <= 3, current: rank > 0 ? `Top ${rank}` : '--' },
+    { id: 4, text: 'Lượt yêu thích', subtext: 'Đạt 5 đánh giá tốt', done: likes >= 5, current: `${likes}/5` }
   ]
 })
 
@@ -267,7 +271,7 @@ onMounted(() => fetchIncomeData())
           <div class="th-card-goals print-hide">
             <div class="th-goals-header">
               <h3 class="th-goals-title">MỤC TIÊU THÁNG</h3>
-              <span class="th-goals-counter">{{ completedGoalsCount }}/3</span>
+              <span class="th-goals-counter">{{ completedGoalsCount }}/{{ computedGoalsList.length }}</span>
             </div>
 
             <div class="th-goals-list">
@@ -280,6 +284,18 @@ onMounted(() => fetchIncomeData())
                   <p class="th-goal-desc">{{ goal.subtext }}</p>
                 </div>
                 <div class="th-goal-score">{{ goal.current }}</div>
+              </div>
+            </div>
+
+            <!-- BẢNG THƯỞNG KHI HOÀN THÀNH -->
+            <div class="th-bonus-banner" :class="{ 'is-earned': completedGoalsCount === computedGoalsList.length }">
+              <div class="th-bonus-info">
+                <span class="th-bonus-title">Thưởng hoàn thành</span>
+                <span class="th-bonus-amount">+500.000đ</span>
+              </div>
+              <div class="th-bonus-status">
+                <span v-if="completedGoalsCount === computedGoalsList.length" class="th-text-emerald" style="font-weight: 700;">Đã đạt</span>
+                <span v-else class="th-text-slate" style="font-size: 0.8rem; font-weight: 600;">Chưa đạt</span>
               </div>
             </div>
           </div>
@@ -451,6 +467,7 @@ onMounted(() => fetchIncomeData())
 </template>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 /* ==========================================================================
    CSS FIREWALL (CHỐNG VỠ BOOTSTRAP BẰNG !IMPORTANT)
@@ -665,7 +682,7 @@ onMounted(() => fetchIncomeData())
 }
 
 /* NÚT TÌM KIẾM - MÀU TƯƠNG PHẢN ĐẬM ĐỂ KHÔNG BỊ CHÌM */
-.th-btn-search {
+.th-app .th-btn-search {
   display: flex !important;
   flex-direction: row !important;
   align-items: center !important;
@@ -682,7 +699,7 @@ onMounted(() => fetchIncomeData())
   transition: all 0.2s !important;
 }
 
-.th-btn-search:hover {
+.th-app .th-btn-search:hover {
   background-color: #334155 !important;
 }
 
@@ -838,7 +855,6 @@ onMounted(() => fetchIncomeData())
 .th-badge-val {
   font-size: 0.875rem !important;
   font-weight: 700 !important;
-  font-family: monospace !important;
   color: #1E293B !important;
 }
 
@@ -936,6 +952,55 @@ onMounted(() => fetchIncomeData())
   color: #1C1C1E !important;
   border: 1px solid #EAE6DF !important;
   font-family: monospace !important;
+}
+
+.th-bonus-banner {
+  margin-top: 1.5rem !important;
+  padding: 1rem 1.25rem !important;
+  border-radius: 12px !important;
+  background-color: #F1F5F9 !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  border: 1px dashed #CBD5E1 !important;
+  transition: all 0.3s ease !important;
+}
+
+.th-bonus-banner.is-earned {
+  background-color: #ECFDF5 !important;
+  border-color: #10B981 !important;
+  border-style: solid !important;
+}
+
+.th-bonus-info {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.th-bonus-title {
+  font-size: 0.8rem !important;
+  font-weight: 600 !important;
+  color: #64748B !important;
+}
+
+.th-bonus-banner.is-earned .th-bonus-title {
+  color: #059669 !important;
+}
+
+.th-bonus-amount {
+  font-size: 1.1rem !important;
+  font-weight: 800 !important;
+  color: #1E293B !important;
+}
+
+.th-bonus-banner.is-earned .th-bonus-amount {
+  color: #10B981 !important;
+}
+
+.th-bonus-status {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 
 /* CHỈ SỐ NHỎ */
