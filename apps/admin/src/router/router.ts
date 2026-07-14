@@ -23,7 +23,6 @@ const routes = [
       { path: 'NhanVien', name: 'NhanVien', component: () => import('@/Admin/NhanVien/NhanVien.vue') },
       { path: 'StyleHairXColor', name: 'StyleHairXColor', component: () => import('@/Admin/StyleHairAndColor/StyleHairXColor.vue') },
       { path: 'nhan-vien', name: 'QuanLyNhanVienAdmin', component: () => import('@/Admin/NhanVien/NhanVien.vue') },
-      { path: 'chuc-vu', name: 'QuanLyChucVu', component: () => import('@/Admin/NhanVien/QuanLyChucVu.vue') },
       { path: 'bang-luong', name: 'BangLuongAdmin', component: () => import('@/Admin/QuanLyLuong/BangLuong.vue') },
       { path: 'Gui-Thong-Bao', name: 'GuiThongBao', component: () => import('@/Admin/GuiThongBao.vue') },
       { path: 'chat', name: 'AdminChat', component: () => import('@/components/AdminChat.vue') },
@@ -34,8 +33,6 @@ const routes = [
       { path: 'profile', name: 'AdminProfile', component: () => import('@/Admin/Profile/StaffProfile.vue') },
       { path: 'nha-cung-cap', name: 'NhaCungCapAdmin', component: () => import('@/Admin/NhaCungCap/NhaCungCap.vue') },
       { path: 'quan-ly-hoat-dong', name: 'QuanLyHoatDong', component: () => import('@/Admin/QuanLyHoatDong.vue') },
-      { path: 'doiSoatDV', name: 'DoiSoatDV', component: () => import('@/Admin/QuanLyDoiSoatDichVu.vue') },
-      { path: 'doiSoatSP', name: 'DoiSoatSP', component: () => import('@/Admin/DoiSoatHoaDon.vue') },
     ],
     meta: { requiresAdminAuth: true }
   },
@@ -55,6 +52,7 @@ const routes = [
       { path: 'ca-lam-viec', name: 'NhanVienCaLamViec', component: () => import('@/NhanVien/CaLamViec/CaLamViec.vue') },
       { path: 'lich-su-diem-danh', name: 'NhanVienLichSuDiemDanh', component: () => import('@/Admin/QuanLyCaLam/LichSuDiemDanh.vue') },
       { path: 'profile', name: 'NhanVienProfile', component: () => import('@/Admin/Profile/StaffProfile.vue') },
+      { path: 'thong-ke-thu-nhap', name: 'NhanVienThongKeThuNhap', component: () => import('@/NhanVien/ThongKe/ThongKeThuNhap.vue') },
     ],
     meta: { requiresStaffAuth: true }
   },
@@ -85,7 +83,8 @@ router.beforeEach((to, from, next) => {
   const isAdminLoggedIn = sessionStorage.getItem('adminUser') !== null;
   const isStaffLoggedIn = 
     localStorage.getItem('staffUser') !== null || sessionStorage.getItem('staffUser') !== null || 
-    localStorage.getItem('nhanVienUser') !== null || sessionStorage.getItem('nhanVienUser') !== null;
+    localStorage.getItem('nhanVienUser') !== null || sessionStorage.getItem('nhanVienUser') !== null ||
+    sessionStorage.getItem('adminUser') !== null;
 
   // 1. Kiểm tra quyền Admin
   if (to.matched.some(record => record.meta.requiresAdminAuth)) {

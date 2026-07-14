@@ -1,17 +1,17 @@
 <script>
 import axios from "axios";
 const API = import.meta.env.VITE_API_URL;
-// import ReviewList from "./ReviewList.vue";
 import { getCartDB, addToCartDB } from "@/Views/Anonymous/CSDL/cartDB";
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 import { useWishlistStore } from "@/stores/useWishlistStore";
 import { Heart } from "lucide-vue-next";
+import ServiceReviews from "./ServiceReviews.vue";
 
 export default {
   name: "ServiceDetail",
   components: {
-    // ReviewList,
     Heart,
+    ServiceReviews,
   },
   data() {
     return {
@@ -23,7 +23,6 @@ export default {
       countdown: "",
       timer: null,
       tieudeDichvus: [],
-      cartItems: [],
       userMaKH: null,
     };
   },
@@ -43,8 +42,9 @@ export default {
     }
   },
 
-  async mounted() {
-    await this.updateCartBadge();
+  mounted() {
+    const customer = getCustomerInfo();
+    this.userMaKH = customer.maKH;
   },
 
   beforeUnmount() {
@@ -52,16 +52,6 @@ export default {
   },
 
   methods: {
-    async updateCartBadge() {
-      const customer = getCustomerInfo();
-      this.userMaKH = customer.maKH;
-      const data = await getCartDB(this.userMaKH);
-      this.cartItems = data || [];
-    },
-
-    openCart() {
-      this.$router.push('/cart');
-    },
 
     async fetchService(id) {
       try {
@@ -170,7 +160,6 @@ export default {
       };
 
       await addToCartDB(item, this.userMaKH);
-      await this.updateCartBadge();
       window.dispatchEvent(new Event("cart-updated"));
       alert(`Đã thêm "${item.tenItem}" vào giỏ hàng thành công!`);
     },
@@ -453,20 +442,15 @@ export default {
       </section>
 
       <!-- ===================================================
-           ĐÁNH GIÁ TỪ KHÁCH HÀNG (giữ nguyên từ ChiTietDichVu)
+           ĐÁNH GIÁ TỪ KHÁCH HÀNG
       =================================================== -->
-      <!-- <ReviewList v-if="$route.params.id" :serviceId="$route.params.id" /> -->
-    </div>
-
-    <!-- FLOATING CART + SIDEBAR (giữ nguyên từ ChiTietDichVu) -->
-    <div class="floating-cart-btn" @click="openCart">
-      <i class="fas fa-shopping-bag"></i>
-      <span class="cart-count">{{ cartItems.length }}</span>
+      <ServiceReviews v-if="service.maDv" :ma-dv="service.maDv" />
     </div>
   </div>
 </template>
 
 <style scoped>
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Jost:wght@200;300;400;500;600&display=swap");
 
 /* =========================================================
    FONT — Cormorant Garamond (heading) + Jost (body)
@@ -1384,49 +1368,6 @@ export default {
   color: #fff;
 }
 
-/* =========================================================
-   FLOATING CART
-   ========================================================= */
-.floating-cart-btn {
-  position: fixed;
-  bottom: 160px;
-  right: 20px;
-  width: 56px;
-  height: 56px;
-  background: var(--ink);
-  border-radius: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  color: #fff;
-  font-size: 22px;
-  cursor: pointer;
-  box-shadow: none;
-  z-index: 1000;
-  transition: 0.3s;
-}
-
-.floating-cart-btn:hover {
-  transform: scale(1.05);
-  background: var(--ink-soft);
-}
-
-.cart-count {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  background: #fff;
-  color: var(--ink);
-  font-size: 10px;
-  font-weight: 600;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  border: 1px solid var(--ink);
-}
 
 /* =========================================================
    RESPONSIVE

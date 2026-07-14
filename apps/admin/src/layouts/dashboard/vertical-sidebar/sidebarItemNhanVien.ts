@@ -2,6 +2,7 @@
 import {
   DashboardOutlined,
   CalendarOutlined,
+  DollarOutlined
 } from '@ant-design/icons-vue';
 
 export interface menu {
@@ -31,6 +32,11 @@ const sidebarItemNhanVien: menu[] = [
     title: 'Ca làm việc',
     icon: CalendarOutlined,
     to: '/nhanvien/ca-lam-viec'
+  },
+  {
+    title: 'Thống kê thu nhập',
+    icon: DollarOutlined,
+    to: '/nhanvien/thong-ke-thu-nhap'
   },
 ];
 

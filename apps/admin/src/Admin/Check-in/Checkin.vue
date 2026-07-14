@@ -227,12 +227,13 @@ const confirmCheckIn = async () => {
             const payload = {
                 maLd: String(selectedAppointment.value.maLd),
                 maStylist: String(selectedStylistId.value),
+                paymentMethod: "", 
                 updatedServices: selectedAppointment.value.dichVus.map((s: any) => ({
                     id: String(s.id || s.Id),
                     gia: Number(s.gia || s.Gia)
                 }))
             };
-
+            console.log("Check-in payload:", payload);
             const response = await axios.post(`${API_BASE_URL}/create-payment-checkin`, payload);
             await Swal.fire('Thành công', response.data.message || 'Đã cập nhật dịch vụ và bắt đầu phục vụ!', 'success');
         } else {
