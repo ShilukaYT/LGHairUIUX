@@ -546,7 +546,7 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
                             </h3>
                             <div class="heading-line"></div>
                         </div>
-                        <p class="text-black small mb-3 font-bold">Chọn tối đa 2 mã — thứ tự chọn = thứ tự áp dụng.</p>
+
                         <div class="voucher-list-modern">
                             <div v-for="v in myVouchers" :key="v.id" class="voucher-ticket-item"
                                 :class="{ active: orderData.voucherIds.includes(v.id) }" @click="toggleVoucher(v.id)">

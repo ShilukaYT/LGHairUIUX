@@ -39,18 +39,27 @@ const botMessages = ref<any[]>([
   }
 ])
 
-const getCustomerInfo = () => {
+// Kiểm tra user đã đăng nhập chưa
+const getLoggedInUser = () => {
   try {
-    const raw = localStorage.getItem('user') || sessionStorage.getItem('accessToken') || ''
+    const raw = localStorage.getItem('user') || ''
     const user = raw ? JSON.parse(raw) : null
     if (user?.hoTen || user?.name) {
-      return {
-        name: user.hoTen || user.name,
-        email: user.email || ''
-      }
+      return user
     }
   } catch (err) {
     console.error(err)
+  }
+  return null
+}
+
+const getCustomerInfo = () => {
+  const user = getLoggedInUser()
+  if (user) {
+    return {
+      name: user.hoTen || user.name,
+      email: user.email || ''
+    }
   }
 
   // Khách vãng lai: Sử dụng tên tùy chỉnh đã nhập nếu có
@@ -59,25 +68,69 @@ const getCustomerInfo = () => {
     return { name: customName, email: '' }
   }
 
-  // Mặc định là 'Khách' (sẽ bị yêu cầu nhập tên khi bấm Bắt đầu chat với nhân viên)
+  // Mặc định là 'Khách'
   return { name: 'Khách', email: '' }
 }
 
 const getStorageKey = () => {
-  try {
-    const raw = localStorage.getItem('user') || sessionStorage.getItem('accessToken') || ''
-    const user = raw ? JSON.parse(raw) : null
-    if (user?.email) {
-      return `lghair_chat_room_id_${user.email}`
-    }
-  } catch (err) {
-    console.error(err)
+  const user = getLoggedInUser()
+  if (user?.email) {
+    return `lghair_chat_room_id_${user.email}`
   }
   const customName = localStorage.getItem('lghair_chat_custom_name')
   if (customName) {
     return `lghair_chat_room_id_anon_${customName}`
   }
   return 'lghair_chat_room_id_guest'
+}
+
+// Lấy tất cả key phòng chat ẩn danh cũ từ localStorage
+const getAnonymousRoomKeys = (): { key: string, roomId: string }[] => {
+  const results: { key: string, roomId: string }[] = []
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (key && (key.startsWith('lghair_chat_room_id_anon_') || key === 'lghair_chat_room_id_guest')) {
+      const roomId = localStorage.getItem(key)
+      if (roomId) {
+        results.push({ key, roomId })
+      }
+    }
+  }
+  return results
+}
+
+// Di chuyển phòng chat ẩn danh sang tài khoản đã đăng nhập
+const migrateAnonymousRoom = async () => {
+  const user = getLoggedInUser()
+  if (!user?.email) return
+
+  const loggedInKey = `lghair_chat_room_id_${user.email}`
+  const existingLoggedInRoom = localStorage.getItem(loggedInKey)
+  if (existingLoggedInRoom) return
+
+  const anonRooms = getAnonymousRoomKeys()
+  if (anonRooms.length === 0) return
+
+  const anonRoomId: string = anonRooms[0].roomId
+  const customerInfo = getCustomerInfo()
+
+  try {
+    const roomSnap = await getDoc(doc(db, 'ChatRooms', anonRoomId))
+    if (roomSnap.exists()) {
+      await updateDoc(doc(db, 'ChatRooms', anonRoomId), {
+        customerName: customerInfo.name,
+        customerEmail: customerInfo.email
+      })
+      localStorage.setItem(loggedInKey, anonRoomId)
+    }
+  } catch (err) {
+    console.warn('[LiveChat] Lỗi migrate phòng chat ẩn danh:', err)
+  }
+
+  for (const ar of anonRooms) {
+    localStorage.removeItem(ar.key)
+  }
+  localStorage.removeItem('lghair_chat_custom_name')
 }
 
 // ── Xử lý Markdown & Hình ảnh cho AI ────────────────────
@@ -490,6 +543,9 @@ const initRoom = async () => {
   roomId.value = null
   isConnected.value = false
 
+  // Migrate phòng chat ẩn danh sang tài khoản đã đăng nhập (nếu có)
+  await migrateAnonymousRoom()
+
   const key = getStorageKey()
   const savedRoomId = localStorage.getItem(key)
   if (savedRoomId) {
@@ -518,18 +574,41 @@ const initRoom = async () => {
   }
 }
 
+// Lắng nghe sự thay đổi localStorage (khi user login/logout từ tab khác hoặc cùng tab)
+const handleStorageChange = (e: StorageEvent) => {
+  if (e.key === 'user') {
+    initRoom()
+  }
+}
+
 watch(() => route.path, () => {
   initRoom()
 })
 
+// Theo dõi thay đổi đăng nhập trong cùng tab bằng cách poll kiểm tra
+let lastUserJson = localStorage.getItem('user') || ''
+const checkLoginChange = () => {
+  const currentUserJson = localStorage.getItem('user') || ''
+  if (currentUserJson !== lastUserJson) {
+    lastUserJson = currentUserJson
+    initRoom()
+  }
+}
+let loginCheckInterval: any = null
+
 onMounted(async () => {
   await initRoom()
+  window.addEventListener('storage', handleStorageChange)
+  // Poll mỗi 2 giây để phát hiện login/logout trong cùng tab
+  loginCheckInterval = setInterval(checkLoginChange, 2000)
 })
 
 onUnmounted(() => {
   if (unsubscribe) unsubscribe()
   if (geminiTimeout) clearTimeout(geminiTimeout)
   if (typingTimeout) clearTimeout(typingTimeout)
+  if (loginCheckInterval) clearInterval(loginCheckInterval)
+  window.removeEventListener('storage', handleStorageChange)
   if (roomId.value && isConnected.value) {
     updateTypingStatus(false)
   }
