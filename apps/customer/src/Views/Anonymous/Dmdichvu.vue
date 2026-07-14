@@ -370,7 +370,7 @@ const formatPrice = (price: number) => {
                 @click="sidebarOpen = !sidebarOpen"
               >
                 <span
-                  class="flex items-center gap-2 text-xs uppercase tracking-widest font-semibold text-black"
+                  class="dv-filter-font flex items-center gap-2 text-xs uppercase tracking-widest font-semibold text-black"
                 >
                   <svg
                     width="14"
@@ -407,7 +407,7 @@ const formatPrice = (price: number) => {
                 <div class="py-1">
                   <button
                     type="button"
-                    class="w-full text-left px-4 py-2.5 text-xs uppercase tracking-widest transition-colors border-l-2"
+                    class="dv-filter-font w-full text-left px-4 py-2.5 text-xs uppercase tracking-widest transition-colors border-l-2"
                     :class="
                       selectedCategory === 'all'
                         ? 'text-black font-semibold bg-gray-50 border-black'
@@ -434,7 +434,7 @@ const formatPrice = (price: number) => {
                     >
                       <button
                         type="button"
-                        class="flex-1 text-left px-4 py-2.5 text-xs uppercase tracking-widest transition-colors hover:text-black truncate"
+                        class="dv-filter-font flex-1 text-left px-4 py-2.5 text-xs uppercase tracking-widest transition-colors hover:text-black truncate"
                         @click="goToCategory(cat.maDM)"
                       >
                         {{ cat.tenDanhMuc }}
@@ -478,7 +478,7 @@ const formatPrice = (price: number) => {
                         v-for="sub in cat.children"
                         :key="sub.maDM"
                         type="button"
-                        class="w-full text-left pl-9 pr-4 py-2 text-[11px] uppercase tracking-widest transition-colors truncate"
+                        class="dv-filter-font w-full text-left pl-9 pr-4 py-2 text-[11px] uppercase tracking-widest transition-colors truncate"
                         :class="
                           selectedCategory === sub.maDM
                             ? 'text-black font-medium'
@@ -528,7 +528,7 @@ const formatPrice = (price: number) => {
               <div
                 class="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-2 pb-4 border-b border-gray-100"
               >
-                <span class="text-xs text-gray-400 uppercase tracking-widest">
+                <span class="dv-filter-font text-xs text-gray-400 uppercase tracking-widest">
                   {{ services.length }} Dịch vụ
                 </span>
 
@@ -547,13 +547,13 @@ const formatPrice = (price: number) => {
                       v-model="searchQuery"
                       type="text"
                       placeholder="Tìm kiếm tên dịch vụ..."
-                      class="text-xs uppercase tracking-widest bg-transparent border-b border-gray-200 focus:outline-none focus:border-black pl-5 py-1 w-44 md:w-56"
+                      class="dv-filter-font text-xs uppercase tracking-widest bg-transparent border-b border-gray-200 focus:outline-none focus:border-black pl-5 py-1 w-44 md:w-56"
                     />
                   </div>
 
                   <select
                     v-model="selectedPriceRange"
-                    class="text-xs uppercase tracking-widest bg-transparent focus:outline-none cursor-pointer"
+                    class="dv-filter-font text-xs uppercase tracking-widest bg-transparent focus:outline-none cursor-pointer"
                   >
                     <option value="all">Tất cả mức giá</option>
                     <option value="low">Dưới 300.000đ</option>
@@ -1875,10 +1875,20 @@ const formatPrice = (price: number) => {
   font-family: "Jost", sans-serif;
 }
 
+/* Đồng bộ font khu vực bộ lọc dịch vụ (Danh mục, đếm số dịch vụ, ô tìm kiếm, lọc mức giá)
+   theo đúng font "Jost" dùng xuyên suốt trang, thay vì font mặc định của trình duyệt/Tailwind. */
+.dv-filter-font,
+.dv-filter-font::placeholder {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
 .editorial-desc {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 0.95rem;
   color: var(--muted);
   font-weight: 300;
   line-height: 1.7;
+  letter-spacing: 0.2px;
   margin: 16px 0 40px;
   max-width: 480px;
 }

@@ -334,7 +334,7 @@ onMounted(async () => {
               class="w-full flex items-center justify-between gap-2 px-4 py-3.5 border-b border-gray-100 bg-gray-50"
               @click="sidebarOpen = !sidebarOpen"
             >
-              <span class="flex items-center gap-2 text-xs uppercase tracking-widest font-semibold text-black">
+              <span class="dv-filter-font flex items-center gap-2 text-xs uppercase tracking-widest font-semibold text-black">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>
                 </svg>
@@ -368,7 +368,7 @@ onMounted(async () => {
               <div class="border-b border-gray-100">
                 <button
                   type="button"
-                  class="w-full flex items-center justify-between px-4 py-2.5 text-[11px] uppercase tracking-widest font-semibold text-black bg-gray-50/70"
+                  class="dv-filter-font w-full flex items-center justify-between px-4 py-2.5 text-[11px] uppercase tracking-widest font-semibold text-black bg-gray-50/70"
                   @click="toggleSection('sanPham')"
                 >
                   <span>Danh Mục Sản Phẩm</span>
@@ -385,7 +385,7 @@ onMounted(async () => {
                   <!-- TẤT CẢ SẢN PHẨM -->
                   <button
                     type="button"
-                    class="w-full text-left px-4 py-2.5 text-xs uppercase tracking-widest transition-colors border-l-2"
+                    class="dv-filter-font w-full text-left px-4 py-2.5 text-xs uppercase tracking-widest transition-colors border-l-2"
                     :class="selectedDanhMuc === 'all'
                       ? 'text-black font-semibold bg-gray-50 border-black'
                       : 'text-gray-500 hover:text-black hover:bg-gray-50 border-transparent'"
@@ -402,7 +402,7 @@ onMounted(async () => {
                     >
                       <button
                         type="button"
-                        class="flex-1 text-left px-4 py-2.5 text-xs uppercase tracking-widest transition-colors hover:text-black truncate"
+                        class="dv-filter-font flex-1 text-left px-4 py-2.5 text-xs uppercase tracking-widest transition-colors hover:text-black truncate"
                         @click="goToCategory(cat.maDM)"
                       >
                         {{ cat.tenDanhMuc }}
@@ -435,7 +435,7 @@ onMounted(async () => {
                         v-for="sub in cat.children"
                         :key="sub.maDM"
                         type="button"
-                        class="w-full text-left pl-9 pr-4 py-2 text-[11px] uppercase tracking-widest transition-colors truncate"
+                        class="dv-filter-font w-full text-left pl-9 pr-4 py-2 text-[11px] uppercase tracking-widest transition-colors truncate"
                         :class="selectedDanhMuc === sub.maDM ? 'text-black font-medium' : 'text-gray-400 hover:text-black'"
                         @click="goToCategory(sub.maDM)"
                       >
@@ -450,7 +450,7 @@ onMounted(async () => {
               <div>
                 <button
                   type="button"
-                  class="w-full flex items-center justify-between px-4 py-2.5 text-[11px] uppercase tracking-widest font-semibold text-black bg-gray-50/70"
+                  class="dv-filter-font w-full flex items-center justify-between px-4 py-2.5 text-[11px] uppercase tracking-widest font-semibold text-black bg-gray-50/70"
                   @click="toggleSection('thuongHieu')"
                 >
                   <span>Thương Hiệu</span>
@@ -467,7 +467,7 @@ onMounted(async () => {
                   <!-- TẤT CẢ THƯƠNG HIỆU -->
                   <button
                     type="button"
-                    class="w-full text-left px-4 py-2.5 text-xs uppercase tracking-widest transition-colors border-l-2"
+                    class="dv-filter-font w-full text-left px-4 py-2.5 text-xs uppercase tracking-widest transition-colors border-l-2"
                     :class="selectedThuongHieu === 'all'
                       ? 'text-black font-semibold bg-gray-50 border-black'
                       : 'text-gray-500 hover:text-black hover:bg-gray-50 border-transparent'"
@@ -480,7 +480,7 @@ onMounted(async () => {
                     v-for="th in thuongHieuList"
                     :key="th.maTh"
                     type="button"
-                    class="w-full text-left px-4 py-2 text-[11px] uppercase tracking-widest transition-colors truncate flex items-center justify-between gap-2"
+                    class="dv-filter-font w-full text-left px-4 py-2 text-[11px] uppercase tracking-widest transition-colors truncate flex items-center justify-between gap-2"
                     :class="selectedThuongHieu === th.maTh ? 'text-black font-medium bg-gray-50' : 'text-gray-500 hover:text-black hover:bg-gray-50'"
                     @click="goToBrand(th.maTh)"
                   >
@@ -500,7 +500,7 @@ onMounted(async () => {
         <div class="flex-1 min-w-0">
 
       <!-- ĐANG LỌC THEO DANH MỤC / THƯƠNG HIỆU -->
-      <div v-if="activeCategoryName || activeBrandName" class="flex flex-wrap items-center justify-center gap-3 mb-8 text-[11px] uppercase tracking-widest text-gray-400">
+      <div v-if="activeCategoryName || activeBrandName" class="dv-filter-font flex flex-wrap items-center justify-center gap-3 mb-8 text-[11px] uppercase tracking-widest text-gray-400">
         <span v-if="activeCategoryName">Danh mục: <strong class="text-black">{{ activeCategoryName }}</strong></span>
         <span v-if="activeBrandName">Thương hiệu: <strong class="text-black">{{ activeBrandName }}</strong></span>
         <button @click="selectedDanhMuc = 'all'; selectedThuongHieu = 'all'" class="underline hover:text-black transition-colors">
@@ -510,7 +510,7 @@ onMounted(async () => {
 
       <!-- TOP BAR: số lượng + tìm kiếm + lọc giá -->
       <div ref="productsListRef" class="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-8 pb-4 border-b border-gray-100">
-        <span class="text-xs text-gray-400 uppercase tracking-widest">{{ products.length }} Sản phẩm</span>
+        <span class="dv-filter-font text-xs text-gray-400 uppercase tracking-widest">{{ products.length }} Sản phẩm</span>
 
         <div class="flex flex-wrap gap-4 items-center">
           <div class="relative">
@@ -522,11 +522,11 @@ onMounted(async () => {
               v-model="searchQuery"
               type="text"
               placeholder="Tìm kiếm sản phẩm..."
-              class="text-xs uppercase tracking-widest bg-transparent border-b border-gray-200 focus:outline-none focus:border-black pl-5 py-1 w-44 md:w-56"
+              class="dv-filter-font text-xs uppercase tracking-widest bg-transparent border-b border-gray-200 focus:outline-none focus:border-black pl-5 py-1 w-44 md:w-56"
             />
           </div>
 
-          <select v-model="selectedPriceRange" class="text-xs uppercase tracking-widest bg-transparent focus:outline-none cursor-pointer">
+          <select v-model="selectedPriceRange" class="dv-filter-font text-xs uppercase tracking-widest bg-transparent focus:outline-none cursor-pointer">
             <option value="all">Tất cả mức giá</option>
             <option value="low">Dưới 200.000đ</option>
             <option value="mid">200k – 500k</option>
@@ -659,6 +659,13 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+/* Đồng bộ font khu vực bộ lọc sản phẩm (Danh mục, Thương hiệu, đếm số lượng, tìm kiếm, lọc mức giá)
+   theo font hệ thống (giống Home.vue/Dmdichvu.vue) - an toàn dấu tiếng Việt, không cần tải font ngoài. */
+.dv-filter-font,
+.dv-filter-font::placeholder {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
 /* HOT badge — đồng bộ với Services.vue */
 .hot-badge {
   position: absolute;
