@@ -902,7 +902,6 @@ const formatPrice = (price: number) => {
 /* =========================================================
    FONT — Cormorant Garamond (heading) + Jost (body)
    ========================================================= */
-@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Jost:wght@200;300;400;500;600&display=swap");
 .pagination-btn.prev-next i {
   color: inherit !important;
   pointer-events: none;
