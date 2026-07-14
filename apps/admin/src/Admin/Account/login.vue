@@ -419,7 +419,6 @@ l-1 -383 42 -42 c24 -24 47 -43 51 -43 4 0 8 200 8 444 0 441 0 444 22 486 13
 </template>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 .login-wrapper {
   position: relative;

@@ -633,8 +633,6 @@ onMounted(loadData);
   --dvc-overlay: rgba(0, 0, 0, 0.6);
 }
 
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
-
 .dm-manager {
   /* ── THEME VARIABLES (light default) ─────────────────────────── */
   --dvc-card-bg: #fff;

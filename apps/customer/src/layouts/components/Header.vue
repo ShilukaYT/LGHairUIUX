@@ -57,6 +57,16 @@ const handleLogout = () => {
   router.push({ name: 'login' });
 };
 
+const getHeaderAvatarUrl = (user: any) => {
+  if (!user) return '';
+  const imgPath = user.hinhAnh || user.picture || user.avatar;
+  if (!imgPath) return '';
+  if (imgPath.startsWith('http')) return imgPath;
+  const baseUrl = API || 'https://localhost:7196';
+  const cleanPath = imgPath.startsWith('/') ? imgPath : '/' + imgPath;
+  return `${baseUrl}${cleanPath}`;
+};
+
 // ======================================================
 // DANH MỤC SẢN PHẨM — load từ backend cho mega menu
 // ======================================================
@@ -128,6 +138,7 @@ onMounted(() => {
   window.addEventListener('scroll', handleScroll);
   checkUser();
   window.addEventListener('storage', checkUser);
+  window.addEventListener('user-updated', checkUser);
   fetchProductCategories();
 
   window.addEventListener('cart-updated', updateCartCount);
@@ -153,6 +164,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('scroll', handleScroll);
   window.removeEventListener('storage', checkUser);
+  window.removeEventListener('user-updated', checkUser);
   window.removeEventListener('cart-updated', updateCartCount);
   document.body.style.overflow = '';
   if (checkSessionInterval) {
@@ -351,13 +363,10 @@ onUnmounted(() => {
               <template v-if="currentUser">
                 <div class="w-6 h-6 rounded-full overflow-hidden border border-gray-200 shrink-0 flex items-center justify-center bg-gray-50">
                   <img 
-                    :src="currentUser.hinhAnh || currentUser.picture || currentUser.avatar || ('https://ui-avatars.com/api/?name=' + encodeURIComponent(currentUser.hoTen || currentUser.name || currentUser.username || 'U') + '&background=random')" 
+                    :src="getHeaderAvatarUrl(currentUser) || ('https://ui-avatars.com/api/?name=' + encodeURIComponent(currentUser.hoTen || currentUser.name || currentUser.username || 'U') + '&background=random')" 
                     alt="Avatar" 
                     class="w-full h-full object-cover"
-                    @error="(e) => { if (e.target) (e.target as HTMLImageElement).style.display='none' }"
                   />
-                  <!-- Fallback icon if img fails -->
-                  <User class="absolute -z-10" :size="16" :stroke-width="1.5" />
                 </div>
               </template>
               <template v-else>
@@ -426,12 +435,10 @@ onUnmounted(() => {
             <template v-if="currentUser">
               <div class="w-5 h-5 rounded-full overflow-hidden border border-gray-200 shrink-0 flex items-center justify-center bg-gray-50">
                 <img 
-                  :src="currentUser.hinhAnh || currentUser.picture || currentUser.avatar || ('https://ui-avatars.com/api/?name=' + encodeURIComponent(currentUser.hoTen || currentUser.name || currentUser.username || 'U') + '&background=random')" 
+                  :src="getHeaderAvatarUrl(currentUser) || ('https://ui-avatars.com/api/?name=' + encodeURIComponent(currentUser.hoTen || currentUser.name || currentUser.username || 'U') + '&background=random')" 
                   alt="Avatar" 
                   class="w-full h-full object-cover"
-                  @error="(e) => { if (e.target) (e.target as HTMLImageElement).style.display='none' }"
                 />
-                <User class="absolute -z-10" :size="14" :stroke-width="1.5" />
               </div>
             </template>
             <template v-else>
