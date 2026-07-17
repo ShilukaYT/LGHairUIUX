@@ -1,0 +1,210 @@
+﻿Sheet: Sheet1
+Rows: 101, Cols: 11
+========================
+Test Case ID	Title	Types	Preconditions	Test Steps	Input Data	Expected Results	Actor	Execution Status	Tester	Date Test
+TC101	Đăng nhập bằng Số điện thoại (SĐT) thay vì Email	Positive	Hệ thống đang chạy, khách hàng có Sdt hợp lệ, TrangThai=1	1. Mở /login
+2. Nhập username = SĐT đã đăng ký
+3. Nhập password đúng
+4. Nhấn ĐĂNG NHẬP	Username: 0901234567
+Password: Pass123	HTTP 200, đăng nhập thành công vì query Login kiểm tra Email == username HOẶC Sdt == username	Tester	Chưa thực hiện		
+TC102	Đăng nhập với mật khẩu đã hash BCrypt ($2b$)	Positive	Khách hàng có MatKhau trong DB bắt đầu bằng '$2b$'	1. Nhập đúng username/password
+2. Nhấn ĐĂNG NHẬP	Username: user01
+Password: Pass123 (khớp hash BCrypt lưu sẵn)	Hệ thống dùng BCrypt.Verify() để so khớp, đăng nhập thành công	Tester	Chưa thực hiện		
+TC103	Đăng nhập với mật khẩu cũ chưa hash (plain text)	Positive	Khách hàng có MatKhau lưu dạng plain text (không có tiền tố $2a$/$2b$/$2y$)	1. Nhập đúng username/password dạng cũ
+2. Nhấn ĐĂNG NHẬP	Username: legacy_user
+Password: PlainPass123	Hệ thống fallback so sánh chuỗi trực tiếp (==), đăng nhập thành công dù chưa hash	Tester	Chưa thực hiện		
+TC104	Đăng nhập trả về đúng MaRank sau khi tính lại theo điểm tích lũy	Positive	Khách hàng có DiemTichLuy vừa thay đổi trước khi login	1. Đăng nhập thành công
+2. Kiểm tra response.user.maRank/tenRank	Username hợp lệ, DiemTichLuy = 1500	maRank/tenRank trong response phản ánh đúng hạng mới nhất tính từ GetRankByPointsAsync, không dùng giá trị MaRank cũ trong DB	Tester	Chưa thực hiện		
+TC105	Đăng nhập dọn dẹp Refresh Token đã hết hạn của khách hàng	Positive	Khách hàng có sẵn 1 Refresh Token cũ đã ExpiredAt < hiện tại trong DB	1. Đăng nhập thành công
+2. Truy vấn bảng Refreshtokens theo UserId	Username/Password hợp lệ	Token cũ đã hết hạn bị xóa khỏi DB, chỉ còn lại token mới vừa tạo	Tester	Chưa thực hiện		
+TC106	Cookie accessToken có hạn 30 ngày vì Frontend luôn gửi rememberMe=true	Positive	Đăng nhập thành công	1. Đăng nhập thành công
+2. Kiểm tra thuộc tính Expires của cookie accessToken	Username/Password hợp lệ	Cookie accessToken có Expires ≈ UtcNow + 30 ngày (vì handleLogin() hard-code rememberMe:true, UI không còn checkbox nào)	Tester	Chưa thực hiện		
+TC107	Cookie đăng nhập khách hàng dùng SameSite=None (khác Strict của admin)	Positive	Đăng nhập thành công	1. Đăng nhập thành công
+2. Kiểm tra Set-Cookie header	Username/Password hợp lệ	Cookie accessToken/refreshToken có SameSite=None, Secure=true, HttpOnly=true để cho phép gửi cookie chéo cổng Vue-.NET	Tester	Chưa thực hiện		
+TC108	Response đăng nhập không rò rỉ trường mật khẩu	Security	Đăng nhập thành công	1. Đăng nhập thành công
+2. Kiểm tra toàn bộ JSON response	Username/Password hợp lệ	Object user trả về không chứa trường matKhau/MatKhau dưới bất kỳ hình thức nào (kể cả đã hash)	Tester	Chưa thực hiện		
+TC109	Username có khoảng trắng đầu/cuối không được tự trim	Negative	Hệ thống đang chạy	1. Nhập username = ' user01 ' (có khoảng trắng 2 đầu)
+2. Nhập password đúng
+3. Nhấn ĐĂNG NHẬP	Username: ' user01 '
+Password: Pass123	Vì input username không có v-model.trim, chuỗi có khoảng trắng gửi thẳng lên server → không khớp Email/Sdt → HTTP 401	Tester	Chưa thực hiện		
+TC110	Đăng nhập bằng Email khác chữ hoa/thường	Boundary	Khách hàng đăng ký với email 'user@gmail.com'	1. Nhập username = 'User@Gmail.com' (khác hoa/thường)
+2. Nhập password đúng
+3. Nhấn ĐĂNG NHẬP	Username: User@Gmail.com
+Password: Pass123	Cần xác minh thực tế: SQL Server mặc định collation không phân biệt hoa/thường nên có thể vẫn đăng nhập được — cần kiểm tra để tránh nhầm lẫn	Tester	Chưa thực hiện		
+TC111	Mật khẩu chỉ gồm khoảng trắng vẫn được FE coi là 'đã nhập'	Negative	Hệ thống đang chạy	1. Nhập username hợp lệ
+2. Nhập password = '   ' (chỉ có dấu cách)
+3. Nhấn ĐĂNG NHẬP	Username: user01
+Password: '   '	FE không chặn vì password.value không rỗng, gọi API và nhận HTTP 401 từ server thay vì báo lỗi 'nhập đầy đủ' ngay từ đầu	Tester	Chưa thực hiện		
+TC112	Lỗi đồng bộ giỏ hàng không chặn luồng đăng nhập thành công	Positive	Đăng nhập thành công, API syncCartAfterLoginDB() trả về lỗi (vd mất mạng tạm thời)	1. Đăng nhập với thông tin hợp lệ
+2. Giả lập syncCartAfterLoginDB() throw exception
+3. Quan sát kết quả	Username/Password hợp lệ	Modal 'Thành công' vẫn hiển thị, vẫn chuyển hướng về '/', lỗi đồng bộ giỏ hàng chỉ log console.warn chứ không chặn đăng nhập	Tester	Chưa thực hiện		
+TC113	Google Login tự động tạo tài khoản mới với mã bắt đầu "GG"	Positive	Email Google chưa tồn tại trong bảng Khachhang	1. Nhấn Google Login
+2. Chọn tài khoản Google chưa từng đăng ký	Google credential hợp lệ, email mới	Tài khoản Khachhang mới được tạo với MaKh dạng 'GG' + 6 số ngẫu nhiên, TrangThai=1	Tester	Chưa thực hiện		
+TC114	Tài khoản tạo tự động qua Google có mật khẩu ngẫu nhiên đã hash	Positive	Tài khoản vừa được tạo qua Google Login	1. Đăng nhập Google lần đầu
+2. Kiểm tra cột MatKhau trong DB	Google credential hợp lệ	MatKhau là chuỗi BCrypt hash của 1 GUID ngẫu nhiên (Guid.NewGuid()), không phải chuỗi rỗng hay giá trị cố định	Tester	Chưa thực hiện		
+TC115	Ảnh đại diện tự động lấy từ hồ sơ Google khi tạo tài khoản mới	Positive	Email Google chưa tồn tại trong hệ thống	1. Đăng nhập Google lần đầu
+2. Kiểm tra trường hinhAnh trong response	Google credential có payload.Picture	HinhAnh của Khachhang mới = payload.Picture lấy từ Google, không phải null	Tester	Chưa thực hiện		
+TC116	Google Login với tài khoản đã tồn tại: cập nhật lại MaRank theo điểm hiện tại	Positive	Khách hàng đã có tài khoản (đăng ký bằng SĐT trước đó), cùng email với Google	1. Đăng nhập Google bằng email trùng khớp	Google credential hợp lệ	Không tạo tài khoản trùng, MaRank được tính lại qua GetRankByPointsAsync(DiemTichLuy) và lưu lại	Tester	Chưa thực hiện		
+TC117	Google Login tài khoản bị khóa trả về thông báo RIÊNG khác luồng login thường	Negative	Khách hàng có Email trùng với Google, TrangThai=0	1. Đăng nhập Google với email của tài khoản bị khóa	Google credential hợp lệ, tài khoản TrangThai=0	HTTP 400, message chính xác 'Tài khoản Google này liên kết với một tài khoản đã bị khóa.' (khác message của login thường 'Tài khoản của bạn đã bị khóa...')	Tester	Chưa thực hiện		
+TC118	Google Login với Audience (ClientId) không khớp cấu hình hệ thống	Security	Hệ thống đang chạy	1. Gửi credential Google được ký cho ClientId khác
+2. Quan sát phản hồi và DB	credential với Audience sai	GoogleJsonWebSignature.ValidateAsync ném exception, HTTP 400 'Xác thực Google thất bại.', KHÔNG có bản ghi Khachhang mới nào được tạo (không có side-effect)	Tester	Chưa thực hiện		
+TC119	Sau Google Login, localStorage chỉ lưu 'user', KHÔNG lưu 'token'	Integration	Đăng nhập Google thành công	1. Đăng nhập Google thành công
+2. Kiểm tra toàn bộ localStorage	Google credential hợp lệ	localStorage chỉ có key 'user', không có key 'token' hay 'accessToken' (khác hẳn luồng login/register thường)	Tester	Chưa thực hiện		
+TC120	Google Login không có độ trễ chuyển trang như luồng đăng nhập thường	UI	Đăng nhập Google thành công	1. Đăng nhập Google thành công
+2. Đo thời điểm window.location.href thay đổi	Google credential hợp lệ	Chuyển hướng về '/' ngay lập tức, không có setTimeout 1000ms như handleLogin() thông thường	Tester	Chưa thực hiện		
+TC121	Đăng ký có Email: gọi send-register-otp trước khi tạo tài khoản	Positive	Hệ thống đang chạy, Email chưa tồn tại	1. Điền đầy đủ thông tin kèm Email hợp lệ
+2. Nhấn ĐĂNG KÝ NGAY
+3. Theo dõi network request	hoTen, sdt, email, matKhau hợp lệ	Gọi POST /api/account/send-register-otp trước, chỉ khi thành công mới mở modal nhập OTP, CHƯA gọi /register ngay	Tester	Chưa thực hiện		
+TC122	Đăng ký: Email đã tồn tại bị chặn ngay ở bước gửi OTP	Negative	Email đã có trong DB	1. Điền form với Email đã tồn tại
+2. Nhấn ĐĂNG KÝ NGAY	email: existing@gmail.com	HTTP 400 'Email này đã được sử dụng.', modal OTP KHÔNG được mở	Tester	Chưa thực hiện		
+TC123	Modal OTP hiển thị đúng địa chỉ Email vừa nhập	UI	Đã gửi OTP thành công, modal đang mở	1. Đăng ký với email 'test@gmail.com'
+2. Quan sát nội dung modal OTP	email: test@gmail.com	Modal hiển thị đúng dòng '...gửi đến email test@gmail.com...'	Tester	Chưa thực hiện		
+TC124	Nhập đúng mã OTP tạo tài khoản thành công và tự động đăng nhập	Positive	Modal OTP đang mở, OTP hợp lệ chưa hết hạn	1. Nhập đúng mã OTP nhận được
+2. Nhấn XÁC NHẬN ĐĂNG KÝ	otp: 123456 (đúng với cache RegOTP_email)	HTTP 200, tài khoản tạo thành công, localStorage lưu accessToken + user, chuyển hướng '/' sau 2s	Tester	Chưa thực hiện		
+TC125	Nhập sai mã OTP, tài khoản KHÔNG được tạo	Negative	Modal OTP đang mở	1. Nhập mã OTP sai
+2. Nhấn XÁC NHẬN ĐĂNG KÝ	otp: 999999 (sai)	HTTP 400 'Mã xác nhận không đúng hoặc đã hết hạn.', không có bản ghi Khachhang mới trong DB	Tester	Chưa thực hiện		
+TC126	Mã OTP đăng ký hết hạn sau 5 phút	Negative	OTP đã được gửi hơn 5 phút trước	1. Chờ quá 5 phút
+2. Nhập đúng mã OTP đã nhận
+3. Nhấn XÁC NHẬN ĐĂNG KÝ	otp đã hết hạn trong cache	HTTP 400 'Mã xác nhận không đúng hoặc đã hết hạn.' vì _cache đã tự xóa theo TimeSpan.FromMinutes(5)	Tester	Chưa thực hiện		
+TC127	Mã OTP đăng ký chỉ dùng được 1 lần	Negative	Đã đăng ký thành công bằng OTP hợp lệ trước đó	1. Dùng lại chính mã OTP vừa xác nhận thành công cho 1 lượt đăng ký khác	otp đã dùng 1 lần	HTTP 400 vì _cache.Remove(RegOTP_{email}) đã xóa mã ngay sau lần dùng đầu tiên	Tester	Chưa thực hiện		
+TC128	Đăng ký không nhập Email: bỏ qua hoàn toàn bước xác minh OTP	Positive	Hệ thống đang chạy	1. Để trống Email
+2. Điền các trường bắt buộc hợp lệ
+3. Nhấn ĐĂNG KÝ NGAY	email: (rỗng)	Gọi thẳng submitRegistration(''), KHÔNG gọi send-register-otp, KHÔNG hiện modal OTP, tạo tài khoản ngay	Tester	Chưa thực hiện		
+TC129	Nút XÁC NHẬN ĐĂNG KÝ bị disabled khi ô OTP còn trống	UI	Modal OTP đang mở	1. Mở modal OTP
+2. Không nhập gì vào ô OTP
+3. Quan sát nút	otpInput: (rỗng)	Nút 'XÁC NHẬN ĐĂNG KÝ' bị disabled (:disabled="isLoading || !otpInput")	Tester	Chưa thực hiện		
+TC130	Đóng modal OTP bằng nút X hủy đăng ký	Positive	Modal OTP đang mở	1. Nhấn nút X trên modal OTP	(Không)	Modal đóng lại (showOtpModal=false), KHÔNG có tài khoản nào được tạo trong DB	Tester	Chưa thực hiện		
+TC131	Đăng ký khi cả SĐT và Email đều đã tồn tại chỉ trả 1 thông báo lỗi chung	Negative	Cả Sdt và Email đều đã có trong DB (thuộc 2 khách hàng khác nhau)	1. Nhập Sdt và Email đều đã tồn tại
+2. Nhấn ĐĂNG KÝ NGAY	sdt: 0901234567 (đã tồn tại)
+email: existing@gmail.com (đã tồn tại)	HTTP 400 'Số điện thoại hoặc Email này đã được đăng ký.' – message không cho biết cụ thể trường nào trùng	Tester	Chưa thực hiện		
+TC132	Mã khách hàng mới khi đăng ký có tiền tố "KH"	Positive	Đăng ký thành công	1. Đăng ký thành công
+2. Kiểm tra MaKh trong DB	Thông tin đăng ký hợp lệ	MaKh có dạng 'KH' + 6 chữ số ngẫu nhiên (khác tiền tố 'GG' của tài khoản tạo qua Google)	Tester	Chưa thực hiện		
+TC133	Mật khẩu khi đăng ký được lưu dạng hash BCrypt, không còn plain text	Security	Đăng ký thành công	1. Đăng ký với matKhau = 'Pass123'
+2. Truy vấn trực tiếp cột MatKhau trong DB	matKhau: Pass123	Giá trị lưu trong DB bắt đầu bằng '$2a$' hoặc '$2b$', KHÔNG phải chuỗi 'Pass123' gốc	Tester	Chưa thực hiện		
+TC134	Đăng ký thành công tự động set cả 2 cookie accessToken và refreshToken	Integration	Đăng ký thành công	1. Đăng ký thành công
+2. Kiểm tra Set-Cookie header	Thông tin đăng ký hợp lệ	Cookie accessToken (1 ngày) và refreshToken (7 ngày) đều được set song song với việc trả token trong JSON body	Tester	Chưa thực hiện		
+TC135	Khách hàng mới đăng ký có DiemTichLuy=0 và MaRank mặc định thấp nhất	Positive	Đăng ký thành công	1. Đăng ký thành công
+2. Kiểm tra DiemTichLuy và MaRank	Thông tin đăng ký hợp lệ	DiemTichLuy = 0, MaRank = kết quả GetRankByPointsAsync(0) (mặc định RANK01 nếu không có hạng nào có DiemToiThieu=0)	Tester	Chưa thực hiện		
+TC136	Khách hàng mới đăng ký có TrangThai=1 ngay lập tức, không cần duyệt	Positive	Đăng ký thành công	1. Đăng ký thành công
+2. Kiểm tra TrangThai trong DB	Thông tin đăng ký hợp lệ	TrangThai = 1 (active), khách hàng có thể đăng nhập ngay mà không cần xác minh gì thêm ngoài OTP lúc đăng ký	Tester	Chưa thực hiện		
+TC137	Họ tên có nhiều khoảng trắng liên tiếp giữa các từ vẫn hợp lệ	Positive	Hệ thống đang chạy	1. Nhập Họ tên = 'Nguyễn    Văn    A' (nhiều dấu cách)
+2. Nhấn ĐĂNG KÝ NGAY	hoTen: 'Nguyễn    Văn    A'	Regex /^[\p{L}\s]+$/u vẫn pass vì \s cho phép nhiều khoảng trắng liên tiếp, không báo lỗi định dạng	Tester	Chưa thực hiện		
+TC138	Họ tên chứa ký tự chữ cái ngôn ngữ khác vẫn pass regex \p{L}	Boundary	Hệ thống đang chạy	1. Nhập Họ tên = '田中太郎' (chữ Kanji)
+2. Nhấn ĐĂNG KÝ NGAY	hoTen: 田中太郎	Regex \p{L} chấp nhận MỌI chữ cái Unicode (không riêng tiếng Việt), FE không báo lỗi 'chứa số hoặc ký tự đặc biệt' dù không phải tên tiếng Việt	Tester	Chưa thực hiện		
+TC139	Họ tên chỉ có đúng 1 ký tự vẫn được coi là hợp lệ	Boundary	Hệ thống đang chạy	1. Nhập Họ tên = 'A'
+2. Điền các trường còn lại hợp lệ
+3. Nhấn ĐĂNG KÝ NGAY	hoTen: 'A'	Không có ràng buộc độ dài tối thiểu cho Họ tên, validate pass, tiếp tục gọi API	Tester	Chưa thực hiện		
+TC140	Trường Họ tên tự động trim khoảng trắng đầu/cuối trước khi validate	Positive	Hệ thống đang chạy	1. Nhập Họ tên = '  Nguyễn Văn A  ' (có khoảng trắng đầu/cuối)
+2. Nhấn ĐĂNG KÝ NGAY	hoTen: '  Nguyễn Văn A  '	Nhờ v-model.trim, giá trị gửi lên API là 'Nguyễn Văn A' đã được cắt khoảng trắng thừa	Tester	Chưa thực hiện		
+TC141	Số điện thoại toàn chữ số 0 lặp lại vẫn pass validate định dạng	Boundary	Hệ thống đang chạy	1. Nhập SĐT = '0000000000' (10 số 0)
+2. Nhấn ĐĂNG KÝ NGAY	sdt: 0000000000	phoneRegex /^[0-9]+$/ và độ dài 10-11 đều pass, hệ thống không kiểm tra tính hợp lệ thực tế của đầu số	Tester	Chưa thực hiện		
+TC142	Mật khẩu đúng ranh giới tối thiểu 6 ký tự gồm 1 chữ + 1 số	Boundary	Hệ thống đang chạy	1. Nhập mật khẩu = 'a12345' (đúng 6 ký tự)
+2. Nhấn ĐĂNG KÝ NGAY	matKhau: a12345	passwordRegex pass vì đủ 6 ký tự, có ít nhất 1 chữ và 1 số, không báo lỗi	Tester	Chưa thực hiện		
+TC143	Sau khi gửi OTP, form quên mật khẩu hiển thị OTP + mật khẩu mới CÙNG 1 bước	Positive	Hệ thống đang chạy	1. Nhập Email, nhấn GỬI MÃ XÁC NHẬN
+2. Quan sát giao diện ngay sau khi step chuyển sang 2	email: user@gmail.com	Form hiển thị đồng thời ô OTP, Mật khẩu mới, Xác nhận mật khẩu trong 1 màn hình – không có bước trung gian riêng để 'xác nhận OTP trước'	Tester	Chưa thực hiện		
+TC144	Quên mật khẩu gửi OTP và mật khẩu mới trong CÙNG 1 request reset-password	Positive	Đang ở bước nhập OTP + mật khẩu mới	1. Nhập OTP đúng và mật khẩu mới hợp lệ
+2. Nhấn CẬP NHẬT MẬT KHẨU
+3. Theo dõi network request	otp: 123456, newPassword: NewPass1	Chỉ có 1 lệnh gọi POST /api/account/reset-password chứa cả email, otp và newPassword – không có API riêng để 'xác thực OTP' trước	Tester	Chưa thực hiện		
+TC145	OTP quên mật khẩu KHÔNG dùng lại được mã OTP đăng ký (khác cache key)	Security	Có 1 mã OTP đăng ký (RegOTP_{email}) và 1 mã OTP quên mật khẩu (key={email}) cho cùng email	1. Lấy mã OTP đã dùng ở luồng đăng ký
+2. Dùng mã đó để reset mật khẩu qua quên mật khẩu	OTP thuộc luồng đăng ký (RegOTP_)	HTTP 400 vì reset-password chỉ tra cứu cache theo key={email} thuần, không khớp với key RegOTP_{email}	Tester	Chưa thực hiện		
+TC146	Quên mật khẩu qua Google yêu cầu email PHẢI đã đăng ký sẵn	Negative	Email Google CHƯA có tài khoản Khachhang nào	1. Nhấn Google Login ở trang quên mật khẩu
+2. Chọn tài khoản Google chưa từng đăng ký	Google credential của email lạ	HTTP 400 'Email này chưa đăng ký thành viên.' – KHÁC với luồng đăng nhập Google (login) sẽ tự động tạo tài khoản mới	Tester	Chưa thực hiện		
+TC147	Trạng thái xác minh Google cho quên mật khẩu chỉ tồn tại 10 phút	Boundary	Đã xác minh Google thành công hơn 10 phút trước, chưa nhấn Cập nhật mật khẩu	1. Xác minh Google thành công
+2. Chờ quá 10 phút
+3. Nhấn CẬP NHẬT MẬT KHẨU	Cache Verified_{email} đã hết hạn	HTTP 400 'Mã xác nhận không đúng hoặc đã hết hạn.' vì _cache.Set(..., TimeSpan.FromMinutes(10)) đã tự xóa	Tester	Chưa thực hiện		
+TC148	Sau xác minh Google, ẩn ô nhập OTP thủ công	UI	Xác minh Google thành công ở bước quên mật khẩu	1. Xác minh Google thành công
+2. Quan sát form	Google credential hợp lệ	Ô nhập OTP bị ẩn, thay bằng khối 'Đã xác minh Mạng Xã Hội' hiển thị đúng email đã xác minh	Tester	Chưa thực hiện		
+TC149	Email sai định dạng bị chặn ở FE trước khi gọi API gửi OTP	Negative	Hệ thống đang chạy	1. Nhập Email sai định dạng
+2. Nhấn GỬI MÃ XÁC NHẬN	email: 'abc123'	Hiện lỗi 'Định dạng Email không hợp lệ.' ngay tại Client, KHÔNG gọi API /send-otp	Tester	Chưa thực hiện		
+TC150	Sau khi đổi mật khẩu thành công, phải đăng nhập lại bằng mật khẩu MỚI	Positive	Đã đổi mật khẩu thành công qua quên mật khẩu	1. Đổi mật khẩu thành công
+2. Thử đăng nhập bằng mật khẩu CŨ
+3. Thử đăng nhập bằng mật khẩu MỚI	Mật khẩu cũ và mật khẩu mới	Đăng nhập bằng mật khẩu cũ thất bại (401), đăng nhập bằng mật khẩu mới thành công	Tester	Chưa thực hiện		
+TC151	Mật khẩu mới trùng với mật khẩu cũ vẫn được chấp nhận	Boundary	Đang ở bước đặt mật khẩu mới, biết mật khẩu cũ	1. Nhập mật khẩu mới TRÙNG với mật khẩu hiện tại
+2. Nhấn CẬP NHẬT MẬT KHẨU	newPassword = mật khẩu cũ	Hệ thống không có kiểm tra chống trùng mật khẩu cũ, vẫn đổi thành công (HTTP 200)	Tester	Chưa thực hiện		
+TC152	Gọi lại GỬI MÃ nhiều lần liên tiếp sẽ ghi đè OTP cũ	Positive	Đang ở bước 1, đã gửi OTP lần 1	1. Nhấn GỬI MÃ lần 1, lưu mã nhận được
+2. Nhấn 'Gửi lại mã' ngay sau đó
+3. Thử dùng mã ở bước 1 để reset	email: user@gmail.com	Mã OTP lần 1 không còn hiệu lực vì _cache.Set() ghi đè theo cùng key email, chỉ mã mới nhất dùng được	Tester	Chưa thực hiện		
+TC153	Nhập Email đúng định dạng nhưng không tồn tại trên hệ thống	Negative	Email hợp lệ về định dạng nhưng chưa từng đăng ký	1. Nhập email chưa đăng ký
+2. Nhấn GỬI MÃ XÁC NHẬN	email: neverexist@gmail.com	HTTP 400 'Email không tồn tại trên hệ thống.'	Tester	Chưa thực hiện		
+TC154	Gửi OTP thất bại do lỗi dịch vụ email	Negative	_emailService.SendEmailAsync ném exception (vd SMTP lỗi)	1. Nhập email hợp lệ đã đăng ký
+2. Nhấn GỬI MÃ XÁC NHẬN trong lúc email service bị lỗi	email: user@gmail.com	HTTP 400 'Không thể gửi mail: ' kèm chi tiết exception message	Tester	Chưa thực hiện		
+TC155	Đăng xuất (khách hàng) dùng cookie SameSite=None	Positive	Khách hàng đã đăng nhập	1. POST /api/account/logout
+2. Kiểm tra Set-Cookie header xóa cookie	Cookie accessToken/refreshToken hợp lệ	Set-Cookie xóa cookie có SameSite=None (khác SameSite=Strict của admin logout)	Tester	Chưa thực hiện		
+TC156	Đăng xuất (khách hàng): refresh token gửi qua Body bị bỏ qua	Security	Đã đăng nhập, có cookie refreshToken hợp lệ	1. Gọi POST /api/account/logout kèm Body chứa refreshToken khác
+2. Quan sát token nào bị xóa trong DB	Body: {refreshToken: 'khác_cookie'}	Endpoint Logout() chỉ đọc Request.Cookies['refreshToken'], hoàn toàn bỏ qua giá trị trong Body	Tester	Chưa thực hiện		
+TC157	Đăng xuất tất cả thiết bị yêu cầu đã đăng nhập	Negative	Chưa đăng nhập / không có JWT hợp lệ	1. Gọi POST /api/account/logout-all mà không có Authorization header	(Không có token)	HTTP 401 Unauthorized vì endpoint có [Authorize]	Tester	Chưa thực hiện		
+TC158	Đăng xuất tất cả thiết bị xóa TOÀN BỘ Refresh Token của khách hàng	Positive	Khách hàng đang đăng nhập trên 3 thiết bị khác nhau (3 refresh token)	1. Từ 1 thiết bị, gọi POST /api/account/logout-all
+2. Truy vấn bảng Refreshtokens theo UserId	JWT hợp lệ của khách hàng	Toàn bộ (cả 3) bản ghi Refreshtoken của UserId này bị xóa khỏi DB	Tester	Chưa thực hiện		
+TC159	Sau logout-all, thiết bị khác dùng refresh token cũ bị từ chối	Positive	Đã gọi logout-all thành công từ thiết bị A	1. Từ thiết bị B, dùng refreshToken cũ gọi POST /api/account/refresh-token	refreshToken cũ (đã bị xóa)	HTTP 401 vì token không còn tồn tại trong bảng Refreshtokens	Tester	Chưa thực hiện		
+TC160	Logout-all chỉ xóa cookie ở thiết bị hiện tại	Positive	Đã gọi logout-all từ thiết bị A	1. Gọi logout-all từ thiết bị A
+2. Kiểm tra cookie ở thiết bị A và thiết bị B	JWT hợp lệ của thiết bị A	Cookie ở thiết bị A bị xóa; thiết bị B vẫn còn cookie cũ trên trình duyệt nhưng token phía server đã bị vô hiệu	Tester	Chưa thực hiện		
+TC161	Refresh Token (khách hàng): Mobile gửi refreshToken qua Body JSON	Positive	Có refreshToken hợp lệ, không dùng cookie (mô phỏng app mobile)	1. POST /api/account/refresh-token
+2. Body: {"RefreshToken": "<valid_token>"}, không gửi cookie	Body: {RefreshToken: "<valid_token>"}	HTTP 200, cấp accessToken và refreshToken mới trả trong JSON	Tester	Chưa thực hiện		
+TC162	Refresh Token (khách hàng): ưu tiên Body hơn Cookie khi cả 2 cùng tồn tại	Positive	Có cả Body refreshToken hợp lệ VÀ Cookie refreshToken khác (cũng hợp lệ)	1. Gửi Body refreshToken A và Cookie refreshToken B đồng thời	Body: token A, Cookie: token B	Hệ thống dùng token A (từ Body) vì code kiểm tra request?.RefreshToken trước, chỉ fallback Cookie khi Body rỗng	Tester	Chưa thực hiện		
+TC163	Refresh Token (khách hàng): dọn dẹp các token hết hạn KHÁC của cùng khách hàng	Positive	Khách hàng có 2 refresh token hết hạn khác + 1 token đang dùng để refresh	1. Gọi refresh-token với token hợp lệ	refreshToken hợp lệ	2 token hết hạn khác của cùng UserId bị xóa khỏi DB, chỉ token đang refresh được cập nhật	Tester	Chưa thực hiện		
+TC164	Refresh Token (khách hàng): tài khoản bị khóa dù token còn hạn vẫn bị từ chối	Negative	Refresh token còn hạn 7 ngày, nhưng Khachhang.TrangThai=0 (mới bị khóa)	1. Gọi refresh-token với token còn hạn	refreshToken hợp lệ, TrangThai=0	HTTP 401 'Tài khoản đã bị khóa. Vui lòng đăng nhập lại hoặc liên hệ hỗ trợ.'	Tester	Chưa thực hiện		
+TC165	Refresh Token (khách hàng): cookie accessToken mới luôn có hạn 1 ngày	Positive	Đăng nhập ban đầu có rememberMe=true (cookie 30 ngày), sau đó gọi refresh	1. Đăng nhập (cookie accessToken 30 ngày)
+2. Gọi refresh-token
+3. Kiểm tra Expires cookie accessToken mới	refreshToken hợp lệ	Cookie accessToken mới chỉ có hạn 1 ngày (SetTokenCookie("accessToken", newAccessToken, 1)) – KHÔNG giữ lại 30 ngày như lúc đăng nhập	Tester	Chưa thực hiện		
+TC166	Refresh Token (khách hàng): không có token ở cả Body lẫn Cookie	Negative	Không gửi Body, không có cookie refreshToken	1. POST /api/account/refresh-token không có Body và không có Cookie	(Trống hoàn toàn)	HTTP 401 'Phiên đăng nhập đã hết hạn.'	Tester	Chưa thực hiện		
+TC167	Refresh Token (khách hàng): bản ghi DB được cập nhật đè, không tạo row mới	Positive	Refresh token hợp lệ	1. Ghi nhận Id bản ghi Refreshtoken trước khi gọi refresh
+2. Gọi refresh-token
+3. Kiểm tra lại bảng Refreshtokens	refreshToken hợp lệ	Cùng 1 Id bản ghi được UPDATE lại Token/IssuedAt/ExpiredAt mới, tổng số row của UserId không tăng thêm	Tester	Chưa thực hiện		
+TC168	Verify-session hợp lệ khi JWT và cookie refreshToken đều đúng	Positive	Đã đăng nhập, JWT còn hạn, cookie refreshToken còn trong DB	1. GET /api/account/verify-session kèm Access Token + Cookie	Authorization: Bearer <valid_jwt>, Cookie: refreshToken=<valid>	HTTP 200 {success:true, message:'Session is valid'}	Tester	Chưa thực hiện		
+TC169	Verify-session thiếu cookie refreshToken	Negative	JWT hợp lệ nhưng trình duyệt không gửi cookie refreshToken	1. GET /api/account/verify-session kèm Access Token, không có Cookie	Authorization: Bearer <valid_jwt>, Cookie: (không có)	HTTP 401 'Không tìm thấy token.'	Tester	Chưa thực hiện		
+TC170	Verify-session khi refreshToken đã bị thu hồi ở thiết bị khác	Negative	Cookie refreshToken còn ở trình duyệt nhưng bản ghi đã bị xóa khỏi DB (do logout-all ở máy khác)	1. GET /api/account/verify-session kèm JWT + Cookie cũ	Authorization: Bearer <valid_jwt>, Cookie: refreshToken=<revoked>	HTTP 401 'Phiên đăng nhập đã bị thu hồi.'	Tester	Chưa thực hiện		
+TC171	Verify-session không có Access Token	Negative	Không đăng nhập	1. GET /api/account/verify-session không có Authorization header	(Không có token)	HTTP 401 Unauthorized ngay tại [Authorize], không chạy vào logic bên trong hàm	Tester	Chưa thực hiện		
+TC172	Get-profile trả về đầy đủ diemTichLuy và tenRank	Positive	Đã đăng nhập, JWT hợp lệ	1. GET /api/account/get-profile kèm Access Token	Authorization: Bearer <valid_jwt>	HTTP 200, response.user có đủ maKH, hoTen, hinhAnh, maRank, tenRank, diemTichLuy, email, sdt	Tester	Chưa thực hiện		
+TC173	Get-profile luôn tính lại MaRank mới nhất mỗi lần gọi	Positive	Khách hàng vừa được cộng thêm điểm tích lũy (vd sau khi mua hàng) trước khi gọi API	1. Cộng điểm cho khách hàng (ngoài luồng)
+2. Gọi GET /api/account/get-profile	Authorization hợp lệ, DiemTichLuy vừa tăng	MaRank trong DB và response được cập nhật lại theo điểm mới, không trả về MaRank cũ đã lỗi thời	Tester	Chưa thực hiện		
+TC174	Get-profile khi không có Access Token	Negative	Chưa đăng nhập	1. GET /api/account/get-profile không có Authorization header	(Không có token)	HTTP 401 Unauthorized	Tester	Chưa thực hiện		
+TC175	Get-profile khi khách hàng đã bị xóa khỏi DB	Negative	JWT còn hạn nhưng bản ghi Khachhang tương ứng đã bị xóa (vd admin xóa tài khoản)	1. Dùng JWT cũ gọi GET /api/account/get-profile sau khi tài khoản đã bị xóa	Authorization: Bearer <jwt của tài khoản đã xóa>	HTTP 404 Not Found	Tester	Chưa thực hiện		
+TC176	Khách hàng 0 điểm được gán RANK01 khi không có hạng phù hợp	Positive	Bảng Hangthanhvien không có hạng nào có DiemToiThieu=0	1. Đăng ký khách hàng mới (DiemTichLuy=0)
+2. Kiểm tra MaRank được gán	points: 0	MaRank = 'RANK01' (giá trị mặc định fallback khi ranks.FirstOrDefault() trả về null)	Tester	Chưa thực hiện		
+TC177	Điểm tích lũy trùng chính xác mốc DiemToiThieu vẫn đạt hạng đó	Boundary	Có 1 hạng với DiemToiThieu = 1000, TrangThai=1	1. Set DiemTichLuy khách hàng = 1000 (bằng đúng mốc)
+2. Gọi lại đăng nhập hoặc get-profile	points: 1000, DiemToiThieu: 1000	Khách hàng được xếp vào hạng đó (điều kiện p >= r.DiemToiThieu là >=, không phải >)	Tester	Chưa thực hiện		
+TC178	Hạng có TrangThai khác 1 bị bỏ qua dù khách đủ điểm	Negative	Có 1 hạng cao với DiemToiThieu thấp nhưng TrangThai=0 (ngưng hoạt động)	1. Khách hàng đủ điểm cho hạng đó
+2. Gọi tính lại hạng	points đủ điều kiện, hạng có TrangThai=0	Hạng bị ngưng hoạt động KHÔNG được xét đến (query .Where(r => r.TrangThai == 1)), khách được xếp vào hạng thấp hơn kế tiếp còn hoạt động	Tester	Chưa thực hiện		
+TC179	Khách đủ điều kiện nhiều hạng cùng lúc được gán hạng CAO NHẤT	Positive	Khách hàng đủ điểm cho 3 hạng khác nhau đang hoạt động	1. Set DiemTichLuy đủ điều kiện cho nhiều hạng
+2. Kiểm tra MaRank được gán	points thỏa nhiều hạng	MaRank = hạng có DiemToiThieu cao nhất trong số các hạng thỏa mãn (do OrderByDescending + FirstOrDefault)	Tester	Chưa thực hiện		
+TC180	SQL Injection vào trường Số điện thoại khi đăng ký	Security	Hệ thống dùng EF Core parameterized query	1. Nhập SĐT = "1' OR '1'='1"
+2. Nhấn ĐĂNG KÝ NGAY	sdt: 1' OR '1'='1	phoneRegex chặn ký tự đặc biệt ở FE; nếu bypass FE gọi thẳng API vẫn không có SQL error leak, trả lỗi định dạng hoặc BadRequest bình thường	Tester	Chưa thực hiện		
+TC181	Email cực dài (300+ ký tự) khi gửi OTP đăng ký	Boundary	Hệ thống đang chạy	1. Nhập Email dài 300 ký tự hợp lệ định dạng
+2. Nhấn ĐĂNG KÝ NGAY	email: 'a'*290 + '@gmail.com'	Không gây lỗi server 500, trả về BadRequest hoặc xử lý bình thường tùy giới hạn cột DB	Tester	Chưa thực hiện		
+TC182	Mã OTP của Email A không dùng được để xác minh đăng ký Email B	Security	2 Email khác nhau cùng đăng ký gần như đồng thời, mỗi Email có OTP riêng trong cache	1. Lấy mã OTP đã gửi cho Email A
+2. Dùng mã đó khi đăng ký với Email B	otp của Email A, email trong request = Email B	HTTP 400 vì cache key RegOTP_{email} gắn chặt với từng Email cụ thể, không có rò rỉ chéo	Tester	Chưa thực hiện		
+TC183	Response login/register/google-login không chứa mật khẩu dưới mọi hình thức	Security	3 luồng đăng nhập/đăng ký đều thành công	1. Thực hiện lần lượt login, register, google-login
+2. Kiểm tra toàn bộ JSON trả về mỗi lần	Thông tin hợp lệ cho từng luồng	Không có trường nào (matKhau, password, hash...) chứa thông tin mật khẩu trong cả 3 response	Tester	Chưa thực hiện		
+TC184	Gọi trực tiếp reset-password mà không qua xác minh OTP/Google	Security	Email tồn tại thật trong hệ thống, không có OTP hay Google verified nào trong cache	1. POST /api/account/reset-password thẳng với email hợp lệ, OTP rỗng	email: real@gmail.com, otp: '', newPassword: Hack123	HTTP 400 'Mã xác nhận không đúng hoặc đã hết hạn.' – không thể đổi mật khẩu người khác nếu chưa qua bước xác minh	Tester	Chưa thực hiện		
+TC185	Đăng ký đồng thời (race condition) 2 request cùng SĐT	Boundary	Hệ thống đang chạy	1. Gửi 2 request POST /api/account/register cùng SĐT gần như đồng thời	2 request cùng sdt: 0909999999	Cần kiểm tra: vì check tồn tại và insert không nằm trong 1 transaction/unique constraint rõ ràng, có khả năng cả 2 request đều pass check và tạo ra 2 bản ghi trùng SĐT – lỗ hổng cần xác minh	Tester	Chưa thực hiện		
+TC186	Chuyển tab Đăng nhập/Đăng ký/Quên mật khẩu tự động reset form	UI	Đang nhập dở dữ liệu ở 1 form	1. Nhập dữ liệu vào form Đăng ký
+2. Chuyển sang tab Đăng nhập rồi quay lại Đăng ký	Dữ liệu bất kỳ đã nhập dở	Toàn bộ dữ liệu form (registerForm, forgotForm, username/password) bị xóa sạch nhờ watch([isLogin, isForgotPassword]) gọi resetAllForms()	Tester	Chưa thực hiện		
+TC187	Trường Email trong form đăng ký có nhãn "(Tuỳ chọn)"	UI	Đang ở form đăng ký	1. Quan sát nhãn label của ô Email	(Không)	Label hiển thị đúng 'Email (Tuỳ chọn)', không có dấu * bắt buộc như các trường khác	Tester	Chưa thực hiện		
+TC188	Dán chuỗi SĐT 12 số vào ô có maxlength=11 vẫn bị chặn khi submit	Boundary	Hệ thống đang chạy	1. Dùng thao tác paste (Ctrl+V) dán '090123456789' (12 số) vào ô SĐT, bỏ qua giới hạn gõ tay của maxlength
+2. Nhấn ĐĂNG KÝ NGAY	sdt (paste): 090123456789	Nếu trình duyệt cho phép paste vượt maxlength, JS validate độ dài 10-11 vẫn chặn lại và báo lỗi 'Số điện thoại không hợp lệ'	Tester	Chưa thực hiện		
+TC189	Nút Google Login tự resize theo chiều rộng form khi thay đổi kích thước cửa sổ	UI	Đang ở trang /login	1. Mở trang login
+2. Resize cửa sổ trình duyệt (thu nhỏ/phóng to)	Viewport thay đổi từ 1200px xuống 400px	googleBtnWidth cập nhật lại qua updateGoogleBtnWidth(), nút Google Login không bị tràn hoặc méo	Tester	Chưa thực hiện		
+TC190	Ô nhập OTP không giới hạn định dạng ở phía Client	UI	Modal OTP đang mở	1. Nhập ký tự chữ hoặc ký tự đặc biệt vào ô OTP thay vì 6 số
+2. Nhấn XÁC NHẬN ĐĂNG KÝ	otpInput: 'abc!@#'	FE không chặn định dạng, gửi thẳng lên server; server trả lỗi 'Mã xác nhận không đúng' vì không khớp cache, không có validate riêng ở Client	Tester	Chưa thực hiện		
+TC191	Khối "Đã xác minh Mạng Xã Hội" hiển thị đúng email và ẩn ô OTP	UI	Vừa xác minh Google thành công ở quên mật khẩu	1. Xác minh Google thành công
+2. Quan sát vùng thông tin xác minh	Google credential hợp lệ	Hiển thị đúng forgotForm.email trong khối xác nhận, ô nhập OTP thủ công (v-if !isGoogleVerified) bị ẩn hoàn toàn	Tester	Chưa thực hiện		
+TC192	Không đồng nhất tên key localStorage giữa đăng ký ('accessToken') và đăng nhập ('token')	Integration	Thực hiện lần lượt đăng ký và đăng nhập ở 2 phiên khác nhau	1. Đăng ký thành công, kiểm tra localStorage
+2. Đăng xuất, đăng nhập lại, kiểm tra localStorage	Thông tin hợp lệ cho cả 2 luồng	Sau đăng ký: localStorage có key 'accessToken'; sau đăng nhập: localStorage có key 'token' – 2 key khác nhau cho cùng mục đích, có thể gây lỗi khi code khác chỉ đọc 1 trong 2 key	Tester	Chưa thực hiện		
+TC193	Sau Google Login không có key nào chứa token trong localStorage	Integration	Đăng nhập Google thành công	1. Đăng nhập Google thành công
+2. Gọi thử 1 API cần Authorization (vd get-profile) dựa vào localStorage	Google credential hợp lệ	Vì không lưu 'token'/'accessToken', mọi lời gọi API dựa vào Authorization header đọc từ localStorage sẽ thất bại dù cookie vẫn còn hiệu lực	Tester	Chưa thực hiện		
+TC194	Đồng bộ giỏ hàng chỉ chạy ở luồng đăng nhập thường	Integration	Có sản phẩm trong giỏ hàng Guest trước khi đăng nhập/đăng ký/Google login	1. Thêm sản phẩm vào giỏ khi chưa đăng nhập
+2. Thử lần lượt: đăng nhập thường, đăng ký mới, Google Login
+3. Kiểm tra giỏ hàng sau mỗi luồng	Giỏ hàng Guest có sẵn sản phẩm	Chỉ luồng đăng nhập thường gọi syncCartAfterLoginDB(); đăng ký và Google Login KHÔNG đồng bộ giỏ hàng Guest	Tester	Chưa thực hiện		
+TC195	Tài khoản khách hàng bị khóa giữa phiên khiến refresh-token bị từ chối ngay	Integration	Khách hàng đang có refreshToken còn hạn 7 ngày, sau đó Admin khóa tài khoản (TrangThai=0)	1. Đăng nhập bình thường
+2. Admin khóa tài khoản khách hàng này
+3. Gọi POST /api/account/refresh-token với token cũ	refreshToken cũ còn hạn, TrangThai vừa đổi thành 0	HTTP 401 'Tài khoản đã bị khóa...' dù bản thân token chưa hết hạn, do kiểm tra TrangThai diễn ra SAU khi xác thực token	Tester	Chưa thực hiện		
+TC196	MaRank/tenRank trả về ngay trong response login/register mà không cần gọi thêm get-profile	Integration	Đăng nhập hoặc đăng ký thành công	1. Đăng nhập (hoặc đăng ký) thành công
+2. Kiểm tra response.user.maRank và tenRank	Thông tin hợp lệ	maRank và tenRank đã có sẵn trong response ngay từ login/register, Frontend không cần gọi thêm GET /get-profile để hiển thị hạng thành viên	Tester	Chưa thực hiện		
+TC197	Đăng nhập thành công chuyển hướng về '/' sau 1000ms	Integration	Đăng nhập thành công	1. Đăng nhập thành công
+2. Đo thời gian từ lúc showStatus() đến khi window.location.href đổi	Username/Password hợp lệ	Chuyển hướng xảy ra sau đúng 1000ms (setTimeout 1000), không phải 1500ms như ở phiên bản code trước đó	Tester	Chưa thực hiện		
+TC198	Gửi mã OTP mới trước khi mã cũ hết hạn 5 phút làm vô hiệu mã cũ ngay lập tức	Boundary	Đã gửi OTP đăng ký lần 1 cho 1 Email, chưa hết 5 phút	1. Gửi send-register-otp lần 1, lưu mã A
+2. Trong vòng 5 phút, gửi lại send-register-otp lần 2 cho cùng Email, nhận mã B
+3. Dùng mã A để đăng ký	email giống nhau cho cả 2 lần gửi	Mã A bị vô hiệu ngay khi mã B ghi đè lên cùng cache key RegOTP_{email}, đăng ký bằng mã A thất bại dù chưa hết 5 phút	Tester	Chưa thực hiện		
+TC199	Mật khẩu mới khi quên mật khẩu đúng 6 ký tự tối thiểu vẫn được chấp nhận	Boundary	Đang ở bước đặt mật khẩu mới	1. Nhập mật khẩu mới = 'b98765' (đúng 6 ký tự, có chữ + số)
+2. Nhấn CẬP NHẬT MẬT KHẨU	newPassword: b98765	passwordRegex pass, HTTP 200, đổi mật khẩu thành công	Tester	Chưa thực hiện		
+TC200	Gọi liên tiếp send-register-otp nhiều lần trong thời gian ngắn không bị giới hạn	Security	Hệ thống đang chạy, không có rate-limit	1. Gửi 15 request POST /api/account/send-register-otp liên tiếp cho cùng 1 Email trong vài giây	15 request dồn dập, cùng email chưa đăng ký	Hiện tại KHÔNG có cơ chế giới hạn tần suất – hệ thống gửi 15 email OTP liên tục, có thể bị lợi dụng để spam/DoS dịch vụ email (lỗ hổng cần khắc phục) – FAIL tiềm ẩn	Tester	Chưa thực hiện		

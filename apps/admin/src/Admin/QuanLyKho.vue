@@ -2,14 +2,12 @@
 import { ref, computed, reactive, onMounted } from "vue";
 import axios from "axios";
 import { logActivity } from "@/utils/activityLogger";
-
-import { useTheme } from "vuetify";
+import {
+  Search, RotateCcw, Plus, Eye, Check, X, Trash2, Edit,
+  ChevronDown, Package, AlertTriangle, DollarSign, Ban,
+} from "lucide-vue-next";
 
 const API = import.meta.env.VITE_API_URL;
-
-// ── DARK / LIGHT MODE (đồng bộ với ProfileDD - Cài đặt Sáng/Tối) ──
-const vuetifyTheme = useTheme();
-const isDarkMode = computed(() => vuetifyTheme.global.name.value === "dark");
 
 function toAbsUrl(path) {
   if (!path) return "";
@@ -20,11 +18,12 @@ function toAbsUrl(path) {
 // ══ TABS ═══════════════════════════════════════════════════════════
 const activeTab = ref("tonkho"); // tonkho | phieunhap | nhacc | lichsu | canhbao
 
-// ══ TOAST / LIGHTBOX ═══════════════════════════════════════════════
-const toast = reactive({ show: false, msg: "", type: "success" });
+// ══ SNACKBAR / LIGHTBOX ════════════════════════════════════════════
+const snackbar = reactive({ show: false, text: "", color: "success" });
 function showToast(msg, type = "success") {
-  toast.msg = msg; toast.type = type; toast.show = true;
-  setTimeout(() => { toast.show = false; }, 3000);
+  snackbar.text = msg;
+  snackbar.color = type === "error" ? "error" : "success";
+  snackbar.show = true;
 }
 const lightbox = reactive({ open: false, src: "" });
 function openLightbox(src) { if (!src) return; lightbox.src = src; lightbox.open = true; }
@@ -37,12 +36,18 @@ function fmtDate(d) {
   if (isNaN(dt.getTime())) return "—";
   return dt.toLocaleDateString("vi-VN");
 }
+function fmtDateTime(d) {
+  if (!d) return "—";
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) return "—";
+  return dt.toLocaleString("vi-VN");
+}
 function todayStr() {
   const d = new Date();
   return d.toISOString().slice(0, 10);
 }
 
-// ── Nhân viên đang đăng nhập (đọc từ sessionStorage, do trang đăng nhập lưu) ──
+// ── Nhân viên đang đăng nhập ──
 function getCurrentNhanVien() {
   try {
     const adminStr = sessionStorage.getItem("adminUser");
@@ -63,12 +68,8 @@ const currentNhanVien = getCurrentNhanVien();
 const danhMucs = ref([]);
 const tonKhoList = ref([]);
 const searchTon = ref("");
-const filterDanhMucTon = ref("");
-const filterTrangThaiTon = ref("");
-const curPageTon = ref(1);
-const perPageTon = ref(10);
-const sortFieldTon = ref(null);
-const sortDirTon = ref(1);
+const filterDanhMucTon = ref(null);
+const filterTrangThaiTon = ref(null);
 const loadingTon = ref(false);
 
 async function loadDanhMuc() {
@@ -85,42 +86,33 @@ async function loadTonKho() {
       params: {
         search: searchTon.value || null,
         maDanhMuc: filterDanhMucTon.value || null,
-        trangThai: filterTrangThaiTon.value === "" ? null : filterTrangThaiTon.value,
+        trangThai: filterTrangThaiTon.value === null || filterTrangThaiTon.value === "" ? null : filterTrangThaiTon.value,
       },
     });
     tonKhoList.value = res.data.map(b => ({ ...b, hinhAnh: toAbsUrl(b.hinhAnh) }));
   } catch { showToast("Lỗi tải tồn kho!", "error"); }
   finally { loadingTon.value = false; }
 }
+function onFilterTonChange() { loadTonKho(); }
 
-function onFilterTonChange() { curPageTon.value = 1; loadTonKho(); }
+const danhMucOptions = computed(() => [
+  { title: "Tất cả danh mục", value: null },
+  ...danhMucs.value.map(dm => ({ title: dm.tenDanhMuc, value: dm.maDMSP })),
+]);
+const trangThaiTonOptions = [
+  { title: "Tất cả trạng thái", value: null },
+  { title: "Đang bán", value: "1" },
+  { title: "Ngừng bán", value: "0" },
+];
 
-function sortIconTon(f) { return sortFieldTon.value !== f ? "↕" : sortDirTon.value === 1 ? "↑" : "↓"; }
-function setSortTon(f) {
-  sortFieldTon.value === f ? (sortDirTon.value *= -1) : ((sortFieldTon.value = f), (sortDirTon.value = 1));
-  curPageTon.value = 1;
-}
-
-const sortedTon = computed(() => {
-  let arr = [...tonKhoList.value];
-  if (sortFieldTon.value) {
-    arr.sort((a, b) => {
-      const av = a[sortFieldTon.value] ?? 0, bv = b[sortFieldTon.value] ?? 0;
-      return av > bv ? sortDirTon.value : av < bv ? -sortDirTon.value : 0;
-    });
-  }
-  return arr;
-});
-const totalPagesTon = computed(() => Math.max(1, Math.ceil(sortedTon.value.length / perPageTon.value)));
-const pageDataTon = computed(() => {
-  const s = (curPageTon.value - 1) * perPageTon.value;
-  return sortedTon.value.slice(s, s + perPageTon.value);
-});
-const pageRangeTon = computed(() => {
-  const t = totalPagesTon.value, c = curPageTon.value;
-  const lo = Math.max(1, c - 2), hi = Math.min(t, lo + 4);
-  return Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
-});
+const tonKhoHeaders = [
+  { title: "Ảnh", key: "hinhAnh", align: "center", sortable: false, width: 70 },
+  { title: "Sản phẩm / Biến thể", key: "tenSanPham", align: "start" },
+  { title: "Danh mục", key: "danhMuc", align: "start" },
+  { title: "Giá bán", key: "giaBan", align: "end" },
+  { title: "Tồn kho", key: "soLuongTon", align: "center" },
+  { title: "Trạng thái", key: "trangThai", align: "center", sortable: false },
+];
 
 const statsTon = computed(() => {
   const list = tonKhoList.value;
@@ -132,8 +124,8 @@ const statsTon = computed(() => {
   };
 });
 
-function stockClass(m) {
-  return m === "het" ? "stock-zero" : m === "thap" ? "stock-low" : m === "on" ? "stock-ok" : "stock-unknown";
+function stockColor(m) {
+  return m === "het" ? "error" : m === "thap" ? "warning" : m === "on" ? "success" : "grey-darken-1";
 }
 function stockText(m) {
   return m === "het" ? "Hết hàng" : m === "thap" ? "Sắp hết" : m === "on" ? "Còn hàng" : "Chưa rõ";
@@ -158,13 +150,21 @@ async function loadCanhBao() {
 }
 function onNguongCanhBaoChange() { loadCanhBao(); }
 
+const canhBaoHeaders = [
+  { title: "Ảnh", key: "hinhAnh", align: "center", sortable: false, width: 70 },
+  { title: "Sản phẩm / Biến thể", key: "tenSanPham", align: "start" },
+  { title: "Tồn kho", key: "soLuongTon", align: "center" },
+  { title: "Giá bán", key: "giaBan", align: "end" },
+  { title: "Mức độ", key: "mucTon", align: "center", sortable: false },
+];
+
 /* ════════════════════════════════════════════════════════════════
    TAB — LỊCH SỬ TỒN KHO
    ════════════════════════════════════════════════════════════════ */
 const lichSuList = ref([]);
 const lichSuTotal = ref(0);
 const filterBienTheLS = ref("");
-const filterLoaiBienDongLS = ref("");
+const filterLoaiBienDongLS = ref(null);
 const tuNgayLS = ref("");
 const denNgayLS = ref("");
 const curPageLS = ref(1);
@@ -192,25 +192,29 @@ async function loadLichSu() {
 function onFilterLSChange() { curPageLS.value = 1; loadLichSu(); }
 
 const totalPagesLS = computed(() => Math.max(1, Math.ceil(lichSuTotal.value / perPageLS.value)));
-const pageRangeLS = computed(() => {
-  const t = totalPagesLS.value, c = curPageLS.value;
-  const lo = Math.max(1, c - 2), hi = Math.min(t, lo + 4);
-  return Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
-});
-function gotoPageLS(p) { curPageLS.value = p; loadLichSu(); }
 
 function loaiBienDongText(l) {
   return l === "NHAP" ? "Nhập kho" : l === "DIEU_CHINH" ? "Điều chỉnh" : l === "BAN" ? "Bán hàng" : l;
 }
-function loaiBienDongClass(l) {
-  return l === "NHAP" ? "active" : l === "BAN" ? "cancelled" : "pending";
+function loaiBienDongColor(l) {
+  return l === "NHAP" ? "success" : l === "BAN" ? "error" : "warning";
 }
-function fmtDateTime(d) {
-  if (!d) return "—";
-  const dt = new Date(d);
-  if (isNaN(dt.getTime())) return "—";
-  return dt.toLocaleString("vi-VN");
-}
+const loaiBienDongOptions = [
+  { title: "Tất cả loại biến động", value: null },
+  { title: "Nhập kho", value: "NHAP" },
+  { title: "Điều chỉnh", value: "DIEU_CHINH" },
+  { title: "Bán hàng", value: "BAN" },
+];
+
+const lichSuHeaders = [
+  { title: "Thời gian", key: "thoiGian", align: "start", sortable: false },
+  { title: "Sản phẩm / Biến thể", key: "tenSanPham", align: "start", sortable: false },
+  { title: "Loại biến động", key: "loaiBienDong", align: "center", sortable: false },
+  { title: "Thay đổi", key: "soLuongThayDoi", align: "center", sortable: false },
+  { title: "Tồn trước → sau", key: "ton", align: "center", sortable: false },
+  { title: "Chứng từ", key: "maChungTu", align: "start", sortable: false },
+  { title: "Ghi chú", key: "ghiChu", align: "start", sortable: false },
+];
 
 /* ════════════════════════════════════════════════════════════════
    THỐNG KÊ NHẬP KHO THEO THÁNG (nhúng trong tab Phiếu nhập)
@@ -243,13 +247,10 @@ const maxThongKeTien = computed(() => {
    TAB 2 — PHIẾU NHẬP
    ════════════════════════════════════════════════════════════════ */
 const phieuNhaps = ref([]);
-const filterNccPN = ref("");
-const filterTrangThaiPN = ref("");
+const filterNccPN = ref(null);
+const filterTrangThaiPN = ref(null);
 const tuNgayPN = ref("");
 const denNgayPN = ref("");
-const expandedPhieu = ref({});
-const curPagePN = ref(1);
-const perPagePN = ref(10);
 const loadingPN = ref(false);
 const savingPN = ref(false);
 
@@ -259,7 +260,7 @@ async function loadPhieuNhap() {
     const res = await axios.get(`${API}/api/QuanLyKho/phieunhap`, {
       params: {
         maNcc: filterNccPN.value || null,
-        trangThai: filterTrangThaiPN.value === "" ? null : filterTrangThaiPN.value,
+        trangThai: filterTrangThaiPN.value === null || filterTrangThaiPN.value === "" ? null : filterTrangThaiPN.value,
         tuNgay: tuNgayPN.value || null,
         denNgay: denNgayPN.value || null,
       },
@@ -271,23 +272,7 @@ async function loadPhieuNhap() {
   } catch { showToast("Lỗi tải phiếu nhập!", "error"); }
   finally { loadingPN.value = false; }
 }
-function onFilterPNChange() { curPagePN.value = 1; loadPhieuNhap(); }
-
-function isExpandedPN(id) { return !!expandedPhieu.value[id]; }
-function toggleExpandPN(id) {
-  expandedPhieu.value[id] ? delete expandedPhieu.value[id] : (expandedPhieu.value[id] = true);
-}
-
-const totalPagesPN = computed(() => Math.max(1, Math.ceil(phieuNhaps.value.length / perPagePN.value)));
-const pageDataPN = computed(() => {
-  const s = (curPagePN.value - 1) * perPagePN.value;
-  return phieuNhaps.value.slice(s, s + perPagePN.value);
-});
-const pageRangePN = computed(() => {
-  const t = totalPagesPN.value, c = curPagePN.value;
-  const lo = Math.max(1, c - 2), hi = Math.min(t, lo + 4);
-  return Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
-});
+function onFilterPNChange() { loadPhieuNhap(); }
 
 const statsPN = computed(() => {
   const list = phieuNhaps.value;
@@ -300,7 +285,26 @@ const statsPN = computed(() => {
 });
 
 function pnStatusText(t) { return t === 1 ? "Đã duyệt" : t === 2 ? "Đã hủy" : "Chờ duyệt"; }
-function pnStatusClass(t) { return t === 1 ? "active" : t === 2 ? "cancelled" : "pending"; }
+function pnStatusColor(t) { return t === 1 ? "success" : t === 2 ? "error" : "warning"; }
+
+const phieuNhapHeaders = [
+  { title: "", key: "data-table-expand", align: "start", sortable: false, width: 40 },
+  { title: "Mã phiếu", key: "maPn", align: "start", sortable: false },
+  { title: "Ngày nhập", key: "ngayNhap", align: "start", sortable: false },
+  { title: "Nhà cung cấp", key: "tenNcc", align: "start", sortable: false },
+  { title: "Nhân viên", key: "tenNv", align: "start", sortable: false },
+  { title: "Số dòng", key: "soLuongDong", align: "center", sortable: false },
+  { title: "Tổng tiền", key: "tongTien", align: "end", sortable: false },
+  { title: "Trạng thái", key: "trangThai", align: "center", sortable: false },
+  { title: "Thao tác", key: "actions", align: "center", sortable: false },
+];
+
+const trangThaiPNOptions = [
+  { title: "Tất cả trạng thái", value: null },
+  { title: "Chờ duyệt", value: "0" },
+  { title: "Đã duyệt", value: "1" },
+  { title: "Đã hủy", value: "2" },
+];
 
 // ── Modal Phiếu nhập ───────────────────────────────────────────────
 const pnModal = reactive({ open: false, mode: "form", title: "" });
@@ -308,12 +312,12 @@ const pnErrors = reactive({ maPn: "", maNcc: "", maNv: "", ngayNhap: "", chiTiet
 function clearPnErrors() { Object.keys(pnErrors).forEach(k => pnErrors[k] = ""); }
 
 const pnForm = reactive({
-  maPn: "", maNcc: "", maNv: currentNhanVien?.maNv || "", ngayNhap: todayStr(), ghiChu: "", chiTiet: [],
+  maPn: "", maNcc: null, maNv: currentNhanVien?.maNv || "", ngayNhap: todayStr(), ghiChu: "", chiTiet: [],
 });
 const pnDetail = ref(null); // dùng cho mode "view"
 
 function resetPnForm() {
-  Object.assign(pnForm, { maPn: "", maNcc: "", maNv: currentNhanVien?.maNv || "", ngayNhap: todayStr(), ghiChu: "", chiTiet: [] });
+  Object.assign(pnForm, { maPn: "", maNcc: null, maNv: currentNhanVien?.maNv || "", ngayNhap: todayStr(), ghiChu: "", chiTiet: [] });
 }
 
 function openAddPN() {
@@ -451,9 +455,7 @@ function removeBTRow(idx) { pnForm.chiTiet.splice(idx, 1); }
    ════════════════════════════════════════════════════════════════ */
 const nccs = ref([]);
 const searchNcc = ref("");
-const filterTrangThaiNcc = ref("");
-const curPageNcc = ref(1);
-const perPageNcc = ref(10);
+const filterTrangThaiNcc = ref(null);
 const savingNcc = ref(false);
 const loadingNcc = ref(false);
 
@@ -470,20 +472,27 @@ const filteredNcc = computed(() => {
   const q = searchNcc.value.toLowerCase().trim();
   return nccs.value.filter(n => {
     const mq = !q || n.tenNcc?.toLowerCase().includes(q) || n.maNcc?.toLowerCase().includes(q);
-    const ms = filterTrangThaiNcc.value === "" || String(n.trangThai) === filterTrangThaiNcc.value;
+    const ms = filterTrangThaiNcc.value === null || filterTrangThaiNcc.value === "" || String(n.trangThai) === filterTrangThaiNcc.value;
     return mq && ms;
   });
 });
-const totalPagesNcc = computed(() => Math.max(1, Math.ceil(filteredNcc.value.length / perPageNcc.value)));
-const pageDataNcc = computed(() => {
-  const s = (curPageNcc.value - 1) * perPageNcc.value;
-  return filteredNcc.value.slice(s, s + perPageNcc.value);
-});
-const pageRangeNcc = computed(() => {
-  const t = totalPagesNcc.value, c = curPageNcc.value;
-  const lo = Math.max(1, c - 2), hi = Math.min(t, lo + 4);
-  return Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
-});
+
+const nccHeaders = [
+  { title: "Mã NCC", key: "maNcc", align: "start" },
+  { title: "Tên nhà cung cấp", key: "tenNcc", align: "start" },
+  { title: "SĐT", key: "soDienThoai", align: "start" },
+  { title: "Địa chỉ", key: "diaChi", align: "start" },
+  { title: "Email", key: "email", align: "start" },
+  { title: "Số phiếu nhập", key: "soPhieuNhap", align: "center" },
+  { title: "Trạng thái", key: "trangThai", align: "center" },
+  { title: "Thao tác", key: "actions", align: "center", sortable: false },
+];
+
+const trangThaiNccOptions = [
+  { title: "Tất cả trạng thái", value: null },
+  { title: "Đang hợp tác", value: "1" },
+  { title: "Ngừng hợp tác", value: "0" },
+];
 
 // ── Modal Nhà cung cấp ──────────────────────────────────────────────
 const nccModal = reactive({ open: false, title: "" });
@@ -602,1024 +611,999 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="kho-manager" :class="{ 'dark-mode': isDarkMode }">
-
-    <!-- ── HEADER ─────────────────────────────────────────────── -->
-    <div class="header-bar">
-      <div class="page-title-text">Quản lý kho hàng</div>
-      <div class="header-actions">
-        <button v-if="activeTab === 'phieunhap'" type="button" class="btn btn-primary btn-sm" @click="openAddPN">
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2v12M2 8h12" /></svg>
-          Tạo phiếu nhập
-        </button>
-        <button v-if="activeTab === 'nhacc'" type="button" class="btn btn-primary btn-sm" @click="openAddNcc">
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2v12M2 8h12" /></svg>
-          Thêm nhà cung cấp
-        </button>
-      </div>
-    </div>
-
-    <!-- ── TAB BAR ────────────────────────────────────────────── -->
-    <div class="tab-bar">
-      <button class="tab-btn" :class="{ active: activeTab === 'tonkho' }" @click="switchTab('tonkho')">Tồn kho</button>
-      <button class="tab-btn" :class="{ active: activeTab === 'phieunhap' }" @click="switchTab('phieunhap')">Phiếu nhập</button>
-      <!-- <button class="tab-btn" :class="{ active: activeTab === 'nhacc' }" @click="switchTab('nhacc')">Nhà cung cấp</button> -->
-      <button class="tab-btn" :class="{ active: activeTab === 'canhbao' }" @click="switchTab('canhbao')">Cảnh báo tồn</button>
-      <button class="tab-btn" :class="{ active: activeTab === 'lichsu' }" @click="switchTab('lichsu')">Lịch sử tồn kho</button>
-    </div>
-
-    <!-- ════════════════════════════════════════════════════════
-         TAB: TỒN KHO
-         ════════════════════════════════════════════════════════ -->
-    <template v-if="activeTab === 'tonkho'">
-      <div class="stats-row">
-        <div class="stat-card stat-dark">
-          <!-- <div class="stat-icon">📦</div> -->
-          <div class="stat-label">Tổng biến thể</div>
-          <div class="stat-value">{{ statsTon.tong }}</div>
-          <div class="stat-hint">Đang theo dõi</div>
+  <v-container fluid class="pa-6 fill-height align-start" style="min-height: 100vh;">
+    <v-card width="100%" elevation="2" rounded="xl">
+      <v-card-title class="d-flex flex-column flex-md-row align-md-center justify-space-between pa-6">
+        <div>
+          <h2 class="text-h5 font-weight-bold mb-1">Quản Lý Kho Hàng</h2>
+          <div class="text-subtitle-2 text-medium-emphasis">Theo dõi tồn kho, phiếu nhập và nhà cung cấp</div>
         </div>
-        <div class="stat-card stat-red">
-          <!-- <div class="stat-icon">🚫</div> -->
-          <div class="stat-label">Hết hàng</div>
-          <div class="stat-value">{{ statsTon.het }}</div>
-          <div class="stat-hint">Cần nhập gấp</div>
-        </div>
-        <div class="stat-card stat-orange">
-          <!-- <div class="stat-icon">⚠️</div> -->
-          <div class="stat-label">Sắp hết</div>
-          <div class="stat-value">{{ statsTon.thap }}</div>
-          <div class="stat-hint">Dưới 10 sản phẩm</div>
-        </div>
-        <div class="stat-card stat-green">
-          <!-- <div class="stat-icon">💰</div> -->
-          <div class="stat-label">Giá trị tồn kho</div>
-          <div class="stat-value" style="font-size:20px">{{ fmt(statsTon.giaTri) }}</div>
-          <div class="stat-hint">Theo giá bán</div>
-        </div>
-      </div>
 
-      <div class="toolbar">
-        <div class="search-box">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5" /><path d="M11 11l3 3" /></svg>
-          <input v-model="searchTon" placeholder="Tìm tên sản phẩm, biến thể..." @keyup.enter="onFilterTonChange" />
+        <div class="d-flex align-center gap-3 mt-4 mt-md-0 flex-wrap">
+          <v-btn
+            v-if="activeTab === 'phieunhap'"
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            class="text-none font-weight-bold"
+            @click="openAddPN"
+          >
+            <template v-slot:prepend><Plus class="w-4 h-4 mr-1" /></template>
+            Tạo phiếu nhập
+          </v-btn>
+          <v-btn
+            v-if="activeTab === 'nhacc'"
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            class="text-none font-weight-bold"
+            @click="openAddNcc"
+          >
+            <template v-slot:prepend><Plus class="w-4 h-4 mr-1" /></template>
+            Thêm nhà cung cấp
+          </v-btn>
         </div>
-        <select v-model="filterDanhMucTon" class="filter-select" @change="onFilterTonChange">
-          <option value="">Tất cả danh mục</option>
-          <option v-for="dm in danhMucs" :key="dm.maDMSP" :value="dm.maDMSP">{{ dm.tenDanhMuc }}</option>
-        </select>
-        <select v-model="filterTrangThaiTon" class="filter-select" @change="onFilterTonChange">
-          <option value="">Tất cả trạng thái</option>
-          <option value="1">Đang bán</option>
-          <option value="0">Ngừng bán</option>
-        </select>
-        <span class="result-count">{{ sortedTon.length }} kết quả</span>
-        <select v-model.number="perPageTon" class="filter-select" style="width:auto;min-width:110px" @change="curPageTon = 1">
-          <option :value="10">10 / trang</option>
-          <option :value="20">20 / trang</option>
-          <option :value="50">50 / trang</option>
-          <option :value="9999">Tất cả</option>
-        </select>
-        <button type="button" class="btn-refresh" :class="{ spinning: loadingTon }" title="Tải lại dữ liệu" @click="loadTonKho">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3.6h-3.6"/></svg>
-        </button>
-      </div>
+      </v-card-title>
 
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th style="width:56px">Ảnh</th>
-              <th class="sortable" @click="setSortTon('tenSanPham')">Sản phẩm / Biến thể <span class="sort-icon">{{ sortIconTon("tenSanPham") }}</span></th>
-              <th>Danh mục</th>
-              <th class="sortable" @click="setSortTon('giaBan')">Giá bán <span class="sort-icon">{{ sortIconTon("giaBan") }}</span></th>
-              <th class="sortable" @click="setSortTon('soLuongTon')">Tồn kho <span class="sort-icon">{{ sortIconTon("soLuongTon") }}</span></th>
-              <th>Trạng thái</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="!loadingTon && pageDataTon.length === 0">
-              <td colspan="6"><div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">Không tìm thấy biến thể nào</div></div></td>
-            </tr>
-            <tr v-for="b in pageDataTon" :key="b.maBienThe">
-              <td>
-                <div class="thumb-wrap" @click="openLightbox(b.hinhAnh)">
-                  <img v-if="b.hinhAnh" :src="b.hinhAnh" class="thumb-img" :alt="b.tenBienThe" />
-                  <div v-else class="thumb-placeholder">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-                  </div>
-                </div>
-              </td>
-              <td>
-                <div class="sp-name">{{ b.tenSanPham || "—" }}</div>
-                <div class="bt-subname">{{ b.tenBienThe }} <span class="code-text">{{ b.maBienThe }}</span></div>
-              </td>
-              <td><span class="brand-badge">{{ b.danhMuc || "—" }}</span></td>
-              <td><span class="price-cell">{{ fmt(b.giaBan) }}</span></td>
-              <td>
-                <span class="stock-badge" :class="stockClass(b.mucTon)">{{ b.soLuongTon ?? "—" }} cái</span>
-              </td>
-              <td>
-                <span class="status-pill" :class="b.trangThai ? 'active' : 'inactive'">
-                  <span class="status-dot"></span>{{ b.trangThai ? "Đang bán" : "Ngừng bán" }}
-                </span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <div v-if="sortedTon.length > 0 && perPageTon < 9999" class="pager-wrap">
-          <span>Hiển thị {{ (curPageTon - 1) * perPageTon + 1 }}–{{ Math.min(curPageTon * perPageTon, sortedTon.length) }} / {{ sortedTon.length }} mục</span>
-          <div class="pager-btns">
-            <button class="page-btn" :disabled="curPageTon <= 1" @click="curPageTon--">‹</button>
-            <button v-for="p in pageRangeTon" :key="p" class="page-btn" :class="{ cur: p === curPageTon }" @click="curPageTon = p">{{ p }}</button>
-            <button class="page-btn" :disabled="curPageTon >= totalPagesTon" @click="curPageTon++">›</button>
+      <v-divider></v-divider>
+
+      <v-tabs v-model="activeTab" color="primary" class="px-4" @update:model-value="switchTab">
+        <v-tab value="tonkho" class="text-none font-weight-bold">Tồn kho</v-tab>
+        <v-tab value="phieunhap" class="text-none font-weight-bold">Phiếu nhập</v-tab>
+        <v-tab value="canhbao" class="text-none font-weight-bold">Cảnh báo tồn</v-tab>
+        <v-tab value="lichsu" class="text-none font-weight-bold">Lịch sử tồn kho</v-tab>
+      </v-tabs>
+
+      <v-divider></v-divider>
+
+      <v-card-text class="pa-6">
+
+        <!-- ════════════════════════════════════════════════════════
+             TAB: TỒN KHO
+             ════════════════════════════════════════════════════════ -->
+        <template v-if="activeTab === 'tonkho'">
+          <v-row class="mb-2">
+            <v-col cols="12" sm="6" md="3">
+              <v-card variant="tonal" color="primary" rounded="lg">
+                <v-card-text>
+                  <div class="text-caption text-uppercase font-weight-bold">Tổng biến thể</div>
+                  <div class="text-h5 font-weight-bold">{{ statsTon.tong }}</div>
+                  <div class="text-caption text-medium-emphasis">Đang theo dõi</div>
+                </v-card-text>
+              </v-card>
+            </v-col>
+            <v-col cols="12" sm="6" md="3">
+              <v-card variant="tonal" color="error" rounded="lg">
+                <v-card-text>
+                  <div class="text-caption text-uppercase font-weight-bold">Hết hàng</div>
+                  <div class="text-h5 font-weight-bold">{{ statsTon.het }}</div>
+                  <div class="text-caption text-medium-emphasis">Cần nhập gấp</div>
+                </v-card-text>
+              </v-card>
+            </v-col>
+            <v-col cols="12" sm="6" md="3">
+              <v-card variant="tonal" color="warning" rounded="lg">
+                <v-card-text>
+                  <div class="text-caption text-uppercase font-weight-bold">Sắp hết</div>
+                  <div class="text-h5 font-weight-bold">{{ statsTon.thap }}</div>
+                  <div class="text-caption text-medium-emphasis">Dưới 10 sản phẩm</div>
+                </v-card-text>
+              </v-card>
+            </v-col>
+            <v-col cols="12" sm="6" md="3">
+              <v-card variant="tonal" color="success" rounded="lg">
+                <v-card-text>
+                  <div class="text-caption text-uppercase font-weight-bold">Giá trị tồn kho</div>
+                  <div class="text-h6 font-weight-bold">{{ fmt(statsTon.giaTri) }}</div>
+                  <div class="text-caption text-medium-emphasis">Theo giá bán</div>
+                </v-card-text>
+              </v-card>
+            </v-col>
+          </v-row>
+
+          <div class="d-flex align-center gap-3 mb-4 flex-wrap">
+            <v-text-field
+              v-model="searchTon"
+              label="Tìm tên sản phẩm, biến thể..."
+              variant="outlined"
+              density="compact"
+              hide-details
+              clearable
+              rounded="lg"
+              style="min-width: 240px; max-width: 320px;"
+              @keyup.enter="onFilterTonChange"
+              @click:clear="onFilterTonChange"
+            >
+              <template v-slot:prepend-inner><Search class="w-4 h-4 mr-1" /></template>
+            </v-text-field>
+
+            <v-select
+              v-model="filterDanhMucTon"
+              :items="danhMucOptions"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              style="min-width: 200px; max-width: 240px;"
+              @update:model-value="onFilterTonChange"
+            ></v-select>
+
+            <v-select
+              v-model="filterTrangThaiTon"
+              :items="trangThaiTonOptions"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              style="min-width: 180px; max-width: 220px;"
+              @update:model-value="onFilterTonChange"
+            ></v-select>
+
+            <v-spacer></v-spacer>
+            <span class="text-caption text-medium-emphasis">{{ tonKhoList.length }} kết quả</span>
+
+            <v-btn variant="outlined" color="grey-darken-1" size="40" rounded="lg" @click="loadTonKho">
+              <RotateCcw class="w-5 h-5" />
+            </v-btn>
           </div>
-        </div>
-      </div>
-    </template>
 
-    <!-- ════════════════════════════════════════════════════════
-         TAB: PHIẾU NHẬP
-         ════════════════════════════════════════════════════════ -->
-    <template v-if="activeTab === 'phieunhap'">
-      <!-- <div class="toolbar" style="margin-bottom:10px">
-        <button type="button" class="btn btn-ghost btn-sm" @click="toggleThongKe">
-          {{ showThongKe ? "Ẩn thống kê theo tháng" : "Xem thống kê nhập kho theo tháng" }}
-        </button>
-      </div> -->
+          <v-data-table
+            :headers="tonKhoHeaders"
+            :items="tonKhoList"
+            :loading="loadingTon"
+            items-per-page="10"
+            hover
+          >
+            <template v-slot:item.hinhAnh="{ item }">
+              <v-avatar
+                rounded="lg"
+                size="42"
+                class="cursor-pointer my-2"
+                color="grey-lighten-3"
+                @click="openLightbox(item.hinhAnh)"
+              >
+                <img v-if="item.hinhAnh" :src="item.hinhAnh" :alt="item.tenBienThe" style="width:100%;height:100%;object-fit:cover;" />
+                <Package v-else class="w-5 h-5 text-medium-emphasis" />
+              </v-avatar>
+            </template>
 
-      <div v-if="showThongKe" class="table-wrap" style="padding:16px;margin-bottom:16px">
-        <div class="toolbar" style="margin-bottom:12px">
-          <label class="form-label" style="margin:0">Năm:</label>
-          <select v-model.number="thongKeNam" class="filter-select" style="width:auto" @change="loadThongKe">
-            <option v-for="y in [thongKeNam, thongKeNam-1, thongKeNam-2]" :key="y" :value="y">{{ y }}</option>
-          </select>
-          <span v-if="thongKeData" class="result-count">
-            Tổng {{ thongKeData.tongSoPhieuCaNam }} phiếu · {{ fmt(thongKeData.tongTienCaNam) }}
-          </span>
-        </div>
-        <div v-if="loadingThongKe" class="empty-state"><div class="empty-text">Đang tải thống kê...</div></div>
-        <div v-else-if="thongKeData" class="thongke-chart">
-          <div v-for="t in thongKeData.theoThang" :key="t.thang" class="thongke-col">
-            <div class="thongke-bar-wrap">
-              <div class="thongke-bar" :style="{ height: (t.tongTien / maxThongKeTien * 100) + '%' }" :title="fmt(t.tongTien)"></div>
+            <template v-slot:item.tenSanPham="{ item }">
+              <div class="py-1">
+                <div class="font-weight-bold">{{ item.tenSanPham || "—" }}</div>
+                <div class="text-caption text-medium-emphasis d-flex align-center gap-1">
+                  {{ item.tenBienThe }}
+                  <v-chip size="x-small" variant="tonal" class="font-weight-medium ml-1">{{ item.maBienThe }}</v-chip>
+                </div>
+              </div>
+            </template>
+
+            <template v-slot:item.danhMuc="{ item }">
+              <v-chip size="small" variant="tonal" color="grey-darken-1" class="font-weight-medium">{{ item.danhMuc || "—" }}</v-chip>
+            </template>
+
+            <template v-slot:item.giaBan="{ item }">
+              <span class="font-weight-bold text-warning-darken-2">{{ fmt(item.giaBan) }}</span>
+            </template>
+
+            <template v-slot:item.soLuongTon="{ item }">
+              <v-chip :color="stockColor(item.mucTon)" size="small" variant="flat" class="font-weight-bold">
+                {{ item.soLuongTon ?? "—" }} cái
+              </v-chip>
+            </template>
+
+            <template v-slot:item.trangThai="{ item }">
+              <v-chip :color="item.trangThai ? 'success' : 'grey-darken-1'" size="small" variant="tonal" class="font-weight-bold">
+                {{ item.trangThai ? "Đang bán" : "Ngừng bán" }}
+              </v-chip>
+            </template>
+
+            <template v-slot:no-data>
+              <div class="text-center pa-8 text-medium-emphasis">Không tìm thấy biến thể nào</div>
+            </template>
+          </v-data-table>
+        </template>
+
+        <!-- ════════════════════════════════════════════════════════
+             TAB: PHIẾU NHẬP
+             ════════════════════════════════════════════════════════ -->
+        <template v-if="activeTab === 'phieunhap'">
+          <v-card v-if="showThongKe" variant="outlined" rounded="lg" class="mb-4 pa-4">
+            <div class="d-flex align-center gap-3 mb-3 flex-wrap">
+              <span class="text-subtitle-2 font-weight-bold">Năm:</span>
+              <v-select
+                v-model="thongKeNam"
+                :items="[thongKeNam, thongKeNam-1, thongKeNam-2]"
+                variant="outlined"
+                density="compact"
+                hide-details
+                rounded="lg"
+                style="max-width: 120px;"
+                @update:model-value="loadThongKe"
+              ></v-select>
+              <span v-if="thongKeData" class="text-caption text-medium-emphasis">
+                Tổng {{ thongKeData.tongSoPhieuCaNam }} phiếu · {{ fmt(thongKeData.tongTienCaNam) }}
+              </span>
             </div>
-            <div class="thongke-label">T{{ t.thang }}</div>
-            <div class="thongke-sub">{{ t.soPhieuNhap }} phiếu</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="stats-row">
-        <div class="stat-card stat-dark">
-          <!-- <div class="stat-icon">📥</div> -->
-          <div class="stat-label">Tổng phiếu nhập</div>
-          <div class="stat-value">{{ statsPN.tong }}</div>
-          <div class="stat-hint">Trong bộ lọc hiện tại</div>
-        </div>
-        <div class="stat-card stat-orange">
-          <!-- <div class="stat-icon">⏳</div> -->
-          <div class="stat-label">Chờ duyệt</div>
-          <div class="stat-value">{{ statsPN.choDuyet }}</div>
-          <div class="stat-hint">Cần xử lý</div>
-        </div>
-        <div class="stat-card stat-green">
-          <!-- <div class="stat-icon">✅</div> -->
-          <div class="stat-label">Đã duyệt</div>
-          <div class="stat-value">{{ statsPN.daDuyet }}</div>
-          <div class="stat-hint">Đã cập nhật tồn kho</div>
-        </div>
-        <div class="stat-card stat-blue">
-          <!-- <div class="stat-icon">💵</div> -->
-          <div class="stat-label">Tổng tiền đã duyệt</div>
-          <div class="stat-value" style="font-size:20px">{{ fmt(statsPN.tongTien) }}</div>
-          <div class="stat-hint">Tổng giá trị nhập</div>
-        </div>
-      </div>
-
-      <div class="toolbar">
-        <select v-model="filterNccPN" class="filter-select" @change="onFilterPNChange">
-          <option value="">Tất cả nhà cung cấp</option>
-          <option v-for="n in nccs" :key="n.maNcc" :value="n.maNcc">{{ n.tenNcc }}</option>
-        </select>
-        <select v-model="filterTrangThaiPN" class="filter-select" @change="onFilterPNChange">
-          <option value="">Tất cả trạng thái</option>
-          <option value="0">Chờ duyệt</option>
-          <option value="1">Đã duyệt</option>
-          <option value="2">Đã hủy</option>
-        </select>
-        <input type="date" v-model="tuNgayPN" class="filter-select" @change="onFilterPNChange" />
-        <span class="date-sep">→</span>
-        <input type="date" v-model="denNgayPN" class="filter-select" @change="onFilterPNChange" />
-        <span class="result-count">{{ phieuNhaps.length }} kết quả</span>
-        <select v-model.number="perPagePN" class="filter-select" style="width:auto;min-width:110px" @change="curPagePN = 1">
-          <option :value="10">10 / trang</option>
-          <option :value="20">20 / trang</option>
-          <option :value="9999">Tất cả</option>
-        </select>
-        <button type="button" class="btn-refresh" :class="{ spinning: loadingPN }" title="Tải lại dữ liệu" @click="loadPhieuNhap">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3.6h-3.6"/></svg>
-        </button>
-      </div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Mã phiếu</th>
-              <th>Ngày nhập</th>
-              <th>Nhà cung cấp</th>
-              <th>Nhân viên</th>
-              <th>Số dòng</th>
-              <th>Tổng tiền</th>
-              <th>Trạng thái</th>
-              <th>Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="!loadingPN && pageDataPN.length === 0">
-              <td colspan="8"><div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">Không có phiếu nhập nào</div></div></td>
-            </tr>
-            <template v-for="p in pageDataPN" :key="p.maPn">
-              <tr class="sp-main-row" :class="{ 'row-expanded': isExpandedPN(p.maPn) }">
-                <td>
-                  <button type="button" class="expand-btn" @click="toggleExpandPN(p.maPn)">
-                    <svg class="expand-icon" :class="{ open: isExpandedPN(p.maPn) }" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6l4 4 4-4"/></svg>
-                  </button>
-                  <span class="code-text">{{ p.maPn }}</span>
-                </td>
-                <td>{{ fmtDate(p.ngayNhap) }}</td>
-                <td>{{ p.tenNcc || "—" }}</td>
-                <td>{{ p.tenNv || "—" }}</td>
-                <td><span class="bt-count-badge">{{ p.soLuongDong }} dòng</span></td>
-                <td><span class="price-cell">{{ fmt(p.tongTien) }}</span></td>
-                <td>
-                  <span class="status-pill" :class="pnStatusClass(p.trangThai)">
-                    <span class="status-dot"></span>{{ pnStatusText(p.trangThai) }}
-                  </span>
-                </td>
-                <td>
-                  <div class="actions">
-                    <button class="icon-btn view" title="Xem chi tiết" @click="openViewPN(p)">
-                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="3"/><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/></svg>
-                    </button>
-                    <button v-if="p.trangThai === 0" class="icon-btn approve" title="Duyệt phiếu" @click="duyetPN(p)">
-                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8l3.5 3.5L13 5"/></svg>
-                    </button>
-                    <button v-if="p.trangThai === 0" class="icon-btn cancel" title="Hủy phiếu" @click="huyPN(p)">
-                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="6.5"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5"/></svg>
-                    </button>
-                    <button v-if="p.trangThai !== 1" class="icon-btn del" title="Xóa phiếu" @click="deletePN(p)">
-                      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M6 4V2h4v2M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4"/></svg>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-              <tr v-if="isExpandedPN(p.maPn)" class="sp-detail-row">
-                <td colspan="8">
-                  <div class="nested-panel">
-                    <div class="nested-header">
-                      <h4 class="nested-title">Chi tiết phiếu nhập <span class="nested-count">{{ p.chiTiet.length }}</span></h4>
-                    </div>
-                    <div v-if="!p.chiTiet.length" class="nested-empty">Chưa có dòng chi tiết.</div>
-                    <div v-else class="bt-table-wrap">
-                      <table class="bt-table">
-                        <thead><tr><th style="width:44px"></th><th>Sản phẩm / Biến thể</th><th>Số lượng</th><th>Giá nhập</th><th>Thành tiền</th></tr></thead>
-                        <tbody>
-                          <tr v-for="c in p.chiTiet" :key="c.maBienThe">
-                            <td>
-                              <div class="thumb-wrap" style="width:32px;height:32px" @click="openLightbox(c.hinhAnh)">
-                                <img v-if="c.hinhAnh" :src="c.hinhAnh" class="thumb-img" style="width:32px;height:32px" />
-                                <div v-else class="thumb-placeholder" style="width:32px;height:32px">
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
-                                </div>
-                              </div>
-                            </td>
-                            <td><div class="bt-name">{{ c.tenSanPham }}</div><div class="bt-subname">{{ c.tenBienThe }}</div></td>
-                            <td>{{ c.soLuong }}</td>
-                            <td>{{ fmt(c.giaNhap) }}</td>
-                            <td class="price-cell">{{ fmt(c.thanhTien) }}</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            </template>
-          </tbody>
-        </table>
-        <div v-if="phieuNhaps.length > 0 && perPagePN < 9999" class="pager-wrap">
-          <span>Hiển thị {{ (curPagePN - 1) * perPagePN + 1 }}–{{ Math.min(curPagePN * perPagePN, phieuNhaps.length) }} / {{ phieuNhaps.length }} mục</span>
-          <div class="pager-btns">
-            <button class="page-btn" :disabled="curPagePN <= 1" @click="curPagePN--">‹</button>
-            <button v-for="p in pageRangePN" :key="p" class="page-btn" :class="{ cur: p === curPagePN }" @click="curPagePN = p">{{ p }}</button>
-            <button class="page-btn" :disabled="curPagePN >= totalPagesPN" @click="curPagePN++">›</button>
-          </div>
-        </div>
-      </div>
-    </template>
-
-    <!-- ════════════════════════════════════════════════════════
-         TAB: NHÀ CUNG CẤP
-         ════════════════════════════════════════════════════════ -->
-    <template v-if="activeTab === 'nhacc'">
-      <div class="toolbar">
-        <div class="search-box">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5" /><path d="M11 11l3 3" /></svg>
-          <input v-model="searchNcc" placeholder="Tìm tên, mã nhà cung cấp..." @input="curPageNcc = 1" />
-        </div>
-        <select v-model="filterTrangThaiNcc" class="filter-select" @change="curPageNcc = 1">
-          <option value="">Tất cả trạng thái</option>
-          <option value="1">Đang hợp tác</option>
-          <option value="0">Ngừng hợp tác</option>
-        </select>
-        <span class="result-count">{{ filteredNcc.length }} kết quả</span>
-        <button type="button" class="btn-refresh" :class="{ spinning: loadingNcc }" title="Tải lại dữ liệu" @click="loadNcc">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3.6h-3.6"/></svg>
-        </button>
-      </div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Mã NCC</th><th>Tên nhà cung cấp</th><th>SĐT</th><th>Địa chỉ</th><th>Email</th><th>Số phiếu nhập</th><th>Trạng thái</th><th>Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="!loadingNcc && pageDataNcc.length === 0">
-              <td colspan="8"><div class="empty-state"><div class="empty-icon">🏭</div><div class="empty-text">Không có nhà cung cấp nào</div></div></td>
-            </tr>
-            <tr v-for="n in pageDataNcc" :key="n.maNcc">
-              <td><span class="code-text">{{ n.maNcc }}</span></td>
-              <td><div class="sp-name">{{ n.tenNcc }}</div></td>
-              <td>{{ n.soDienThoai || "—" }}</td>
-              <td class="addr-cell">{{ n.diaChi || "—" }}</td>
-              <td>{{ n.email || "—" }}</td>
-              <td><span class="bt-count-badge">{{ n.soPhieuNhap }} phiếu</span></td>
-              <td>
-                <span class="status-pill clickable" :class="n.trangThai ? 'active' : 'inactive'" @click="toggleStatusNcc(n)">
-                  <span class="status-dot"></span>{{ n.trangThai ? "Đang hợp tác" : "Ngừng hợp tác" }}
-                </span>
-              </td>
-              <td>
-                <div class="actions">
-                  <button class="icon-btn edit" title="Sửa" @click="openEditNcc(n)">
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 2l3 3L5 14H2v-3L11 2z"/></svg>
-                  </button>
-                  <button class="icon-btn del" title="Xóa" @click="deleteNcc(n)">
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M6 4V2h4v2M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4"/></svg>
-                  </button>
+            <div v-if="loadingThongKe" class="text-center pa-4 text-medium-emphasis">Đang tải thống kê...</div>
+            <div v-else-if="thongKeData" class="thongke-chart">
+              <div v-for="t in thongKeData.theoThang" :key="t.thang" class="thongke-col">
+                <div class="thongke-bar-wrap">
+                  <div class="thongke-bar" :style="{ height: (t.tongTien / maxThongKeTien * 100) + '%' }" :title="fmt(t.tongTien)"></div>
                 </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <div v-if="filteredNcc.length > 0 && perPageNcc < 9999" class="pager-wrap">
-          <span>Hiển thị {{ (curPageNcc - 1) * perPageNcc + 1 }}–{{ Math.min(curPageNcc * perPageNcc, filteredNcc.length) }} / {{ filteredNcc.length }} mục</span>
-          <div class="pager-btns">
-            <button class="page-btn" :disabled="curPageNcc <= 1" @click="curPageNcc--">‹</button>
-            <button v-for="p in pageRangeNcc" :key="p" class="page-btn" :class="{ cur: p === curPageNcc }" @click="curPageNcc = p">{{ p }}</button>
-            <button class="page-btn" :disabled="curPageNcc >= totalPagesNcc" @click="curPageNcc++">›</button>
-          </div>
-        </div>
-      </div>
-    </template>
-
-    <!-- ════════════════════════════════════════════════════════
-         TAB: CẢNH BÁO SẮP HẾT HÀNG
-         ════════════════════════════════════════════════════════ -->
-    <template v-if="activeTab === 'canhbao'">
-      <div class="toolbar">
-        <label class="form-label" style="margin:0">Ngưỡng cảnh báo (tồn dưới):</label>
-        <input type="number" min="0" v-model.number="nguongCanhBao" class="form-input form-input-sm" style="width:90px" @change="onNguongCanhBaoChange" />
-        <span class="result-count">{{ canhBaoList.length }} biến thể cần chú ý</span>
-        <button type="button" class="btn-refresh" :class="{ spinning: loadingCanhBao }" title="Tải lại dữ liệu" @click="loadCanhBao">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3.6h-3.6"/></svg>
-        </button>
-      </div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th style="width:56px">Ảnh</th>
-              <th>Sản phẩm / Biến thể</th>
-              <th>Tồn kho</th>
-              <th>Giá bán</th>
-              <th>Mức độ</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="!loadingCanhBao && canhBaoList.length === 0">
-              <td colspan="5"><div class="empty-state"><div class="empty-icon">✅</div><div class="empty-text">Không có biến thể nào dưới ngưỡng cảnh báo</div></div></td>
-            </tr>
-            <tr v-for="b in canhBaoList" :key="b.maBienThe">
-              <td>
-                <div class="thumb-wrap" @click="openLightbox(b.hinhAnh)">
-                  <img v-if="b.hinhAnh" :src="b.hinhAnh" class="thumb-img" :alt="b.tenBienThe" />
-                  <div v-else class="thumb-placeholder">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-                  </div>
-                </div>
-              </td>
-              <td>
-                <div class="sp-name">{{ b.tenSanPham || "—" }}</div>
-                <div class="bt-subname">{{ b.tenBienThe }} <span class="code-text">{{ b.maBienThe }}</span></div>
-              </td>
-              <td><span class="stock-badge" :class="stockClass(b.mucTon)">{{ b.soLuongTon ?? 0 }} cái</span></td>
-              <td><span class="price-cell">{{ fmt(b.giaBan) }}</span></td>
-              <td>
-                <span class="status-pill" :class="b.mucTon === 'het' ? 'inactive' : 'pending'">
-                  <span class="status-dot"></span>{{ stockText(b.mucTon) }}
-                </span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </template>
-
-    <!-- ════════════════════════════════════════════════════════
-         TAB: LỊCH SỬ TỒN KHO
-         ════════════════════════════════════════════════════════ -->
-    <template v-if="activeTab === 'lichsu'">
-      <div class="toolbar">
-        <div class="search-box">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5" /><path d="M11 11l3 3" /></svg>
-          <input v-model="filterBienTheLS" placeholder="Mã biến thể..." @keyup.enter="onFilterLSChange" />
-        </div>
-        <select v-model="filterLoaiBienDongLS" class="filter-select" @change="onFilterLSChange">
-          <option value="">Tất cả loại biến động</option>
-          <option value="NHAP">Nhập kho</option>
-          <!-- <option value="HUY_NHAP">Hủy nhập</option> -->
-          <option value="DIEU_CHINH">Điều chỉnh</option>
-          <option value="BAN">Bán hàng</option>
-        </select>
-        <input type="date" v-model="tuNgayLS" class="form-input" style="width:auto" @change="onFilterLSChange" />
-        <span style="color:var(--dvc-text-muted)">đến</span>
-        <input type="date" v-model="denNgayLS" class="form-input" style="width:auto" @change="onFilterLSChange" />
-        <span class="result-count">{{ lichSuTotal }} kết quả</span>
-        <button type="button" class="btn-refresh" :class="{ spinning: loadingLS }" title="Tải lại dữ liệu" @click="loadLichSu">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3.6h-3.6"/></svg>
-        </button>
-      </div>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Thời gian</th>
-              <th>Sản phẩm / Biến thể</th>
-              <th>Loại biến động</th>
-              <th>Thay đổi</th>
-              <th>Tồn trước → sau</th>
-              <th>Chứng từ</th>
-              <th>Ghi chú</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="!loadingLS && lichSuList.length === 0">
-              <td colspan="7"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Chưa có lịch sử biến động nào</div></div></td>
-            </tr>
-            <tr v-for="l in lichSuList" :key="l.maLich">
-              <td>{{ fmtDateTime(l.thoiGian) }}</td>
-              <td>
-                <div class="sp-name">{{ l.tenSanPham || "—" }}</div>
-                <div class="bt-subname">{{ l.tenBienThe }} <span class="code-text">{{ l.maBienThe }}</span></div>
-              </td>
-              <td>
-                <span class="status-pill" :class="loaiBienDongClass(l.loaiBienDong)">
-                  <span class="status-dot"></span>{{ loaiBienDongText(l.loaiBienDong) }}
-                </span>
-              </td>
-              <td>
-                <span :class="l.soLuongThayDoi >= 0 ? 'stock-ok' : 'stock-zero'" class="stock-badge">
-                  {{ l.soLuongThayDoi >= 0 ? "+" : "" }}{{ l.soLuongThayDoi }}
-                </span>
-              </td>
-              <td>{{ l.tonTruoc }} → {{ l.tonSau }}</td>
-              <td><span class="code-text">{{ l.maChungTu || "—" }}</span></td>
-              <td class="addr-cell">{{ l.ghiChu || "—" }}</td>
-            </tr>
-          </tbody>
-        </table>
-        <div v-if="lichSuTotal > 0" class="pager-wrap">
-          <span>Hiển thị {{ (curPageLS - 1) * perPageLS + 1 }}–{{ Math.min(curPageLS * perPageLS, lichSuTotal) }} / {{ lichSuTotal }} mục</span>
-          <div class="pager-btns">
-            <button class="page-btn" :disabled="curPageLS <= 1" @click="gotoPageLS(curPageLS - 1)">‹</button>
-            <button v-for="p in pageRangeLS" :key="p" class="page-btn" :class="{ cur: p === curPageLS }" @click="gotoPageLS(p)">{{ p }}</button>
-            <button class="page-btn" :disabled="curPageLS >= totalPagesLS" @click="gotoPageLS(curPageLS + 1)">›</button>
-          </div>
-        </div>
-      </div>
-    </template>
-
-    <!-- ════════════════════════════════════════════════════════
-         TAB: ĐỐI SOÁT KHO - HÓA ĐƠN ĐIỆN TỬ
-         ════════════════════════════════════════════════════════ -->
-    <!-- ══ MODAL PHIẾU NHẬP (THÊM / XEM) ══════════════════════════════ -->
-    <Teleport to="body">
-      <div v-if="pnModal.open" class="modal-overlay" :class="{ 'dark-mode': isDarkMode }" @click.self="closePnModal">
-        <div class="modal modal-wide">
-          <div class="modal-header">
-            <h3 class="modal-title">{{ pnModal.title }}</h3>
-            <button class="modal-close" @click="closePnModal">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 2l12 12M14 2L2 14"/></svg>
-            </button>
-          </div>
-          <div class="modal-body">
-
-            <!-- VIEW MODE -->
-            <template v-if="pnModal.mode === 'view' && pnDetail">
-              <div class="detail-info-col" style="margin-bottom:14px">
-                <div class="detail-row"><span class="detail-label">Mã phiếu</span><span class="code-text">{{ pnDetail.maPn }}</span></div>
-                <div class="detail-row"><span class="detail-label">Ngày nhập</span><span class="detail-val">{{ fmtDate(pnDetail.ngayNhap) }}</span></div>
-                <div class="detail-row"><span class="detail-label">Nhà cung cấp</span><span class="detail-val">{{ pnDetail.tenNcc || "—" }}</span></div>
-                <div class="detail-row"><span class="detail-label">Nhân viên</span><span class="detail-val">{{ pnDetail.tenNv || "—" }}</span></div>
-                <div class="detail-row"><span class="detail-label">Ghi chú</span><span class="detail-val">{{ pnDetail.ghiChu || "—" }}</span></div>
-                <div class="detail-row"><span class="detail-label">Trạng thái</span>
-                  <span class="status-pill" :class="pnStatusClass(pnDetail.trangThai)"><span class="status-dot"></span>{{ pnStatusText(pnDetail.trangThai) }}</span>
-                </div>
+                <div class="text-caption font-weight-bold mt-1">T{{ t.thang }}</div>
+                <div class="text-caption text-medium-emphasis">{{ t.soPhieuNhap }} phiếu</div>
               </div>
-              <div class="bt-table-wrap">
-                <table class="bt-table">
-                  <thead><tr><th style="width:44px"></th><th>Sản phẩm / Biến thể</th><th>Giá bán hiện tại</th><th>SL</th><th>Giá nhập</th><th>Thành tiền</th></tr></thead>
-                  <tbody>
-                    <tr v-for="c in pnDetail.chiTiet" :key="c.maBienThe">
-                      <td>
-                        <div class="thumb-wrap" style="width:32px;height:32px" @click="openLightbox(c.hinhAnh)">
-                          <img v-if="c.hinhAnh" :src="c.hinhAnh" class="thumb-img" style="width:32px;height:32px" />
-                        </div>
-                      </td>
-                      <td><div class="bt-name">{{ c.tenSanPham }}</div><div class="bt-subname">{{ c.tenBienThe }}</div></td>
-                      <td>{{ fmt(c.giaBanHienTai) }}</td>
-                      <td>{{ c.soLuong }}</td>
-                      <td>{{ fmt(c.giaNhap) }}</td>
-                      <td class="price-cell">{{ fmt(c.thanhTien) }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div class="total-line">Tổng tiền: <span class="price-cell">{{ fmt(pnDetail.tongTien) }}</span></div>
+            </div>
+          </v-card>
+
+          <v-row class="mb-2">
+            <v-col cols="12" sm="6" md="3">
+              <v-card variant="tonal" color="primary" rounded="lg">
+                <v-card-text>
+                  <div class="text-caption text-uppercase font-weight-bold">Tổng phiếu nhập</div>
+                  <div class="text-h5 font-weight-bold">{{ statsPN.tong }}</div>
+                  <div class="text-caption text-medium-emphasis">Trong bộ lọc hiện tại</div>
+                </v-card-text>
+              </v-card>
+            </v-col>
+            <v-col cols="12" sm="6" md="3">
+              <v-card variant="tonal" color="warning" rounded="lg">
+                <v-card-text>
+                  <div class="text-caption text-uppercase font-weight-bold">Chờ duyệt</div>
+                  <div class="text-h5 font-weight-bold">{{ statsPN.choDuyet }}</div>
+                  <div class="text-caption text-medium-emphasis">Cần xử lý</div>
+                </v-card-text>
+              </v-card>
+            </v-col>
+            <v-col cols="12" sm="6" md="3">
+              <v-card variant="tonal" color="success" rounded="lg">
+                <v-card-text>
+                  <div class="text-caption text-uppercase font-weight-bold">Đã duyệt</div>
+                  <div class="text-h5 font-weight-bold">{{ statsPN.daDuyet }}</div>
+                  <div class="text-caption text-medium-emphasis">Đã cập nhật tồn kho</div>
+                </v-card-text>
+              </v-card>
+            </v-col>
+            <v-col cols="12" sm="6" md="3">
+              <v-card variant="tonal" color="info" rounded="lg">
+                <v-card-text>
+                  <div class="text-caption text-uppercase font-weight-bold">Tổng tiền đã duyệt</div>
+                  <div class="text-h6 font-weight-bold">{{ fmt(statsPN.tongTien) }}</div>
+                  <div class="text-caption text-medium-emphasis">Tổng giá trị nhập</div>
+                </v-card-text>
+              </v-card>
+            </v-col>
+          </v-row>
+
+          <div class="d-flex align-center gap-3 mb-4 flex-wrap">
+            <v-select
+              v-model="filterNccPN"
+              :items="[{ title: 'Tất cả nhà cung cấp', value: null }, ...nccs.map(n => ({ title: n.tenNcc, value: n.maNcc }))]"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              style="min-width: 200px; max-width: 240px;"
+              @update:model-value="onFilterPNChange"
+            ></v-select>
+
+            <v-select
+              v-model="filterTrangThaiPN"
+              :items="trangThaiPNOptions"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              style="min-width: 180px; max-width: 200px;"
+              @update:model-value="onFilterPNChange"
+            ></v-select>
+
+            <v-text-field
+              v-model="tuNgayPN"
+              type="date"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              style="max-width: 170px;"
+              @change="onFilterPNChange"
+            ></v-text-field>
+            <span class="text-medium-emphasis">→</span>
+            <v-text-field
+              v-model="denNgayPN"
+              type="date"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              style="max-width: 170px;"
+              @change="onFilterPNChange"
+            ></v-text-field>
+
+            <v-spacer></v-spacer>
+            <span class="text-caption text-medium-emphasis">{{ phieuNhaps.length }} kết quả</span>
+
+            <v-btn variant="outlined" color="grey-darken-1" size="40" rounded="lg" @click="loadPhieuNhap">
+              <RotateCcw class="w-5 h-5" />
+            </v-btn>
+          </div>
+
+          <v-data-table
+            :headers="phieuNhapHeaders"
+            :items="phieuNhaps"
+            :loading="loadingPN"
+            items-per-page="10"
+            show-expand
+            item-value="maPn"
+            hover
+          >
+            <template v-slot:item.maPn="{ item }">
+              <v-chip size="small" variant="tonal" class="font-weight-medium">{{ item.maPn }}</v-chip>
             </template>
 
-            <!-- FORM ADD MODE -->
-            <template v-else>
-              <div class="form-row-2">
-                <div class="form-group">
-                  <label class="form-label">Mã phiếu nhập *</label>
-                  <input v-model="pnForm.maPn" class="form-input" :class="{ 'input-error': pnErrors.maPn }" placeholder="VD: PN001" maxlength="15" />
-                  <p v-if="pnErrors.maPn" class="field-error">{{ pnErrors.maPn }}</p>
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Ngày nhập</label>
-                  <input type="date" v-model="pnForm.ngayNhap" class="form-input" :class="{ 'input-error': pnErrors.ngayNhap }" :max="todayStr()" />
-                  <p v-if="pnErrors.ngayNhap" class="field-error">{{ pnErrors.ngayNhap }}</p>
-                </div>
-              </div>
-              <div class="form-row-2">
-                <div class="form-group">
-                  <label class="form-label">Nhà cung cấp</label>
-                  <select v-model="pnForm.maNcc" class="form-input">
-                    <option value="">-- Không chọn --</option>
-                    <option v-for="n in nccs" :key="n.maNcc" :value="n.maNcc">{{ n.tenNcc }}</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Người nhập</label>
-                  <input
-                    :value="currentNhanVien ? `${currentNhanVien.ten} (${currentNhanVien.maNv})` : 'Không xác định'"
-                    class="form-input"
-                    readonly
-                    disabled
-                  />
-                  <p v-if="!currentNhanVien" class="field-error">Không tìm thấy thông tin đăng nhập, vui lòng đăng nhập lại.</p>
-                </div>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Ghi chú</label>
-                <textarea v-model="pnForm.ghiChu" class="form-input" rows="2" placeholder="Ghi chú thêm (nếu có)" maxlength="500"></textarea>
-              </div>
+            <template v-slot:item.ngayNhap="{ item }">{{ fmtDate(item.ngayNhap) }}</template>
+            <template v-slot:item.tenNcc="{ item }">{{ item.tenNcc || "—" }}</template>
+            <template v-slot:item.tenNv="{ item }">{{ item.tenNv || "—" }}</template>
 
-              <!-- Tìm & thêm biến thể -->
-              <div class="form-group">
-                <label class="form-label">Thêm sản phẩm vào phiếu *</label>
-                <div class="bt-search-wrap">
-                  <div class="search-box" style="max-width:none">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5" /><path d="M11 11l3 3" /></svg>
-                    <input v-model="btSearchKw" placeholder="Tìm mã, tên sản phẩm / biến thể..." @input="onBtSearchInput" @focus="onBtSearchInput" />
-                  </div>
-                  <div v-if="btSuggestions.length" class="bt-suggest-list">
-                    <div v-for="bt in btSuggestions" :key="bt.maBienThe" class="bt-suggest-item" @click="addBTRow(bt)">
-                      <img v-if="bt.hinhAnh" :src="bt.hinhAnh" class="bt-suggest-thumb" />
-                      <div class="bt-suggest-thumb placeholder" v-else></div>
-                      <div class="bt-suggest-info">
-                        <div class="bt-suggest-name">{{ bt.label }}</div>
-                        <div class="bt-suggest-meta">{{ fmt(bt.giaBan) }} · Tồn: {{ bt.soLuongTon ?? 0 }}</div>
+            <template v-slot:item.soLuongDong="{ item }">
+              <v-chip size="small" variant="tonal" color="info">{{ item.soLuongDong }} dòng</v-chip>
+            </template>
+
+            <template v-slot:item.tongTien="{ item }">
+              <span class="font-weight-bold text-warning-darken-2">{{ fmt(item.tongTien) }}</span>
+            </template>
+
+            <template v-slot:item.trangThai="{ item }">
+              <v-chip :color="pnStatusColor(item.trangThai)" size="small" variant="flat" class="font-weight-bold">
+                {{ pnStatusText(item.trangThai) }}
+              </v-chip>
+            </template>
+
+            <template v-slot:item.actions="{ item }">
+              <div class="d-flex align-center justify-center gap-1">
+                <v-btn icon size="small" variant="text" color="info" title="Xem chi tiết" @click="openViewPN(item)">
+                  <Eye class="w-4 h-4" />
+                </v-btn>
+                <v-btn v-if="item.trangThai === 0" icon size="small" variant="text" color="success" title="Duyệt phiếu" @click="duyetPN(item)">
+                  <Check class="w-4 h-4" />
+                </v-btn>
+                <v-btn v-if="item.trangThai === 0" icon size="small" variant="text" color="warning" title="Hủy phiếu" @click="huyPN(item)">
+                  <X class="w-4 h-4" />
+                </v-btn>
+                <v-btn v-if="item.trangThai !== 1" icon size="small" variant="text" color="error" title="Xóa phiếu" @click="deletePN(item)">
+                  <Trash2 class="w-4 h-4" />
+                </v-btn>
+              </div>
+            </template>
+
+            <template v-slot:expanded-row="{ columns, item }">
+              <tr>
+                <td :colspan="columns.length" class="pa-0">
+                  <div class="pa-4 bg-grey-lighten-5">
+                    <div class="d-flex align-center justify-space-between mb-2">
+                      <div class="text-subtitle-2 font-weight-bold">
+                        Chi tiết phiếu nhập
+                        <v-chip size="x-small" variant="tonal" class="ml-1">{{ item.chiTiet.length }}</v-chip>
                       </div>
                     </div>
+                    <div v-if="!item.chiTiet.length" class="text-center text-caption text-medium-emphasis pa-3">Chưa có dòng chi tiết.</div>
+                    <v-table v-else density="compact" class="rounded-lg border">
+                      <thead>
+                        <tr>
+                          <th style="width:44px"></th>
+                          <th>Sản phẩm / Biến thể</th>
+                          <th>Số lượng</th>
+                          <th>Giá nhập</th>
+                          <th>Thành tiền</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="c in item.chiTiet" :key="c.maBienThe">
+                          <td>
+                            <v-avatar rounded="lg" size="32" class="cursor-pointer" color="grey-lighten-3" @click="openLightbox(c.hinhAnh)">
+                              <img v-if="c.hinhAnh" :src="c.hinhAnh" style="width:100%;height:100%;object-fit:cover;" />
+                              <Package v-else class="w-4 h-4" />
+                            </v-avatar>
+                          </td>
+                          <td>
+                            <div class="font-weight-medium">{{ c.tenSanPham }}</div>
+                            <div class="text-caption text-medium-emphasis">{{ c.tenBienThe }}</div>
+                          </td>
+                          <td>{{ c.soLuong }}</td>
+                          <td>{{ fmt(c.giaNhap) }}</td>
+                          <td class="font-weight-bold text-warning-darken-2">{{ fmt(c.thanhTien) }}</td>
+                        </tr>
+                      </tbody>
+                    </v-table>
                   </div>
+                </td>
+              </tr>
+            </template>
+
+            <template v-slot:no-data>
+              <div class="text-center pa-8 text-medium-emphasis">Không có phiếu nhập nào</div>
+            </template>
+          </v-data-table>
+        </template>
+
+        <!-- ════════════════════════════════════════════════════════
+             TAB: NHÀ CUNG CẤP
+             ════════════════════════════════════════════════════════ -->
+        <template v-if="activeTab === 'nhacc'">
+          <div class="d-flex align-center gap-3 mb-4 flex-wrap">
+            <v-text-field
+              v-model="searchNcc"
+              label="Tìm tên, mã nhà cung cấp..."
+              variant="outlined"
+              density="compact"
+              hide-details
+              clearable
+              rounded="lg"
+              style="min-width: 240px; max-width: 320px;"
+            >
+              <template v-slot:prepend-inner><Search class="w-4 h-4 mr-1" /></template>
+            </v-text-field>
+
+            <v-select
+              v-model="filterTrangThaiNcc"
+              :items="trangThaiNccOptions"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              style="min-width: 180px; max-width: 220px;"
+            ></v-select>
+
+            <v-spacer></v-spacer>
+            <span class="text-caption text-medium-emphasis">{{ filteredNcc.length }} kết quả</span>
+
+            <v-btn variant="outlined" color="grey-darken-1" size="40" rounded="lg" @click="loadNcc">
+              <RotateCcw class="w-5 h-5" />
+            </v-btn>
+          </div>
+
+          <v-data-table
+            :headers="nccHeaders"
+            :items="filteredNcc"
+            :loading="loadingNcc"
+            items-per-page="10"
+            hover
+          >
+            <template v-slot:item.maNcc="{ item }">
+              <v-chip size="small" variant="tonal" class="font-weight-medium">{{ item.maNcc }}</v-chip>
+            </template>
+
+            <template v-slot:item.tenNcc="{ item }">
+              <div class="font-weight-bold">{{ item.tenNcc }}</div>
+            </template>
+
+            <template v-slot:item.soDienThoai="{ item }">{{ item.soDienThoai || "—" }}</template>
+            <template v-slot:item.diaChi="{ item }">
+              <span class="text-medium-emphasis" style="max-width: 220px; display: inline-block;">{{ item.diaChi || "—" }}</span>
+            </template>
+            <template v-slot:item.email="{ item }">{{ item.email || "—" }}</template>
+
+            <template v-slot:item.soPhieuNhap="{ item }">
+              <v-chip size="small" variant="tonal" color="info">{{ item.soPhieuNhap }} phiếu</v-chip>
+            </template>
+
+            <template v-slot:item.trangThai="{ item }">
+              <v-chip
+                :color="item.trangThai ? 'success' : 'grey-darken-1'"
+                size="small"
+                variant="flat"
+                class="font-weight-bold cursor-pointer"
+                @click="toggleStatusNcc(item)"
+              >
+                {{ item.trangThai ? "Đang hợp tác" : "Ngừng hợp tác" }}
+              </v-chip>
+            </template>
+
+            <template v-slot:item.actions="{ item }">
+              <div class="d-flex align-center justify-center gap-1">
+                <v-btn icon size="small" variant="text" color="primary" title="Sửa" @click="openEditNcc(item)">
+                  <Edit class="w-4 h-4" />
+                </v-btn>
+                <v-btn icon size="small" variant="text" color="error" title="Xóa" @click="deleteNcc(item)">
+                  <Trash2 class="w-4 h-4" />
+                </v-btn>
+              </div>
+            </template>
+
+            <template v-slot:no-data>
+              <div class="text-center pa-8 text-medium-emphasis">Không có nhà cung cấp nào</div>
+            </template>
+          </v-data-table>
+        </template>
+
+        <!-- ════════════════════════════════════════════════════════
+             TAB: CẢNH BÁO SẮP HẾT HÀNG
+             ════════════════════════════════════════════════════════ -->
+        <template v-if="activeTab === 'canhbao'">
+          <div class="d-flex align-center gap-3 mb-4 flex-wrap">
+            <span class="text-subtitle-2 font-weight-bold">Ngưỡng cảnh báo (tồn dưới):</span>
+            <v-text-field
+              type="number"
+              min="0"
+              v-model.number="nguongCanhBao"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              style="max-width: 100px;"
+              @change="onNguongCanhBaoChange"
+            ></v-text-field>
+
+            <v-spacer></v-spacer>
+            <span class="text-caption text-medium-emphasis">{{ canhBaoList.length }} biến thể cần chú ý</span>
+
+            <v-btn variant="outlined" color="grey-darken-1" size="40" rounded="lg" @click="loadCanhBao">
+              <RotateCcw class="w-5 h-5" />
+            </v-btn>
+          </div>
+
+          <v-data-table
+            :headers="canhBaoHeaders"
+            :items="canhBaoList"
+            :loading="loadingCanhBao"
+            items-per-page="10"
+            hover
+          >
+            <template v-slot:item.hinhAnh="{ item }">
+              <v-avatar
+                rounded="lg"
+                size="42"
+                class="cursor-pointer my-2"
+                color="grey-lighten-3"
+                @click="openLightbox(item.hinhAnh)"
+              >
+                <img v-if="item.hinhAnh" :src="item.hinhAnh" :alt="item.tenBienThe" style="width:100%;height:100%;object-fit:cover;" />
+                <Package v-else class="w-5 h-5 text-medium-emphasis" />
+              </v-avatar>
+            </template>
+
+            <template v-slot:item.tenSanPham="{ item }">
+              <div class="py-1">
+                <div class="font-weight-bold">{{ item.tenSanPham || "—" }}</div>
+                <div class="text-caption text-medium-emphasis d-flex align-center gap-1">
+                  {{ item.tenBienThe }}
+                  <v-chip size="x-small" variant="tonal" class="font-weight-medium ml-1">{{ item.maBienThe }}</v-chip>
                 </div>
-                <p v-if="pnErrors.chiTiet" class="field-error">{{ pnErrors.chiTiet }}</p>
               </div>
+            </template>
 
-              <div v-if="pnForm.chiTiet.length" class="bt-table-wrap" style="margin-top:6px">
-                <table class="bt-table">
-                  <thead><tr><th style="width:44px"></th><th>Sản phẩm</th><th style="width:90px">SL</th><th style="width:130px">Giá nhập</th><th style="width:120px">Thành tiền</th><th style="width:36px"></th></tr></thead>
-                  <tbody>
-                    <tr v-for="(c, idx) in pnForm.chiTiet" :key="c.maBienThe">
-                      <td>
-                        <div class="thumb-wrap" style="width:32px;height:32px">
-                          <img v-if="c.hinhAnh" :src="c.hinhAnh" class="thumb-img" style="width:32px;height:32px" />
-                        </div>
-                      </td>
-                      <td class="bt-name">{{ c.label }}</td>
-                      <td><input type="number" min="1" max="1000000" v-model.number="c.soLuong" class="form-input form-input-sm" /></td>
-                      <td><input type="number" min="0" max="1000000000" v-model.number="c.giaNhap" class="form-input form-input-sm" /></td>
-                      <td class="price-cell">{{ fmt((c.soLuong || 0) * (c.giaNhap || 0)) }}</td>
-                      <td><button type="button" class="icon-btn del icon-btn-xs" @click="removeBTRow(idx)">✕</button></td>
-                    </tr>
-                  </tbody>
-                </table>
+            <template v-slot:item.soLuongTon="{ item }">
+              <v-chip :color="stockColor(item.mucTon)" size="small" variant="flat" class="font-weight-bold">
+                {{ item.soLuongTon ?? 0 }} cái
+              </v-chip>
+            </template>
+
+            <template v-slot:item.giaBan="{ item }">
+              <span class="font-weight-bold text-warning-darken-2">{{ fmt(item.giaBan) }}</span>
+            </template>
+
+            <template v-slot:item.mucTon="{ item }">
+              <v-chip :color="item.mucTon === 'het' ? 'error' : 'warning'" size="small" variant="tonal" class="font-weight-bold">
+                {{ stockText(item.mucTon) }}
+              </v-chip>
+            </template>
+
+            <template v-slot:no-data>
+              <div class="text-center pa-8 text-medium-emphasis">Không có biến thể nào dưới ngưỡng cảnh báo</div>
+            </template>
+          </v-data-table>
+        </template>
+
+        <!-- ════════════════════════════════════════════════════════
+             TAB: LỊCH SỬ TỒN KHO
+             ════════════════════════════════════════════════════════ -->
+        <template v-if="activeTab === 'lichsu'">
+          <div class="d-flex align-center gap-3 mb-4 flex-wrap">
+            <v-text-field
+              v-model="filterBienTheLS"
+              label="Mã biến thể..."
+              variant="outlined"
+              density="compact"
+              hide-details
+              clearable
+              rounded="lg"
+              style="min-width: 200px; max-width: 260px;"
+              @keyup.enter="onFilterLSChange"
+            >
+              <template v-slot:prepend-inner><Search class="w-4 h-4 mr-1" /></template>
+            </v-text-field>
+
+            <v-select
+              v-model="filterLoaiBienDongLS"
+              :items="loaiBienDongOptions"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              style="min-width: 180px; max-width: 220px;"
+              @update:model-value="onFilterLSChange"
+            ></v-select>
+
+            <v-text-field
+              v-model="tuNgayLS"
+              type="date"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              style="max-width: 170px;"
+              @change="onFilterLSChange"
+            ></v-text-field>
+            <span class="text-medium-emphasis">đến</span>
+            <v-text-field
+              v-model="denNgayLS"
+              type="date"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              style="max-width: 170px;"
+              @change="onFilterLSChange"
+            ></v-text-field>
+
+            <v-spacer></v-spacer>
+            <span class="text-caption text-medium-emphasis">{{ lichSuTotal }} kết quả</span>
+
+            <v-btn variant="outlined" color="grey-darken-1" size="40" rounded="lg" @click="loadLichSu">
+              <RotateCcw class="w-5 h-5" />
+            </v-btn>
+          </div>
+
+          <v-data-table
+            :headers="lichSuHeaders"
+            :items="lichSuList"
+            :loading="loadingLS"
+            :items-per-page="perPageLS"
+            hide-default-footer
+            hover
+          >
+            <template v-slot:item.thoiGian="{ item }">{{ fmtDateTime(item.thoiGian) }}</template>
+
+            <template v-slot:item.tenSanPham="{ item }">
+              <div class="py-1">
+                <div class="font-weight-bold">{{ item.tenSanPham || "—" }}</div>
+                <div class="text-caption text-medium-emphasis d-flex align-center gap-1">
+                  {{ item.tenBienThe }}
+                  <v-chip size="x-small" variant="tonal" class="font-weight-medium ml-1">{{ item.maBienThe }}</v-chip>
+                </div>
               </div>
-              <div v-else class="nested-empty" style="border:1px dashed #e5e7eb;border-radius:8px;margin-top:6px">Chưa có sản phẩm nào trong phiếu, hãy tìm và chọn ở trên.</div>
-
-              <div class="total-line">Tổng tiền: <span class="price-cell">{{ fmt(tongTienForm) }}</span></div>
             </template>
 
-          </div>
-          <div class="modal-footer">
-            <template v-if="pnModal.mode === 'view'">
-              <button type="button" class="btn btn-ghost" @click="closePnModal">Đóng</button>
+            <template v-slot:item.loaiBienDong="{ item }">
+              <v-chip :color="loaiBienDongColor(item.loaiBienDong)" size="small" variant="tonal" class="font-weight-bold">
+                {{ loaiBienDongText(item.loaiBienDong) }}
+              </v-chip>
             </template>
-            <template v-else>
-              <button type="button" class="btn btn-ghost" @click="closePnModal">Hủy</button>
-              <button type="button" class="btn btn-primary" :disabled="savingPN" @click="savePN">
-                <span v-if="savingPN" class="spinner"></span>
-                {{ savingPN ? "Đang lưu..." : "Tạo phiếu nhập" }}
-              </button>
+
+            <template v-slot:item.soLuongThayDoi="{ item }">
+              <v-chip :color="item.soLuongThayDoi >= 0 ? 'success' : 'error'" size="small" variant="flat" class="font-weight-bold">
+                {{ item.soLuongThayDoi >= 0 ? "+" : "" }}{{ item.soLuongThayDoi }}
+              </v-chip>
             </template>
+
+            <template v-slot:item.ton="{ item }">{{ item.tonTruoc }} → {{ item.tonSau }}</template>
+
+            <template v-slot:item.maChungTu="{ item }">
+              <v-chip size="small" variant="tonal" class="font-weight-medium">{{ item.maChungTu || "—" }}</v-chip>
+            </template>
+
+            <template v-slot:item.ghiChu="{ item }">
+              <span class="text-medium-emphasis">{{ item.ghiChu || "—" }}</span>
+            </template>
+
+            <template v-slot:no-data>
+              <div class="text-center pa-8 text-medium-emphasis">Chưa có lịch sử biến động nào</div>
+            </template>
+          </v-data-table>
+
+          <div v-if="lichSuTotal > 0" class="d-flex justify-center mt-4">
+            <v-pagination
+              v-model="curPageLS"
+              :length="totalPagesLS"
+              :total-visible="5"
+              rounded="circle"
+              density="comfortable"
+              @update:model-value="loadLichSu"
+            ></v-pagination>
           </div>
-        </div>
-      </div>
-    </Teleport>
+        </template>
+
+      </v-card-text>
+    </v-card>
+
+    <!-- ══ MODAL PHIẾU NHẬP (THÊM / XEM) ══════════════════════════════ -->
+    <v-dialog v-model="pnModal.open" max-width="800" scrollable>
+      <v-card rounded="xl">
+        <v-card-title class="pa-6 border-b d-flex align-center justify-space-between">
+          <div class="text-h6 font-weight-bold">{{ pnModal.title }}</div>
+          <v-btn icon variant="text" size="small" @click="closePnModal">
+            <X class="w-5 h-5" />
+          </v-btn>
+        </v-card-title>
+
+        <v-card-text class="pa-6" style="max-height: 70vh;">
+
+          <!-- VIEW MODE -->
+          <template v-if="pnModal.mode === 'view' && pnDetail">
+            <div class="d-flex flex-column gap-2 mb-4">
+              <div class="d-flex align-center gap-2"><span class="text-caption font-weight-bold text-medium-emphasis" style="min-width:110px">Mã phiếu</span><v-chip size="small" variant="tonal">{{ pnDetail.maPn }}</v-chip></div>
+              <div class="d-flex align-center gap-2"><span class="text-caption font-weight-bold text-medium-emphasis" style="min-width:110px">Ngày nhập</span><span>{{ fmtDate(pnDetail.ngayNhap) }}</span></div>
+              <div class="d-flex align-center gap-2"><span class="text-caption font-weight-bold text-medium-emphasis" style="min-width:110px">Nhà cung cấp</span><span>{{ pnDetail.tenNcc || "—" }}</span></div>
+              <div class="d-flex align-center gap-2"><span class="text-caption font-weight-bold text-medium-emphasis" style="min-width:110px">Nhân viên</span><span>{{ pnDetail.tenNv || "—" }}</span></div>
+              <div class="d-flex align-center gap-2"><span class="text-caption font-weight-bold text-medium-emphasis" style="min-width:110px">Ghi chú</span><span>{{ pnDetail.ghiChu || "—" }}</span></div>
+              <div class="d-flex align-center gap-2">
+                <span class="text-caption font-weight-bold text-medium-emphasis" style="min-width:110px">Trạng thái</span>
+                <v-chip :color="pnStatusColor(pnDetail.trangThai)" size="small" variant="flat" class="font-weight-bold">{{ pnStatusText(pnDetail.trangThai) }}</v-chip>
+              </div>
+            </div>
+            <v-table density="compact" class="rounded-lg border">
+              <thead>
+                <tr>
+                  <th style="width:44px"></th>
+                  <th>Sản phẩm / Biến thể</th>
+                  <th>Giá bán hiện tại</th>
+                  <th>SL</th>
+                  <th>Giá nhập</th>
+                  <th>Thành tiền</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="c in pnDetail.chiTiet" :key="c.maBienThe">
+                  <td>
+                    <v-avatar rounded="lg" size="32" class="cursor-pointer" color="grey-lighten-3" @click="openLightbox(c.hinhAnh)">
+                      <img v-if="c.hinhAnh" :src="c.hinhAnh" style="width:100%;height:100%;object-fit:cover;" />
+                    </v-avatar>
+                  </td>
+                  <td><div class="font-weight-medium">{{ c.tenSanPham }}</div><div class="text-caption text-medium-emphasis">{{ c.tenBienThe }}</div></td>
+                  <td>{{ fmt(c.giaBanHienTai) }}</td>
+                  <td>{{ c.soLuong }}</td>
+                  <td>{{ fmt(c.giaNhap) }}</td>
+                  <td class="font-weight-bold text-warning-darken-2">{{ fmt(c.thanhTien) }}</td>
+                </tr>
+              </tbody>
+            </v-table>
+            <div class="text-right font-weight-bold mt-3">Tổng tiền: <span class="text-warning-darken-2">{{ fmt(pnDetail.tongTien) }}</span></div>
+          </template>
+
+          <!-- FORM ADD MODE -->
+          <template v-else>
+            <v-row>
+              <v-col cols="12" sm="6">
+                <div class="mb-1 text-caption font-weight-bold text-medium-emphasis">Mã phiếu nhập *</div>
+                <v-text-field
+                  v-model="pnForm.maPn"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                  placeholder="VD: PN001"
+                  maxlength="15"
+                  :error-messages="pnErrors.maPn"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="6">
+                <div class="mb-1 text-caption font-weight-bold text-medium-emphasis">Ngày nhập</div>
+                <v-text-field
+                  v-model="pnForm.ngayNhap"
+                  type="date"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                  :max="todayStr()"
+                  :error-messages="pnErrors.ngayNhap"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="6">
+                <div class="mb-1 text-caption font-weight-bold text-medium-emphasis">Nhà cung cấp</div>
+                <v-select
+                  v-model="pnForm.maNcc"
+                  :items="[{ title: '-- Không chọn --', value: null }, ...nccs.map(n => ({ title: n.tenNcc, value: n.maNcc }))]"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                ></v-select>
+              </v-col>
+              <v-col cols="12" sm="6">
+                <div class="mb-1 text-caption font-weight-bold text-medium-emphasis">Người nhập</div>
+                <v-text-field
+                  :model-value="currentNhanVien ? `${currentNhanVien.ten} (${currentNhanVien.maNv})` : 'Không xác định'"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                  readonly
+                  :error-messages="!currentNhanVien ? 'Không tìm thấy thông tin đăng nhập, vui lòng đăng nhập lại.' : ''"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12">
+                <div class="mb-1 text-caption font-weight-bold text-medium-emphasis">Ghi chú</div>
+                <v-textarea
+                  v-model="pnForm.ghiChu"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                  rows="2"
+                  placeholder="Ghi chú thêm (nếu có)"
+                  maxlength="500"
+                ></v-textarea>
+              </v-col>
+            </v-row>
+
+            <!-- Tìm & thêm biến thể -->
+            <div class="mb-1 text-caption font-weight-bold text-medium-emphasis">Thêm sản phẩm vào phiếu *</div>
+            <div class="position-relative mb-2">
+              <v-text-field
+                v-model="btSearchKw"
+                variant="outlined"
+                density="comfortable"
+                rounded="lg"
+                placeholder="Tìm mã, tên sản phẩm / biến thể..."
+                hide-details
+                @input="onBtSearchInput"
+                @focus="onBtSearchInput"
+              >
+                <template v-slot:prepend-inner><Search class="w-4 h-4 mr-1" /></template>
+              </v-text-field>
+              <v-card v-if="btSuggestions.length" class="position-absolute w-100 mt-1" style="z-index: 20; max-height: 260px; overflow-y: auto;" elevation="6" rounded="lg">
+                <v-list density="compact">
+                  <v-list-item
+                    v-for="bt in btSuggestions"
+                    :key="bt.maBienThe"
+                    @click="addBTRow(bt)"
+                  >
+                    <template v-slot:prepend>
+                      <v-avatar rounded="lg" size="32" color="grey-lighten-3">
+                        <img v-if="bt.hinhAnh" :src="bt.hinhAnh" style="width:100%;height:100%;object-fit:cover;" />
+                      </v-avatar>
+                    </template>
+                    <v-list-item-title>{{ bt.label }}</v-list-item-title>
+                    <v-list-item-subtitle>{{ fmt(bt.giaBan) }} · Tồn: {{ bt.soLuongTon ?? 0 }}</v-list-item-subtitle>
+                  </v-list-item>
+                </v-list>
+              </v-card>
+            </div>
+            <div v-if="pnErrors.chiTiet" class="text-caption text-error mb-2">{{ pnErrors.chiTiet }}</div>
+
+            <v-table v-if="pnForm.chiTiet.length" density="compact" class="rounded-lg border mb-3">
+              <thead>
+                <tr>
+                  <th style="width:44px"></th>
+                  <th>Sản phẩm</th>
+                  <th style="width:90px">SL</th>
+                  <th style="width:130px">Giá nhập</th>
+                  <th style="width:120px">Thành tiền</th>
+                  <th style="width:36px"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(c, idx) in pnForm.chiTiet" :key="c.maBienThe">
+                  <td>
+                    <v-avatar rounded="lg" size="32" color="grey-lighten-3">
+                      <img v-if="c.hinhAnh" :src="c.hinhAnh" style="width:100%;height:100%;object-fit:cover;" />
+                    </v-avatar>
+                  </td>
+                  <td class="font-weight-medium">{{ c.label }}</td>
+                  <td><v-text-field type="number" min="1" max="1000000" v-model.number="c.soLuong" density="compact" variant="outlined" hide-details rounded="lg"></v-text-field></td>
+                  <td><v-text-field type="number" min="0" max="1000000000" v-model.number="c.giaNhap" density="compact" variant="outlined" hide-details rounded="lg"></v-text-field></td>
+                  <td class="font-weight-bold text-warning-darken-2">{{ fmt((c.soLuong || 0) * (c.giaNhap || 0)) }}</td>
+                  <td>
+                    <v-btn icon size="x-small" variant="text" color="error" @click="removeBTRow(idx)">
+                      <X class="w-4 h-4" />
+                    </v-btn>
+                  </td>
+                </tr>
+              </tbody>
+            </v-table>
+            <v-alert v-else type="info" variant="tonal" density="compact" class="mb-3">
+              Chưa có sản phẩm nào trong phiếu, hãy tìm và chọn ở trên.
+            </v-alert>
+
+            <div class="text-right font-weight-bold">Tổng tiền: <span class="text-warning-darken-2">{{ fmt(tongTienForm) }}</span></div>
+          </template>
+
+        </v-card-text>
+
+        <v-card-actions class="pa-4 px-6 d-flex justify-end border-t">
+          <template v-if="pnModal.mode === 'view'">
+            <v-btn variant="outlined" rounded="lg" class="text-none font-weight-bold" color="grey-darken-2" @click="closePnModal">Đóng</v-btn>
+          </template>
+          <template v-else>
+            <v-btn variant="outlined" rounded="lg" class="text-none font-weight-bold mr-2" color="grey-darken-2" @click="closePnModal">Hủy</v-btn>
+            <v-btn variant="flat" rounded="lg" class="text-none font-weight-bold" color="primary" :loading="savingPN" @click="savePN">
+              Tạo phiếu nhập
+            </v-btn>
+          </template>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <!-- ══ MODAL NHÀ CUNG CẤP ══════════════════════════════════════════ -->
-    <Teleport to="body">
-      <div v-if="nccModal.open" class="modal-overlay" :class="{ 'dark-mode': isDarkMode }" @click.self="closeNccModal">
-        <div class="modal">
-          <div class="modal-header">
-            <h3 class="modal-title">{{ nccModal.title }}</h3>
-            <button class="modal-close" @click="closeNccModal">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 2l12 12M14 2L2 14"/></svg>
-            </button>
-          </div>
-          <div class="modal-body">
-            <div class="form-row-2">
-              <div class="form-group" v-if="!editingNccId">
-                <label class="form-label">Mã nhà cung cấp *</label>
-                <input v-model="nccForm.maNcc" class="form-input" :class="{ 'input-error': nccErrors.maNcc }" placeholder="VD: NCC001" maxlength="10" />
-                <p v-if="nccErrors.maNcc" class="field-error">{{ nccErrors.maNcc }}</p>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Tên nhà cung cấp *</label>
-                <input v-model="nccForm.tenNcc" class="form-input" :class="{ 'input-error': nccErrors.tenNcc }" placeholder="Nhập tên nhà cung cấp" maxlength="100" />
-                <p v-if="nccErrors.tenNcc" class="field-error">{{ nccErrors.tenNcc }}</p>
-              </div>
-            </div>
-            <div class="form-row-2">
-              <div class="form-group">
-                <label class="form-label">Số điện thoại</label>
-                <input v-model="nccForm.soDienThoai" class="form-input" :class="{ 'input-error': nccErrors.soDienThoai }" placeholder="VD: 0901234567" maxlength="10" />
-                <p v-if="nccErrors.soDienThoai" class="field-error">{{ nccErrors.soDienThoai }}</p>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Email</label>
-                <input v-model="nccForm.email" class="form-input" :class="{ 'input-error': nccErrors.email }" placeholder="VD: ncc@email.com" maxlength="100" />
-                <p v-if="nccErrors.email" class="field-error">{{ nccErrors.email }}</p>
-              </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Địa chỉ</label>
-              <input v-model="nccForm.diaChi" class="form-input" :class="{ 'input-error': nccErrors.diaChi }" placeholder="Nhập địa chỉ" maxlength="200" />
-              <p v-if="nccErrors.diaChi" class="field-error">{{ nccErrors.diaChi }}</p>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Trạng thái</label>
-              <select v-model.number="nccForm.trangThai" class="form-input">
-                <option :value="1">Đang hợp tác</option>
-                <option :value="0">Ngừng hợp tác</option>
-              </select>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-ghost" @click="closeNccModal">Hủy</button>
-            <button type="button" class="btn btn-primary" :disabled="savingNcc" @click="saveNcc">
-              <span v-if="savingNcc" class="spinner"></span>
-              {{ savingNcc ? "Đang lưu..." : editingNccId ? "Cập nhật" : "Thêm nhà cung cấp" }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <v-dialog v-model="nccModal.open" max-width="600">
+      <v-card rounded="xl">
+        <v-card-title class="pa-6 border-b d-flex align-center justify-space-between">
+          <div class="text-h6 font-weight-bold">{{ nccModal.title }}</div>
+          <v-btn icon variant="text" size="small" @click="closeNccModal">
+            <X class="w-5 h-5" />
+          </v-btn>
+        </v-card-title>
+
+        <v-card-text class="pa-6">
+          <v-row>
+            <v-col cols="12" sm="6" v-if="!editingNccId">
+              <div class="mb-1 text-caption font-weight-bold text-medium-emphasis">Mã nhà cung cấp *</div>
+              <v-text-field v-model="nccForm.maNcc" variant="outlined" density="comfortable" rounded="lg" placeholder="VD: NCC001" maxlength="10" :error-messages="nccErrors.maNcc"></v-text-field>
+            </v-col>
+            <v-col cols="12" :sm="editingNccId ? 12 : 6">
+              <div class="mb-1 text-caption font-weight-bold text-medium-emphasis">Tên nhà cung cấp *</div>
+              <v-text-field v-model="nccForm.tenNcc" variant="outlined" density="comfortable" rounded="lg" placeholder="Nhập tên nhà cung cấp" maxlength="100" :error-messages="nccErrors.tenNcc"></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6">
+              <div class="mb-1 text-caption font-weight-bold text-medium-emphasis">Số điện thoại</div>
+              <v-text-field v-model="nccForm.soDienThoai" variant="outlined" density="comfortable" rounded="lg" placeholder="VD: 0901234567" maxlength="10" :error-messages="nccErrors.soDienThoai"></v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6">
+              <div class="mb-1 text-caption font-weight-bold text-medium-emphasis">Email</div>
+              <v-text-field v-model="nccForm.email" variant="outlined" density="comfortable" rounded="lg" placeholder="VD: ncc@email.com" maxlength="100" :error-messages="nccErrors.email"></v-text-field>
+            </v-col>
+            <v-col cols="12">
+              <div class="mb-1 text-caption font-weight-bold text-medium-emphasis">Địa chỉ</div>
+              <v-text-field v-model="nccForm.diaChi" variant="outlined" density="comfortable" rounded="lg" placeholder="Nhập địa chỉ" maxlength="200" :error-messages="nccErrors.diaChi"></v-text-field>
+            </v-col>
+            <v-col cols="12">
+              <div class="mb-1 text-caption font-weight-bold text-medium-emphasis">Trạng thái</div>
+              <v-select
+                v-model.number="nccForm.trangThai"
+                :items="[{ title: 'Đang hợp tác', value: 1 }, { title: 'Ngừng hợp tác', value: 0 }]"
+                variant="outlined"
+                density="comfortable"
+                rounded="lg"
+              ></v-select>
+            </v-col>
+          </v-row>
+        </v-card-text>
+
+        <v-card-actions class="pa-4 px-6 d-flex justify-end border-t">
+          <v-btn variant="outlined" rounded="lg" class="text-none font-weight-bold mr-2" color="grey-darken-2" @click="closeNccModal">Hủy</v-btn>
+          <v-btn variant="flat" rounded="lg" class="text-none font-weight-bold" color="primary" :loading="savingNcc" @click="saveNcc">
+            {{ editingNccId ? "Cập nhật" : "Thêm nhà cung cấp" }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <!-- ══ LIGHTBOX ══════════════════════════════════════════════════ -->
-    <Teleport to="body">
-      <div v-if="lightbox.open" class="lb-overlay" @click.self="lightbox.open = false">
-        <button class="lb-close" @click="lightbox.open = false">✕</button>
-        <img :src="lightbox.src" class="lb-img" />
-      </div>
-    </Teleport>
+    <v-dialog v-model="lightbox.open" max-width="800">
+      <v-card rounded="lg" class="pa-2">
+        <v-btn icon size="small" variant="text" class="position-absolute" style="top: 8px; right: 8px; z-index: 1;" @click="lightbox.open = false">
+          <X class="w-5 h-5" />
+        </v-btn>
+        <v-img :src="lightbox.src" max-height="80vh" contain></v-img>
+      </v-card>
+    </v-dialog>
 
-    <!-- ══ TOAST ═════════════════════════════════════════════════════ -->
-    <div class="toast" :class="[{ show: toast.show }, toast.type]">
-      <span>{{ toast.type === "success" ? "✅" : "❌" }}</span>{{ toast.msg }}
-    </div>
-  </div>
+    <!-- ══ SNACKBAR ══════════════════════════════════════════════════ -->
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" location="top right" timeout="3000" rounded="lg">
+      <div class="font-weight-bold d-flex align-center">
+        <Check v-if="snackbar.color === 'success'" class="w-5 h-5 mr-2" />
+        <X v-else class="w-5 h-5 mr-2" />
+        {{ snackbar.text }}
+      </div>
+    </v-snackbar>
+  </v-container>
 </template>
 
 <style scoped>
-/* ── THEME VARIABLES (dark mode) ─────────────────────────────── */
-.kho-manager.dark-mode {
-  --dvc-card-bg: #23232f;
-  --dvc-bg-subtle: #2a2a38;
-  --dvc-bg-subtle2: #1e1e29;
-  --dvc-border: #383846;
-  --dvc-border-strong: #464656;
-  --dvc-text: #e8e8ee;
-  --dvc-text-strong: #cbcbd6;
-  --dvc-text-secondary: #a3a3b2;
-  --dvc-text-muted: #7c7c8c;
-  --dvc-accent: #4b4b6b;
-  --dvc-accent-hover: #5c5c80;
-  --dvc-shadow: rgba(0, 0, 0, 0.35);
-  --dvc-overlay: rgba(0, 0, 0, 0.6);
-}
-
-/* ── ROOT ───────────────────────────────────────────────────────── */
-.kho-manager {
-  /* ── THEME VARIABLES (light default) ─────────────────────────── */
-  --dvc-card-bg: #fff;
-  --dvc-bg-subtle: #f3f4f6;
-  --dvc-bg-subtle2: #f9fafb;
-  --dvc-border: #e5e7eb;
-  --dvc-border-strong: #d1d5db;
-  --dvc-text: #1a1a2e;
-  --dvc-text-strong: #374151;
-  --dvc-text-secondary: #6b7280;
-  --dvc-text-muted: #9ca3af;
-  --dvc-accent: #1a1a2e;
-  --dvc-accent-hover: #2d2d4e;
-  --dvc-shadow: rgba(0, 0, 0, 0.08);
-  --dvc-overlay: rgba(0, 0, 0, 0.45);
-  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
- font-family: "Jost", "Inter", sans-serif; color: var(--dvc-text); }
-
-/* ── HEADER ─────────────────────────────────────────────────────── */
-.header-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
-.page-title-text { font-size: 17px; font-weight: 700; color: var(--dvc-text); letter-spacing: 0.2px; }
-.header-actions { display: flex; gap: 8px; }
-
-/* ── TABS ───────────────────────────────────────────────────────── */
-.tab-bar { display: flex; gap: 4px; margin-bottom: 18px; border-bottom: 1px solid var(--dvc-border); }
-.tab-btn { background: none; border: none; padding: 9px 16px; font-size: 13px; font-weight: 500; color: var(--dvc-text-muted); cursor: pointer; font-family: inherit; border-bottom: 2px solid transparent; transition: all 0.15s; }
-.tab-btn:hover { color: var(--dvc-text-strong); }
-.tab-btn.active { color: var(--dvc-text); border-bottom-color: var(--dvc-accent); font-weight: 600; }
-
-/* ── BUTTONS ────────────────────────────────────────────────────── */
-.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 15px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; font-family: inherit; transition: all 0.15s; white-space: nowrap; }
-.btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.btn-primary { background: var(--dvc-accent); color: #fff; }
-.btn-primary:hover:not(:disabled) { background: var(--dvc-accent-hover); transform: translateY(-1px); }
-.btn-ghost { background: transparent; color: var(--dvc-text-secondary); border: 1px solid var(--dvc-border); }
-.btn-ghost:hover:not(:disabled) { color: var(--dvc-text); border-color: var(--dvc-border-strong); background: var(--dvc-bg-subtle2); }
-.btn-sm { padding: 6px 12px; font-size: 12px; }
-.spinner { width: 13px; height: 13px; border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff; border-radius: 50%; animation: spin 0.6s linear infinite; flex-shrink: 0; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* ── STATS ──────────────────────────────────────────────────────── */
-.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
-.stat-card { background: var(--dvc-card-bg); border: 1px solid var(--dvc-border); border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 3px; }
-.stat-icon { font-size: 20px; margin-bottom: 4px; }
-.stat-label { font-size: 11px; font-weight: 600; color: var(--dvc-text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
-.stat-value { font-size: 26px; font-weight: 700; color: var(--dvc-text); line-height: 1.1; }
-.stat-hint { font-size: 11px; color: var(--dvc-text-muted); margin-top: 2px; }
-.stat-dark { border-top: 3px solid var(--dvc-accent); }
-.stat-green { border-top: 3px solid #22c55e; }
-.stat-blue { border-top: 3px solid #3b82f6; }
-.stat-orange { border-top: 3px solid #f59e0b; }
-.stat-red { border-top: 3px solid #ef4444; }
-
-/* ── TOOLBAR ────────────────────────────────────────────────────── */
-.toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
-.search-box { display: flex; align-items: center; gap: 8px; background: var(--dvc-card-bg); border: 1px solid var(--dvc-border); border-radius: 8px; padding: 7px 12px; min-width: 200px; flex: 1; max-width: 300px; transition: border 0.15s; }
-.search-box:focus-within { border-color: var(--dvc-text-secondary); }
-.search-box input { background: transparent; border: none; outline: none; color: var(--dvc-text); font-size: 13px; font-family: inherit; width: 100%; }
-.search-box input::placeholder { color: var(--dvc-text-muted); }
-.filter-select { background: var(--dvc-card-bg); border: 1px solid var(--dvc-border); border-radius: 8px; padding: 7px 10px; color: var(--dvc-text-strong); font-size: 13px; font-family: inherit; cursor: pointer; outline: none; }
-.result-count { font-size: 12px; color: var(--dvc-text-muted); margin-left: auto; }
-.date-sep { color: var(--dvc-text-muted); font-size: 12px; }
-
-/* ── TABLE ──────────────────────────────────────────────────────── */
-.table-wrap { background: var(--dvc-card-bg); border: 1px solid var(--dvc-border); border-radius: 12px; overflow: hidden; }
-table { width: 100%; border-collapse: collapse; }
-thead th { padding: 11px 14px; text-align: left; font-size: 11px; font-weight: 600; color: var(--dvc-text-muted); letter-spacing: 0.5px; border-bottom: 1px solid var(--dvc-bg-subtle); background: var(--dvc-bg-subtle2); white-space: nowrap; text-transform: uppercase; }
-.sortable { cursor: pointer; user-select: none; }
-.sortable:hover { color: var(--dvc-text-strong); }
-.sort-icon { font-size: 10px; }
-tbody tr { border-bottom: 1px solid var(--dvc-bg-subtle); transition: background 0.12s; }
-tbody tr:last-child { border-bottom: none; }
-tbody tr:hover { background: var(--dvc-bg-subtle2); }
-tbody td { padding: 10px 14px; font-size: 13px; vertical-align: middle; }
-.code-text { font-size: 12px; color: var(--dvc-text-secondary); font-family: "Courier New", monospace; background: var(--dvc-bg-subtle); padding: 2px 7px; border-radius: 4px; }
-.sp-name { font-weight: 500; color: var(--dvc-text); }
-.bt-subname { font-size: 11.5px; color: var(--dvc-text-muted); margin-top: 2px; display: flex; align-items: center; gap: 6px; }
-.price-cell { font-weight: 600; color: #d97706; }
-.addr-cell { color: var(--dvc-text-secondary); max-width: 220px; }
-
-/* ── THUMBNAIL ──────────────────────────────────────────────────── */
-.thumb-wrap { position: relative; width: 42px; height: 42px; cursor: pointer; flex-shrink: 0; }
-.thumb-img { width: 42px; height: 42px; object-fit: cover; border-radius: 8px; border: 1px solid var(--dvc-border); display: block; transition: opacity 0.15s; }
-.thumb-img:hover { opacity: 0.82; }
-.thumb-placeholder { width: 42px; height: 42px; border-radius: 8px; border: 1.5px dashed var(--dvc-border-strong); background: var(--dvc-bg-subtle2); display: flex; align-items: center; justify-content: center; color: var(--dvc-border-strong); }
-
-/* ── BADGES ─────────────────────────────────────────────────────── */
-.brand-badge { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 500; background: var(--dvc-bg-subtle); color: var(--dvc-text-strong); }
-.bt-count-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 500; background: #f0f9ff; color: #0369a1; }
-.stock-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11.5px; font-weight: 600; }
-.stock-ok { background: #f0fdf4; color: #15803d; }
-.stock-low { background: #fffbeb; color: #b45309; }
-.stock-zero { background: #fef2f2; color: #dc2626; }
-.stock-unknown { background: var(--dvc-bg-subtle2); color: var(--dvc-text-muted); }
-
-/* ── STATUS ─────────────────────────────────────────────────────── */
-.status-pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
-.status-pill.active { background: #f0fdf4; color: #15803d; }
-.status-pill.inactive { background: var(--dvc-bg-subtle2); color: var(--dvc-text-muted); }
-.status-pill.pending { background: #fffbeb; color: #b45309; }
-.status-pill.cancelled { background: #fef2f2; color: #dc2626; }
-.status-pill.clickable { cursor: pointer; }
-.status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-
-/* ── ACTIONS ────────────────────────────────────────────────────── */
-.actions { display: flex; gap: 4px; align-items: center; }
-.icon-btn { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--dvc-border); background: var(--dvc-card-bg); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--dvc-text-muted); transition: all 0.12s; }
-.icon-btn:hover { background: var(--dvc-bg-subtle2); color: var(--dvc-text-strong); border-color: var(--dvc-border-strong); }
-.icon-btn.view:hover { color: #2563eb; border-color: #bfdbfe; background: #eff6ff; }
-.icon-btn.edit:hover { color: #d97706; border-color: #fde68a; background: #fffbeb; }
-.icon-btn.del:hover { color: #dc2626; border-color: #fecaca; background: #fef2f2; }
-.icon-btn.approve:hover { color: #16a34a; border-color: #bbf7d0; background: #f0fdf4; }
-.icon-btn.cancel:hover { color: #ea580c; border-color: #fed7aa; background: #fff7ed; }
-.icon-btn-xs { width: 24px; height: 24px; }
-
-/* ── EMPTY ──────────────────────────────────────────────────────── */
-.empty-state { text-align: center; padding: 40px; }
-.empty-icon { font-size: 36px; margin-bottom: 8px; }
-.empty-text { color: var(--dvc-text-muted); font-size: 14px; }
-
-/* ── REFRESH BUTTON ─────────────────────────────────────────────── */
-.btn-refresh { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--dvc-border); background: var(--dvc-card-bg); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--dvc-text-secondary); transition: all 0.15s; flex-shrink: 0; }
-.btn-refresh:hover { background: var(--dvc-bg-subtle2); color: var(--dvc-text); border-color: var(--dvc-border-strong); }
-.btn-refresh.spinning { color: var(--dvc-text); pointer-events: none; }
-.btn-refresh.spinning svg { animation: refresh-spin 0.7s linear infinite; }
-@keyframes refresh-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-
-/* ── PAGINATION ─────────────────────────────────────────────────── */
-.pager-wrap { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-top: 1px solid var(--dvc-bg-subtle); font-size: 12px; color: var(--dvc-text-muted); }
-.pager-btns { display: flex; gap: 4px; }
-.page-btn { min-width: 28px; height: 28px; padding: 0 6px; border-radius: 6px; border: 1px solid var(--dvc-border); background: var(--dvc-card-bg); font-size: 12px; cursor: pointer; color: var(--dvc-text-secondary); transition: all 0.12s; }
-.page-btn:disabled { opacity: 0.4; cursor: default; }
-.page-btn:hover:not(:disabled):not(.cur) { border-color: var(--dvc-border-strong); background: var(--dvc-bg-subtle2); }
-.page-btn.cur { background: var(--dvc-accent); color: #fff; border-color: var(--dvc-accent); }
-
-/* ── EXPAND / NESTED ────────────────────────────────────────────── */
-.expand-btn { background: none; border: none; cursor: pointer; color: var(--dvc-text-muted); padding: 2px 4px; margin-right: 6px; display: inline-flex; align-items: center; transition: color 0.15s; vertical-align: middle; }
-.expand-btn:hover { color: var(--dvc-text); }
-.expand-icon { transition: transform 0.2s; }
-.expand-icon.open { transform: rotate(180deg); }
-.sp-main-row.row-expanded { background: var(--dvc-bg-subtle); }
-.sp-detail-row { background: var(--dvc-bg-subtle2); }
-.sp-detail-row td { padding: 0 !important; }
-.nested-panel { padding: 14px 18px; border-top: 1px solid var(--dvc-border); background: var(--dvc-bg-subtle2); }
-.nested-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.nested-title { font-size: 13px; font-weight: 600; color: var(--dvc-text-strong); margin: 0; }
-.nested-count { background: var(--dvc-border); font-size: 11px; padding: 1px 8px; border-radius: 10px; margin-left: 6px; font-weight: 500; }
-.nested-empty { font-size: 12px; color: var(--dvc-text-muted); text-align: center; padding: 16px; }
-
-/* ── BT TABLE ───────────────────────────────────────────────────── */
-.bt-table-wrap { overflow: hidden; border: 1px solid var(--dvc-border); border-radius: 8px; }
-.bt-table { width: 100%; border-collapse: collapse; }
-.bt-table thead th { padding: 8px 12px; text-align: left; font-size: 10px; font-weight: 600; color: var(--dvc-text-muted); letter-spacing: 0.4px; border-bottom: 1px solid var(--dvc-bg-subtle); background: var(--dvc-bg-subtle2); text-transform: uppercase; }
-.bt-table tbody tr { border-bottom: 1px solid var(--dvc-bg-subtle); transition: background 0.1s; }
-.bt-table tbody tr:last-child { border-bottom: none; }
-.bt-table tbody tr:hover { background: var(--dvc-bg-subtle2); }
-.bt-table tbody td { padding: 8px 12px; font-size: 12px; vertical-align: middle; }
-.bt-name { font-weight: 500; color: var(--dvc-text-strong); }
-
-/* ── TOTAL LINE ─────────────────────────────────────────────────── */
-.total-line { text-align: right; font-size: 13.5px; font-weight: 600; color: var(--dvc-text-strong); margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--dvc-bg-subtle); }
-
-/* ── MODAL ──────────────────────────────────────────────────────── */
-.modal-overlay {
-  /* Teleport đưa modal ra ngoài .kho-manager nên không thừa hưởng được biến màu từ đó -> khai báo lại tại đây */
-  --dvc-card-bg: #fff;
-  --dvc-bg-subtle: #f3f4f6;
-  --dvc-bg-subtle2: #f9fafb;
-  --dvc-border: #e5e7eb;
-  --dvc-border-strong: #d1d5db;
-  --dvc-text: #1a1a2e;
-  --dvc-text-strong: #374151;
-  --dvc-text-secondary: #6b7280;
-  --dvc-text-muted: #9ca3af;
-  --dvc-accent: #1a1a2e;
-  --dvc-accent-hover: #2d2d4e;
-  --dvc-shadow: rgba(0, 0, 0, 0.08);
-  --dvc-overlay: rgba(0, 0, 0, 0.45);
-  font-family: "Jost", "Inter", sans-serif;
-  position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 9000; display: flex; align-items: center; justify-content: center; padding: 20px;
-}
-.modal-overlay.dark-mode {
-  --dvc-card-bg: #23232f;
-  --dvc-bg-subtle: #2a2a38;
-  --dvc-bg-subtle2: #1e1e29;
-  --dvc-border: #383846;
-  --dvc-border-strong: #464656;
-  --dvc-text: #e8e8ee;
-  --dvc-text-strong: #cbcbd6;
-  --dvc-text-secondary: #a3a3b2;
-  --dvc-text-muted: #7c7c8c;
-  --dvc-accent: #4b4b6b;
-  --dvc-accent-hover: #5c5c80;
-  --dvc-shadow: rgba(0, 0, 0, 0.35);
-  --dvc-overlay: rgba(0, 0, 0, 0.6);
-}
-.modal { position: relative; top: auto; left: auto; margin: 0; background: var(--dvc-card-bg); border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); display: flex; flex-direction: column; max-height: 90vh; overflow: hidden; width: 460px; max-width: 95vw; }
-.modal-wide { width: 660px; max-width: 95vw; }
-.modal-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px 14px; border-bottom: 1px solid var(--dvc-bg-subtle); }
-.modal-title { font-size: 15px; font-weight: 700; color: var(--dvc-text); margin: 0; }
-.modal-close { width: 28px; height: 28px; border: 1px solid var(--dvc-border); border-radius: 6px; background: var(--dvc-card-bg); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--dvc-text-muted); }
-.modal-close:hover { background: var(--dvc-bg-subtle2); color: var(--dvc-text-strong); }
-.modal-body { padding: 18px 22px; overflow-y: auto; flex: 1; }
-.modal-footer { padding: 14px 22px; border-top: 1px solid var(--dvc-bg-subtle); display: flex; justify-content: flex-end; gap: 8px; }
-
-/* ── FORM ───────────────────────────────────────────────────────── */
-.form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
-.form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
-.form-label { font-size: 12px; font-weight: 600; color: var(--dvc-text-strong); }
-.form-input { background: var(--dvc-card-bg); border: 1px solid var(--dvc-border); border-radius: 8px; padding: 8px 12px; font-size: 13px; color: var(--dvc-text); font-family: inherit; outline: none; transition: border 0.15s; }
-.form-input:focus { border-color: var(--dvc-text-secondary); box-shadow: 0 0 0 3px rgba(107,114,128,0.07); }
-.form-input-sm { padding: 5px 8px; font-size: 12px; width: 100%; }
-.input-error { border-color: #f87171 !important; }
-.field-error { font-size: 11px; color: #dc2626; margin: 2px 0 0; }
-textarea.form-input { resize: vertical; font-family: inherit; }
-
-/* ── BIẾN THỂ SEARCH/SUGGEST ────────────────────────────────────── */
-.bt-search-wrap { position: relative; }
-.bt-suggest-list { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: var(--dvc-card-bg); border: 1px solid var(--dvc-border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); max-height: 240px; overflow-y: auto; z-index: 20; }
-.bt-suggest-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; transition: background 0.1s; }
-.bt-suggest-item:hover { background: var(--dvc-bg-subtle2); }
-.bt-suggest-thumb { width: 32px; height: 32px; object-fit: cover; border-radius: 6px; border: 1px solid var(--dvc-border); flex-shrink: 0; }
-.bt-suggest-thumb.placeholder { background: var(--dvc-bg-subtle); }
-.bt-suggest-info { flex: 1; min-width: 0; }
-.bt-suggest-name { font-size: 12.5px; color: var(--dvc-text); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.bt-suggest-meta { font-size: 11px; color: var(--dvc-text-muted); margin-top: 1px; }
-
-/* ── DETAIL VIEW ────────────────────────────────────────────────── */
-.detail-info-col { display: flex; flex-direction: column; gap: 10px; }
-.detail-row { display: flex; align-items: center; gap: 10px; }
-.detail-label { font-size: 12px; font-weight: 600; color: var(--dvc-text-muted); min-width: 110px; }
-.detail-val { font-size: 13px; color: var(--dvc-text); }
-
-/* ── LIGHTBOX ───────────────────────────────────────────────────── */
-.lb-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-.lb-img { max-width: 90vw; max-height: 85vh; border-radius: 8px; object-fit: contain; }
-.lb-close { position: absolute; top: 16px; right: 20px; background: rgba(255,255,255,0.15); color: #fff; border: none; font-size: 20px; cursor: pointer; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-
-/* ── TOAST ──────────────────────────────────────────────────────── */
-.toast { position: fixed; bottom: 24px; right: 24px; background: var(--dvc-card-bg); border: 1px solid var(--dvc-border); border-radius: 10px; padding: 12px 16px; font-size: 13px; color: var(--dvc-text); display: flex; align-items: center; gap: 9px; z-index: 1000; transform: translateY(20px); opacity: 0; transition: all 0.25s; pointer-events: none; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 320px; }
-.toast.show { transform: translateY(0); opacity: 1; }
-.toast.success { border-color: #bbf7d0; }
-.toast.error { border-color: #fecaca; }
-
-/* ── RESPONSIVE ─────────────────────────────────────────────────── */
-@media (max-width: 768px) {
-  .stats-row { grid-template-columns: repeat(2, 1fr); }
-  .form-row-2 { grid-template-columns: 1fr; }
-  .header-bar { flex-direction: column; align-items: flex-start; }
-  .result-count { margin-left: 0; }
-  .modal-wide { width: 95vw; }
-}
-@media (max-width: 480px) {
-  .stats-row { grid-template-columns: 1fr 1fr; }
-}
+.gap-1 { gap: 4px; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.cursor-pointer { cursor: pointer; }
 
 /* ── THỐNG KÊ NHẬP KHO THEO THÁNG ──────────────────────────────── */
 .thongke-chart { display: flex; align-items: flex-end; gap: 8px; height: 200px; padding: 8px 4px 0; }
 .thongke-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; }
 .thongke-bar-wrap { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
-.thongke-bar { width: 60%; min-height: 2px; background: var(--dvc-accent); border-radius: 4px 4px 0 0; transition: height 0.3s ease; }
-.thongke-label { font-size: 11px; color: var(--dvc-text-secondary); margin-top: 6px; font-weight: 600; }
-.thongke-sub { font-size: 10px; color: var(--dvc-text-muted); }
+.thongke-bar { width: 60%; min-height: 2px; background: rgb(var(--v-theme-primary)); border-radius: 4px 4px 0 0; transition: height 0.3s ease; }
 </style>

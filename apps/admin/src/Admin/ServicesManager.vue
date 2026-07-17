@@ -2,13 +2,23 @@
 import { ref, computed, reactive, onMounted } from "vue";
 import axios from "axios";
 import { logActivity } from "@/utils/activityLogger";
-import { useTheme } from "vuetify";
+import {
+  Plus,
+  Search,
+  Eye,
+  Pencil,
+  Trash2,
+  RotateCcw,
+  ChevronDown,
+  ImageOff,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Upload,
+  Check,
+} from "lucide-vue-next";
 
 const API = import.meta.env.VITE_API_URL;
-
-// ── DARK / LIGHT MODE (đồng bộ với ProfileDD - Cài đặt Sáng/Tối) ──
-const vuetifyTheme = useTheme();
-const isDarkMode = computed(() => vuetifyTheme.global.name.value === "dark");
 
 function base64ToFile(base64, filename) {
   const arr = base64.split(",");
@@ -24,6 +34,14 @@ function toAbsUrl(path) {
   if (!path) return "";
   if (path.startsWith("http")) return path;
   return `${API}${path}`;
+}
+
+// ── SNACKBAR (Vuetify) ────────────────────────────────────────────
+const snackbar = ref({ show: false, text: "", color: "success" });
+function showToast(msg, type = "success") {
+  snackbar.value.text = msg;
+  snackbar.value.color = type === "success" ? "success" : "error";
+  snackbar.value.show = true;
 }
 
 // ══ TIÊU ĐỀ VALIDATION ════════════════════════════════════════════
@@ -108,7 +126,7 @@ function validateChiTiet(formObj) {
     ok = false;
   }
 
-  if (!formObj.ctFile) {
+  if (!formObj.ctFile && !formObj.ctPreview) {
     setCtError(id, "ctFile", "Ảnh chi tiết là bắt buộc.");
     ok = false;
   }
@@ -145,8 +163,156 @@ const expandedServices = ref({}); // MaDv -> boolean
 const expandedTitles = ref({}); // maTD -> boolean mở chi tiết
 const tdSaving = ref(false);
 const ctImgInput = ref(null);
+const isLoading = ref(false);
+
+// ── MODAL: Tiêu đề dịch vụ ──────────────────────────────────────────
+const tdModal = reactive({
+  open: false,
+  dvMaDv: "",
+  isEdit: false,
+  target: null, // reference tới object td gốc (nếu edit) để cancel khôi phục
+  form: { tenTieuDe: "", moTaTieuDe: "", soThuTu: "", trangThai: 1 },
+});
+
+function openAddTieuDeModal(maDv) {
+  clearTdErrors("_tdform");
+  tdModal.dvMaDv = maDv;
+  tdModal.isEdit = false;
+  tdModal.target = null;
+  tdModal.form = { tenTieuDe: "", moTaTieuDe: "", soThuTu: "", trangThai: 1 };
+  tdModal.open = true;
+}
+
+function openEditTieuDeModal(td, maDv) {
+  clearTdErrors("_tdform");
+  tdModal.dvMaDv = maDv;
+  tdModal.isEdit = true;
+  tdModal.target = td;
+  tdModal.form = {
+    tenTieuDe: td.tenTieuDe,
+    moTaTieuDe: td.moTaTieuDe,
+    soThuTu: td.soThuTu,
+    trangThai: td.trangThai,
+  };
+  tdModal.open = true;
+}
+
+function closeTdModal() {
+  if (tdSaving.value) return;
+  tdModal.open = false;
+  clearTdErrors("_tdform");
+}
+
+async function submitTieuDeModal() {
+  if (tdModal.isEdit) {
+    await editTieuDe(tdModal.target.maTd, tdModal.dvMaDv, tdModal.form);
+    if (!tdErrors["_tdform"]) {
+      Object.assign(tdModal.target, {
+        tenTieuDe: tdModal.form.tenTieuDe,
+        moTaTieuDe: tdModal.form.moTaTieuDe,
+        soThuTu: tdModal.form.soThuTu,
+        trangThai: tdModal.form.trangThai,
+      });
+      tdModal.open = false;
+    }
+  } else {
+    await saveTieuDe(tdModal.dvMaDv, tdModal.form);
+    if (!tdErrors["_tdform"]) {
+      tdModal.open = false;
+    }
+  }
+}
+
+// ── MODAL: Chi tiết tiêu đề dịch vụ ─────────────────────────────────
+const ctModal = reactive({
+  open: false,
+  tdMaTd: "",
+  tdMaDv: "",
+  isEdit: false,
+  target: null, // reference tới object ct gốc (nếu edit)
+  form: { ctTenTieuDe: "", ctMoTaTieuDe: "", ctSoThuTu: "", ctFile: null, ctPreview: "" },
+});
+
+function openAddChiTietModal(td) {
+  clearCtErrors("_ctform");
+  ctModal.tdMaTd = td.maTd;
+  ctModal.tdMaDv = td.maDv;
+  ctModal.isEdit = false;
+  ctModal.target = null;
+  ctModal.form = { ctTenTieuDe: "", ctMoTaTieuDe: "", ctSoThuTu: "", ctFile: null, ctPreview: "" };
+  ctModal.open = true;
+}
+
+function openEditChiTietModal(ct, tdMaTd, tdMaDv) {
+  clearCtErrors("_ctform");
+  ctModal.tdMaTd = tdMaTd;
+  ctModal.tdMaDv = tdMaDv;
+  ctModal.isEdit = true;
+  ctModal.target = ct;
+  ctModal.form = {
+    ctTenTieuDe: ct.tenTieuDe?.trim() || "",
+    ctMoTaTieuDe: ct.moTaTieuDe || "",
+    ctSoThuTu: ct.soThuTu != null ? Number(ct.soThuTu) : 0,
+    ctFile: null,
+    ctPreview: ct.hinhAnh ? toAbsUrl(ct.hinhAnh) : "",
+  };
+  ctModal.open = true;
+}
+
+function closeCtModal() {
+  if (tdSaving.value) return;
+  ctModal.open = false;
+  clearCtErrors("_ctform");
+}
+
+function onCtModalFileChange(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  ctModal.form.ctFile = file;
+  ctModal.form.ctPreview = URL.createObjectURL(file);
+}
+
+async function submitChiTietModal() {
+  if (ctModal.isEdit) {
+    if (!validateChiTiet(ctModal.form)) {
+      showToast("Vui lòng kiểm tra lại thông tin chi tiết!", "error");
+      return;
+    }
+    tdSaving.value = true;
+    try {
+      const fd = new FormData();
+      fd.append("TenTieuDe", ctModal.form.ctTenTieuDe.trim());
+      fd.append("MoTaTieuDe", ctModal.form.ctMoTaTieuDe || "");
+      fd.append("SoThuTu", Number(ctModal.form.ctSoThuTu) || 0);
+      if (ctModal.form.ctFile) fd.append("File", ctModal.form.ctFile);
+
+      await axios.put(`${API}/api/TieudeDichvu/chitiet/${ctModal.target.maCttd}`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      showToast("Sửa chi tiết thành công!");
+      await loadTieudeDichVu(ctModal.tdMaDv);
+      ctModal.open = false;
+    } catch (err) {
+      console.error(err);
+      showToast("Lỗi khi sửa chi tiết!", "error");
+    } finally {
+      tdSaving.value = false;
+    }
+  } else {
+    if (!validateChiTiet(ctModal.form)) {
+      showToast("Vui lòng kiểm tra lại thông tin chi tiết!", "error");
+      return;
+    }
+    await saveChiTiet(ctModal.tdMaTd, ctModal.tdMaDv, ctModal.form);
+    if (!ctErrors["_ctform"]) {
+      ctModal.open = false;
+    }
+  }
+}
 
 async function loadDichVu() {
+  isLoading.value = true;
   try {
     const res = await axios.get(`${API}/api/DichVu`, {
       params: {
@@ -169,10 +335,13 @@ async function loadDichVu() {
   } catch (err) {
     console.error(err);
     showToast("Lỗi tải danh sách dịch vụ!", "error");
+  } finally {
+    isLoading.value = false;
   }
 }
 
 async function loadCombos() {
+  isLoading.value = true;
   try {
     const res = await axios.get(`${API}/api/Combo`, {
       params: {
@@ -195,6 +364,8 @@ async function loadCombos() {
   } catch (err) {
     console.error(err);
     showToast("Lỗi tải danh sách combo!", "error");
+  } finally {
+    isLoading.value = false;
   }
 }
 
@@ -204,8 +375,6 @@ const search = ref("");
 const filterCat = ref("");
 const filterStatus = ref("");
 const curPage = ref(1);
-const sortField = ref(null);
-const sortDir = ref(1);
 const editingId = ref(null);
 const dvImgInput = ref(null);
 const cbImgInput = ref(null);
@@ -213,8 +382,14 @@ const saving = ref(false);
 const deletedImages = ref([]);
 
 const tabs = [
-  { key: "dv", label: "Dịch vụ", icon: "✂️" },
-  { key: "combo", label: "Combo", icon: "🎁" },
+  { key: "dv", label: "Dịch vụ" },
+  { key: "combo", label: "Combo" },
+];
+
+const statusOptions = [
+  { title: "Tất cả trạng thái", value: "" },
+  { title: "Đang hoạt động", value: "1" },
+  { title: "Ngừng hoạt động", value: "0" },
 ];
 
 const modal = reactive({ open: false, mode: "", title: "", data: null });
@@ -260,7 +435,6 @@ function validateDV() {
   clearErrors();
   let ok = true;
 
-  // maDV
   if (!editingId.value) {
     if (!form.maDV.trim()) {
       errors.maDV = "Mã dịch vụ không được để trống.";
@@ -274,7 +448,6 @@ function validateDV() {
     }
   }
 
-  // tenDV
   if (!form.tenDV.trim()) {
     errors.tenDV = "Tên dịch vụ không được để trống.";
     ok = false;
@@ -286,13 +459,11 @@ function validateDV() {
     ok = false;
   }
 
-  // maDM
   if (!form.maDM) {
     errors.maDM = "Vui lòng chọn danh mục.";
     ok = false;
   }
 
-  // gia
   const gia = Number(form.gia);
   if (form.gia === "" || isNaN(gia)) {
     errors.gia = "Giá không được để trống.";
@@ -305,7 +476,6 @@ function validateDV() {
     ok = false;
   }
 
-  // thoiGianLam
   const tgl = Number(form.thoiGianLam);
   if (form.thoiGianLam === "" || isNaN(tgl)) {
     errors.thoiGianLam = "Thời gian không được để trống.";
@@ -318,7 +488,6 @@ function validateDV() {
     ok = false;
   }
 
-  // phanTramHoaHong (không bắt buộc)
   if (form.phanTramHoaHong !== "" && form.phanTramHoaHong != null) {
     const pth = Number(form.phanTramHoaHong);
     if (isNaN(pth)) {
@@ -330,7 +499,6 @@ function validateDV() {
     }
   }
 
-  // moTa
   if (form.moTa && form.moTa.length > 500) {
     errors.moTa = "Mô tả tối đa 500 ký tự.";
     ok = false;
@@ -343,7 +511,6 @@ function validateCombo() {
   clearErrors();
   let ok = true;
 
-  // maCB
   if (!editingId.value) {
     if (!form.maCB.trim()) {
       errors.maCB = "Mã combo không được để trống.";
@@ -357,7 +524,6 @@ function validateCombo() {
     }
   }
 
-  // tenCombo
   if (!form.tenCombo.trim()) {
     errors.tenCombo = "Tên combo không được để trống.";
     ok = false;
@@ -369,7 +535,6 @@ function validateCombo() {
     ok = false;
   }
 
-  // gia
   const gia = Number(form.gia);
   if (form.gia === "" || isNaN(gia)) {
     errors.giaCombo = "Giá combo không được để trống.";
@@ -382,21 +547,16 @@ function validateCombo() {
     ok = false;
   }
 
-  // giaGoc tự tính từ tổng dịch vụ — không cần validate
-
-  // hinhAnh bắt buộc
   if (!form.hinhAnh) {
     errors.hinhAnh = "Ảnh bìa combo là bắt buộc.";
     ok = false;
   }
 
-  // dichvus
   if (!form.dichvus.length) {
     errors.dichvus = "Vui lòng chọn ít nhất 1 dịch vụ cho combo.";
     ok = false;
   }
 
-  // moTa
   if (form.moTa && form.moTa.length > 500) {
     errors.moTa = "Mô tả tối đa 500 ký tự.";
     ok = false;
@@ -406,9 +566,15 @@ function validateCombo() {
 }
 
 // ── COMPUTED ───────────────────────────────────────────────────────
-const toast = reactive({ show: false, msg: "", type: "success", icon: "✅" });
 const lightbox = reactive({ open: false, imgs: [], idx: 0 });
 const perPage = ref(10);
+
+const perPageOptions = [
+  { title: "10 / trang", value: 10 },
+  { title: "20 / trang", value: 20 },
+  { title: "50 / trang", value: 50 },
+  { title: "Tất cả", value: 9999 },
+];
 
 const avgPrice = computed(() => {
   if (!dichvus.value.length) return 0;
@@ -425,7 +591,7 @@ const totalSavings = computed(() =>
 const filteredData = computed(() => {
   const q = search.value.toLowerCase().trim();
   if (curTab.value === "dv") {
-    let arr = dichvus.value.filter((d) => {
+    return dichvus.value.filter((d) => {
       const mq =
         !q ||
         d.tenDV.toLowerCase().includes(q) ||
@@ -435,13 +601,6 @@ const filteredData = computed(() => {
         filterStatus.value === "" || String(d.trangThai) === filterStatus.value;
       return mq && mc && ms;
     });
-    if (sortField.value)
-      arr = [...arr].sort((a, b) =>
-        a[sortField.value] > b[sortField.value]
-          ? sortDir.value
-          : -sortDir.value,
-      );
-    return arr;
   }
   return combos.value.filter((c) => {
     const mq =
@@ -483,21 +642,10 @@ const dvInCombos = (id) => combos.value.filter((c) => c.dichvus.includes(id));
 const discountPct = (c) =>
   c.giaGoc > 0 ? Math.round((1 - c.gia / c.giaGoc) * 100) : 0;
 
-// Dynamic cat class by index in danhMucs list
-function getCatClass(maDM) {
-  const classes = ["cat-1", "cat-2", "cat-3", "cat-4", "cat-5"];
+const catColors = ["primary", "success", "warning", "purple", "info"];
+function getCatColor(maDM) {
   const idx = danhMucs.value.findIndex((x) => x.maDM === maDM);
-  return classes[idx % classes.length] ?? "cat-1";
-}
-
-function sortIcon(f) {
-  return sortField.value !== f ? "↕" : sortDir.value === 1 ? "↑" : "↓";
-}
-function setSort(f) {
-  sortField.value === f
-    ? (sortDir.value *= -1)
-    : ((sortField.value = f), (sortDir.value = 1));
-  curPage.value = 1;
+  return catColors[idx % catColors.length] ?? "primary";
 }
 
 // ── LIGHTBOX ───────────────────────────────────────────────────────
@@ -575,7 +723,6 @@ function switchTab(tab) {
   search.value = "";
   filterCat.value = "";
   filterStatus.value = "";
-  sortField.value = null;
 }
 
 // ── FILTER ─────────────────────────────────────────────────────────
@@ -620,37 +767,6 @@ function sameMaDv(a, b) {
   return normalizeMaDv(a) === normalizeMaDv(b);
 }
 
-function startNewTieuDe(maDv) {
-  if (tieudes.value.find((t) => sameMaDv(t._newFor, maDv))) return;
-  tieudes.value.push({
-    maTD: "",
-    maDv,
-    tenTieuDe: "",
-    moTaTieuDe: "",
-    soThuTu: "",
-    trangThai: 1,
-    chiTiet: [],
-    _newFor: maDv,
-    _editing: true,
-    editForm: null,
-  });
-  clearTdErrors("_tdform");
-}
-
-function cancelTieuDeEdit(td) {
-  clearTdErrors("_tdform");
-  if (td.maTd) {
-    td.tenTieuDe = td._snapshot?.tenTieuDe ?? td.tenTieuDe;
-    td.moTaTieuDe = td._snapshot?.moTaTieuDe ?? td.moTaTieuDe;
-    td.soThuTu = td._snapshot?.soThuTu ?? td.soThuTu;
-    td.trangThai = td._snapshot?.trangThai ?? td.trangThai;
-    td._editing = false;
-    return;
-  }
-  const idx = tieudes.value.indexOf(td);
-  if (idx >= 0) tieudes.value.splice(idx, 1);
-}
-
 async function loadTieudeDichVu(maDv) {
   try {
     const res = await axios.get(`${API}/api/TieudeDichvu/bydv/${maDv}`);
@@ -683,7 +799,6 @@ async function saveTieuDe(dvMaDv, formObj) {
     ).length;
 
     const res = await axios.post(`${API}/api/TieudeDichvu/tieude`, {
-      // Gửi cả camelCase và PascalCase để tương thích nhiều kiểu backend binding.
       maDv: dvMaDv,
       tenTieuDe,
       moTaTieuDe,
@@ -768,20 +883,6 @@ async function deleteTieuDe(maTd, dvMaDv) {
 }
 
 // Chi tiết
-function readChiTietImage(file, cb) {
-  if (!file.type.startsWith("image/")) {
-    showToast("Không phải file ảnh!", "error");
-    return;
-  }
-  if (file.size > 5 * 1024 * 1024) {
-    showToast("Ảnh vượt quá 5MB!", "error");
-    return;
-  }
-  const r = new FileReader();
-  r.onload = (e) => cb(e.target.result);
-  r.readAsDataURL(file);
-}
-
 async function saveChiTiet(tdMaTd, tdMaDv, formObj) {
   if (tdSaving.value) return;
   if (!validateChiTiet(formObj)) {
@@ -817,60 +918,6 @@ async function saveChiTiet(tdMaTd, tdMaDv, formObj) {
     tdSaving.value = false;
   }
 }
-async function addChiTiet(td) {
-  const fd = {
-    ctTenTieuDe: td._ctTen,
-    ctMoTaTieuDe: td._ctDesc,
-    ctSoThuTu: td._ctStt,
-    ctFile: td._pendingCtFile,
-  };
-
-  await saveChiTiet(td.maTd, td.maDv, fd);
-
-  // reset form sau khi thêm thành công
-  td._ctTen = "";
-  td._ctDesc = "";
-  td._ctStt = null;
-  td._pendingCtFile = null;
-}
-async function editChiTiet(maCttd, tdMaTd, tdMaDv, ctItem) {
-  const formObj = {
-    ctTenTieuDe: ctItem.tenTieuDe?.trim() || "",
-    ctMoTaTieuDe: ctItem.moTaTieuDe || "",
-    ctSoThuTu: ctItem.soThuTu != null ? Number(ctItem.soThuTu) : 0,
-    ctFile: ctItem._newFile || ctItem.hinhAnh || null, // nếu validate cần
-  };
-
-  if (!validateChiTiet(formObj)) {
-    showToast("Vui lòng kiểm tra lại thông tin chi tiết!", "error");
-    return;
-  }
-
-  tdSaving.value = true;
-  try {
-    const fd = new FormData();
-    fd.append("TenTieuDe", formObj.ctTenTieuDe);
-    fd.append("MoTaTieuDe", formObj.ctMoTaTieuDe);
-    fd.append("SoThuTu", formObj.ctSoThuTu);
-    if (ctItem._newFile) fd.append("File", ctItem._newFile);
-
-    await axios.put(`${API}/api/TieudeDichvu/chitiet/${maCttd}`, fd, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
-
-    showToast("Sửa chi tiết thành công!");
-    ctItem._editing = false;
-    ctItem._newFile = null;
-
-    await loadTieudeDichVu(tdMaDv);
-  } catch (err) {
-    console.error(err);
-    showToast("Lỗi khi sửa chi tiết!", "error");
-  } finally {
-    tdSaving.value = false;
-  }
-}
-
 async function deleteChiTiet(maCttd, tdMaDv) {
   if (!confirm("Xóa chi tiết này?")) return;
   try {
@@ -951,7 +998,6 @@ function closeModal() {
 async function saveItem() {
   if (saving.value) return;
 
-  // ── Dịch vụ ──
   if (modal.mode === "formDV") {
     if (!validateDV()) return;
     saving.value = true;
@@ -1011,7 +1057,6 @@ async function saveItem() {
     return;
   }
 
-  // ── Combo ──
   if (modal.mode === "formCombo") {
     if (!validateCombo()) return;
     saving.value = true;
@@ -1122,43 +1167,6 @@ function toggleDV(id) {
   if (errors.dichvus) errors.dichvus = "";
 }
 
-// ── TOAST ──────────────────────────────────────────────────────────
-let toastTimer = null;
-function showToast(msg, type = "success") {
-  Object.assign(toast, {
-    msg,
-    type,
-    icon: type === "success" ? "✅" : "❌",
-    show: true,
-  });
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    toast.show = false;
-  }, 3000);
-}
-
-// ── EXPORT ─────────────────────────────────────────────────────────
-// function exportCSV() {
-//   const data = filteredData.value;
-//   let csv =
-//     curTab.value === "dv"
-//       ? "Mã DV,Tên,Danh mục,Giá,Thời gian,Số ảnh,Trạng thái\n"
-//       : "Mã CB,Tên,Giá,Giá gốc,Có ảnh,Dịch vụ,Trạng thái\n";
-//   data.forEach((d) => {
-//     if (curTab.value === "dv")
-//       csv += `${d.maDV},"${d.tenDV}","${getDMName(d.maDM)}",${d.gia},${d.thoiGianLam},${d.hinhanhs?.length || 0},${d.trangThai ? "Hoạt động" : "Ngừng"}\n`;
-//     else
-//       csv += `${d.maCB},"${d.tenCombo}",${d.gia},${d.giaGoc},${d.hinhAnh ? "Có" : "Không"},"${d.dichvus.join("; ")}",${d.trangThai ? "Hoạt động" : "Ngừng"}\n`;
-//   });
-//   const a = document.createElement("a");
-//   a.href = URL.createObjectURL(
-//     new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }),
-//   );
-//   a.download = `${curTab.value === "dv" ? "dichvu" : "combo"}_${new Date().toISOString().slice(0, 10)}.csv`;
-//   a.click();
-//   showToast("Xuất CSV thành công!");
-// }
-
 // ── INIT ───────────────────────────────────────────────────────────
 onMounted(async () => {
   await loadDanhMuc();
@@ -1168,3400 +1176,1190 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="dvc-root" :class="{ 'dark-mode': isDarkMode }">
+  <v-container fluid class="pa-6 fill-height align-start" style="min-height: 100vh;">
     <!-- ── STATS ───────────────────────────────────────────────── -->
-    <div class="stats-row">
-      <div class="stat-card stat-gold">
-        <div class="stat-icon"></div>
-        <div class="stat-label">Tổng dịch vụ</div>
-        <div class="stat-value">{{ dichvus.length }}</div>
-        <div class="stat-hint">
-          {{ dichvus.filter((d) => d.trangThai).length }} đang hoạt động
-        </div>
-      </div>
-      <div class="stat-card stat-green">
-        <div class="stat-icon"></div>
-        <div class="stat-label">Tổng combo</div>
-        <div class="stat-value">{{ combos.length }}</div>
-        <div class="stat-hint">
-          {{ combos.filter((c) => c.trangThai).length }} đang hoạt động
-        </div>
-      </div>
-      <div class="stat-card stat-blue">
-        <div class="stat-icon"></div>
-        <div class="stat-label">Giá trung bình</div>
-        <div class="stat-value">{{ fmt(avgPrice) }}</div>
-        <div class="stat-hint">Dịch vụ đơn lẻ</div>
-      </div>
-      <div class="stat-card stat-purple">
-        <div class="stat-icon"></div>
-        <div class="stat-label">Tổng tiết kiệm combo</div>
-        <div class="stat-value">{{ fmt(totalSavings) }}</div>
-        <div class="stat-hint">Khách hàng được giảm</div>
-      </div>
-    </div>
+    <v-row class="mb-2">
+      <v-col cols="6" md="3">
+        <v-card rounded="xl" elevation="1" class="pa-4">
+          <div class="text-caption text-medium-emphasis font-weight-medium text-uppercase">Tổng dịch vụ</div>
+          <div class="text-h4 font-weight-bold mt-1">{{ dichvus.length }}</div>
+          <div class="text-caption text-medium-emphasis mt-1">
+            {{ dichvus.filter((d) => d.trangThai).length }} đang hoạt động
+          </div>
+        </v-card>
+      </v-col>
+      <v-col cols="6" md="3">
+        <v-card rounded="xl" elevation="1" class="pa-4">
+          <div class="text-caption text-medium-emphasis font-weight-medium text-uppercase">Tổng combo</div>
+          <div class="text-h4 font-weight-bold mt-1">{{ combos.length }}</div>
+          <div class="text-caption text-medium-emphasis mt-1">
+            {{ combos.filter((c) => c.trangThai).length }} đang hoạt động
+          </div>
+        </v-card>
+      </v-col>
+      <v-col cols="6" md="3">
+        <v-card rounded="xl" elevation="1" class="pa-4">
+          <div class="text-caption text-medium-emphasis font-weight-medium text-uppercase">Giá trung bình</div>
+          <div class="text-h5 font-weight-bold mt-1">{{ fmt(avgPrice) }}</div>
+          <div class="text-caption text-medium-emphasis mt-1">Dịch vụ đơn lẻ</div>
+        </v-card>
+      </v-col>
+      <v-col cols="6" md="3">
+        <v-card rounded="xl" elevation="1" class="pa-4">
+          <div class="text-caption text-medium-emphasis font-weight-medium text-uppercase">Tổng tiết kiệm combo</div>
+          <div class="text-h5 font-weight-bold mt-1">{{ fmt(totalSavings) }}</div>
+          <div class="text-caption text-medium-emphasis mt-1">Khách hàng được giảm</div>
+        </v-card>
+      </v-col>
+    </v-row>
 
-    <!-- ── HEADER BAR ──────────────────────────────────────────── -->
-    <div class="header-bar">
-      <div class="tabs">
-        <button
-          v-for="tab in tabs"
-          :key="tab.key"
-          type="button"
-          class="tab"
-          :class="{ active: curTab === tab.key }"
-          @click="switchTab(tab.key)"
-        >
-          <!-- {{ tab.icon }} -->{{ tab.label }}
-          <span class="tab-count">{{
-            tab.key === "dv" ? dichvus.length : combos.length
-          }}</span>
-        </button>
-      </div>
-      <div class="header-actions">
-        <!-- <button class="btn btn-ghost btn-sm" @click="exportCSV">
-          <svg
-            width="13"
-            height="13"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
+    <!-- ── MAIN CARD ───────────────────────────────────────────── -->
+    <v-card width="100%" elevation="2" rounded="xl">
+      <v-card-title class="d-flex flex-column flex-md-row align-md-center justify-space-between pa-6">
+        <div class="d-flex align-center gap-2">
+          <v-btn-toggle
+            v-model="curTab"
+            mandatory
+            rounded="lg"
+            color="primary"
+            density="comfortable"
+            @update:model-value="switchTab"
           >
-            <path d="M8 1v9M5 7l3 3 3-3M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2" />
-          </svg>
-          Xuất CSV
-        </button> -->
-        <button
-          type="button"
-          class="btn btn-primary btn-sm"
-          @click="openModal()"
-        >
-          <svg
-            width="13"
-            height="13"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
+            <v-btn v-for="tab in tabs" :key="tab.key" :value="tab.key" class="text-none font-weight-bold">
+              {{ tab.label }}
+              <v-chip size="x-small" class="ml-2" variant="tonal">
+                {{ tab.key === "dv" ? dichvus.length : combos.length }}
+              </v-chip>
+            </v-btn>
+          </v-btn-toggle>
+        </div>
+
+        <div class="d-flex align-center gap-3 mt-4 mt-md-0 flex-wrap">
+          <v-btn
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            class="text-none font-weight-bold"
+            @click="openModal()"
           >
-            <path d="M8 2v12M2 8h12" />
-          </svg>
-          {{ curTab === "dv" ? "Thêm dịch vụ" : "Thêm combo" }}
-        </button>
-      </div>
-    </div>
+            <template v-slot:prepend><Plus class="w-4 h-4 mr-1" /></template>
+            {{ curTab === "dv" ? "Thêm dịch vụ" : "Thêm combo" }}
+          </v-btn>
+        </div>
+      </v-card-title>
 
-    <!-- ── TOOLBAR ─────────────────────────────────────────────── -->
-    <div class="toolbar">
-      <div class="search-box">
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-        >
-          <circle cx="7" cy="7" r="5" />
-          <path d="M11 11l3 3" />
-        </svg>
-        <input
-          v-model="search"
-          placeholder="Tìm kiếm..."
-          @keyup.enter="onFilterChange"
-          @input="curPage = 1"
-        />
-      </div>
-      <select
-        v-if="curTab === 'dv'"
-        v-model="filterCat"
-        class="filter-select"
-        @change="onFilterChange"
-      >
-        <option value="">Tất cả danh mục</option>
-        <option v-for="dm in danhMucs" :key="dm.maDM" :value="dm.maDM">
-          {{ dm.tenDanhMuc }}
-        </option>
-      </select>
-      <select
-        v-model="filterStatus"
-        class="filter-select"
-        @change="onFilterChange"
-      >
-        <option value="">Tất cả trạng thái</option>
-        <option value="1">Đang hoạt động</option>
-        <option value="0">Ngừng hoạt động</option>
-      </select>
-      <span class="result-count">{{ filteredData.length }} kết quả</span>
-      <select
-        v-model.number="perPage"
-        class="filter-select"
-        style="width: auto; min-width: 110px"
-        @change="curPage = 1"
-      >
-        <option :value="10">10 / trang</option>
-        <option :value="20">20 / trang</option>
-        <option :value="50">50 / trang</option>
-        <option :value="9999">Tất cả</option>
-      </select>
-    </div>
+      <v-divider></v-divider>
 
-    <!-- ── TABLE: Dịch vụ ──────────────────────────────────────── -->
-    <template v-if="curTab === 'dv'">
-      <div class="table-wrap">
-        <table>
+      <!-- ── TOOLBAR ─────────────────────────────────────────────── -->
+      <v-card-text class="pb-0">
+        <div class="d-flex align-center gap-3 flex-wrap mb-2">
+          <v-text-field
+            v-model="search"
+            label="Tìm kiếm..."
+            variant="outlined"
+            density="compact"
+            hide-details
+            clearable
+            rounded="lg"
+            class="flex-grow-1"
+            style="min-width: 220px;"
+            @keyup.enter="onFilterChange"
+            @update:model-value="curPage = 1"
+          >
+            <template v-slot:prepend-inner>
+              <Search class="w-5 h-5 text-grey-darken-1" />
+            </template>
+          </v-text-field>
+
+          <v-select
+            v-if="curTab === 'dv'"
+            v-model="filterCat"
+            :items="[{ title: 'Tất cả danh mục', value: '' }, ...danhMucs.map(dm => ({ title: dm.tenDanhMuc, value: dm.maDM }))]"
+            variant="outlined"
+            density="compact"
+            hide-details
+            rounded="lg"
+            style="min-width: 180px; max-width: 220px;"
+            @update:model-value="onFilterChange"
+          ></v-select>
+
+          <v-select
+            v-model="filterStatus"
+            :items="statusOptions"
+            variant="outlined"
+            density="compact"
+            hide-details
+            rounded="lg"
+            style="min-width: 170px; max-width: 200px;"
+            @update:model-value="onFilterChange"
+          ></v-select>
+
+          <v-select
+            v-model="perPage"
+            :items="perPageOptions"
+            variant="outlined"
+            density="compact"
+            hide-details
+            rounded="lg"
+            style="min-width: 130px; max-width: 150px;"
+            @update:model-value="curPage = 1"
+          ></v-select>
+
+          <v-btn variant="outlined" color="grey-darken-1" size="40" rounded="lg" @click="onFilterChange">
+            <RotateCcw class="w-5 h-5" />
+          </v-btn>
+
+          <span class="text-caption text-medium-emphasis">{{ filteredData.length }} kết quả</span>
+        </div>
+      </v-card-text>
+
+      <!-- ── TABLE: Dịch vụ ──────────────────────────────────────── -->
+      <div v-if="curTab === 'dv'">
+        <v-table hover>
           <thead>
             <tr>
               <th style="width: 56px">Ảnh</th>
+              <th style="width: 40px"></th>
               <th>Mã DV</th>
-              <th class="sortable" @click="setSort('tenDV')">
-                Tên dịch vụ
-                <span class="sort-icon">{{ sortIcon("tenDV") }}</span>
-              </th>
+              <th>Tên dịch vụ</th>
               <th>Danh mục</th>
-              <th class="sortable" @click="setSort('gia')">
-                Giá <span class="sort-icon">{{ sortIcon("gia") }}</span>
-              </th>
+              <th>Giá</th>
               <th>Thời gian</th>
-              <th class="sortable" @click="setSort('phanTramHoaHong')">
-                Hoa hồng
-                <span class="sort-icon">{{ sortIcon("phanTramHoaHong") }}</span>
-              </th>
+              <th>Hoa hồng</th>
               <th>Trạng thái</th>
-              <th>Thao tác</th>
+              <th class="text-center">Thao tác</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="pageData.length === 0">
-              <td colspan="8">
-                <div class="empty-state">
-                  <div class="empty-icon">🔍</div>
-                  <div class="empty-text">Không tìm thấy dịch vụ nào</div>
+              <td colspan="10">
+                <div class="text-center py-8 text-medium-emphasis">
+                  <Search class="w-8 h-8 mx-auto mb-2" />
+                  <div>Không tìm thấy dịch vụ nào</div>
                 </div>
               </td>
             </tr>
             <template v-for="d in pageData" :key="d.maDV">
-              <tr
-                class="dv-main-row"
-                :class="{ 'row-expanded': isExpanded(d.maDV) }"
-              >
+              <tr :class="{ 'bg-grey-lighten-4': isExpanded(d.maDV) }">
                 <td>
                   <div
-                    class="thumb-wrap"
+                    class="position-relative"
+                    style="width: 40px; height: 40px; cursor: pointer;"
                     @click="d.hinhanhs?.length && openLightbox(d.hinhanhs, 0)"
                   >
-                    <img
+                    <v-img
                       v-if="d.hinhanhs?.length"
                       :src="d.hinhanhs[0]"
-                      class="thumb-img"
-                      :alt="d.tenDV"
-                    />
-                    <div v-else class="thumb-placeholder">
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                      >
-                        <rect x="3" y="3" width="18" height="18" rx="2" />
-                        <circle cx="8.5" cy="8.5" r="1.5" />
-                        <path d="M21 15l-5-5L5 21" />
-                      </svg>
-                    </div>
-                    <span v-if="d.hinhanhs?.length > 1" class="thumb-count"
-                      >+{{ d.hinhanhs.length - 1 }}</span
+                      width="40"
+                      height="40"
+                      rounded="lg"
+                      cover
+                    ></v-img>
+                    <div
+                      v-else
+                      class="d-flex align-center justify-center bg-grey-lighten-3 rounded-lg"
+                      style="width: 40px; height: 40px;"
                     >
+                      <ImageOff class="w-4 h-4 text-grey" />
+                    </div>
+                    <v-chip
+                      v-if="d.hinhanhs?.length > 1"
+                      size="x-small"
+                      color="black"
+                      class="position-absolute"
+                      style="bottom: -4px; right: -4px; font-size: 9px; height: 16px; padding: 0 4px;"
+                    >+{{ d.hinhanhs.length - 1 }}</v-chip>
                   </div>
                 </td>
                 <td>
-                  <button
-                    type="button"
-                    class="expand-btn"
+                  <v-btn
+                    icon
+                    variant="text"
+                    size="small"
+                    :title="isExpanded(d.maDV) ? 'Thu gọn' : 'Mở tiêu đề & chi tiết'"
                     @click="toggleExpand(d.maDV)"
-                    :title="
-                      isExpanded(d.maDV) ? 'Thu gọn' : 'Mở tiêu đề & chi tiết'
-                    "
                   >
-                    <svg
-                      class="expand-icon"
-                      :class="{ open: isExpanded(d.maDV) }"
-                      width="14"
-                      height="14"
-                      viewBox="0 0 16 16"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <path d="M4 6l4 4 4-4" />
-                    </svg>
-                  </button>
-                  <span class="code-text">{{ d.maDV }}</span>
+                    <ChevronDown class="w-4 h-4" :style="{ transform: isExpanded(d.maDV) ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }" />
+                  </v-btn>
+                </td>
+                <td><span class="font-mono text-caption">{{ d.maDV }}</span></td>
+                <td>
+                  <div class="font-weight-medium">{{ d.tenDV }}</div>
+                  <div class="text-caption text-medium-emphasis text-truncate" style="max-width: 220px;">{{ d.moTa }}</div>
                 </td>
                 <td>
-                  <div class="dv-name">{{ d.tenDV }}</div>
-                  <div class="dv-sub">{{ d.moTa }}</div>
+                  <v-chip :color="getCatColor(d.maDM)" size="small" variant="tonal" class="font-weight-medium">
+                    {{ getDMName(d.maDM) }}
+                  </v-chip>
+                </td>
+                <td class="font-weight-bold">{{ fmt(d.gia) }}</td>
+                <td>{{ fmtMin(d.thoiGianLam) }}</td>
+                <td>{{ fmtPercent(d.phanTramHoaHong) }}</td>
+                <td>
+                  <v-chip
+                    :color="d.trangThai ? 'success' : 'grey'"
+                    size="small"
+                    variant="flat"
+                    class="font-weight-bold"
+                  >{{ d.trangThai ? "Hoạt động" : "Ngừng" }}</v-chip>
                 </td>
                 <td>
-                  <span class="cat-badge" :class="getCatClass(d.maDM)">{{
-                    getDMName(d.maDM)
-                  }}</span>
-                </td>
-                <td class="price-cell">{{ fmt(d.gia) }}</td>
-                <td class="time-cell">⏱ {{ fmtMin(d.thoiGianLam) }}</td>
-                <td class="commission-cell">{{ fmtPercent(d.phanTramHoaHong) }}</td>
-                <td>
-                  <span
-                    class="status-pill"
-                    :class="d.trangThai ? 'active' : 'inactive'"
-                  >
-                    <span class="status-dot"></span
-                    >{{ d.trangThai ? "Hoạt động" : "Ngừng" }}
-                  </span>
-                </td>
-                <td>
-                  <div class="actions">
-                    <button
-                      class="icon-btn view"
-                      title="Xem chi tiết"
-                      @click="viewDV(d)"
-                    >
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                      >
-                        <circle cx="8" cy="8" r="3" />
-                        <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" />
-                      </svg>
-                    </button>
-                    <button
-                      class="icon-btn edit"
-                      title="Chỉnh sửa"
-                      @click="editDV(d)"
-                    >
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                      >
-                        <path d="M11 2l3 3L5 14H2v-3L11 2z" />
-                      </svg>
-                    </button>
-                    <button class="icon-btn del" title="Xóa" @click="delDV(d)">
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                      >
-                        <path
-                          d="M2 4h12M6 4V2h4v2M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4"
-                        />
-                      </svg>
-                    </button>
+                  <div class="d-flex align-center justify-center gap-1">
+                    <v-btn icon variant="text" size="small" title="Xem chi tiết" @click="viewDV(d)">
+                      <Eye class="w-4 h-4" />
+                    </v-btn>
+                    <v-btn icon variant="text" size="small" title="Chỉnh sửa" color="primary" @click="editDV(d)">
+                      <Pencil class="w-4 h-4" />
+                    </v-btn>
+                    <v-btn icon variant="text" size="small" title="Xóa" color="error" @click="delDV(d)">
+                      <Trash2 class="w-4 h-4" />
+                    </v-btn>
                   </div>
                 </td>
               </tr>
 
               <!-- Expanded row: Tiêu đề + Chi tiết -->
-              <tr v-if="isExpanded(d.maDV)" class="dv-detail-row">
-                <td colspan="8">
-                  <div class="nested-panel">
-                    <div class="nested-header">
-                      <h4 class="nested-title">
+              <tr v-if="isExpanded(d.maDV)">
+                <td colspan="10" class="pa-0 bg-grey-lighten-5">
+                  <div class="pa-4">
+                    <div class="d-flex align-center justify-space-between mb-3">
+                      <div class="text-subtitle-2 font-weight-bold">
                         Tiêu đề dịch vụ
-                        <span class="nested-count">{{
-                          tieudes.filter((t) => sameMaDv(t.maDv, d.maDV)).length
-                        }}</span>
-                      </h4>
-                      <button
-                        type="button"
-                        class="btn btn-sm btn-nested-add"
-                        @click="startNewTieuDe(d.maDV)"
-                      >
-                        + Thêm tiêu đề
-                      </button>
+                        <v-chip size="x-small" class="ml-1">{{ tieudes.filter((t) => sameMaDv(t.maDv, d.maDV)).length }}</v-chip>
+                      </div>
+                      <v-btn size="small" color="success" variant="tonal" class="text-none font-weight-bold" @click="openAddTieuDeModal(d.maDV)">
+                        <template v-slot:prepend><Plus class="w-4 h-4" /></template>
+                        Thêm tiêu đề
+                      </v-btn>
                     </div>
 
-                    <div class="nested-body">
-                      <div
-                        v-if="
-                          !tieudes.filter(
-                            (t) => sameMaDv(t.maDv, d.maDV) && !t._newFor,
-                          ).length &&
-                          !tieudes.find((t) => sameMaDv(t._newFor, d.maDV))
-                        "
-                        class="nested-empty"
-                      >
-                        Chưa có tiêu đề. Nhấn "Thêm tiêu đề" để bắt đầu.
-                      </div>
+                    <div
+                      v-if="!tieudes.filter((t) => sameMaDv(t.maDv, d.maDV)).length"
+                      class="text-caption text-medium-emphasis text-center py-4"
+                    >
+                      Chưa có tiêu đề. Nhấn "Thêm tiêu đề" để bắt đầu.
+                    </div>
 
-                      <!-- Tiêu đề items -->
-                      <div
-                        v-for="td in tieudes"
-                        :key="td.maTd || td._newFor + td.tenTieuDe"
-                        v-show="
-                          sameMaDv(td.maDv, d.maDV) &&
-                          (!td._newFor || td._editing)
-                        "
-                        class="td-item"
-                        :class="{ 'td-new': td._newFor }"
-                      >
-                        <!-- New/Edit tiêu đề form -->
-                        <div v-if="td._editing" class="td-form">
-                          <div class="td-form-row">
-                            <div class="td-form-field">
-                              <input
-                                v-model="td.tenTieuDe"
-                                class="td-input"
-                                :class="{
-                                  'input-error': getTdError(
-                                    '_tdform',
-                                    'tenTieuDe',
-                                  ),
-                                }"
-                                placeholder="Tên tiêu đề"
-                              />
-                              <p
-                                v-if="getTdError('_tdform', 'tenTieuDe')"
-                                class="td-field-error"
-                              >
-                                {{ getTdError("_tdform", "tenTieuDe") }}
-                              </p>
-                            </div>
-                            <div class="td-form-field">
-                              <input
-                                v-model="td.moTaTieuDe"
-                                class="td-input"
-                                :class="{
-                                  'input-error': getTdError(
-                                    '_tdform',
-                                    'moTaTieuDe',
-                                  ),
-                                }"
-                                placeholder="Mô tả (optional)"
-                                style="flex: 1.5"
-                              />
-                              <p
-                                v-if="getTdError('_tdform', 'moTaTieuDe')"
-                                class="td-field-error"
-                              >
-                                {{ getTdError("_tdform", "moTaTieuDe") }}
-                              </p>
-                            </div>
-                            <div class="td-form-field">
-                              <input
-                                v-model="td.soThuTu"
-                                class="td-input td-sm"
-                                :class="{
-                                  'input-error': getTdError(
-                                    '_tdform',
-                                    'soThuTu',
-                                  ),
-                                }"
-                                type="number"
-                                placeholder="STT"
-                                style="width: 60px"
-                              />
-                              <p
-                                v-if="getTdError('_tdform', 'soThuTu')"
-                                class="td-field-error"
-                              >
-                                {{ getTdError("_tdform", "soThuTu") }}
-                              </p>
-                            </div>
-                            <select
-                              v-model.number="td.trangThai"
-                              class="td-input td-sm"
-                              style="width: 90px"
-                            >
-                              <option :value="1">Hoạt động</option>
-                              <option :value="0">Ngừng</option>
-                            </select>
-                            <button
-                              type="button"
-                              class="td-btn td-btn-save"
-                              :disabled="tdSaving"
-                              @click="
-                                td.maTd
-                                  ? editTieuDe(td.maTd, d.maDV, td)
-                                  : saveTieuDe(d.maDV, td)
-                              "
-                            >
-                              {{
-                                tdSaving ? "..." : td.maTd ? "Cập nhật" : "Lưu"
-                              }}
-                            </button>
-                            <button
-                              type="button"
-                              class="td-btn td-btn-cancel"
-                              @click="cancelTieuDeEdit(td)"
-                            >
-                              Hủy
-                            </button>
-                          </div>
-                        </div>
+                    <!-- Tiêu đề items -->
+                    <v-card
+                      v-for="td in tieudes.filter((t) => sameMaDv(t.maDv, d.maDV))"
+                      :key="td.maTd"
+                      class="mb-2"
+                      variant="outlined"
+                      rounded="lg"
+                    >
+                      <v-card-text class="pa-3 d-flex align-center gap-2">
+                        <v-btn icon variant="text" size="x-small" @click="toggleTitleExpand(td.maTd)">
+                          <ChevronDown class="w-4 h-4" :style="{ transform: isTitleExpanded(td.maTd) ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }" />
+                        </v-btn>
+                        <span class="font-weight-bold text-body-2">{{ td.tenTieuDe }}</span>
+                        <span v-if="td.moTaTieuDe" class="text-caption text-medium-emphasis">{{ td.moTaTieuDe }}</span>
+                        <v-chip size="x-small" :color="td.trangThai ? 'success' : 'grey'" variant="flat">
+                          {{ td.trangThai ? "Hoạt động" : "Ngừng" }}
+                        </v-chip>
+                        <v-spacer></v-spacer>
+                        <v-btn
+                          icon
+                          variant="text"
+                          size="x-small"
+                          title="Sửa tiêu đề"
+                          @click.stop="openEditTieuDeModal(td, d.maDV)"
+                        >
+                          <Pencil class="w-3.5 h-3.5" />
+                        </v-btn>
+                        <v-btn
+                          icon
+                          variant="text"
+                          size="x-small"
+                          color="error"
+                          title="Xóa tiêu đề"
+                          @click.stop="deleteTieuDe(td.maTd, d.maDV)"
+                        >
+                          <Trash2 class="w-3.5 h-3.5" />
+                        </v-btn>
+                      </v-card-text>
 
-                        <!-- Display tiêu đề (not editing) -->
-                        <div v-else class="td-display">
-                          <div class="td-header">
-                            <button
-                              type="button"
-                              class="td-toggle"
-                              @click="toggleTitleExpand(td.maTd)"
-                            >
-                              <svg
-                                class="expand-icon"
-                                :class="{ open: isTitleExpanded(td.maTd) }"
-                                width="14"
-                                height="14"
-                                viewBox="0 0 16 16"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2"
-                              >
-                                <path d="M4 6l4 4 4-4" />
-                              </svg>
-                            </button>
-                            <span class="td-name">{{ td.tenTieuDe }}</span>
-                            <span v-if="td.moTaTieuDe" class="td-desc">{{
-                              td.moTaTieuDe
-                            }}</span>
-                            <span
-                              class="status-pill"
-                              :class="td.trangThai ? 'active' : 'inactive'"
-                              style="font-size: 10px; padding: 2px 6px"
-                            >
-                              {{ td.trangThai ? "Hoạt động" : "Ngừng" }}
-                            </span>
-                            <div class="actions" style="margin-left: auto">
-                              <button
-                                type="button"
-                                class="icon-btn edit icon-btn-xs"
-                                title="Sửa tiêu đề"
-                                @click.stop="
-                                  td._snapshot = {
-                                    tenTieuDe: td.tenTieuDe,
-                                    moTaTieuDe: td.moTaTieuDe,
-                                    soThuTu: td.soThuTu,
-                                    trangThai: td.trangThai,
-                                  };
-                                  td._editing = true;
-                                "
-                              >
-                                <svg
-                                  width="12"
-                                  height="12"
-                                  viewBox="0 0 16 16"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  stroke-width="1.5"
-                                >
-                                  <path d="M11 2l3 3L5 14H2v-3L11 2z" />
-                                </svg>
-                              </button>
-                              <button
-                                type="button"
-                                class="icon-btn del icon-btn-xs"
-                                title="Xóa tiêu đề"
-                                @click.stop="deleteTieuDe(td.maTd, d.maDV)"
-                              >
-                                <svg
-                                  width="12"
-                                  height="12"
-                                  viewBox="0 0 16 16"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  stroke-width="1.5"
-                                >
-                                  <path
-                                    d="M2 4h12M6 4V2h4v2M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4"
-                                  />
-                                </svg>
-                              </button>
-                            </div>
+                      <!-- Chi tiết section -->
+                      <v-card-text v-if="isTitleExpanded(td.maTd)" class="pt-0 pb-3 px-3 ml-8">
+                        <v-sheet rounded="lg" color="grey-lighten-5" class="pa-3">
+                          <div class="d-flex align-center justify-space-between mb-3">
+                            <span class="text-caption font-weight-bold text-medium-emphasis">CHI TIẾT</span>
+                            <v-btn size="small" color="primary" variant="tonal" class="text-none font-weight-bold" @click="openAddChiTietModal(td)">
+                              <template v-slot:prepend><Plus class="w-4 h-4" /></template>
+                              Thêm chi tiết
+                            </v-btn>
                           </div>
 
-                          <!-- Chi tiết section -->
-                          <div
-                            v-if="isTitleExpanded(td.maTd)"
-                            class="ct-section"
-                          >
-                            <div class="ct-form" style="margin-bottom: 8px">
-                              <input
-                                v-model="td._ctTen"
-                                class="td-input"
-                                placeholder="Thêm chi tiết mới..."
-                                style="flex: 1"
-                                @keyup.enter="addChiTiet(td)"
-                              />
-
-                              <input
-                                v-model="td._ctDesc"
-                                class="td-input"
-                                placeholder="Mô tả"
-                                style="flex: 1"
-                              />
-
-                              <input
-                                v-model.number="td._ctStt"
-                                class="td-input td-sm"
-                                type="number"
-                                placeholder="STT"
-                                style="width: 60px"
-                              />
-
-                              <label class="td-btn td-img-upload">
-                                Ảnh
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  style="display: none"
-                                  @change="
-                                    (e) =>
-                                      (td._pendingCtFile = e.target.files[0])
-                                  "
-                                />
-                              </label>
-
-                              <button
-                                type="button"
-                                class="td-btn td-btn-save"
-                                @click="addChiTiet(td)"
-                              >
-                                + Thêm CT
-                              </button>
-                            </div>
-
-                            <div
-                              v-if="td.chiTiet && td.chiTiet.length"
-                              class="ct-list"
+                          <div v-if="td.chiTiet && td.chiTiet.length" class="d-flex flex-wrap gap-2">
+                            <v-sheet
+                              v-for="ct in td.chiTiet"
+                              :key="ct.maCttd"
+                              rounded="lg"
+                              border
+                              class="pa-2 d-flex align-center gap-2"
+                              style="max-width: 240px;"
                             >
-                              <div
-                                v-for="ct in td.chiTiet"
-                                :key="ct.maCttd"
-                                class="ct-item"
-                              >
-                                <!-- Editing -->
-                                <div
-                                  v-if="ct._editing"
-                                  class="ct-display"
-                                  style="
-                                    display: flex;
-                                    align-items: center;
-                                    gap: 6px;
-                                    flex-wrap: wrap;
-                                  "
-                                >
-                                  <input
-                                    v-model="ct.tenTieuDe"
-                                    class="td-input"
-                                    :class="{
-                                      'input-error': getCtError(
-                                        '_ctform',
-                                        'ctTenTieuDe',
-                                      ),
-                                    }"
-                                    style="flex: 1"
-                                  />
-                                  <input
-                                    v-model="ct.moTaTieuDe"
-                                    class="td-input"
-                                    :class="{
-                                      'input-error': getCtError(
-                                        '_ctform',
-                                        'ctMoTaTieuDe',
-                                      ),
-                                    }"
-                                    style="flex: 1"
-                                  />
-                                  <input
-                                    v-model.number="ct.soThuTu"
-                                    class="td-input td-sm"
-                                    type="number"
-                                    style="width: 60px"
-                                  />
-
-                                  <label class="td-btn td-img-upload">
-                                    Đổi ảnh
-                                    <input
-                                      type="file"
-                                      accept="image/*"
-                                      style="display: none"
-                                      @change="
-                                        (e) => {
-                                          const file = e.target.files?.[0];
-                                          if (!file) return;
-
-                                          ct._newFile = file;
-                                          ct._imgPreview =
-                                            URL.createObjectURL(file);
-                                        }
-                                      "
-                                    />
-                                  </label>
-
-                                  <button
-                                    type="button"
-                                    class="td-btn td-btn-save"
-                                    @click="
-                                      editChiTiet(
-                                        ct.maCttd,
-                                        td.maTd,
-                                        td.maDv,
-                                        ct,
-                                      )
-                                    "
-                                  >
-                                    Cập nhật
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    class="td-btn td-btn-cancel"
-                                    @click="
-                                      ct._editing = false;
-                                      ct._newFile = null;
-                                      ct._imgPreview = null;
-                                      if (ct._snapshot) {
-                                        ct.tenTieuDe = ct._snapshot.tenTieuDe;
-                                        ct.moTaTieuDe = ct._snapshot.moTaTieuDe;
-                                        ct.soThuTu = ct._snapshot.soThuTu;
-                                      }
-                                    "
-                                  >
-                                    Hủy
-                                  </button>
-                                </div>
-
-                                <!-- Display -->
-                                <div v-else class="ct-display">
-                                  <div v-if="ct.hinhAnh" class="ct-img-wrap">
-                                    <img
-                                      :src="
-                                        ct._imgPreview || toAbsUrl(ct.hinhAnh)
-                                      "
-                                      class="ct-img"
-                                    />
-                                  </div>
-
-                                  <div class="ct-info">
-                                    <span class="ct-name">{{
-                                      ct.tenTieuDe
-                                    }}</span>
-                                    <span v-if="ct.moTaTieuDe" class="ct-desc">
-                                      {{ ct.moTaTieuDe }}
-                                    </span>
-                                  </div>
-
-                                  <div class="actions" style="flex-shrink: 0">
-                                    <button
-                                      class="icon-btn edit icon-btn-xs"
-                                      @click.stop="
-                                        ct._snapshot = {
-                                          tenTieuDe: ct.tenTieuDe,
-                                          moTaTieuDe: ct.moTaTieuDe,
-                                          soThuTu: ct.soThuTu,
-                                        };
-                                        ct._editing = true;
-                                        ct._imgPreview = ct.hinhAnh
-                                          ? toAbsUrl(ct.hinhAnh)
-                                          : '';
-                                      "
-                                    >
-                                      ✏️
-                                    </button>
-
-                                    <button
-                                      class="icon-btn del icon-btn-xs"
-                                      @click.stop="
-                                        deleteChiTiet(ct.maCttd, td.maDv)
-                                      "
-                                    >
-                                      🗑️
-                                    </button>
-                                  </div>
-                                </div>
+                              <v-img
+                                v-if="ct.hinhAnh"
+                                :src="toAbsUrl(ct.hinhAnh)"
+                                width="36"
+                                height="36"
+                                rounded="lg"
+                                cover
+                              ></v-img>
+                              <div class="flex-grow-1 overflow-hidden">
+                                <div class="text-caption font-weight-medium text-truncate">{{ ct.tenTieuDe }}</div>
+                                <div v-if="ct.moTaTieuDe" class="text-caption text-medium-emphasis text-truncate">{{ ct.moTaTieuDe }}</div>
                               </div>
-                            </div>
-
-                            <div v-else class="ct-empty">
-                              Chưa có chi tiết. Nhập thông tin phía trên để
-                              thêm.
-                            </div>
+                              <v-btn
+                                icon
+                                variant="text"
+                                size="x-small"
+                                @click.stop="openEditChiTietModal(ct, td.maTd, td.maDv)"
+                              >
+                                <Pencil class="w-3.5 h-3.5" />
+                              </v-btn>
+                              <v-btn
+                                icon
+                                variant="text"
+                                size="x-small"
+                                color="error"
+                                @click.stop="deleteChiTiet(ct.maCttd, td.maDv)"
+                              >
+                                <Trash2 class="w-3.5 h-3.5" />
+                              </v-btn>
+                            </v-sheet>
                           </div>
-                        </div>
-                      </div>
-                    </div>
+                          <div v-else class="text-caption text-medium-emphasis text-center py-2">
+                            Chưa có chi tiết nào. Nhấn "Thêm chi tiết" để thêm.
+                          </div>
+                        </v-sheet>
+                      </v-card-text>
+                    </v-card>
                   </div>
                 </td>
               </tr>
             </template>
           </tbody>
-        </table>
-        <div
-          v-if="filteredData.length > 0 && perPage < 9999"
-          class="pager-wrap"
-        >
-          <span
-            >Hiển thị {{ (curPage - 1) * perPage + 1 }}–{{
-              Math.min(curPage * perPage, filteredData.length)
-            }}
-            / {{ filteredData.length }} mục</span
-          >
-          <div class="pager-btns">
-            <button
-              class="page-btn"
-              :disabled="curPage <= 1"
-              @click="curPage--"
-            >
-              ‹
-            </button>
-            <button
-              v-for="p in pageRange"
-              :key="p"
-              class="page-btn"
-              :class="{ cur: p === curPage }"
-              @click="curPage = p"
-            >
-              {{ p }}
-            </button>
-            <button
-              class="page-btn"
-              :disabled="curPage >= totalPages"
-              @click="curPage++"
-            >
-              ›
-            </button>
-          </div>
-        </div>
-      </div>
-    </template>
+        </v-table>
 
-    <!-- ── GRID: Combo ─────────────────────────────────────────── -->
-    <template v-else>
-      <div class="combo-grid">
-        <div
-          v-if="pageData.length === 0"
-          class="empty-state"
-          style="grid-column: 1/-1"
-        >
-          <div class="empty-icon">📦</div>
-          <div class="empty-text">Không tìm thấy combo nào</div>
-        </div>
-        <div
-          v-for="c in pageData"
-          :key="c.maCB"
-          class="combo-card"
-          :class="{ 'inactive-card': !c.trangThai }"
-        >
-          <div class="combo-img">
-            <img
-              v-if="c.hinhAnh"
-              :src="c.hinhAnh"
-              class="combo-cover-img"
-              :alt="c.tenCombo"
-              @click="openLightbox([c.hinhAnh], 0)"
-            />
-            <div
-              v-else
-              class="combo-cover-placeholder"
-              :style="{ background: `linear-gradient(${c.mauNen})` }"
-            >
-              <span class="combo-img-emoji">{{ c.icon }}</span>
-            </div>
-            <span class="combo-discount" v-if="discountPct(c) > 0"
-              >-{{ discountPct(c) }}%</span
-            >
-            <span v-if="!c.trangThai" class="combo-status-badge">Ngừng HĐ</span>
-          </div>
-          <div class="combo-body">
-            <div class="combo-code">{{ c.maCB }}</div>
-            <div class="combo-name">{{ c.tenCombo }}</div>
-            <div class="combo-desc">{{ c.moTa }}</div>
-            <div class="combo-tags">
-              <span v-for="id in c.dichvus" :key="id" class="combo-tag">{{
-                getDVName(id)
-              }}</span>
-            </div>
-          </div>
-          <div class="combo-footer">
-            <div>
-              <div class="combo-price">{{ fmt(c.gia) }}</div>
-              <div class="combo-price-orig" v-if="c.giaGoc > c.gia">
-                {{ fmt(c.giaGoc) }}
-              </div>
-              <div class="combo-savings" v-if="c.giaGoc > c.gia">
-                Tiết kiệm {{ fmt(c.giaGoc - c.gia) }}
-              </div>
-            </div>
-            <div class="actions">
-              <button class="icon-btn view" title="Xem" @click="viewCombo(c)">
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                >
-                  <circle cx="8" cy="8" r="3" />
-                  <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" />
-                </svg>
-              </button>
-              <button class="icon-btn edit" title="Sửa" @click="editCombo(c)">
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                >
-                  <path d="M11 2l3 3L5 14H2v-3L11 2z" />
-                </svg>
-              </button>
-              <button class="icon-btn del" title="Xóa" @click="delCombo(c)">
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                >
-                  <path
-                    d="M2 4h12M6 4V2h4v2M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4"
-                  />
-                </svg>
-              </button>
-            </div>
-          </div>
+        <div v-if="filteredData.length > 0 && perPage < 9999" class="d-flex align-center justify-space-between pa-4 flex-wrap gap-2">
+          <span class="text-caption text-medium-emphasis">
+            Hiển thị {{ (curPage - 1) * perPage + 1 }}–{{ Math.min(curPage * perPage, filteredData.length) }}
+            / {{ filteredData.length }} mục
+          </span>
+          <v-pagination
+            v-model="curPage"
+            :length="totalPages"
+            :total-visible="5"
+            density="comfortable"
+            rounded="lg"
+          ></v-pagination>
         </div>
       </div>
-      <div
-        v-if="filteredData.length > 0 && perPage < 9999"
-        class="pager-wrap"
-        style="
-          margin-top: 14px;
-          background: var(--dvc-card-bg);
-          border: 1px solid var(--dvc-border);
-          border-radius: 10px;
-        "
-      >
-        <span
-          >Hiển thị {{ (curPage - 1) * perPage + 1 }}–{{
-            Math.min(curPage * perPage, filteredData.length)
-          }}
-          / {{ filteredData.length }} mục</span
-        >
-        <div class="pager-btns">
-          <button class="page-btn" :disabled="curPage <= 1" @click="curPage--">
-            ‹
-          </button>
-          <button
-            v-for="p in pageRange"
-            :key="p"
-            class="page-btn"
-            :class="{ cur: p === curPage }"
-            @click="curPage = p"
-          >
-            {{ p }}
-          </button>
-          <button
-            class="page-btn"
-            :disabled="curPage >= totalPages"
-            @click="curPage++"
-          >
-            ›
-          </button>
+
+      <!-- ── GRID: Combo ─────────────────────────────────────────── -->
+      <div v-else class="pa-4">
+        <v-row v-if="pageData.length === 0">
+          <v-col cols="12" class="text-center py-8 text-medium-emphasis">
+            <div>Không tìm thấy combo nào</div>
+          </v-col>
+        </v-row>
+        <v-row v-else>
+          <v-col v-for="c in pageData" :key="c.maCB" cols="12" sm="6" md="4" lg="3">
+            <v-card
+              rounded="xl"
+              elevation="1"
+              :class="{ 'opacity-60': !c.trangThai }"
+              height="100%"
+              class="d-flex flex-column"
+            >
+              <div class="position-relative">
+                <v-img
+                  v-if="c.hinhAnh"
+                  :src="c.hinhAnh"
+                  height="150"
+                  cover
+                  style="cursor: pointer;"
+                  @click="openLightbox([c.hinhAnh], 0)"
+                ></v-img>
+                <div
+                  v-else
+                  class="d-flex align-center justify-center"
+                  style="height: 150px; background: linear-gradient(135deg, #f8fafc, #f1f5f9);"
+                >
+                  <span style="font-size: 40px;">{{ c.icon }}</span>
+                </div>
+                <v-chip
+                  v-if="discountPct(c) > 0"
+                  color="error"
+                  size="small"
+                  class="position-absolute font-weight-bold"
+                  style="top: 8px; right: 8px;"
+                >-{{ discountPct(c) }}%</v-chip>
+                <v-chip
+                  v-if="!c.trangThai"
+                  color="grey-darken-2"
+                  size="small"
+                  class="position-absolute font-weight-bold"
+                  style="top: 8px; left: 8px;"
+                >Ngừng HĐ</v-chip>
+              </div>
+              <v-card-text class="flex-grow-1">
+                <div class="text-caption text-medium-emphasis font-mono">{{ c.maCB }}</div>
+                <div class="text-subtitle-1 font-weight-bold">{{ c.tenCombo }}</div>
+                <div class="text-caption text-medium-emphasis text-truncate">{{ c.moTa }}</div>
+                <div class="d-flex flex-wrap gap-1 mt-2">
+                  <v-chip v-for="id in c.dichvus" :key="id" size="x-small" variant="tonal">{{ getDVName(id) }}</v-chip>
+                </div>
+              </v-card-text>
+              <v-divider></v-divider>
+              <v-card-actions class="px-4 py-3">
+                <div>
+                  <div class="text-h6 font-weight-bold text-primary">{{ fmt(c.gia) }}</div>
+                  <div v-if="c.giaGoc > c.gia" class="text-caption text-medium-emphasis" style="text-decoration: line-through;">{{ fmt(c.giaGoc) }}</div>
+                  <div v-if="c.giaGoc > c.gia" class="text-caption text-success">Tiết kiệm {{ fmt(c.giaGoc - c.gia) }}</div>
+                </div>
+                <v-spacer></v-spacer>
+                <v-btn icon variant="text" size="small" title="Xem" @click="viewCombo(c)"><Eye class="w-4 h-4" /></v-btn>
+                <v-btn icon variant="text" size="small" color="primary" title="Sửa" @click="editCombo(c)"><Pencil class="w-4 h-4" /></v-btn>
+                <v-btn icon variant="text" size="small" color="error" title="Xóa" @click="delCombo(c)"><Trash2 class="w-4 h-4" /></v-btn>
+              </v-card-actions>
+            </v-card>
+          </v-col>
+        </v-row>
+
+        <div v-if="filteredData.length > 0 && perPage < 9999" class="d-flex align-center justify-space-between pa-4 flex-wrap gap-2">
+          <span class="text-caption text-medium-emphasis">
+            Hiển thị {{ (curPage - 1) * perPage + 1 }}–{{ Math.min(curPage * perPage, filteredData.length) }}
+            / {{ filteredData.length }} mục
+          </span>
+          <v-pagination
+            v-model="curPage"
+            :length="totalPages"
+            :total-visible="5"
+            density="comfortable"
+            rounded="lg"
+          ></v-pagination>
         </div>
       </div>
-    </template>
+    </v-card>
 
     <!-- ── LIGHTBOX ────────────────────────────────────────────── -->
-    <Teleport to="body">
-      <div
-        v-if="lightbox.open"
-        class="lightbox-overlay"
-        @click.self="lightbox.open = false"
-      >
-        <button class="lb-close" @click="lightbox.open = false">✕</button>
-        <button
+    <v-dialog v-model="lightbox.open" max-width="900">
+      <div class="position-relative d-flex align-center justify-center" style="background: rgba(0,0,0,0.9); min-height: 60vh; border-radius: 12px;">
+        <v-btn icon variant="text" color="white" class="position-absolute" style="top: 12px; right: 12px; z-index: 2;" @click="lightbox.open = false">
+          <X class="w-5 h-5" />
+        </v-btn>
+        <v-btn
           v-if="lightbox.imgs.length > 1"
-          class="lb-arrow lb-prev"
+          icon
+          variant="text"
+          color="white"
+          class="position-absolute"
+          style="left: 12px; z-index: 2;"
           @click="lbPrev"
         >
-          ‹
-        </button>
-        <img :src="lightbox.imgs[lightbox.idx]" class="lb-img" />
-        <button
+          <ChevronLeft class="w-6 h-6" />
+        </v-btn>
+        <img :src="lightbox.imgs[lightbox.idx]" style="max-width: 100%; max-height: 80vh; object-fit: contain;" />
+        <v-btn
           v-if="lightbox.imgs.length > 1"
-          class="lb-arrow lb-next"
+          icon
+          variant="text"
+          color="white"
+          class="position-absolute"
+          style="right: 12px; z-index: 2;"
           @click="lbNext"
         >
-          ›
-        </button>
-        <div v-if="lightbox.imgs.length > 1" class="lb-dots">
+          <ChevronRight class="w-6 h-6" />
+        </v-btn>
+        <div v-if="lightbox.imgs.length > 1" class="position-absolute d-flex gap-1" style="bottom: 12px; left: 50%; transform: translateX(-50%);">
           <span
             v-for="(_, i) in lightbox.imgs"
             :key="i"
-            class="lb-dot"
-            :class="{ active: i === lightbox.idx }"
+            style="width: 8px; height: 8px; border-radius: 50%; cursor: pointer;"
+            :style="{ background: i === lightbox.idx ? '#fff' : 'rgba(255,255,255,0.4)' }"
             @click="lightbox.idx = i"
           ></span>
         </div>
       </div>
-    </Teleport>
+    </v-dialog>
 
     <!-- ── MODAL ───────────────────────────────────────────────── -->
-    <Teleport to="body">
-      <div
-        v-if="modal.open"
-        class="modal-overlay"
-        :class="{ 'dark-mode': isDarkMode }"
-        @click.self="closeModal"
-      >
-        <div
-          class="modal"
-          :class="{
-            'modal-wide': modal.mode === 'formDV' || modal.mode === 'formCombo',
-          }"
-        >
-          <div class="modal-head">
-            <div class="modal-title">{{ modal.title }}</div>
-            <button class="modal-close" @click="closeModal">✕</button>
-          </div>
+    <v-dialog v-model="modal.open" :max-width="modal.mode === 'formDV' || modal.mode === 'formCombo' ? 700 : 560" scrollable>
+      <v-card rounded="xl">
+        <v-card-title class="pa-6 border-b d-flex align-center justify-space-between">
+          <div class="text-h6 font-weight-bold">{{ modal.title }}</div>
+          <v-btn icon variant="text" size="small" @click="closeModal">
+            <X class="w-5 h-5" />
+          </v-btn>
+        </v-card-title>
 
+        <v-card-text class="pa-6" style="max-height: 70vh;">
           <!-- ── VIEW DV ── -->
-          <div v-if="modal.mode === 'viewDV'" class="modal-body">
-            <div v-if="modal.data.hinhanhs?.length" class="detail-section">
-              <div class="detail-title">
-                Hình ảnh ({{ modal.data.hinhanhs.length }})
-              </div>
-              <div class="img-gallery">
-                <div
+          <div v-if="modal.mode === 'viewDV'">
+            <div v-if="modal.data.hinhanhs?.length" class="mb-4">
+              <div class="text-subtitle-2 font-weight-bold mb-2">Hình ảnh ({{ modal.data.hinhanhs.length }})</div>
+              <div class="d-flex flex-wrap gap-2">
+                <v-img
                   v-for="(src, i) in modal.data.hinhanhs"
                   :key="i"
-                  class="gallery-thumb"
+                  :src="src"
+                  width="72"
+                  height="72"
+                  rounded="lg"
+                  cover
+                  style="cursor: pointer;"
                   @click="openLightbox(modal.data.hinhanhs, i)"
-                >
-                  <img :src="src" :alt="`Ảnh ${i + 1}`" />
-                  <div class="gallery-overlay">🔍</div>
-                </div>
+                ></v-img>
               </div>
             </div>
-            <div v-else class="detail-section">
-              <div class="detail-title">Hình ảnh</div>
-              <div class="no-img-notice">Chưa có hình ảnh</div>
+            <div v-else class="mb-4">
+              <div class="text-subtitle-2 font-weight-bold mb-2">Hình ảnh</div>
+              <div class="text-caption text-medium-emphasis">Chưa có hình ảnh</div>
             </div>
-            <div class="detail-section">
-              <div class="detail-title">Thông tin cơ bản</div>
-              <div class="detail-grid">
-                <div class="detail-item">
-                  <div class="detail-label">Mã dịch vụ</div>
-                  <div class="detail-val">{{ modal.data.maDV }}</div>
-                </div>
-                <div class="detail-item">
-                  <div class="detail-label">Danh mục</div>
-                  <div class="detail-val">
-                    <span
-                      class="cat-badge"
-                      :class="getCatClass(modal.data.maDM)"
-                      >{{ getDMName(modal.data.maDM) }}</span
-                    >
-                  </div>
-                </div>
-                <div class="detail-item">
-                  <div class="detail-label">Giá</div>
-                  <div class="detail-val price-cell">
-                    {{ fmt(modal.data.gia) }}
-                  </div>
-                </div>
-                <div class="detail-item">
-                  <div class="detail-label">Thời gian</div>
-                  <div class="detail-val">
-                    ⏱ {{ fmtMin(modal.data.thoiGianLam) }}
-                  </div>
-                </div>
-                <div class="detail-item">
-                  <div class="detail-label">Hoa hồng NV</div>
-                  <div class="detail-val">
-                    {{ fmtPercent(modal.data.phanTramHoaHong) }}
-                  </div>
-                </div>
-                <div class="detail-item">
-                  <div class="detail-label">Trạng thái</div>
-                  <div class="detail-val">
-                    <span
-                      class="status-pill"
-                      :class="modal.data.trangThai ? 'active' : 'inactive'"
-                      ><span class="status-dot"></span
-                      >{{ modal.data.trangThai ? "Hoạt động" : "Ngừng" }}</span
-                    >
-                  </div>
-                </div>
-              </div>
+
+            <div class="mb-4">
+              <div class="text-subtitle-2 font-weight-bold mb-2">Thông tin cơ bản</div>
+              <v-row dense>
+                <v-col cols="6">
+                  <div class="text-caption text-medium-emphasis">Mã dịch vụ</div>
+                  <div class="font-weight-medium">{{ modal.data.maDV }}</div>
+                </v-col>
+                <v-col cols="6">
+                  <div class="text-caption text-medium-emphasis">Danh mục</div>
+                  <v-chip :color="getCatColor(modal.data.maDM)" size="small" variant="tonal">{{ getDMName(modal.data.maDM) }}</v-chip>
+                </v-col>
+                <v-col cols="6">
+                  <div class="text-caption text-medium-emphasis">Giá</div>
+                  <div class="font-weight-bold">{{ fmt(modal.data.gia) }}</div>
+                </v-col>
+                <v-col cols="6">
+                  <div class="text-caption text-medium-emphasis">Thời gian</div>
+                  <div class="font-weight-medium">{{ fmtMin(modal.data.thoiGianLam) }}</div>
+                </v-col>
+                <v-col cols="6">
+                  <div class="text-caption text-medium-emphasis">Hoa hồng NV</div>
+                  <div class="font-weight-medium">{{ fmtPercent(modal.data.phanTramHoaHong) }}</div>
+                </v-col>
+                <v-col cols="6">
+                  <div class="text-caption text-medium-emphasis">Trạng thái</div>
+                  <v-chip :color="modal.data.trangThai ? 'success' : 'grey'" size="small" variant="flat">
+                    {{ modal.data.trangThai ? "Hoạt động" : "Ngừng" }}
+                  </v-chip>
+                </v-col>
+              </v-row>
             </div>
-            <div class="detail-section">
-              <div class="detail-title">Tên &amp; mô tả</div>
-              <div
-                style="
-                  font-size: 15px;
-                  font-weight: 600;
-                  color: var(--dvc-text);
-                  margin-bottom: 6px;
-                "
-              >
-                {{ modal.data.tenDV }}
-              </div>
-              <div
-                style="
-                  font-size: 13px;
-                  color: var(--dvc-text-secondary);
-                  line-height: 1.7;
-                "
-              >
-                {{ modal.data.moTa }}
-              </div>
+
+            <div class="mb-4">
+              <div class="text-subtitle-2 font-weight-bold mb-2">Tên &amp; mô tả</div>
+              <div class="text-body-1 font-weight-bold mb-1">{{ modal.data.tenDV }}</div>
+              <div class="text-body-2 text-medium-emphasis">{{ modal.data.moTa }}</div>
             </div>
-            <div
-              v-if="dvInCombos(modal.data.maDV).length"
-              class="detail-section"
-            >
-              <div class="detail-title">
-                Có trong {{ dvInCombos(modal.data.maDV).length }} combo
-              </div>
-              <div
-                v-for="c in dvInCombos(modal.data.maDV)"
-                :key="c.maCB"
-                class="dv-list-item"
-              >
-                <span>{{ c.tenCombo }}</span
-                ><span class="price-cell">{{ fmt(c.gia) }}</span>
+
+            <div v-if="dvInCombos(modal.data.maDV).length">
+              <div class="text-subtitle-2 font-weight-bold mb-2">Có trong {{ dvInCombos(modal.data.maDV).length }} combo</div>
+              <div v-for="c in dvInCombos(modal.data.maDV)" :key="c.maCB" class="d-flex justify-space-between py-1 border-b">
+                <span>{{ c.tenCombo }}</span>
+                <span class="font-weight-medium">{{ fmt(c.gia) }}</span>
               </div>
             </div>
           </div>
 
           <!-- ── VIEW COMBO ── -->
-          <div v-else-if="modal.mode === 'viewCombo'" class="modal-body">
-            <div class="detail-section">
-              <div class="detail-title">Ảnh bìa</div>
-              <div
+          <div v-else-if="modal.mode === 'viewCombo'">
+            <div class="mb-4">
+              <div class="text-subtitle-2 font-weight-bold mb-2">Ảnh bìa</div>
+              <v-img
                 v-if="modal.data.hinhAnh"
-                class="combo-view-img-wrap"
+                :src="modal.data.hinhAnh"
+                height="150"
+                rounded="lg"
+                cover
+                style="cursor: pointer;"
                 @click="openLightbox([modal.data.hinhAnh], 0)"
-              >
-                <img
-                  :src="modal.data.hinhAnh"
-                  class="combo-view-img"
-                  :alt="modal.data.tenCombo"
-                />
-                <div class="gallery-overlay">🔍</div>
-              </div>
+              ></v-img>
               <div
                 v-else
-                class="combo-cover-placeholder"
-                style="height: 140px; border-radius: 10px"
-                :style="{ background: `linear-gradient(${modal.data.mauNen})` }"
+                class="d-flex align-center justify-center rounded-lg"
+                style="height: 140px; background: linear-gradient(135deg, #f8fafc, #f1f5f9);"
               >
-                <span style="font-size: 40px">{{ modal.data.icon }}</span>
+                <span style="font-size: 40px;">{{ modal.data.icon }}</span>
               </div>
             </div>
-            <div class="detail-section">
-              <div class="detail-title">Thông tin combo</div>
-              <div class="detail-grid">
-                <div class="detail-item">
-                  <div class="detail-label">Mã combo</div>
-                  <div class="detail-val">{{ modal.data.maCB }}</div>
-                </div>
-                <div class="detail-item">
-                  <div class="detail-label">Trạng thái</div>
-                  <div class="detail-val">
-                    <span
-                      class="status-pill"
-                      :class="modal.data.trangThai ? 'active' : 'inactive'"
-                      ><span class="status-dot"></span
-                      >{{ modal.data.trangThai ? "Hoạt động" : "Ngừng" }}</span
-                    >
+
+            <div class="mb-4">
+              <div class="text-subtitle-2 font-weight-bold mb-2">Thông tin combo</div>
+              <v-row dense>
+                <v-col cols="6">
+                  <div class="text-caption text-medium-emphasis">Mã combo</div>
+                  <div class="font-weight-medium">{{ modal.data.maCB }}</div>
+                </v-col>
+                <v-col cols="6">
+                  <div class="text-caption text-medium-emphasis">Trạng thái</div>
+                  <v-chip :color="modal.data.trangThai ? 'success' : 'grey'" size="small" variant="flat">
+                    {{ modal.data.trangThai ? "Hoạt động" : "Ngừng" }}
+                  </v-chip>
+                </v-col>
+                <v-col cols="6">
+                  <div class="text-caption text-medium-emphasis">Giá combo</div>
+                  <div class="font-weight-bold">{{ fmt(modal.data.gia) }}</div>
+                </v-col>
+                <v-col cols="6">
+                  <div class="text-caption text-medium-emphasis">Giá gốc (tổng DV)</div>
+                  <div class="text-medium-emphasis" style="text-decoration: line-through;">{{ fmt(modal.data.giaGoc) }}</div>
+                </v-col>
+                <v-col cols="6">
+                  <div class="text-caption text-medium-emphasis">Tiết kiệm</div>
+                  <div class="text-success font-weight-medium">
+                    {{ fmt(modal.data.giaGoc - modal.data.gia) }} (-{{ discountPct(modal.data) }}%)
                   </div>
-                </div>
-                <div class="detail-item">
-                  <div class="detail-label">Giá combo</div>
-                  <div class="detail-val price-cell">
-                    {{ fmt(modal.data.gia) }}
-                  </div>
-                </div>
-                <div class="detail-item">
-                  <div class="detail-label">Giá gốc (tổng DV)</div>
-                  <div
-                    class="detail-val"
-                    style="
-                      text-decoration: line-through;
-                      color: var(--dvc-text-muted);
-                    "
-                  >
-                    {{ fmt(modal.data.giaGoc) }}
-                  </div>
-                </div>
-                <div class="detail-item">
-                  <div class="detail-label">Tiết kiệm</div>
-                  <div class="detail-val" style="color: #059669">
-                    {{ fmt(modal.data.giaGoc - modal.data.gia) }} (-{{
-                      discountPct(modal.data)
-                    }}%)
-                  </div>
-                </div>
-                <div class="detail-item">
-                  <div class="detail-label">Số dịch vụ</div>
-                  <div class="detail-val">
-                    {{ modal.data.dichvus.length }} dịch vụ
-                  </div>
-                </div>
-              </div>
+                </v-col>
+                <v-col cols="6">
+                  <div class="text-caption text-medium-emphasis">Số dịch vụ</div>
+                  <div class="font-weight-medium">{{ modal.data.dichvus.length }} dịch vụ</div>
+                </v-col>
+              </v-row>
             </div>
-            <div class="detail-section">
-              <div class="detail-title">Mô tả</div>
-              <div
-                style="
-                  font-size: 13px;
-                  color: var(--dvc-text-secondary);
-                  line-height: 1.7;
-                "
-              >
-                {{ modal.data.moTa }}
-              </div>
+
+            <div class="mb-4">
+              <div class="text-subtitle-2 font-weight-bold mb-2">Mô tả</div>
+              <div class="text-body-2 text-medium-emphasis">{{ modal.data.moTa }}</div>
             </div>
-            <div class="detail-section">
-              <div class="detail-title">Dịch vụ bao gồm</div>
+
+            <div>
+              <div class="text-subtitle-2 font-weight-bold mb-2">Dịch vụ bao gồm</div>
               <div v-for="id in modal.data.dichvus" :key="id">
-                <div v-if="getDV(id)" class="dv-list-item">
+                <div v-if="getDV(id)" class="d-flex justify-space-between align-center py-2 border-b">
                   <div>
-                    <div style="font-size: 13px; font-weight: 500">
-                      {{ getDV(id).tenDV }}
-                    </div>
-                    <div style="font-size: 11px; color: var(--dvc-text-muted)">
-                      ⏱ {{ fmtMin(getDV(id).thoiGianLam) }}
-                    </div>
+                    <div class="text-body-2 font-weight-medium">{{ getDV(id).tenDV }}</div>
+                    <div class="text-caption text-medium-emphasis">{{ fmtMin(getDV(id).thoiGianLam) }}</div>
                   </div>
-                  <span style="color: var(--dvc-text-muted); font-size: 13px">{{
-                    fmt(getDV(id).gia)
-                  }}</span>
+                  <span class="text-medium-emphasis text-body-2">{{ fmt(getDV(id).gia) }}</span>
                 </div>
               </div>
             </div>
           </div>
 
           <!-- ── FORM DV ── -->
-          <div v-else-if="modal.mode === 'formDV'" class="modal-body">
-            <div class="form-row-2">
-              <div>
-                <label class="form-label"
-                  >Mã dịch vụ <span class="req">*</span></label
-                >
-                <input
-                  class="form-input"
-                  :class="{ 'input-error': errors.maDV }"
+          <v-form v-else-if="modal.mode === 'formDV'" @submit.prevent="saveItem">
+            <v-row dense>
+              <v-col cols="12" sm="6">
+                <v-text-field
                   v-model="form.maDV"
+                  label="Mã dịch vụ *"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
                   :readonly="!!editingId"
                   placeholder="VD: DV015"
-                  @input="errors.maDV = ''"
-                />
-                <p v-if="errors.maDV" class="field-error">{{ errors.maDV }}</p>
-              </div>
-              <div>
-                <label class="form-label"
-                  >Danh mục <span class="req">*</span></label
-                >
-                <select
-                  class="form-select"
-                  :class="{ 'input-error': errors.maDM }"
+                  :error-messages="errors.maDV"
+                  @update:model-value="errors.maDV = ''"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="6">
+                <v-select
                   v-model="form.maDM"
-                  @change="errors.maDM = ''"
-                >
-                  <option value="" disabled>-- Chọn danh mục --</option>
-                  <option
-                    v-for="dm in danhMucs"
-                    :key="dm.maDM"
-                    :value="dm.maDM"
-                  >
-                    {{ dm.tenDanhMuc }}
-                  </option>
-                </select>
-                <p v-if="errors.maDM" class="field-error">{{ errors.maDM }}</p>
-              </div>
-            </div>
-            <div class="dvc-form-row">
-              <label class="form-label"
-                >Tên dịch vụ <span class="req">*</span></label
-              >
-              <input
-                class="form-input"
-                :class="{ 'input-error': errors.tenDV }"
-                v-model="form.tenDV"
-                placeholder="Nhập tên dịch vụ..."
-                @input="errors.tenDV = ''"
-              />
-              <p v-if="errors.tenDV" class="field-error">{{ errors.tenDV }}</p>
-            </div>
-            <div class="form-row-2">
-              <div>
-                <label class="form-label"
-                  >Giá (VNĐ) <span class="req">*</span></label
-                >
-                <input
-                  class="form-input"
-                  :class="{ 'input-error': errors.gia }"
+                  :items="danhMucs.map(dm => ({ title: dm.tenDanhMuc, value: dm.maDM }))"
+                  label="Danh mục *"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                  :error-messages="errors.maDM"
+                  @update:model-value="errors.maDM = ''"
+                ></v-select>
+              </v-col>
+            </v-row>
+
+            <v-text-field
+              v-model="form.tenDV"
+              label="Tên dịch vụ *"
+              variant="outlined"
+              density="comfortable"
+              rounded="lg"
+              placeholder="Nhập tên dịch vụ..."
+              :error-messages="errors.tenDV"
+              @update:model-value="errors.tenDV = ''"
+            ></v-text-field>
+
+            <v-row dense>
+              <v-col cols="12" sm="6">
+                <v-text-field
                   v-model="form.gia"
+                  label="Giá (VNĐ) *"
                   type="number"
                   min="0"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
                   placeholder="0"
-                  @input="errors.gia = ''"
-                />
-                <p v-if="errors.gia" class="field-error">{{ errors.gia }}</p>
-              </div>
-              <div>
-                <label class="form-label"
-                  >Thời gian (phút) <span class="req">*</span></label
-                >
-                <input
-                  class="form-input"
-                  :class="{ 'input-error': errors.thoiGianLam }"
+                  :error-messages="errors.gia"
+                  @update:model-value="errors.gia = ''"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="6">
+                <v-text-field
                   v-model="form.thoiGianLam"
+                  label="Thời gian (phút) *"
                   type="number"
                   min="1"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
                   placeholder="30"
-                  @input="errors.thoiGianLam = ''"
-                />
-                <p v-if="errors.thoiGianLam" class="field-error">
-                  {{ errors.thoiGianLam }}
-                </p>
-              </div>
-            </div>
-            <div class="dvc-form-row">
-              <label class="form-label"
-                >% Hoa hồng nhân viên
-                <span class="label-hint">— để trống nếu không áp dụng</span></label
-              >
-              <input
-                class="form-input"
-                :class="{ 'input-error': errors.phanTramHoaHong }"
-                v-model="form.phanTramHoaHong"
-                type="number"
-                min="0"
-                max="100"
-                step="0.1"
-                style="max-width: 160px"
-                placeholder="0"
-                @input="errors.phanTramHoaHong = ''"
-              />
-              <p v-if="errors.phanTramHoaHong" class="field-error">
-                {{ errors.phanTramHoaHong }}
-              </p>
-            </div>
-            <div class="dvc-form-row">
-              <label class="form-label"
-                >Mô tả <span class="label-hint">— tối đa 500 ký tự</span></label
-              >
-              <textarea
-                class="form-textarea"
-                :class="{ 'input-error': errors.moTa }"
-                v-model="form.moTa"
-                placeholder="Mô tả ngắn về dịch vụ..."
-                @input="errors.moTa = ''"
-              ></textarea>
-              <div
-                class="char-count"
-                :class="{ 'char-warn': (form.moTa?.length ?? 0) > 450 }"
-              >
-                {{ form.moTa?.length ?? 0 }} / 500
-              </div>
-              <p v-if="errors.moTa" class="field-error">{{ errors.moTa }}</p>
-            </div>
+                  :error-messages="errors.thoiGianLam"
+                  @update:model-value="errors.thoiGianLam = ''"
+                ></v-text-field>
+              </v-col>
+            </v-row>
+
+            <v-text-field
+              v-model="form.phanTramHoaHong"
+              label="% Hoa hồng nhân viên"
+              hint="Để trống nếu không áp dụng"
+              persistent-hint
+              type="number"
+              min="0"
+              max="100"
+              step="0.1"
+              variant="outlined"
+              density="comfortable"
+              rounded="lg"
+              style="max-width: 220px;"
+              placeholder="0"
+              :error-messages="errors.phanTramHoaHong"
+              @update:model-value="errors.phanTramHoaHong = ''"
+              class="mb-2"
+            ></v-text-field>
+
+            <v-textarea
+              v-model="form.moTa"
+              label="Mô tả"
+              hint="Tối đa 500 ký tự"
+              persistent-hint
+              variant="outlined"
+              density="comfortable"
+              rounded="lg"
+              placeholder="Mô tả ngắn về dịch vụ..."
+              :counter="500"
+              :error-messages="errors.moTa"
+              @update:model-value="errors.moTa = ''"
+              class="mb-2"
+            ></v-textarea>
 
             <!-- MULTI IMAGE -->
-            <div class="dvc-form-row">
-              <label class="form-label">
+            <div class="mb-4">
+              <div class="text-subtitle-2 font-weight-medium mb-1">
                 Hình ảnh dịch vụ
-                <span class="label-hint"
-                  >— tối đa 10 ảnh, mỗi ảnh ≤ 5MB. Ảnh đầu tiên là ảnh
-                  chính.</span
-                >
-              </label>
+                <span class="text-caption text-medium-emphasis">— tối đa 10 ảnh, mỗi ảnh ≤ 5MB. Ảnh đầu tiên là ảnh chính.</span>
+              </div>
               <div
                 v-if="!form.hinhanhs.length"
-                class="img-upload-zone"
+                class="d-flex flex-column align-center justify-center pa-6 rounded-lg"
+                style="border: 2px dashed #ccc; cursor: pointer;"
                 @click="dvImgInput?.click()"
                 @dragover.prevent
                 @drop.prevent="onDropDV"
               >
-                <input
-                  ref="dvImgInput"
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  style="display: none"
-                  @change="onDVImgChange"
-                />
-                <svg
-                  width="28"
-                  height="28"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="var(--dvc-text-muted)"
-                  stroke-width="1.5"
-                >
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <circle cx="8.5" cy="8.5" r="1.5" />
-                  <path d="M21 15l-5-5L5 21" />
-                </svg>
-                <div class="upload-hint">
-                  Kéo thả hoặc <span class="upload-link">chọn ảnh</span>
-                </div>
-                <div style="font-size: 11px; color: var(--dvc-border-strong)">
-                  PNG, JPG, WEBP
-                </div>
+                <input ref="dvImgInput" type="file" accept="image/*" multiple style="display: none" @change="onDVImgChange" />
+                <Upload class="w-7 h-7 text-medium-emphasis mb-2" />
+                <div class="text-body-2">Kéo thả hoặc <span class="text-primary font-weight-medium">chọn ảnh</span></div>
+                <div class="text-caption text-medium-emphasis">PNG, JPG, WEBP</div>
               </div>
               <div v-else>
-                <input
-                  ref="dvImgInput"
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  style="display: none"
-                  @change="onDVImgChange"
-                />
-                <div class="img-preview-grid">
-                  <div
-                    v-for="(src, i) in form.hinhanhs"
-                    :key="i"
-                    class="preview-item"
-                  >
-                    <img
-                      :src="src"
-                      class="preview-img"
-                      @click="openLightbox(form.hinhanhs, i)"
-                    />
-                    <button class="preview-del" @click.stop="removeDVImg(i)">
-                      ✕
-                    </button>
-                    <span v-if="i === 0" class="preview-main-badge"
-                      >Ảnh chính</span
-                    >
-                    <button
-                      v-if="i > 0"
-                      class="preview-move-btn"
-                      @click.stop="moveDVImg(i, -1)"
-                      title="Đặt làm trước"
-                    >
-                      ‹
-                    </button>
+                <input ref="dvImgInput" type="file" accept="image/*" multiple style="display: none" @change="onDVImgChange" />
+                <div class="d-flex flex-wrap gap-2">
+                  <div v-for="(src, i) in form.hinhanhs" :key="i" class="position-relative">
+                    <v-img :src="src" width="80" height="80" rounded="lg" cover style="cursor: pointer;" @click="openLightbox(form.hinhanhs, i)"></v-img>
+                    <v-btn icon size="x-small" color="error" class="position-absolute" style="top: -6px; right: -6px;" @click.stop="removeDVImg(i)">
+                      <X class="w-3 h-3" />
+                    </v-btn>
+                    <v-chip v-if="i === 0" size="x-small" color="primary" class="position-absolute" style="bottom: 2px; left: 2px; font-size: 9px;">Ảnh chính</v-chip>
+                    <v-btn v-if="i > 0" icon size="x-small" variant="flat" class="position-absolute" style="top: 50%; left: -6px; transform: translateY(-50%);" title="Đặt làm trước" @click.stop="moveDVImg(i, -1)">
+                      <ChevronLeft class="w-3 h-3" />
+                    </v-btn>
                   </div>
                   <div
                     v-if="form.hinhanhs.length < 10"
-                    class="preview-add"
+                    class="d-flex flex-column align-center justify-center rounded-lg"
+                    style="width: 80px; height: 80px; border: 2px dashed #ccc; cursor: pointer;"
                     @click="dvImgInput?.click()"
                   >
-                    <svg
-                      width="20"
-                      height="20"
-                      viewBox="0 0 16 16"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                    >
-                      <path d="M8 2v12M2 8h12" />
-                    </svg>
-                    <span style="font-size: 10px; margin-top: 3px">Thêm</span>
+                    <Plus class="w-5 h-5 text-medium-emphasis" />
+                    <span class="text-caption text-medium-emphasis">Thêm</span>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div class="dvc-form-row">
-              <label class="form-label">Trạng thái</label>
-              <select class="form-select" v-model.number="form.trangThai">
-                <option :value="1">✅ Hoạt động</option>
-                <option :value="0">❌ Ngừng hoạt động</option>
-              </select>
-            </div>
-          </div>
+            <v-select
+              v-model.number="form.trangThai"
+              :items="[{ title: 'Hoạt động', value: 1 }, { title: 'Ngừng hoạt động', value: 0 }]"
+              label="Trạng thái"
+              variant="outlined"
+              density="comfortable"
+              rounded="lg"
+            ></v-select>
+          </v-form>
 
           <!-- ── FORM COMBO ── -->
-          <div v-else-if="modal.mode === 'formCombo'" class="modal-body">
-            <div class="form-row-2">
-              <div>
-                <label class="form-label"
-                  >Mã combo <span class="req">*</span></label
-                >
-                <input
-                  class="form-input"
-                  :class="{ 'input-error': errors.maCB }"
+          <v-form v-else-if="modal.mode === 'formCombo'" @submit.prevent="saveItem">
+            <v-row dense>
+              <v-col cols="12" sm="6">
+                <v-text-field
                   v-model="form.maCB"
+                  label="Mã combo *"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
                   :readonly="!!editingId"
                   placeholder="VD: CB008"
-                  @input="errors.maCB = ''"
-                />
-                <p v-if="errors.maCB" class="field-error">{{ errors.maCB }}</p>
-              </div>
-              <div>
-                <label class="form-label"
-                  >Tên combo <span class="req">*</span></label
-                >
-                <input
-                  class="form-input"
-                  :class="{ 'input-error': errors.tenCombo }"
+                  :error-messages="errors.maCB"
+                  @update:model-value="errors.maCB = ''"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="6">
+                <v-text-field
                   v-model="form.tenCombo"
+                  label="Tên combo *"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
                   placeholder="Nhập tên combo..."
-                  @input="errors.tenCombo = ''"
-                />
-                <p v-if="errors.tenCombo" class="field-error">
-                  {{ errors.tenCombo }}
-                </p>
-              </div>
-            </div>
-            <div class="form-row-2">
-              <div>
-                <label class="form-label"
-                  >Giá combo (VNĐ) <span class="req">*</span></label
-                >
-                <input
-                  class="form-input"
-                  :class="{ 'input-error': errors.giaCombo }"
+                  :error-messages="errors.tenCombo"
+                  @update:model-value="errors.tenCombo = ''"
+                ></v-text-field>
+              </v-col>
+            </v-row>
+
+            <v-row dense>
+              <v-col cols="12" sm="6">
+                <v-text-field
                   v-model="form.gia"
+                  label="Giá combo (VNĐ) *"
                   type="number"
                   min="0"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
                   placeholder="0"
-                  @input="errors.giaCombo = ''"
-                />
-                <p v-if="errors.giaCombo" class="field-error">
-                  {{ errors.giaCombo }}
-                </p>
-              </div>
-              <div>
-                <label class="form-label"
-                  >Giá gốc
-                  <span class="label-hint"
-                    >— tự tính từ tổng dịch vụ</span
-                  ></label
-                >
-                <div
-                  class="form-input"
-                  style="
-                    background: var(--dvc-bg-subtle2);
-                    color: var(--dvc-text-secondary);
-                    cursor: default;
-                  "
-                >
-                  {{
-                    form.dichvus.length
-                      ? fmt(
-                          form.dichvus.reduce(
-                            (s, id) => s + (getDV(id)?.gia || 0),
-                            0,
-                          ),
-                        )
-                      : "—"
-                  }}
-                </div>
-              </div>
-            </div>
-            <div class="dvc-form-row">
-              <label class="form-label"
-                >Mô tả <span class="label-hint">— tối đa 500 ký tự</span></label
-              >
-              <textarea
-                class="form-textarea"
-                :class="{ 'input-error': errors.moTa }"
-                v-model="form.moTa"
-                placeholder="Mô tả combo..."
-                @input="errors.moTa = ''"
-              ></textarea>
-              <div
-                class="char-count"
-                :class="{ 'char-warn': (form.moTa?.length ?? 0) > 450 }"
-              >
-                {{ form.moTa?.length ?? 0 }} / 500
-              </div>
-              <p v-if="errors.moTa" class="field-error">{{ errors.moTa }}</p>
-            </div>
+                  :error-messages="errors.giaCombo"
+                  @update:model-value="errors.giaCombo = ''"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="6">
+                <v-text-field
+                  :model-value="form.dichvus.length ? fmt(form.dichvus.reduce((s, id) => s + (getDV(id)?.gia || 0), 0)) : '—'"
+                  label="Giá gốc (tự tính từ tổng dịch vụ)"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                  readonly
+                  bg-color="grey-lighten-4"
+                ></v-text-field>
+              </v-col>
+            </v-row>
+
+            <v-textarea
+              v-model="form.moTa"
+              label="Mô tả"
+              hint="Tối đa 500 ký tự"
+              persistent-hint
+              variant="outlined"
+              density="comfortable"
+              rounded="lg"
+              placeholder="Mô tả combo..."
+              :counter="500"
+              :error-messages="errors.moTa"
+              @update:model-value="errors.moTa = ''"
+              class="mb-2"
+            ></v-textarea>
 
             <!-- SINGLE IMAGE -->
-            <div class="dvc-form-row">
-              <label class="form-label">
-                Ảnh bìa combo <span class="req">*</span>
-                <span class="label-hint">— 1 ảnh duy nhất, ≤ 5MB</span>
-              </label>
-              <input
-                ref="cbImgInput"
-                type="file"
-                accept="image/*"
-                style="display: none"
-                @change="onCBImgChange"
-              />
+            <div class="mb-4">
+              <div class="text-subtitle-2 font-weight-medium mb-1">
+                Ảnh bìa combo *
+                <span class="text-caption text-medium-emphasis">— 1 ảnh duy nhất, ≤ 5MB</span>
+              </div>
+              <input ref="cbImgInput" type="file" accept="image/*" style="display: none" @change="onCBImgChange" />
               <div
                 v-if="!form.hinhAnh"
-                class="img-upload-zone"
-                :class="{ 'upload-zone-error': errors.hinhAnh }"
+                class="d-flex flex-column align-center justify-center pa-6 rounded-lg"
+                :style="{ border: errors.hinhAnh ? '2px dashed #f44336' : '2px dashed #ccc', cursor: 'pointer' }"
                 @click="cbImgInput?.click()"
                 @dragover.prevent
                 @drop.prevent="onDropCB"
               >
-                <svg
-                  width="28"
-                  height="28"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="var(--dvc-text-muted)"
-                  stroke-width="1.5"
-                >
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <circle cx="8.5" cy="8.5" r="1.5" />
-                  <path d="M21 15l-5-5L5 21" />
-                </svg>
-                <div class="upload-hint">
-                  Kéo thả hoặc <span class="upload-link">chọn ảnh bìa</span>
-                </div>
-                <div style="font-size: 11px; color: var(--dvc-border-strong)">
-                  PNG, JPG, WEBP
-                </div>
+                <Upload class="w-7 h-7 text-medium-emphasis mb-2" />
+                <div class="text-body-2">Kéo thả hoặc <span class="text-primary font-weight-medium">chọn ảnh bìa</span></div>
+                <div class="text-caption text-medium-emphasis">PNG, JPG, WEBP</div>
               </div>
-              <p v-if="errors.hinhAnh" class="field-error">
-                {{ errors.hinhAnh }}
-              </p>
-              <div v-else class="cb-img-preview">
-                <img
-                  :src="form.hinhAnh"
-                  class="cb-preview-img"
-                  @click="openLightbox([form.hinhAnh], 0)"
-                />
-                <div class="cb-preview-actions">
-                  <button
-                    class="btn btn-ghost btn-sm"
-                    @click="cbImgInput?.click()"
-                  >
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 16 16"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                    >
-                      <path d="M11 2l3 3L5 14H2v-3L11 2z" />
-                    </svg>
-                    Đổi ảnh
-                  </button>
-                </div>
+              <div v-if="errors.hinhAnh" class="text-caption text-error mt-1">{{ errors.hinhAnh }}</div>
+              <div v-else class="mt-2">
+                <v-img :src="form.hinhAnh" width="140" height="100" rounded="lg" cover style="cursor: pointer;" @click="openLightbox([form.hinhAnh], 0)"></v-img>
+                <v-btn size="small" variant="outlined" class="text-none mt-2" @click="cbImgInput?.click()">
+                  <template v-slot:prepend><Pencil class="w-3.5 h-3.5" /></template>
+                  Đổi ảnh
+                </v-btn>
               </div>
             </div>
 
             <!-- CHỌN DỊCH VỤ -->
-            <div class="dvc-form-row">
-              <label class="form-label">
-                Dịch vụ trong combo <span class="req">*</span>
-                <span class="label-hint">— click để chọn / bỏ chọn</span>
-              </label>
-              <div
-                class="dv-picker"
-                :class="{ 'picker-error': errors.dichvus }"
+            <div class="mb-4">
+              <div class="text-subtitle-2 font-weight-medium mb-1">
+                Dịch vụ trong combo *
+                <span class="text-caption text-medium-emphasis">— click để chọn / bỏ chọn</span>
+              </div>
+              <v-sheet
+                rounded="lg"
+                :style="{ border: errors.dichvus ? '1px solid #f44336' : '1px solid #ddd' }"
+                class="pa-3 d-flex flex-wrap gap-2"
               >
-                <div
-                  v-if="!dichvus.filter((x) => x.trangThai).length"
-                  style="
-                    font-size: 12px;
-                    color: var(--dvc-text-muted);
-                    padding: 4px;
-                  "
-                >
+                <div v-if="!dichvus.filter((x) => x.trangThai).length" class="text-caption text-medium-emphasis">
                   Không có dịch vụ đang hoạt động.
                 </div>
-                <span
+                <v-chip
                   v-for="d in dichvus.filter((x) => x.trangThai)"
                   :key="d.maDV"
-                  class="dv-chip"
-                  :class="form.dichvus.includes(d.maDV) ? 'sel' : 'unsel'"
+                  :color="form.dichvus.includes(d.maDV) ? 'primary' : undefined"
+                  :variant="form.dichvus.includes(d.maDV) ? 'flat' : 'outlined'"
+                  class="cursor-pointer"
                   @click="toggleDV(d.maDV)"
                 >
-                  {{ d.tenDV }} <span class="chip-price">{{ fmt(d.gia) }}</span>
-                </span>
-              </div>
-              <p v-if="errors.dichvus" class="field-error">
-                {{ errors.dichvus }}
-              </p>
+                  {{ d.tenDV }} <span class="ml-1 text-caption">{{ fmt(d.gia) }}</span>
+                </v-chip>
+              </v-sheet>
+              <div v-if="errors.dichvus" class="text-caption text-error mt-1">{{ errors.dichvus }}</div>
 
-              <!-- Hiển thị tổng giá gốc tự tính -->
-              <div v-if="form.dichvus.length" class="combo-price-preview">
+              <div v-if="form.dichvus.length" class="d-flex align-center gap-2 mt-2 text-body-2">
                 <span>Tổng giá dịch vụ đã chọn:</span>
-                <strong>{{
-                  fmt(
-                    form.dichvus.reduce(
-                      (s, id) => s + (getDV(id)?.gia || 0),
-                      0,
-                    ),
-                  )
-                }}</strong>
+                <strong>{{ fmt(form.dichvus.reduce((s, id) => s + (getDV(id)?.gia || 0), 0)) }}</strong>
                 <span
-                  v-if="
-                    form.gia &&
-                    form.dichvus.reduce(
-                      (s, id) => s + (getDV(id)?.gia || 0),
-                      0,
-                    ) > Number(form.gia)
-                  "
-                  style="color: #059669"
+                  v-if="form.gia && form.dichvus.reduce((s, id) => s + (getDV(id)?.gia || 0), 0) > Number(form.gia)"
+                  class="text-success"
                 >
-                  → Tiết kiệm
-                  {{
-                    fmt(
-                      form.dichvus.reduce(
-                        (s, id) => s + (getDV(id)?.gia || 0),
-                        0,
-                      ) - Number(form.gia),
-                    )
-                  }}
+                  → Tiết kiệm {{ fmt(form.dichvus.reduce((s, id) => s + (getDV(id)?.gia || 0), 0) - Number(form.gia)) }}
                 </span>
               </div>
             </div>
 
-            <div class="dvc-form-row">
-              <label class="form-label">Trạng thái</label>
-              <select class="form-select" v-model.number="form.trangThai">
-                <option :value="1">✅ Hoạt động</option>
-                <option :value="0">❌ Ngừng hoạt động</option>
-              </select>
+            <v-select
+              v-model.number="form.trangThai"
+              :items="[{ title: 'Hoạt động', value: 1 }, { title: 'Ngừng hoạt động', value: 0 }]"
+              label="Trạng thái"
+              variant="outlined"
+              density="comfortable"
+              rounded="lg"
+            ></v-select>
+          </v-form>
+        </v-card-text>
+
+        <v-card-actions class="pa-4 px-6 d-flex justify-end border-t">
+          <template v-if="modal.mode === 'viewDV' || modal.mode === 'viewCombo'">
+            <v-btn variant="outlined" rounded="lg" class="text-none font-weight-bold mr-2" @click="closeModal">Đóng</v-btn>
+            <v-btn
+              color="primary"
+              variant="flat"
+              rounded="lg"
+              class="text-none font-weight-bold"
+              @click="modal.mode === 'viewDV' ? editDV(modal.data) : editCombo(modal.data)"
+            >Chỉnh sửa</v-btn>
+          </template>
+          <template v-else>
+            <v-btn variant="outlined" rounded="lg" class="text-none font-weight-bold mr-2" :disabled="saving" @click="closeModal">Hủy</v-btn>
+            <v-btn color="primary" variant="flat" rounded="lg" class="text-none font-weight-bold" :loading="saving" @click="saveItem">
+              Lưu lại
+            </v-btn>
+          </template>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- ── MODAL: Thêm/Sửa tiêu đề dịch vụ ─────────────────────── -->
+    <v-dialog v-model="tdModal.open" max-width="560" persistent>
+      <v-card rounded="xl">
+        <v-card-title class="pa-4 px-6 d-flex align-center justify-space-between border-b">
+          <span class="text-h6 font-weight-bold">{{ tdModal.isEdit ? "Sửa tiêu đề dịch vụ" : "Thêm tiêu đề dịch vụ" }}</span>
+          <v-btn icon variant="text" size="small" :disabled="tdSaving" @click="closeTdModal">
+            <X class="w-5 h-5" />
+          </v-btn>
+        </v-card-title>
+
+        <v-card-text class="pa-6">
+          <v-form @submit.prevent="submitTieuDeModal">
+            <v-text-field
+              v-model="tdModal.form.tenTieuDe"
+              label="Tên tiêu đề *"
+              variant="outlined"
+              density="comfortable"
+              rounded="lg"
+              placeholder="Nhập tên tiêu đề..."
+              :error-messages="getTdError('_tdform', 'tenTieuDe')"
+              @update:model-value="tdErrors['_tdform'] && (tdErrors['_tdform'].tenTieuDe = '')"
+              class="mb-2"
+              autofocus
+            ></v-text-field>
+
+            <v-textarea
+              v-model="tdModal.form.moTaTieuDe"
+              label="Mô tả (tuỳ chọn)"
+              hint="Tối đa 500 ký tự"
+              persistent-hint
+              variant="outlined"
+              density="comfortable"
+              rounded="lg"
+              rows="2"
+              placeholder="Mô tả tiêu đề..."
+              :error-messages="getTdError('_tdform', 'moTaTieuDe')"
+              @update:model-value="tdErrors['_tdform'] && (tdErrors['_tdform'].moTaTieuDe = '')"
+              class="mb-2"
+            ></v-textarea>
+
+            <v-row dense>
+              <v-col cols="6">
+                <v-text-field
+                  v-model="tdModal.form.soThuTu"
+                  label="Số thứ tự"
+                  type="number"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                  placeholder="0"
+                  :error-messages="getTdError('_tdform', 'soThuTu')"
+                  @update:model-value="tdErrors['_tdform'] && (tdErrors['_tdform'].soThuTu = '')"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="6">
+                <v-select
+                  v-model.number="tdModal.form.trangThai"
+                  :items="[{ title: 'Hoạt động', value: 1 }, { title: 'Ngừng hoạt động', value: 0 }]"
+                  label="Trạng thái"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                ></v-select>
+              </v-col>
+            </v-row>
+          </v-form>
+        </v-card-text>
+
+        <v-card-actions class="pa-4 px-6 d-flex justify-end border-t">
+          <v-btn variant="outlined" rounded="lg" class="text-none font-weight-bold mr-2" :disabled="tdSaving" @click="closeTdModal">Hủy</v-btn>
+          <v-btn color="primary" variant="flat" rounded="lg" class="text-none font-weight-bold" :loading="tdSaving" @click="submitTieuDeModal">
+            {{ tdModal.isEdit ? "Cập nhật" : "Lưu lại" }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- ── MODAL: Thêm/Sửa chi tiết tiêu đề dịch vụ ────────────── -->
+    <v-dialog v-model="ctModal.open" max-width="560" persistent>
+      <v-card rounded="xl">
+        <v-card-title class="pa-4 px-6 d-flex align-center justify-space-between border-b">
+          <span class="text-h6 font-weight-bold">{{ ctModal.isEdit ? "Sửa chi tiết" : "Thêm chi tiết" }}</span>
+          <v-btn icon variant="text" size="small" :disabled="tdSaving" @click="closeCtModal">
+            <X class="w-5 h-5" />
+          </v-btn>
+        </v-card-title>
+
+        <v-card-text class="pa-6">
+          <v-form @submit.prevent="submitChiTietModal">
+            <v-text-field
+              v-model="ctModal.form.ctTenTieuDe"
+              label="Tên chi tiết *"
+              variant="outlined"
+              density="comfortable"
+              rounded="lg"
+              placeholder="Nhập tên chi tiết..."
+              :error-messages="getCtError('_ctform', 'ctTenTieuDe')"
+              @update:model-value="ctErrors['_ctform'] && (ctErrors['_ctform'].ctTenTieuDe = '')"
+              class="mb-2"
+              autofocus
+            ></v-text-field>
+
+            <v-textarea
+              v-model="ctModal.form.ctMoTaTieuDe"
+              label="Mô tả (tuỳ chọn)"
+              hint="Tối đa 500 ký tự"
+              persistent-hint
+              variant="outlined"
+              density="comfortable"
+              rounded="lg"
+              rows="2"
+              placeholder="Mô tả chi tiết..."
+              :error-messages="getCtError('_ctform', 'ctMoTaTieuDe')"
+              @update:model-value="ctErrors['_ctform'] && (ctErrors['_ctform'].ctMoTaTieuDe = '')"
+              class="mb-2"
+            ></v-textarea>
+
+            <v-text-field
+              v-model.number="ctModal.form.ctSoThuTu"
+              label="Số thứ tự"
+              type="number"
+              variant="outlined"
+              density="comfortable"
+              rounded="lg"
+              placeholder="0"
+              :error-messages="getCtError('_ctform', 'ctSoThuTu')"
+              @update:model-value="ctErrors['_ctform'] && (ctErrors['_ctform'].ctSoThuTu = '')"
+              class="mb-4"
+            ></v-text-field>
+
+            <!-- Ảnh chi tiết -->
+            <div>
+              <div class="text-subtitle-2 font-weight-medium mb-1">
+                Ảnh chi tiết {{ !ctModal.isEdit ? "*" : "" }}
+                <span class="text-caption text-medium-emphasis">— ≤ 5MB</span>
+              </div>
+              <input ref="ctImgInput" type="file" accept="image/*" style="display: none" @change="onCtModalFileChange" />
+              <div
+                v-if="!ctModal.form.ctPreview"
+                class="d-flex flex-column align-center justify-center pa-6 rounded-lg"
+                :style="{ border: getCtError('_ctform', 'ctFile') ? '2px dashed #f44336' : '2px dashed #ccc', cursor: 'pointer' }"
+                @click="ctImgInput?.click()"
+              >
+                <Upload class="w-7 h-7 text-medium-emphasis mb-2" />
+                <div class="text-body-2">Nhấn để <span class="text-primary font-weight-medium">chọn ảnh</span></div>
+                <div class="text-caption text-medium-emphasis">PNG, JPG, WEBP</div>
+              </div>
+              <div v-if="getCtError('_ctform', 'ctFile')" class="text-caption text-error mt-1">{{ getCtError('_ctform', 'ctFile') }}</div>
+              <div v-else class="mt-2">
+                <v-img :src="ctModal.form.ctPreview" width="120" height="90" rounded="lg" cover></v-img>
+                <v-btn size="small" variant="outlined" class="text-none mt-2" @click="ctImgInput?.click()">
+                  <template v-slot:prepend><Pencil class="w-3.5 h-3.5" /></template>
+                  Đổi ảnh
+                </v-btn>
+              </div>
             </div>
-          </div>
+          </v-form>
+        </v-card-text>
 
-          <div class="modal-foot">
-            <template
-              v-if="modal.mode === 'viewDV' || modal.mode === 'viewCombo'"
-            >
-              <button class="btn btn-ghost btn-sm" @click="closeModal">
-                Đóng
-              </button>
-              <button
-                class="btn btn-primary btn-sm"
-                @click="
-                  modal.mode === 'viewDV'
-                    ? editDV(modal.data)
-                    : editCombo(modal.data)
-                "
-              >
-                Chỉnh sửa
-              </button>
-            </template>
-            <template v-else>
-              <button
-                class="btn btn-ghost btn-sm"
-                :disabled="saving"
-                @click="closeModal"
-              >
-                Hủy
-              </button>
-              <button
-                class="btn btn-primary btn-sm"
-                :disabled="saving"
-                @click="saveItem"
-              >
-                <span v-if="saving" class="spinner"></span>
-                <span v-else></span>
-                {{ saving ? "Đang lưu..." : "Lưu lại" }}
-              </button>
-            </template>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+        <v-card-actions class="pa-4 px-6 d-flex justify-end border-t">
+          <v-btn variant="outlined" rounded="lg" class="text-none font-weight-bold mr-2" :disabled="tdSaving" @click="closeCtModal">Hủy</v-btn>
+          <v-btn color="primary" variant="flat" rounded="lg" class="text-none font-weight-bold" :loading="tdSaving" @click="submitChiTietModal">
+            {{ ctModal.isEdit ? "Cập nhật" : "Lưu lại" }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
-    <!-- ── TOAST ───────────────────────────────────────────────── -->
-    <Teleport to="body">
-      <div
-        class="toast"
-        :class="[
-          toast.show ? 'show' : '',
-          toast.type,
-          isDarkMode ? 'dark-mode' : '',
-        ]"
-      >
-        <span>{{ toast.icon }}</span
-        ><span>{{ toast.msg }}</span>
+    <!-- ── SNACKBAR ────────────────────────────────────────────── -->
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" location="top right" timeout="3000" rounded="lg">
+      <div class="font-weight-bold d-flex align-center">
+        <Check v-if="snackbar.color === 'success'" class="w-5 h-5 mr-2" />
+        <X v-else class="w-5 h-5 mr-2" />
+        {{ snackbar.text }}
       </div>
-    </Teleport>
-  </div>
+    </v-snackbar>
+  </v-container>
 </template>
 
 <style scoped>
-/* ── THEME VARIABLES (dark mode) ─────────────────────────────── */
-.dvc-root.dark-mode {
-  --dvc-card-bg: #23232f;
-  --dvc-bg-subtle: #2a2a38;
-  --dvc-bg-subtle2: #1e1e29;
-  --dvc-border: #383846;
-  --dvc-border-strong: #464656;
-  --dvc-text: #e8e8ee;
-  --dvc-text-strong: #cbcbd6;
-  --dvc-text-secondary: #a3a3b2;
-  --dvc-text-muted: #7c7c8c;
-  --dvc-accent: #4b4b6b;
-  --dvc-accent-hover: #5c5c80;
-  --dvc-shadow: rgba(0, 0, 0, 0.35);
-  --dvc-overlay: rgba(0, 0, 0, 0.6);
-}
-/* ── RESET ─────────────────────────────────────────────────────── */
-.dvc-root {
-  /* ── THEME VARIABLES (light default) ─────────────────────────── */
-  --dvc-card-bg: #fff;
-  --dvc-bg-subtle: #f3f4f6;
-  --dvc-bg-subtle2: #f9fafb;
-  --dvc-border: #e5e7eb;
-  --dvc-border-strong: #d1d5db;
-  --dvc-text: #1a1a2e;
-  --dvc-text-strong: #374151;
-  --dvc-text-secondary: #6b7280;
-  --dvc-text-muted: #9ca3af;
-  --dvc-accent: #1a1a2e;
-  --dvc-accent-hover: #2d2d4e;
-  --dvc-shadow: rgba(0, 0, 0, 0.08);
-  --dvc-overlay: rgba(0, 0, 0, 0.45);
-  transition:
-    background-color 0.2s ease,
-    color 0.2s ease,
-    border-color 0.2s ease;
-  font-family:
-    "Inter",
-    -apple-system,
-    "Segoe UI",
-    sans-serif;
-  color: var(--dvc-text);
-  background: transparent;
-}
-
-/* ── STATS ─────────────────────────────────────────────────────── */
-.stats-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 22px;
-}
-.stat-card {
-  background: var(--dvc-card-bg);
-  border: 1px solid var(--dvc-border);
-  border-radius: 12px;
-  padding: 16px;
-  position: relative;
-  overflow: hidden;
-}
-.stat-card::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  border-radius: 12px 12px 0 0;
-}
-.stat-gold::before {
-  background: #d97706;
-}
-.stat-green::before {
-  background: #059669;
-}
-.stat-blue::before {
-  background: #2563eb;
-}
-.stat-purple::before {
-  background: #7c3aed;
-}
-.stat-icon {
-  font-size: 20px;
-  margin-bottom: 8px;
-}
-.stat-label {
-  font-size: 11px;
-  color: var(--dvc-text-muted);
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 4px;
-}
-.stat-value {
-  font-size: 22px;
-  font-weight: 700;
-}
-.stat-gold .stat-value {
-  color: #d97706;
-}
-.stat-green .stat-value {
-  color: #059669;
-}
-.stat-blue .stat-value {
-  color: #2563eb;
-}
-.stat-purple .stat-value {
-  color: #7c3aed;
-}
-.stat-hint {
-  font-size: 11px;
-  color: var(--dvc-text-muted);
-  margin-top: 4px;
-}
-
-/* ── HEADER ─────────────────────────────────────────────────────── */
-.header-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-.tabs {
-  display: flex;
-  gap: 4px;
-  background: var(--dvc-bg-subtle);
-  padding: 4px;
-  border-radius: 10px;
-}
-.tab {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 16px;
-  border-radius: 7px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  color: var(--dvc-text-secondary);
-  border: none;
-  background: transparent;
-  transition: all 0.15s;
-}
-.tab.active {
-  background: var(--dvc-card-bg);
-  color: var(--dvc-text);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-}
-.tab-count {
-  background: var(--dvc-border);
-  color: var(--dvc-text-secondary);
-  font-size: 11px;
-  font-weight: 600;
-  padding: 1px 6px;
-  border-radius: 10px;
-}
-.tab.active .tab-count {
-  background: var(--dvc-bg-subtle);
-  color: var(--dvc-text-strong);
-}
-.header-actions {
-  display: flex;
-  gap: 8px;
-}
-
-/* ── BUTTONS ────────────────────────────────────────────────────── */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 15px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-  font-family: inherit;
-  transition: all 0.15s;
-  white-space: nowrap;
-}
-.btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-.btn-primary {
-  background: var(--dvc-accent);
-  color: #fff;
-}
-.btn-primary:hover:not(:disabled) {
-  background: var(--dvc-accent-hover);
-  transform: translateY(-1px);
-}
-.btn-ghost {
-  background: transparent;
-  color: var(--dvc-text-secondary);
-  border: 1px solid var(--dvc-border);
-}
-.btn-ghost:hover:not(:disabled) {
-  color: var(--dvc-text);
-  border-color: var(--dvc-border-strong);
-  background: var(--dvc-bg-subtle2);
-}
-.btn-sm {
-  padding: 6px 12px;
-  font-size: 12px;
-}
-.btn-del-img {
-  color: #dc2626;
-  border: 1px solid #fecaca;
-  background: transparent;
-}
-.btn-del-img:hover {
-  background: #fef2f2;
-}
-
-/* ── SPINNER ────────────────────────────────────────────────────── */
-.spinner {
-  width: 13px;
-  height: 13px;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  border-top-color: var(--dvc-card-bg);
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-  flex-shrink: 0;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* ── TOOLBAR ────────────────────────────────────────────────────── */
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
-}
-.search-box {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--dvc-card-bg);
-  border: 1px solid var(--dvc-border);
-  border-radius: 8px;
-  padding: 7px 12px;
-  min-width: 200px;
-  flex: 1;
-  max-width: 300px;
-  transition: border 0.15s;
-}
-.search-box:focus-within {
-  border-color: var(--dvc-text-secondary);
-}
-.search-box input {
-  background: transparent;
-  border: none;
-  outline: none;
-  color: var(--dvc-text);
-  font-size: 13px;
-  font-family: inherit;
-  width: 100%;
-}
-.search-box input::placeholder {
-  color: var(--dvc-text-muted);
-}
-.filter-select {
-  background: var(--dvc-card-bg);
-  border: 1px solid var(--dvc-border);
-  border-radius: 8px;
-  padding: 7px 10px;
-  color: var(--dvc-text-strong);
-  font-size: 13px;
-  font-family: inherit;
-  cursor: pointer;
-  outline: none;
-}
-.result-count {
-  font-size: 12px;
-  color: var(--dvc-text-muted);
-  margin-left: auto;
-}
-
-/* ── TABLE ──────────────────────────────────────────────────────── */
-.table-wrap {
-  background: var(--dvc-card-bg);
-  border: 1px solid var(--dvc-border);
-  border-radius: 12px;
-  overflow: hidden;
-}
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-thead th {
-  padding: 11px 14px;
-  text-align: left;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--dvc-text-muted);
-  letter-spacing: 0.5px;
-  border-bottom: 1px solid var(--dvc-bg-subtle);
-  background: var(--dvc-bg-subtle2);
-  white-space: nowrap;
-  text-transform: uppercase;
-}
-.sortable {
-  cursor: pointer;
-  user-select: none;
-}
-.sortable:hover {
-  color: var(--dvc-text-strong);
-}
-.sort-icon {
-  font-size: 10px;
-}
-tbody tr {
-  border-bottom: 1px solid var(--dvc-bg-subtle);
-  transition: background 0.12s;
-}
-tbody tr:last-child {
-  border-bottom: none;
-}
-tbody tr:hover {
-  background: var(--dvc-bg-subtle2);
-}
-tbody td {
-  padding: 10px 14px;
-  font-size: 13px;
-  vertical-align: middle;
-}
-.code-text {
-  font-size: 12px;
-  color: var(--dvc-text-secondary);
-  font-family: "Courier New", monospace;
-  background: var(--dvc-bg-subtle);
-  padding: 2px 7px;
-  border-radius: 4px;
-}
-.dv-name {
-  font-weight: 500;
-  color: var(--dvc-text);
-}
-.dv-sub {
-  font-size: 11px;
-  color: var(--dvc-text-muted);
-  margin-top: 2px;
-  max-width: 220px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.price-cell {
-  font-weight: 600;
-  color: #d97706;
-}
-.time-cell {
-  font-size: 12px;
-  color: var(--dvc-text-muted);
-  white-space: nowrap;
-}
-
-/* ── THUMBNAIL ──────────────────────────────────────────────────── */
-.thumb-wrap {
-  position: relative;
-  width: 42px;
-  height: 42px;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.thumb-img {
-  width: 42px;
-  height: 42px;
-  object-fit: cover;
-  border-radius: 8px;
-  border: 1px solid var(--dvc-border);
-  display: block;
-  transition: opacity 0.15s;
-}
-.thumb-img:hover {
-  opacity: 0.82;
-}
-.thumb-placeholder {
-  width: 42px;
-  height: 42px;
-  border-radius: 8px;
-  border: 1.5px dashed var(--dvc-border-strong);
-  background: var(--dvc-bg-subtle2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--dvc-border-strong);
-}
-.thumb-count {
-  position: absolute;
-  bottom: -5px;
-  right: -5px;
-  background: var(--dvc-accent);
-  color: #fff;
-  font-size: 9px;
-  font-weight: 700;
-  padding: 1px 5px;
-  border-radius: 8px;
-  line-height: 1.5;
-}
-
-/* ── BADGES ─────────────────────────────────────────────────────── */
-.cat-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 9px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 500;
-}
-.cat-1 {
-  background: #eff6ff;
-  color: #2563eb;
-  border: 1px solid #bfdbfe;
-}
-.cat-2 {
-  background: #f5f3ff;
-  color: #7c3aed;
-  border: 1px solid #ddd6fe;
-}
-.cat-3 {
-  background: #fff7ed;
-  color: #c2410c;
-  border: 1px solid #fed7aa;
-}
-.cat-4 {
-  background: #f0fdf4;
-  color: #166534;
-  border: 1px solid #bbf7d0;
-}
-.cat-5 {
-  background: #fdf2f8;
-  color: #9d174d;
-  border: 1px solid #fbcfe8;
-}
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 9px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 500;
-}
-.status-pill.active {
-  background: #f0fdf4;
-  color: #166534;
-  border: 1px solid #bbf7d0;
-}
-.status-pill.inactive {
-  background: #fef2f2;
-  color: #dc2626;
-  border: 1px solid #fecaca;
-}
-.status-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: currentColor;
-  flex-shrink: 0;
-}
-
-/* ── ACTIONS ────────────────────────────────────────────────────── */
-.actions {
-  display: flex;
-  gap: 4px;
-}
-.icon-btn {
-  width: 30px;
-  height: 30px;
-  border-radius: 7px;
-  border: 1px solid var(--dvc-border);
-  background: transparent;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--dvc-text-muted);
-  transition: all 0.15s;
-}
-.icon-btn.view:hover {
-  background: #fffbeb;
-  color: #d97706;
-  border-color: #fcd34d;
-}
-.icon-btn.edit:hover {
-  background: #eff6ff;
-  color: #2563eb;
-  border-color: #bfdbfe;
-}
-.icon-btn.del:hover {
-  background: #fef2f2;
-  color: #dc2626;
-  border-color: #fecaca;
-}
-
-/* ── PAGER ──────────────────────────────────────────────────────── */
-.pager-wrap {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 18px;
-  border-top: 1px solid var(--dvc-bg-subtle);
-  font-size: 12px;
-  color: var(--dvc-text-muted);
-}
-.pager-btns {
-  display: flex;
-  gap: 4px;
-}
-.page-btn {
-  min-width: 30px;
-  height: 30px;
-  border-radius: 7px;
-  border: 1px solid var(--dvc-border);
-  background: transparent;
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--dvc-text-secondary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: inherit;
-  padding: 0 6px;
-  transition: all 0.15s;
-}
-.page-btn.cur {
-  background: var(--dvc-accent);
-  color: #fff;
-  border-color: var(--dvc-accent);
-  font-weight: 700;
-}
-.page-btn:hover:not(.cur):not(:disabled) {
-  background: var(--dvc-bg-subtle);
-  color: var(--dvc-text);
-}
-.page-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-/* ── COMBO CARD ─────────────────────────────────────────────────── */
-.combo-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(285px, 1fr));
-  gap: 14px;
-}
-.combo-card {
-  background: var(--dvc-card-bg);
-  border: 1px solid var(--dvc-border);
-  border-radius: 13px;
-  overflow: hidden;
-  transition: all 0.2s;
-  display: flex;
-  flex-direction: column;
-}
-.combo-card:hover {
-  border-color: var(--dvc-text-secondary);
-  transform: translateY(-3px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
-}
-.combo-card.inactive-card {
-  opacity: 0.65;
-}
-.combo-img {
-  height: 150px;
-  position: relative;
-  overflow: hidden;
-}
-.combo-cover-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  cursor: pointer;
-  transition: transform 0.25s;
-}
-.combo-card:hover .combo-cover-img {
-  transform: scale(1.03);
-}
-.combo-cover-placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.combo-img-emoji {
-  font-size: 40px;
-  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.1));
-}
-.combo-discount {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  background: #d97706;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 3px 8px;
-  border-radius: 20px;
-}
-.combo-status-badge {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background: #dc2626;
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 7px;
-  border-radius: 20px;
-}
-.combo-body {
-  padding: 13px;
-  flex: 1;
-}
-.combo-code {
-  font-size: 11px;
-  color: var(--dvc-text-muted);
-  font-family: "Courier New", monospace;
-  background: var(--dvc-bg-subtle);
-  padding: 2px 6px;
-  border-radius: 4px;
-  display: inline-block;
-  margin-bottom: 5px;
-}
-.combo-name {
-  font-size: 14px;
-  font-weight: 700;
-  margin-bottom: 4px;
-  color: var(--dvc-text);
-  line-height: 1.3;
-}
-.combo-desc {
-  font-size: 12px;
-  color: var(--dvc-text-secondary);
-  line-height: 1.6;
-  margin-bottom: 9px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.combo-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-.combo-tag {
-  font-size: 11px;
-  background: var(--dvc-bg-subtle);
-  border: 1px solid var(--dvc-border);
-  padding: 2px 8px;
-  border-radius: 20px;
-  color: var(--dvc-text-secondary);
-  white-space: nowrap;
-}
-.combo-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 13px;
-  border-top: 1px solid var(--dvc-bg-subtle);
-  background: var(--dvc-bg-subtle2);
-}
-.combo-price {
-  font-size: 17px;
-  font-weight: 700;
-  color: #d97706;
-}
-.combo-price-orig {
-  font-size: 11px;
-  color: var(--dvc-text-muted);
-  text-decoration: line-through;
-  margin-top: 1px;
-}
-.combo-savings {
-  font-size: 11px;
-  color: #059669;
-  margin-top: 1px;
-}
-
-/* ── EMPTY ──────────────────────────────────────────────────────── */
-.empty-state {
-  text-align: center;
-  padding: 48px 20px;
-  color: var(--dvc-text-muted);
-}
-.empty-icon {
-  font-size: 38px;
-  margin-bottom: 10px;
-  opacity: 0.45;
-}
-.empty-text {
-  font-size: 14px;
-}
-
-/* ── MODAL ──────────────────────────────────────────────────────── */
-.modal-overlay {
-  /* Teleport đưa modal ra ngoài .dvc-root nên không thừa hưởng được biến màu từ đó -> khai báo lại tại đây */
-  --dvc-card-bg: #fff;
-  --dvc-bg-subtle: #f3f4f6;
-  --dvc-bg-subtle2: #f9fafb;
-  --dvc-border: #e5e7eb;
-  --dvc-border-strong: #d1d5db;
-  --dvc-text: #1a1a2e;
-  --dvc-text-strong: #374151;
-  --dvc-text-secondary: #6b7280;
-  --dvc-text-muted: #9ca3af;
-  --dvc-accent: #1a1a2e;
-  --dvc-accent-hover: #2d2d4e;
-  --dvc-shadow: rgba(0, 0, 0, 0.08);
-  --dvc-overlay: rgba(0, 0, 0, 0.45);
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  z-index: 9000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.modal-overlay.dark-mode {
-  --dvc-card-bg: #23232f;
-  --dvc-bg-subtle: #2a2a38;
-  --dvc-bg-subtle2: #1e1e29;
-  --dvc-border: #383846;
-  --dvc-border-strong: #464656;
-  --dvc-text: #e8e8ee;
-  --dvc-text-strong: #cbcbd6;
-  --dvc-text-secondary: #a3a3b2;
-  --dvc-text-muted: #7c7c8c;
-  --dvc-accent: #4b4b6b;
-  --dvc-accent-hover: #5c5c80;
-  --dvc-shadow: rgba(0, 0, 0, 0.35);
-  --dvc-overlay: rgba(0, 0, 0, 0.6);
-}
-.modal {
-  position: relative; /* reset lại vì Bootstrap có sẵn .modal { position: fixed; top:0; left:0 } gây xung đột */
-  top: auto;
-  left: auto;
-  margin: 0;
-  background: var(--dvc-card-bg);
-  border: 1px solid var(--dvc-border);
-  border-radius: 14px;
-  width: 540px;
-  max-width: 95vw;
-  max-height: 88vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
-}
-.modal-wide {
-  width: 650px;
-}
-.modal-head {
-  padding: 18px 22px;
-  border-bottom: 1px solid var(--dvc-bg-subtle);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-shrink: 0;
-}
-.modal-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--dvc-text);
-}
-.modal-close {
-  width: 30px;
-  height: 30px;
-  border-radius: 7px;
-  border: 1px solid var(--dvc-border);
-  background: transparent;
-  cursor: pointer;
-  color: var(--dvc-text-muted);
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s;
-}
-.modal-close:hover {
-  color: var(--dvc-text);
-  background: var(--dvc-bg-subtle);
-}
-.modal-body {
-  padding: 20px 22px;
-  overflow-y: auto;
-  flex: 1;
-}
-.modal-body::-webkit-scrollbar {
-  width: 4px;
-}
-.modal-body::-webkit-scrollbar-thumb {
-  background: var(--dvc-border);
-  border-radius: 4px;
-}
-.modal-foot {
-  padding: 14px 22px;
-  border-top: 1px solid var(--dvc-bg-subtle);
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  flex-shrink: 0;
-}
-
-/* ── FORM ───────────────────────────────────────────────────────── */
-.dvc-form-row {
-  margin-bottom: 16px;
-}
-.form-row-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-.form-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--dvc-text-secondary);
-  margin-bottom: 6px;
-  display: block;
-}
-.label-hint {
-  font-weight: 400;
-  color: var(--dvc-text-muted);
-  font-size: 11px;
-}
-.req {
-  color: #dc2626;
-}
-.form-input,
-.form-select,
-.form-textarea {
-  width: 100%;
-  background: var(--dvc-bg-subtle2);
-  border: 1px solid var(--dvc-border);
-  border-radius: 8px;
-  padding: 9px 12px;
-  color: var(--dvc-text);
-  font-size: 13px;
-  font-family: inherit;
-  outline: none;
-  transition: all 0.15s;
-}
-.form-input:focus,
-.form-select:focus,
-.form-textarea:focus {
-  border-color: var(--dvc-text-secondary);
-  background: var(--dvc-card-bg);
-  box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.1);
-}
-.form-input[readonly] {
-  opacity: 0.6;
-  cursor: default;
-}
-.form-textarea {
-  resize: vertical;
-  min-height: 80px;
-  line-height: 1.6;
-}
-/* Error states */
-.input-error {
-  border-color: #dc2626 !important;
-  background: var(--dvc-card-bg) !important;
-}
-.input-error:focus {
-  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1) !important;
-}
-/* Nested inline error for tiêu đề + chi tiết */
-.td-field-error {
-  color: #dc2626;
-  font-size: 11px;
-  margin: 2px 0 0 0;
-  padding: 0;
-}
-.td-form-field {
-  display: flex;
-  flex-direction: column;
-}
-.field-error {
-  font-size: 11px;
-  color: #dc2626;
-  margin-top: 4px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.field-error::before {
-  content: "⚠";
-  font-size: 10px;
-}
-/* Char count */
-.char-count {
-  font-size: 11px;
-  color: var(--dvc-text-muted);
-  text-align: right;
-  margin-top: 3px;
-}
-.char-warn {
-  color: #d97706;
-}
-
-/* ── IMAGE UPLOAD ───────────────────────────────────────────────── */
-.img-upload-zone {
-  border: 2px dashed var(--dvc-border-strong);
-  border-radius: 10px;
-  padding: 22px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 7px;
-  cursor: pointer;
-  background: var(--dvc-bg-subtle2);
-  transition: all 0.15s;
-}
-.img-upload-zone:hover {
-  border-color: var(--dvc-text-secondary);
-  background: var(--dvc-bg-subtle);
-}
-.upload-hint {
-  font-size: 13px;
-  color: var(--dvc-text-muted);
-}
-.upload-link {
-  color: #2563eb;
-  text-decoration: underline;
-  cursor: pointer;
-}
-.img-preview-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 2px;
-}
-.preview-item {
-  position: relative;
-  width: 76px;
-  height: 76px;
-  flex-shrink: 0;
-}
-.preview-img {
-  width: 76px;
-  height: 76px;
-  object-fit: cover;
-  border-radius: 8px;
-  border: 1px solid var(--dvc-border);
-  display: block;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-.preview-img:hover {
-  opacity: 0.82;
-}
-.preview-del {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #dc2626;
-  color: #fff;
-  border: none;
-  cursor: pointer;
-  font-size: 10px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.preview-main-badge {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  text-align: center;
-  font-size: 9px;
-  font-weight: 700;
-  color: #fff;
-  background: rgba(26, 26, 46, 0.72);
-  border-radius: 0 0 7px 7px;
-  padding: 2px 0;
-}
-.preview-move-btn {
-  position: absolute;
-  bottom: 2px;
-  left: 2px;
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  background: rgba(26, 26, 46, 0.65);
-  color: #fff;
-  border: none;
-  cursor: pointer;
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.preview-add {
-  width: 76px;
-  height: 76px;
-  border: 2px dashed var(--dvc-border-strong);
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: var(--dvc-text-muted);
-  flex-shrink: 0;
-  transition: all 0.15s;
-  font-size: 11px;
-  gap: 3px;
-}
-.preview-add:hover {
-  border-color: var(--dvc-text-secondary);
-  color: var(--dvc-text-strong);
-  background: var(--dvc-bg-subtle);
-}
-.cb-img-preview {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-.cb-preview-img {
-  width: 110px;
-  height: 76px;
-  object-fit: cover;
-  border-radius: 8px;
-  border: 1px solid var(--dvc-border);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.cb-preview-img:hover {
-  opacity: 0.85;
-}
-.cb-preview-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-
-/* ── DV PICKER ──────────────────────────────────────────────────── */
-.dv-picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 10px;
-  background: var(--dvc-bg-subtle2);
-  border: 1px solid var(--dvc-border);
-  border-radius: 8px;
-  min-height: 56px;
-  max-height: 140px;
-  overflow-y: auto;
-  transition: border 0.15s;
-}
-.dv-picker::-webkit-scrollbar {
-  width: 4px;
-}
-.dv-picker::-webkit-scrollbar-thumb {
-  background: var(--dvc-border);
-  border-radius: 4px;
-}
-.picker-error {
-  border-color: #dc2626 !important;
-}
-.dv-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 11px;
-  cursor: pointer;
-  transition: all 0.15s;
-  user-select: none;
-}
-.dv-chip.sel {
-  background: var(--dvc-accent);
-  border: 1px solid var(--dvc-accent);
-  color: #fff;
-  font-weight: 500;
-}
-.dv-chip.unsel {
-  background: var(--dvc-card-bg);
-  border: 1px solid var(--dvc-border);
-  color: var(--dvc-text-secondary);
-}
-.dv-chip.unsel:hover {
-  border-color: var(--dvc-text-secondary);
-  color: var(--dvc-text);
-}
-.chip-price {
-  opacity: 0.65;
-  font-size: 10px;
-}
-.combo-price-preview {
-  font-size: 12px;
-  color: var(--dvc-text-secondary);
-  margin-top: 8px;
-  padding: 8px 12px;
-  background: #f0fdf4;
-  border-radius: 7px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.combo-price-preview strong {
-  color: #059669;
-}
-
-/* ── DETAIL ─────────────────────────────────────────────────────── */
-.detail-section {
-  margin-bottom: 18px;
-}
-.detail-title {
-  font-size: 11px;
-  color: var(--dvc-text-muted);
-  font-weight: 600;
-  letter-spacing: 0.7px;
-  text-transform: uppercase;
-  margin-bottom: 10px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--dvc-bg-subtle);
-}
-.detail-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-.detail-item {
-  background: var(--dvc-bg-subtle2);
-  border-radius: 7px;
-  padding: 10px 12px;
-}
-.detail-label {
-  font-size: 11px;
-  color: var(--dvc-text-muted);
-  margin-bottom: 3px;
-}
-.detail-val {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--dvc-text);
-}
-.dv-list-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  background: var(--dvc-bg-subtle2);
-  border-radius: 7px;
-  margin-bottom: 6px;
-}
-.dv-list-item:last-child {
-  margin-bottom: 0;
-}
-.no-img-notice {
-  font-size: 13px;
-  color: var(--dvc-text-muted);
-  background: var(--dvc-bg-subtle2);
-  border-radius: 7px;
-  padding: 12px 16px;
-  text-align: center;
-}
-
-/* ── GALLERY ────────────────────────────────────────────────────── */
-.img-gallery {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.gallery-thumb {
-  position: relative;
-  width: 80px;
-  height: 80px;
-  border-radius: 9px;
-  overflow: hidden;
-  cursor: pointer;
-  flex-shrink: 0;
-  border: 1px solid var(--dvc-border);
-}
-.gallery-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.gallery-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.28);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-.gallery-thumb:hover .gallery-overlay,
-.combo-view-img-wrap:hover .gallery-overlay {
-  opacity: 1;
-}
-.combo-view-img-wrap {
-  position: relative;
-  cursor: pointer;
-  display: block;
-  width: 100%;
-  border-radius: 10px;
-  overflow: hidden;
-}
-.combo-view-img {
-  width: 100%;
-  height: 170px;
-  object-fit: cover;
-  display: block;
-}
-
-/* ── LIGHTBOX ───────────────────────────────────────────────────── */
-.lightbox-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.93);
-  z-index: 900;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.lb-img {
-  max-width: 88vw;
-  max-height: 82vh;
-  object-fit: contain;
-  border-radius: 6px;
-  user-select: none;
-}
-.lb-close {
-  position: fixed;
-  top: 18px;
-  right: 22px;
-  background: rgba(255, 255, 255, 0.13);
-  border: none;
-  color: #fff;
-  font-size: 20px;
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-}
-.lb-close:hover {
-  background: rgba(255, 255, 255, 0.26);
-}
-.lb-arrow {
-  position: fixed;
-  top: 50%;
-  transform: translateY(-50%);
-  background: rgba(255, 255, 255, 0.13);
-  border: none;
-  color: #fff;
-  font-size: 28px;
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-  line-height: 1;
-}
-.lb-arrow:hover {
-  background: rgba(255, 255, 255, 0.28);
-}
-.lb-prev {
-  left: 18px;
-}
-.lb-next {
-  right: 18px;
-}
-.lb-dots {
-  position: fixed;
-  bottom: 22px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 6px;
-}
-.lb-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.4);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.lb-dot.active {
-  background: #fff;
-}
-
-/* ── TOAST ──────────────────────────────────────────────────────── */
-.toast {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  /* Teleport đưa toast ra ngoài .dvc-root nên không thừa hưởng được biến màu -> khai báo lại tại đây */
-  --dvc-card-bg: #fff;
-  --dvc-border: #e5e7eb;
-  --dvc-text: #1a1a2e;
-  background: var(--dvc-card-bg);
-  border: 1px solid var(--dvc-border);
-  border-radius: 10px;
-  padding: 12px 16px;
-  font-size: 13px;
-  color: var(--dvc-text);
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  z-index: 1000;
-  transform: translateY(20px);
-  opacity: 0;
-  transition: all 0.25s;
-  pointer-events: none;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  max-width: 320px;
-}
-.toast.dark-mode {
-  --dvc-card-bg: #23232f;
-  --dvc-border: #383846;
-  --dvc-text: #e8e8ee;
-}
-.toast.show {
-  transform: translateY(0);
-  opacity: 1;
-}
-.toast.success {
-  border-color: #bbf7d0;
-}
-.toast.error {
-  border-color: #fecaca;
-}
-.upload-zone-error {
-  border-color: #f87171 !important;
-  background: #fff5f5 !important;
-}
-
-/* ── RESPONSIVE ─────────────────────────────────────────────────── */
-@media (max-width: 768px) {
-  .stats-row {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .combo-grid {
-    grid-template-columns: 1fr;
-  }
-  .form-row-2 {
-    grid-template-columns: 1fr;
-  }
-  .detail-grid {
-    grid-template-columns: 1fr;
-  }
-  .header-bar {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .result-count {
-    margin-left: 0;
-  }
-  .modal-wide {
-    width: 95vw;
-  }
-}
-@media (max-width: 480px) {
-  .stats-row {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-/* ── NESTED CRUD: TIÊU ĐỀ + CHI TIẾT ─────────────────────────── */
-.dv-main-row.row-expanded {
-  background: var(--dvc-bg-subtle);
-}
-.expand-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--dvc-text-muted);
-  padding: 2px 4px;
-  margin-right: 6px;
-  display: inline-flex;
-  align-items: center;
-  transition: color 0.15s;
-  vertical-align: middle;
-}
-.expand-btn:hover {
-  color: var(--dvc-text);
-}
-.expand-icon {
-  transition: transform 0.2s;
-}
-.expand-icon.open {
-  transform: rotate(180deg);
-}
-.dv-detail-row {
-  background: var(--dvc-bg-subtle2);
-}
-.dv-detail-row td {
-  padding: 0 !important;
-}
-.nested-panel {
-  padding: 14px 18px;
-  border-top: 1px solid var(--dvc-border);
-  background: var(--dvc-bg-subtle2);
-}
-.nested-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-.nested-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--dvc-text-strong);
-  margin: 0;
-}
-.nested-count {
-  background: var(--dvc-border);
-  font-size: 11px;
-  padding: 1px 8px;
-  border-radius: 10px;
-  margin-left: 6px;
-  font-weight: 500;
-}
-.btn-nested-add {
-  background: #f0fdf4;
-  color: #166534;
-  border: 1px solid #bbf7d0;
-}
-.btn-nested-add:hover {
-  background: #dcfce7;
-}
-.nested-empty {
-  font-size: 12px;
-  color: var(--dvc-text-muted);
-  text-align: center;
-  padding: 16px;
-}
-
-/* Tiêu đề */
-.td-item {
-  margin-bottom: 8px;
-}
-.td-new {
-  background: var(--dvc-card-bg);
-  border: 1px dashed #2563eb;
-  border-radius: 8px;
-  padding: 8px 10px;
-}
-.td-form {
-  padding: 6px 0;
-}
-.td-form-row {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.td-input {
-  background: var(--dvc-card-bg);
-  border: 1px solid var(--dvc-border);
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 12px;
-  color: var(--dvc-text);
-  font-family: inherit;
-  outline: none;
-  transition: border 0.15s;
-}
-.td-input:focus {
-  border-color: var(--dvc-text-secondary);
-  box-shadow: 0 0 0 2px rgba(107, 114, 128, 0.08);
-}
-.td-input.td-sm {
-  font-size: 11px;
-  padding: 5px 8px;
-}
-.td-display {
-  padding: 2px 0;
-}
-.td-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  background: var(--dvc-card-bg);
-  border-radius: 7px;
-  border: 1px solid var(--dvc-border);
-}
-.td-toggle {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--dvc-text-muted);
-  padding: 2px;
-  display: flex;
-  align-items: center;
-}
-.td-toggle:hover {
-  color: var(--dvc-text-strong);
-}
-.td-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--dvc-text);
-}
-.td-desc {
-  font-size: 11px;
-  color: var(--dvc-text-muted);
-  margin-left: 4px;
-}
-
-/* Nút tiêu đề / chi tiết */
-.td-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 5px 10px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid var(--dvc-border);
-  background: var(--dvc-card-bg);
-  color: var(--dvc-text-secondary);
-  font-family: inherit;
-  transition: all 0.12s;
-  white-space: nowrap;
-}
-.td-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.td-btn-save {
-  background: var(--dvc-accent);
-  color: #fff;
-  border-color: var(--dvc-accent);
-}
-.td-btn-save:hover:not(:disabled) {
-  background: var(--dvc-accent-hover);
-}
-.td-btn-cancel {
-  background: transparent;
-  color: var(--dvc-text-muted);
-}
-.td-btn-cancel:hover {
-  background: var(--dvc-bg-subtle);
-}
-.td-img-upload {
-  cursor: pointer;
-  background: var(--dvc-bg-subtle2);
-  border: 1px dashed var(--dvc-border-strong);
-}
-.td-img-upload:hover {
-  background: var(--dvc-bg-subtle);
-  border-color: var(--dvc-text-muted);
-}
-
-/* Chi tiết section */
-.ct-section {
-  margin-top: 6px;
-  margin-left: 20px;
-  padding: 8px 10px;
-  background: var(--dvc-bg-subtle2);
-  border-radius: 7px;
-  border: 1px solid var(--dvc-border);
-}
-.ct-form {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.ct-list {
-  margin-top: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.ct-item {
-  flex: 0 0 auto;
-}
-/* ct-display = một chip ngang gọn */
-.ct-display {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  background: var(--dvc-card-bg);
-  border: 1px solid var(--dvc-border);
-  border-radius: 8px;
-  padding: 5px 8px 5px 6px;
-  min-width: 0;
-  max-width: 240px;
-}
-.ct-img-wrap {
-  flex-shrink: 0;
-}
-.ct-img {
-  width: 36px;
-  height: 36px;
-  object-fit: cover;
-  border-radius: 5px;
-  border: 1px solid var(--dvc-border);
-  display: block;
-}
-.ct-info {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-}
-.ct-name {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--dvc-text-strong);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: block;
-}
-.ct-desc {
-  font-size: 11px;
-  color: var(--dvc-text-muted);
-  display: block;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.ct-empty {
-  font-size: 11px;
-  color: var(--dvc-text-muted);
-  text-align: center;
-  padding: 10px;
-}
-
-.icon-btn-xs {
-  width: 24px;
-  height: 24px;
-}
+.gap-1 { gap: 4px; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.font-mono { font-family: monospace; }
+.cursor-pointer { cursor: pointer; }
+.border-primary { border-color: rgb(var(--v-theme-primary)) !important; }
 </style>
