@@ -1,47 +1,50 @@
-<script setup>
-import { ref, computed, reactive, onMounted } from "vue";
-import axios from "axios";
-import { useTheme } from "vuetify";
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
+import axios from 'axios'
+import { Search, RotateCcw, Eye, Receipt, CheckCircle2, XCircle, Clock, Ban, Check, X } from 'lucide-vue-next'
 
-const API = import.meta.env.VITE_API_URL;
+// --- CẤU HÌNH API ---
+const API = import.meta.env.VITE_API_URL
 
-// ── DARK / LIGHT MODE (đồng bộ với ProfileDD - Cài đặt Sáng/Tối) ──
-const vuetifyTheme = useTheme();
-const isDarkMode = computed(() => vuetifyTheme.global.name.value === "dark");
+// --- STATE QUẢN LÝ DỮ LIỆU ---
+const doiSoatList = ref<any[]>([])
+const doiSoatTotal = ref(0)
+const doiSoatStats = ref({ tongLuot: 0, daKhop: 0, chuaKhop: 0 })
+const loadingDS = ref(false)
 
-// ══ TOAST ══════════════════════════════════════════════════════════
-const toast = reactive({ show: false, msg: "", type: "success" });
-function showToast(msg, type = "success") {
-  toast.msg = msg; toast.type = type; toast.show = true;
-  setTimeout(() => { toast.show = false; }, 3000);
+// Vuetify Snackbar State
+const snackbar = ref({
+  show: false,
+  text: '',
+  color: 'success'
+})
+const showSnackbar = (text: string, color: string = 'success') => {
+  snackbar.value.text = text
+  snackbar.value.color = color
+  snackbar.value.show = true
 }
 
-// ══ HELPERS ════════════════════════════════════════════════════════
-const fmt = n => new Intl.NumberFormat("vi-VN").format(n || 0) + "₫";
-function fmtDateTime(d) {
-  if (!d) return "—";
-  const dt = new Date(d);
-  if (isNaN(dt.getTime())) return "—";
-  return dt.toLocaleString("vi-VN");
+// --- LOGIC LỌC / TÌM KIẾM ---
+const tuNgayDS = ref('')
+const denNgayDS = ref('')
+const filterTrangThaiDS = ref('')
+const searchDS = ref('')
+const curPageDS = ref(1)
+const perPageDS = ref(20)
+let searchDebounce: ReturnType<typeof setTimeout> | null = null
+
+// --- HELPERS ---
+const fmt = (n?: number) => new Intl.NumberFormat('vi-VN').format(n || 0) + '₫'
+const fmtDateTime = (d?: string) => {
+  if (!d) return '—'
+  const dt = new Date(d)
+  if (isNaN(dt.getTime())) return '—'
+  return dt.toLocaleString('vi-VN')
 }
 
-/* ════════════════════════════════════════════════════════════════
-   ĐỐI SOÁT HÓA ĐƠN DỊCH VỤ
-   ════════════════════════════════════════════════════════════════ */
-const doiSoatList = ref([]);
-const doiSoatTotal = ref(0);
-const doiSoatStats = ref({ tongLuot: 0, daKhop: 0, chuaKhop: 0 });
-const tuNgayDS = ref("");
-const denNgayDS = ref("");
-const filterTrangThaiDS = ref("");
-const searchDS = ref("");
-const curPageDS = ref(1);
-const perPageDS = ref(20);
-const loadingDS = ref(false);
-let searchDebounce = null;
-
-async function loadDoiSoat() {
-  loadingDS.value = true;
+// --- FETCH DỮ LIỆU (server-side paging) ---
+const loadDoiSoat = async () => {
+  loadingDS.value = true
   try {
     const res = await axios.get(`${API}/api/QuanLyDoiSoatDichVu/doisoathoadon`, {
       params: {
@@ -52,284 +55,284 @@ async function loadDoiSoat() {
         page: curPageDS.value,
         pageSize: perPageDS.value,
       },
-    });
-    doiSoatList.value = res.data.items || [];
-    doiSoatTotal.value = res.data.total || 0;
-    doiSoatStats.value = res.data.stats || { tongLuot: 0, daKhop: 0, chuaKhop: 0 };
-  } catch { showToast("Lỗi tải dữ liệu đối soát!", "error"); }
-  finally { loadingDS.value = false; }
-}
-function onFilterDSChange() { curPageDS.value = 1; loadDoiSoat(); }
-function gotoPageDS(p) { curPageDS.value = p; loadDoiSoat(); }
-function onSearchDSInput() {
-  clearTimeout(searchDebounce);
-  searchDebounce = setTimeout(() => { onFilterDSChange(); }, 350);
+    })
+    doiSoatList.value = res.data.items || []
+    doiSoatTotal.value = res.data.total || 0
+    doiSoatStats.value = res.data.stats || { tongLuot: 0, daKhop: 0, chuaKhop: 0 }
+  } catch {
+    showSnackbar('Lỗi tải dữ liệu đối soát!', 'error')
+  } finally {
+    loadingDS.value = false
+  }
 }
 
-const totalPagesDS = computed(() => Math.max(1, Math.ceil(doiSoatTotal.value / perPageDS.value)));
-const pageRangeDS = computed(() => {
-  const t = totalPagesDS.value, c = curPageDS.value;
-  const lo = Math.max(1, c - 2), hi = Math.min(t, lo + 4);
-  return Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
-});
+const onFilterDSChange = () => {
+  curPageDS.value = 1
+  loadDoiSoat()
+}
+
+const onSearchDSInput = () => {
+  if (searchDebounce) clearTimeout(searchDebounce)
+  searchDebounce = setTimeout(() => { onFilterDSChange() }, 350)
+}
+
+// Vuetify v-data-table-server phát sự kiện update:options ngay khi mount,
+// nên không cần gọi loadDoiSoat() riêng trong onMounted để tránh gọi API 2 lần.
+const handleTableUpdate = (options: { page: number; itemsPerPage: number }) => {
+  curPageDS.value = options.page
+  perPageDS.value = options.itemsPerPage
+  loadDoiSoat()
+}
 
 const tyLeKhopDS = computed(() => {
-  const t = doiSoatStats.value.tongLuot;
-  return t > 0 ? Math.round((doiSoatStats.value.daKhop / t) * 100) : 100;
-});
+  const t = doiSoatStats.value.tongLuot
+  return t > 0 ? Math.round((doiSoatStats.value.daKhop / t) * 100) : 100
+})
 
-// ══ INIT ═══════════════════════════════════════════════════════════
-onMounted(() => { loadDoiSoat(); });
+const trangThaiOptions = [
+  { title: 'Tất cả trạng thái', value: '' },
+  { title: 'Đã có hóa đơn', value: 'khop' },
+  { title: 'Chưa khớp hóa đơn', value: 'thieu' },
+]
+
+const headers = [
+  { title: 'Thời gian', key: 'ngayTao', align: 'start', sortable: false },
+  { title: 'Mã hóa đơn', key: 'maHd', align: 'start', sortable: false },
+  { title: 'Khách hàng', key: 'khachhang', align: 'start', sortable: false },
+  { title: 'Nhân viên', key: 'tenNv', align: 'start', sortable: false },
+  { title: 'Dịch vụ', key: 'dichvu', align: 'start', sortable: false },
+  { title: 'Tổng tiền', key: 'tongTien', align: 'end', sortable: false },
+  { title: 'Trạng thái hóa đơn', key: 'trangThai', align: 'center', sortable: false },
+  { title: 'Số hóa đơn', key: 'soHoaDonDichVu', align: 'center', sortable: false },
+  { title: 'Hóa đơn PDF', key: 'pdf', align: 'center', sortable: false },
+] as const
 </script>
 
 <template>
-  <div class="kho-manager" :class="{ 'dark-mode': isDarkMode }">
+  <v-container fluid class="pa-6 fill-height align-start" style="min-height: 100vh;">
+    <div class="w-100">
+      <!-- Thẻ thống kê -->
+      <v-row class="mb-2">
+        <v-col cols="6" md="3">
+          <v-card rounded="xl" elevation="2" class="pa-4" style="border-top: 3px solid #1a1a2e;">
+            <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Tổng hóa đơn</div>
+            <div class="text-h5 font-weight-bold mt-1">{{ doiSoatStats.tongLuot }}</div>
+            <div class="text-caption text-medium-emphasis mt-1">Trong khoảng thời gian lọc</div>
+          </v-card>
+        </v-col>
+        <v-col cols="6" md="3">
+          <v-card rounded="xl" elevation="2" class="pa-4" style="border-top: 3px solid #22c55e;">
+            <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Đã có hóa đơn điện tử</div>
+            <div class="text-h5 font-weight-bold mt-1 text-success">{{ doiSoatStats.daKhop }}</div>
+            <div class="text-caption text-medium-emphasis mt-1">Xuất hóa đơn thành công</div>
+          </v-card>
+        </v-col>
+        <v-col cols="6" md="3">
+          <v-card rounded="xl" elevation="2" class="pa-4" style="border-top: 3px solid #ef4444;">
+            <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Chưa khớp hóa đơn</div>
+            <div class="text-h5 font-weight-bold mt-1 text-error">{{ doiSoatStats.chuaKhop }}</div>
+            <div class="text-caption text-medium-emphasis mt-1">Chưa xuất / lỗi / đang chờ</div>
+          </v-card>
+        </v-col>
+        <v-col cols="6" md="3">
+          <v-card rounded="xl" elevation="2" class="pa-4" style="border-top: 3px solid #f59e0b;">
+            <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis">Tỷ lệ khớp</div>
+            <div class="text-h5 font-weight-bold mt-1 text-warning">{{ tyLeKhopDS }}%</div>
+            <div class="text-caption text-medium-emphasis mt-1">Dịch vụ ↔ Hóa đơn điện tử</div>
+          </v-card>
+        </v-col>
+      </v-row>
 
-    <!-- ── HEADER ─────────────────────────────────────────────── -->
-    <div class="header-bar">
-      <div class="page-title-text">Đối soát hóa đơn dịch vụ</div>
+      <!-- Bảng đối soát -->
+      <v-card width="100%" elevation="2" rounded="xl">
+        <v-card-title class="d-flex flex-column flex-md-row align-md-center justify-space-between pa-6">
+          <div>
+            <h2 class="text-h5 font-weight-bold mb-1">Đối Soát Hóa Đơn Dịch Vụ</h2>
+            <div class="text-subtitle-2 text-medium-emphasis">{{ doiSoatTotal }} kết quả</div>
+          </div>
+
+          <div class="d-flex align-center gap-3 mt-4 mt-md-0 flex-wrap">
+            <v-text-field
+              v-model="searchDS"
+              label="Tìm mã hóa đơn, tên khách, dịch vụ..."
+              variant="outlined"
+              density="compact"
+              hide-details
+              clearable
+              rounded="lg"
+              class="flex-grow-1"
+              style="min-width: 260px;"
+              @input="onSearchDSInput"
+              @click:clear="onFilterDSChange"
+            >
+              <template v-slot:prepend-inner>
+                <Search class="w-5 h-5 text-grey-darken-1 mr-2" />
+              </template>
+            </v-text-field>
+
+            <v-text-field
+              v-model="tuNgayDS"
+              type="date"
+              label="Từ ngày"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              style="min-width: 160px;"
+              @change="onFilterDSChange"
+            ></v-text-field>
+
+            <v-text-field
+              v-model="denNgayDS"
+              type="date"
+              label="Đến ngày"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              style="min-width: 160px;"
+              @change="onFilterDSChange"
+            ></v-text-field>
+
+            <v-select
+              v-model="filterTrangThaiDS"
+              :items="trangThaiOptions"
+              item-title="title"
+              item-value="value"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              style="min-width: 190px;"
+              @update:model-value="onFilterDSChange"
+            ></v-select>
+
+            <v-btn variant="outlined" color="grey-darken-1" size="40" rounded="lg" :loading="loadingDS" @click="loadDoiSoat">
+              <RotateCcw class="w-5 h-5" />
+            </v-btn>
+          </div>
+        </v-card-title>
+
+        <v-divider></v-divider>
+
+        <v-data-table-server
+          :headers="headers"
+          :items="doiSoatList"
+          :items-length="doiSoatTotal"
+          :loading="loadingDS"
+          :items-per-page="perPageDS"
+          items-per-page-text="Số dòng / trang"
+          @update:options="handleTableUpdate"
+          hover
+        >
+          <template v-slot:item.ngayTao="{ item }">
+            <div class="font-weight-medium">{{ fmtDateTime(item.ngayTao) }}</div>
+          </template>
+
+          <template v-slot:item.maHd="{ item }">
+            <v-chip size="small" variant="tonal" color="grey-darken-2" class="font-family-monospace">
+              {{ item.maHd }}
+            </v-chip>
+          </template>
+
+          <template v-slot:item.khachhang="{ item }">
+            <div class="py-2">
+              <div class="font-weight-bold">{{ item.tenKh || 'Khách vãng lai' }}</div>
+              <div class="text-caption text-medium-emphasis">{{ item.sdtKh || '—' }}</div>
+            </div>
+          </template>
+
+          <template v-slot:item.tenNv="{ item }">
+            <div class="font-weight-medium">{{ item.tenNv || '—' }}</div>
+          </template>
+
+          <template v-slot:item.dichvu="{ item }">
+            <div class="text-caption text-medium-emphasis" style="max-width: 260px;">
+              {{ (item.danhSachDichVu && item.danhSachDichVu.length) ? item.danhSachDichVu.join(', ') : '—' }}
+            </div>
+          </template>
+
+          <template v-slot:item.tongTien="{ item }">
+            <div class="font-weight-bold text-right">{{ fmt(item.tongTien) }}</div>
+          </template>
+
+          <template v-slot:item.trangThai="{ item }">
+            <v-chip
+              v-if="item.trangThaiHddtDichVu === 1"
+              color="success" size="small" variant="flat" class="font-weight-bold"
+            >
+              <template v-slot:prepend><CheckCircle2 class="w-4 h-4 mr-1" /></template>
+              Đã xuất
+            </v-chip>
+            <v-chip
+              v-else-if="item.trangThaiHddtDichVu === 2"
+              color="error" size="small" variant="flat" class="font-weight-bold"
+              :title="item.ghiChuLoiDichVu"
+            >
+              <template v-slot:prepend><XCircle class="w-4 h-4 mr-1" /></template>
+              Lỗi
+            </v-chip>
+            <v-chip
+              v-else-if="item.trangThaiHddtDichVu === 3 || item.trangThaiHddtDichVu === 0"
+              color="warning" size="small" variant="flat" class="font-weight-bold"
+            >
+              <template v-slot:prepend><Clock class="w-4 h-4 mr-1" /></template>
+              Đang chờ
+            </v-chip>
+            <v-chip
+              v-else
+              color="grey-darken-2" size="small" variant="tonal" class="font-weight-bold"
+            >
+              <template v-slot:prepend><Ban class="w-4 h-4 mr-1" /></template>
+              Không xuất HĐ
+            </v-chip>
+          </template>
+
+          <template v-slot:item.soHoaDonDichVu="{ item }">
+            <div class="text-center">{{ item.soHoaDonDichVu || '—' }}</div>
+          </template>
+
+          <template v-slot:item.pdf="{ item }">
+            <div class="d-flex justify-center">
+              <v-btn
+                v-if="item.linkPdfDichVu"
+                :href="item.linkPdfDichVu"
+                target="_blank"
+                icon
+                size="small"
+                variant="tonal"
+                color="primary"
+                title="Xem PDF"
+              >
+                <Eye class="w-4 h-4" />
+              </v-btn>
+              <span v-else class="text-medium-emphasis">—</span>
+            </div>
+          </template>
+
+          <template v-slot:no-data>
+            <div class="text-center pa-8">
+              <Receipt class="w-10 h-10 text-medium-emphasis mb-2" />
+              <div class="text-medium-emphasis">Không có dữ liệu đối soát</div>
+            </div>
+          </template>
+        </v-data-table-server>
+      </v-card>
     </div>
 
-    <div class="stats-row">
-      <div class="stat-card stat-dark">
-        <div class="stat-label">Tổng hóa đơn</div>
-        <div class="stat-value">{{ doiSoatStats.tongLuot }}</div>
-        <div class="stat-hint">Trong khoảng thời gian lọc</div>
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" location="top right" timeout="3000" rounded="lg">
+      <div class="font-weight-bold d-flex align-center">
+        <Check v-if="snackbar.color === 'success'" class="w-5 h-5 mr-2" />
+        <X v-else class="w-5 h-5 mr-2" />
+        {{ snackbar.text }}
       </div>
-      <div class="stat-card stat-green">
-        <div class="stat-label">Đã có hóa đơn điện tử</div>
-        <div class="stat-value">{{ doiSoatStats.daKhop }}</div>
-        <div class="stat-hint">Xuất hóa đơn thành công</div>
-      </div>
-      <div class="stat-card stat-red">
-        <div class="stat-label">Chưa khớp hóa đơn</div>
-        <div class="stat-value">{{ doiSoatStats.chuaKhop }}</div>
-        <div class="stat-hint">Chưa xuất / lỗi / đang chờ</div>
-      </div>
-      <div class="stat-card stat-orange">
-        <div class="stat-label">Tỷ lệ khớp</div>
-        <div class="stat-value">{{ tyLeKhopDS }}%</div>
-        <div class="stat-hint">Dịch vụ ↔ Hóa đơn điện tử</div>
-      </div>
-    </div>
-
-    <div class="toolbar">
-      <div class="search-box">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5" /><path d="M11 11l3 3" /></svg>
-        <input v-model="searchDS" placeholder="Tìm mã hóa đơn, tên khách, mã/tên dịch vụ..." @input="onSearchDSInput" />
-      </div>
-      <input type="date" v-model="tuNgayDS" class="form-input" style="width:auto" @change="onFilterDSChange" />
-      <span style="color:var(--dvc-text-muted)">đến</span>
-      <input type="date" v-model="denNgayDS" class="form-input" style="width:auto" @change="onFilterDSChange" />
-      <select v-model="filterTrangThaiDS" class="filter-select" @change="onFilterDSChange">
-        <option value="">Tất cả trạng thái</option>
-        <option value="khop">Đã có hóa đơn</option>
-        <option value="thieu">Chưa khớp hóa đơn</option>
-      </select>
-      <span class="result-count">{{ doiSoatTotal }} kết quả</span>
-      <button type="button" class="btn-refresh" :class="{ spinning: loadingDS }" title="Tải lại dữ liệu" @click="loadDoiSoat">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3.6h-3.6"/></svg>
-      </button>
-    </div>
-
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Thời gian</th>
-            <th>Mã hóa đơn</th>
-            <th>Khách hàng</th>
-            <th>Nhân viên</th>
-            <th>Dịch vụ</th>
-            <th>Tổng tiền</th>
-            <th>Trạng thái hóa đơn</th>
-            <th>Số hóa đơn</th>
-            <th>Hóa đơn PDF</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="!loadingDS && doiSoatList.length === 0">
-            <td colspan="9"><div class="empty-state"><div class="empty-icon">🧾</div><div class="empty-text">Không có dữ liệu đối soát</div></div></td>
-          </tr>
-          <tr v-for="d in doiSoatList" :key="d.maHd">
-            <td>{{ fmtDateTime(d.ngayTao) }}</td>
-            <td><span class="code-text">{{ d.maHd }}</span></td>
-            <td>
-              <div class="sp-name">{{ d.tenKh || "Khách vãng lai" }}</div>
-              <div class="bt-subname">{{ d.sdtKh || "—" }}</div>
-            </td>
-            <td>{{ d.tenNv || "—" }}</td>
-            <td>
-              <div class="bt-subname" style="margin-top:0">{{ (d.danhSachDichVu && d.danhSachDichVu.length) ? d.danhSachDichVu.join(", ") : "—" }}</div>
-            </td>
-            <td>{{ fmt(d.tongTien) }}</td>
-            <td>
-              <!-- ĐÃ SỬA: trước đây bind d.trangThaiHoaDon / d.coHoaDon / d.ghiChuLoi - các field này
-                   KHÔNG tồn tại trong response backend (backend trả TrangThaiHddtDichVu/CoHoaDon...),
-                   nên luôn ra undefined -> rơi vào nhánh "Đang chờ" dù thực tế đã xuất hóa đơn. -->
-              <span v-if="d.trangThaiHddtDichVu === 1" class="status-pill active"><span class="status-dot"></span>Đã xuất</span>
-              <span v-else-if="d.trangThaiHddtDichVu === 2" class="status-pill cancelled" :title="d.ghiChuLoiDichVu"><span class="status-dot"></span>Lỗi</span>
-              <span v-else-if="d.trangThaiHddtDichVu === 3 || d.trangThaiHddtDichVu === 0" class="status-pill pending"><span class="status-dot"></span>Đang chờ</span>
-              <span v-else class="status-pill inactive"><span class="status-dot"></span>Không xuất HĐ</span>
-            </td>
-            <td>{{ d.soHoaDonDichVu || "—" }}</td>
-            <td>
-              <a v-if="d.linkPdfDichVu" :href="d.linkPdfDichVu" target="_blank" class="icon-btn view" title="Xem PDF">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8s2.5-5 6-5 6 5 6 5-2.5 5-6 5-6-5-6-5Z"/><circle cx="8" cy="8" r="2"/></svg>
-              </a>
-              <span v-else>—</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-if="doiSoatTotal > 0" class="pager-wrap">
-        <span>Hiển thị {{ (curPageDS - 1) * perPageDS + 1 }}–{{ Math.min(curPageDS * perPageDS, doiSoatTotal) }} / {{ doiSoatTotal }} mục</span>
-        <div class="pager-btns">
-          <button class="page-btn" :disabled="curPageDS <= 1" @click="gotoPageDS(curPageDS - 1)">‹</button>
-          <button v-for="p in pageRangeDS" :key="p" class="page-btn" :class="{ cur: p === curPageDS }" @click="gotoPageDS(p)">{{ p }}</button>
-          <button class="page-btn" :disabled="curPageDS >= totalPagesDS" @click="gotoPageDS(curPageDS + 1)">›</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── TOAST ──────────────────────────────────────────────── -->
-    <Teleport to="body">
-      <div class="toast" :class="[toast.type, { show: toast.show }]">
-        {{ toast.msg }}
-      </div>
-    </Teleport>
-  </div>
+    </v-snackbar>
+  </v-container>
 </template>
 
 <style scoped>
-/* ── THEME VARIABLES (dark mode) ─────────────────────────────── */
-.kho-manager.dark-mode {
-  --dvc-card-bg: #23232f;
-  --dvc-bg-subtle: #2a2a38;
-  --dvc-bg-subtle2: #1e1e29;
-  --dvc-border: #383846;
-  --dvc-border-strong: #464656;
-  --dvc-text: #e8e8ee;
-  --dvc-text-strong: #cbcbd6;
-  --dvc-text-secondary: #a3a3b2;
-  --dvc-text-muted: #7c7c8c;
-  --dvc-accent: #4b4b6b;
-  --dvc-accent-hover: #5c5c80;
-  --dvc-shadow: rgba(0, 0, 0, 0.35);
-  --dvc-overlay: rgba(0, 0, 0, 0.6);
-}
-
-/* ── ROOT ───────────────────────────────────────────────────────── */
-.kho-manager {
-  /* ── THEME VARIABLES (light default) ─────────────────────────── */
-  --dvc-card-bg: #fff;
-  --dvc-bg-subtle: #f3f4f6;
-  --dvc-bg-subtle2: #f9fafb;
-  --dvc-border: #e5e7eb;
-  --dvc-border-strong: #d1d5db;
-  --dvc-text: #1a1a2e;
-  --dvc-text-strong: #374151;
-  --dvc-text-secondary: #6b7280;
-  --dvc-text-muted: #9ca3af;
-  --dvc-accent: #1a1a2e;
-  --dvc-accent-hover: #2d2d4e;
-  --dvc-shadow: rgba(0, 0, 0, 0.08);
-  --dvc-overlay: rgba(0, 0, 0, 0.45);
-  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
- font-family: "Jost", "Inter", sans-serif; color: var(--dvc-text); }
-
-/* ── HEADER ─────────────────────────────────────────────────────── */
-.header-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
-.page-title-text { font-size: 17px; font-weight: 700; color: var(--dvc-text); letter-spacing: 0.2px; }
-.header-actions { display: flex; gap: 8px; }
-
-/* ── BUTTONS ────────────────────────────────────────────────────── */
-.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 15px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; font-family: inherit; transition: all 0.15s; white-space: nowrap; }
-.btn-primary { background: var(--dvc-accent); color: #fff; }
-.btn-primary:hover:not(:disabled) { background: var(--dvc-accent-hover); transform: translateY(-1px); }
-.btn-sm { padding: 6px 12px; font-size: 12px; }
-
-/* ── STATS ──────────────────────────────────────────────────────── */
-.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
-.stat-card { background: var(--dvc-card-bg); border: 1px solid var(--dvc-border); border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 3px; }
-.stat-label { font-size: 11px; font-weight: 600; color: var(--dvc-text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
-.stat-value { font-size: 26px; font-weight: 700; color: var(--dvc-text); line-height: 1.1; }
-.stat-hint { font-size: 11px; color: var(--dvc-text-muted); margin-top: 2px; }
-.stat-dark { border-top: 3px solid var(--dvc-accent); }
-.stat-green { border-top: 3px solid #22c55e; }
-.stat-orange { border-top: 3px solid #f59e0b; }
-.stat-red { border-top: 3px solid #ef4444; }
-
-/* ── TOOLBAR ────────────────────────────────────────────────────── */
-.toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
-.form-input { background: var(--dvc-card-bg); border: 1px solid var(--dvc-border); border-radius: 8px; padding: 8px 12px; font-size: 13px; color: var(--dvc-text); font-family: inherit; outline: none; transition: border 0.15s; }
-.form-input:focus { border-color: var(--dvc-text-secondary); box-shadow: 0 0 0 3px rgba(107,114,128,0.07); }
-.filter-select { background: var(--dvc-card-bg); border: 1px solid var(--dvc-border); border-radius: 8px; padding: 7px 10px; color: var(--dvc-text-strong); font-size: 13px; font-family: inherit; cursor: pointer; outline: none; }
-.result-count { font-size: 12px; color: var(--dvc-text-muted); margin-left: auto; }
-
-.search-box { display: flex; align-items: center; gap: 8px; background: var(--dvc-card-bg); border: 1px solid var(--dvc-border); border-radius: 8px; padding: 7px 12px; min-width: 200px; flex: 1; max-width: 300px; transition: border 0.15s; }
-.search-box:focus-within { border-color: var(--dvc-text-secondary); }
-.search-box input { background: transparent; border: none; outline: none; color: var(--dvc-text); font-size: 13px; font-family: inherit; width: 100%; }
-.search-box input::placeholder { color: var(--dvc-text-muted); }
-
-.btn-refresh { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--dvc-border); background: var(--dvc-card-bg); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--dvc-text-muted); transition: all 0.12s; }
-.btn-refresh:hover { background: var(--dvc-bg-subtle2); color: var(--dvc-text); border-color: var(--dvc-border-strong); }
-.btn-refresh.spinning { color: var(--dvc-text); pointer-events: none; }
-.btn-refresh.spinning svg { animation: refresh-spin 0.7s linear infinite; }
-@keyframes refresh-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-
-/* ── TABLE ──────────────────────────────────────────────────────── */
-.table-wrap { background: var(--dvc-card-bg); border: 1px solid var(--dvc-border); border-radius: 12px; overflow: hidden; }
-table { width: 100%; border-collapse: collapse; }
-thead th { padding: 11px 14px; text-align: left; font-size: 11px; font-weight: 600; color: var(--dvc-text-muted); letter-spacing: 0.5px; border-bottom: 1px solid var(--dvc-bg-subtle); background: var(--dvc-bg-subtle2); white-space: nowrap; text-transform: uppercase; }
-tbody tr { border-bottom: 1px solid var(--dvc-bg-subtle); transition: background 0.12s; }
-tbody tr:last-child { border-bottom: none; }
-tbody tr:hover { background: var(--dvc-bg-subtle2); }
-tbody td { padding: 10px 14px; font-size: 13px; vertical-align: middle; }
-.code-text { font-size: 12px; color: var(--dvc-text-secondary); font-family: "Courier New", monospace; background: var(--dvc-bg-subtle); padding: 2px 7px; border-radius: 4px; }
-.sp-name { font-weight: 500; color: var(--dvc-text); }
-.bt-subname { font-size: 11.5px; color: var(--dvc-text-muted); margin-top: 2px; display: flex; align-items: center; gap: 6px; }
-
-/* ── STATUS PILL ────────────────────────────────────────────────── */
-.status-pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
-.status-pill.active { background: #f0fdf4; color: #15803d; }
-.status-pill.inactive { background: var(--dvc-bg-subtle2); color: var(--dvc-text-muted); }
-.status-pill.pending { background: #fffbeb; color: #b45309; }
-.status-pill.cancelled { background: #fef2f2; color: #dc2626; }
-.status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-
-/* ── ICON BUTTON ────────────────────────────────────────────────── */
-.icon-btn { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--dvc-border); background: var(--dvc-card-bg); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--dvc-text-muted); transition: all 0.12s; }
-.icon-btn:hover { background: var(--dvc-bg-subtle2); color: var(--dvc-text-strong); border-color: var(--dvc-border-strong); }
-.icon-btn.view:hover { color: #2563eb; border-color: #bfdbfe; background: #eff6ff; }
-
-/* ── EMPTY STATE ────────────────────────────────────────────────── */
-.empty-state { text-align: center; padding: 40px; }
-.empty-icon { font-size: 36px; margin-bottom: 8px; }
-.empty-text { color: var(--dvc-text-muted); font-size: 14px; }
-
-/* ── PAGINATION ─────────────────────────────────────────────────── */
-.pager-wrap { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-top: 1px solid var(--dvc-bg-subtle); font-size: 12px; color: var(--dvc-text-muted); }
-.pager-btns { display: flex; gap: 4px; }
-.page-btn { min-width: 28px; height: 28px; padding: 0 6px; border-radius: 6px; border: 1px solid var(--dvc-border); background: var(--dvc-card-bg); font-size: 12px; cursor: pointer; color: var(--dvc-text-secondary); transition: all 0.12s; }
-.page-btn:disabled { opacity: 0.4; cursor: default; }
-.page-btn:hover:not(:disabled):not(.cur) { border-color: var(--dvc-border-strong); background: var(--dvc-bg-subtle2); }
-.page-btn.cur { background: var(--dvc-accent); color: #fff; border-color: var(--dvc-accent); }
-
-/* ── TOAST ──────────────────────────────────────────────────────── */
-.toast { position: fixed; bottom: 24px; right: 24px; background: var(--dvc-card-bg); border: 1px solid var(--dvc-border); border-radius: 10px; padding: 12px 16px; font-size: 13px; color: var(--dvc-text); display: flex; align-items: center; gap: 9px; z-index: 1000; transform: translateY(20px); opacity: 0; transition: all 0.25s; pointer-events: none; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 320px; }
-.toast.show { transform: translateY(0); opacity: 1; }
-.toast.success { border-color: #bbf7d0; }
-.toast.error { border-color: #fecaca; }
-
-/* ── RESPONSIVE ─────────────────────────────────────────────────── */
-@media (max-width: 768px) {
-  .stats-row { grid-template-columns: repeat(2, 1fr); }
-  .header-bar { flex-direction: column; align-items: flex-start; }
-  .result-count { margin-left: 0; }
-  .search-box { max-width: none; width: 100%; }
-}
-@media (max-width: 480px) {
-  .stats-row { grid-template-columns: 1fr 1fr; }
-}
+.gap-1 { gap: 4px; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.font-family-monospace { font-family: "Courier New", monospace; }
 </style>

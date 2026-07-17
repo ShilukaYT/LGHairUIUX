@@ -1,9 +1,12 @@
 <script setup>
-import { ref, computed, reactive, onMounted } from "vue";
+import { ref, computed, reactive, onMounted, watch } from "vue";
 import axios from "axios";
 import { logActivity } from "@/utils/activityLogger";
-
 import { useTheme } from "vuetify";
+import {
+  Plus, Pencil, Trash2, Eye, Search, ImageOff, ChevronDown,
+  Check, X, RotateCcw,
+} from "lucide-vue-next";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -36,6 +39,8 @@ const bienThes = ref([]);
 const danhMucSPs = ref([]);
 const thuongHieus = ref([]);
 const expandedProducts = ref({});
+const expandedRows = ref([]);
+const isLoading = ref(false);
 
 // Gallery state
 const spGallery = reactive({}); // maSP -> [{ maHa, duongDan }]
@@ -46,10 +51,6 @@ const search = ref("");
 const filterCat = ref("");
 const filterBrand = ref("");
 const filterStatus = ref("");
-const curPage = ref(1);
-const perPage = ref(10);
-const sortField = ref(null);
-const sortDir = ref(1);
 const saving = ref(false);
 const btSaving = ref(false);
 
@@ -209,6 +210,7 @@ async function loadThuongHieu() {
 }
 
 async function loadSanPham() {
+  isLoading.value = true;
   try {
     const res = await axios.get(`${API}/api/QuanLySanPham`, {
       params: {
@@ -224,6 +226,7 @@ async function loadSanPham() {
       trangThai: sp.trangThai, soLuongBienThe: sp.soLuongBienThe ?? 0,
     }));
   } catch { showToast("Lỗi tải danh sách sản phẩm!", "error"); }
+  finally { isLoading.value = false; }
 }
 
 async function loadBienThe(maSP) {
@@ -255,74 +258,66 @@ async function loadGalleryBT(maBienThe) {
   } catch { btGallery[maBienThe] = []; }
 }
 
-// ══ COMPUTED ═══════════════════════════════════════════════════════
-const toast = reactive({ show: false, msg: "", type: "success" });
-const lightbox = reactive({ open: false, imgs: [], idx: 0 });
+// ══ SNACKBAR (Vuetify) ═════════════════════════════════════════════
+const snackbar = ref({ show: false, text: "", color: "success" });
+function showToast(msg, type = "success") {
+  snackbar.value.text = msg;
+  snackbar.value.color = type === "success" ? "success" : "error";
+  snackbar.value.show = true;
+}
 
+// ══ LIGHTBOX ═══════════════════════════════════════════════════════
+const lightbox = reactive({ open: false, imgs: [], idx: 0 });
+function openLightbox(imgs, idx) { lightbox.imgs = imgs; lightbox.idx = idx; lightbox.open = true; }
+function lbPrev() { lightbox.idx = (lightbox.idx - 1 + lightbox.imgs.length) % lightbox.imgs.length; }
+function lbNext() { lightbox.idx = (lightbox.idx + 1) % lightbox.imgs.length; }
+
+// ══ COMPUTED ═══════════════════════════════════════════════════════
 const totalActive = computed(() => sanPhams.value.filter(s => s.trangThai).length);
 const totalBT = computed(() => bienThes.value.length);
 
 const filteredData = computed(() => {
   const q = search.value.toLowerCase().trim();
-  let arr = sanPhams.value.filter(sp => {
+  return sanPhams.value.filter(sp => {
     const mq = !q || sp.tenSP.toLowerCase().includes(q) || sp.maSP.toLowerCase().includes(q);
     const mc = !filterCat.value || sp.maDanhMuc === filterCat.value;
     const mb = !filterBrand.value || sp.maTH === filterBrand.value;
     const ms = filterStatus.value === "" || String(sp.trangThai) === filterStatus.value;
     return mq && mc && mb && ms;
   });
-  if (sortField.value)
-    arr = [...arr].sort((a, b) =>
-      a[sortField.value] > b[sortField.value] ? sortDir.value : -sortDir.value
-    );
-  return arr;
 });
 
-const totalPages = computed(() => Math.ceil(filteredData.value.length / perPage.value));
-const pageData = computed(() => {
-  const s = (curPage.value - 1) * perPage.value;
-  return filteredData.value.slice(s, s + perPage.value);
-});
-const pageRange = computed(() => {
-  const t = totalPages.value, c = curPage.value;
-  const lo = Math.max(1, c - 2), hi = Math.min(t, lo + 4);
-  return Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
-});
+// ══ HEADERS cho v-data-table ═══════════════════════════════════════
+const headers = [
+  { title: "Ảnh", key: "hinhAnhDaiDien", align: "center", sortable: false, width: 70 },
+  { title: "Mã SP", key: "maSP", align: "start", sortable: true },
+  { title: "Tên sản phẩm", key: "tenSP", align: "start", sortable: true },
+  { title: "Danh mục", key: "maDanhMuc", align: "start", sortable: false },
+  { title: "Thương hiệu", key: "maTH", align: "start", sortable: false },
+  { title: "Biến thể", key: "soLuongBienThe", align: "center", sortable: true },
+  { title: "Trạng thái", key: "trangThai", align: "center", sortable: true },
+  { title: "Thao tác", key: "actions", align: "center", sortable: false },
+];
 
 // ══ HELPERS ════════════════════════════════════════════════════════
 const fmt = n => new Intl.NumberFormat("vi-VN").format(n) + "₫";
 const getDMName = id => danhMucSPs.value.find(x => x.maDMSP === id)?.tenDanhMuc ?? "---";
 const getTHName = id => thuongHieus.value.find(x => x.maTh === id)?.tenThuongHieu ?? "---";
-function sortIcon(f) { return sortField.value !== f ? "↕" : sortDir.value === 1 ? "↑" : "↓"; }
-function setSort(f) {
-  sortField.value === f ? (sortDir.value *= -1) : ((sortField.value = f), (sortDir.value = 1));
-  curPage.value = 1;
-}
 function getBTOfSP(maSP) { return bienThes.value.filter(bt => bt.maSanPham === maSP); }
-function isExpanded(maSP) { return !!expandedProducts.value[maSP]; }
-function toggleExpand(maSP) {
-  if (expandedProducts.value[maSP]) { delete expandedProducts.value[maSP]; }
-  else { expandedProducts.value[maSP] = true; loadBienThe(maSP); }
+function isExpanded(maSP) { return expandedRows.value.includes(maSP); }
+function onToggleExpand(maSP) {
+  if (isExpanded(maSP) && !expandedProducts.value[maSP]) {
+    expandedProducts.value[maSP] = true;
+    loadBienThe(maSP);
+  }
 }
-function getCatClass(maDanhMuc) {
-  const classes = ["cat-1", "cat-2", "cat-3", "cat-4", "cat-5"];
+const catColors = ["blue", "purple", "orange", "green", "amber-darken-2"];
+function getCatColor(maDanhMuc) {
   const idx = danhMucSPs.value.findIndex(x => x.maDMSP === maDanhMuc);
-  return classes[idx % classes.length] ?? "cat-1";
+  return catColors[idx % catColors.length] ?? "blue";
 }
 
-// ══ TOAST ══════════════════════════════════════════════════════════
-function showToast(msg, type = "success") {
-  toast.msg = msg; toast.type = type; toast.show = true;
-  setTimeout(() => { toast.show = false; }, 3000);
-}
-
-// ══ LIGHTBOX ═══════════════════════════════════════════════════════
-function openLightbox(imgs, idx) { lightbox.imgs = imgs; lightbox.idx = idx; lightbox.open = true; }
-function lbPrev() { lightbox.idx = (lightbox.idx - 1 + lightbox.imgs.length) % lightbox.imgs.length; }
-function lbNext() { lightbox.idx = (lightbox.idx + 1) % lightbox.imgs.length; }
-
-// ══ FILTER ═════════════════════════════════════════════════════════
-function onFilterChange() { curPage.value = 1; loadSanPham(); }
+function onFilterChange() { loadSanPham(); }
 
 // ══ SP MODAL ══════════════════════════════════════════════════════
 function resetSpForm() {
@@ -518,876 +513,689 @@ async function deleteBT(bt) {
   }
 }
 
+// Tự load biến thể khi mở rộng dòng
+watch(expandedRows, (rows) => {
+  for (const maSP of rows) onToggleExpand(maSP);
+});
+
 // ══ INIT ═══════════════════════════════════════════════════════════
-onMounted(async () => {
+async function loadAll() {
   await Promise.all([loadDanhMuc(), loadThuongHieu()]);
   await loadSanPham();
+}
+
+onMounted(async () => {
+  await loadAll();
 });
 </script>
 
 <template>
-  <div class="sp-manager" :class="{ 'dark-mode': isDarkMode }">
+  <v-container fluid class="pa-6 fill-height align-start" style="min-height: 100vh;">
+    <v-card width="100%" elevation="2" rounded="xl">
+      <v-card-title class="d-flex flex-column flex-md-row align-md-center justify-space-between pa-6">
+        <div>
+          <h2 class="text-h5 font-weight-bold mb-1">Quản Lý Sản Phẩm</h2>
+          <div class="text-subtitle-2 text-medium-emphasis">
+            {{ sanPhams.length }} sản phẩm · {{ totalActive }} đang bán
+          </div>
+        </div>
 
-    <!-- ── STATS ──────────────────────────────────────────────── -->
-    <!-- <div class="stats-row">
-      <div class="stat-card stat-dark">
-        <div class="stat-icon">📦</div>
-        <div class="stat-label">Tổng sản phẩm</div>
-        <div class="stat-value">{{ sanPhams.length }}</div>
-        <div class="stat-hint">{{ totalActive }} đang hoạt động</div>
-      </div>
-      <div class="stat-card stat-green">
-        <div class="stat-icon">🏷️</div>
-        <div class="stat-label">Danh mục</div>
-        <div class="stat-value">{{ danhMucSPs.length }}</div>
-        <div class="stat-hint">Đang sử dụng</div>
-      </div>
-      <div class="stat-card stat-blue">
-        <div class="stat-icon">🔖</div>
-        <div class="stat-label">Thương hiệu</div>
-        <div class="stat-value">{{ thuongHieus.length }}</div>
-        <div class="stat-hint">Đã đăng ký</div>
-      </div>
-      <div class="stat-card stat-purple">
-        <div class="stat-icon">🎛️</div>
-        <div class="stat-label">Biến thể đã tải</div>
-        <div class="stat-value">{{ totalBT }}</div>
-        <div class="stat-hint">Trong phiên này</div>
-      </div>
-    </div> -->
+        <div class="d-flex align-center gap-3 mt-4 mt-md-0 flex-wrap">
+          <v-btn
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            class="text-none font-weight-bold"
+            @click="openAddSP"
+          >
+            <template v-slot:prepend><Plus class="w-4 h-4 mr-1" /></template>
+            Thêm sản phẩm
+          </v-btn>
 
-    <!-- ── HEADER BAR ─────────────────────────────────────────── -->
-    <div class="header-bar">
-      <div class="page-title-text">Quản lý sản phẩm</div>
-      <div class="header-actions">
-        <button type="button" class="btn btn-primary btn-sm" @click="openAddSP">
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M8 2v12M2 8h12" />
-          </svg>
-          Thêm sản phẩm
-        </button>
-      </div>
-    </div>
+          <v-btn variant="outlined" color="grey-darken-1" size="40" rounded="lg" @click="loadAll">
+            <RotateCcw class="w-5 h-5" />
+          </v-btn>
+        </div>
+      </v-card-title>
 
-    <!-- ── TOOLBAR ────────────────────────────────────────────── -->
-    <div class="toolbar">
-      <div class="search-box">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <circle cx="7" cy="7" r="5" /><path d="M11 11l3 3" />
-        </svg>
-        <input v-model="search" placeholder="Tìm tên, mã sản phẩm..." @keyup.enter="onFilterChange" @input="curPage = 1" />
-      </div>
-      <select v-model="filterCat" class="filter-select" @change="onFilterChange">
-        <option value="">Tất cả danh mục</option>
-        <option v-for="dm in danhMucSPs" :key="dm.maDMSP" :value="dm.maDMSP">{{ dm.tenDanhMuc }}</option>
-      </select>
-      <select v-model="filterBrand" class="filter-select" @change="onFilterChange">
-        <option value="">Tất cả thương hiệu</option>
-        <option v-for="th in thuongHieus" :key="th.maTh" :value="th.maTh">{{ th.tenThuongHieu }}</option>
-      </select>
-      <select v-model="filterStatus" class="filter-select" @change="onFilterChange">
-        <option value="">Tất cả trạng thái</option>
-        <option value="1">Đang bán</option>
-        <option value="0">Ngừng bán</option>
-      </select>
-      <span class="result-count">{{ filteredData.length }} kết quả</span>
-      <select v-model.number="perPage" class="filter-select" style="width:auto;min-width:110px" @change="curPage = 1">
-        <option :value="10">10 / trang</option>
-        <option :value="20">20 / trang</option>
-        <option :value="50">50 / trang</option>
-        <option :value="9999">Tất cả</option>
-      </select>
-    </div>
+      <v-divider></v-divider>
 
-    <!-- ── TABLE ──────────────────────────────────────────────── -->
-    <div class="table-wrap">
-      <table>
-        <thead>
+      <!-- ── TOOLBAR ────────────────────────────────────────────── -->
+      <v-card-text class="pb-0">
+        <v-row dense>
+          <v-col cols="12" md="4">
+            <v-text-field
+              v-model="search"
+              label="Tìm tên, mã sản phẩm..."
+              variant="outlined"
+              density="compact"
+              hide-details
+              clearable
+              rounded="lg"
+              @keyup.enter="onFilterChange"
+              @click:clear="onFilterChange"
+            >
+              <template v-slot:prepend-inner>
+                <Search class="w-5 h-5 text-grey-darken-1 mr-2" />
+              </template>
+            </v-text-field>
+          </v-col>
+          <v-col cols="6" md="2">
+            <v-select
+              v-model="filterCat"
+              :items="[{ title: 'Tất cả danh mục', value: '' }, ...danhMucSPs.map(dm => ({ title: dm.tenDanhMuc, value: dm.maDMSP }))]"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              @update:model-value="onFilterChange"
+            ></v-select>
+          </v-col>
+          <v-col cols="6" md="2">
+            <v-select
+              v-model="filterBrand"
+              :items="[{ title: 'Tất cả thương hiệu', value: '' }, ...thuongHieus.map(th => ({ title: th.tenThuongHieu, value: th.maTh }))]"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              @update:model-value="onFilterChange"
+            ></v-select>
+          </v-col>
+          <v-col cols="6" md="2">
+            <v-select
+              v-model="filterStatus"
+              :items="[{ title: 'Tất cả trạng thái', value: '' }, { title: 'Đang bán', value: '1' }, { title: 'Ngừng bán', value: '0' }]"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              @update:model-value="onFilterChange"
+            ></v-select>
+          </v-col>
+          <v-col cols="6" md="2" class="d-flex align-center">
+            <span class="text-caption text-medium-emphasis">{{ filteredData.length }} kết quả</span>
+          </v-col>
+        </v-row>
+      </v-card-text>
+
+      <v-data-table
+        :headers="headers"
+        :items="filteredData"
+        :loading="isLoading"
+        items-per-page="10"
+        item-value="maSP"
+        show-expand
+        v-model:expanded="expandedRows"
+        hover
+        class="mt-2"
+      >
+        <template v-slot:item.hinhAnhDaiDien="{ item }">
+          <div class="d-flex justify-center py-2">
+            <v-avatar
+              rounded="lg"
+              size="42"
+              class="cursor-pointer"
+              @click="item.hinhAnhDaiDien && openLightbox([item.hinhAnhDaiDien], 0)"
+            >
+              <v-img v-if="item.hinhAnhDaiDien" :src="item.hinhAnhDaiDien" cover></v-img>
+              <ImageOff v-else class="w-4 h-4 text-grey" />
+            </v-avatar>
+          </div>
+        </template>
+
+        <template v-slot:item.maSP="{ item }">
+          <span class="text-caption font-weight-medium code-chip">{{ item.maSP }}</span>
+        </template>
+
+        <template v-slot:item.tenSP="{ item }">
+          <div class="font-weight-medium">{{ item.tenSP }}</div>
+        </template>
+
+        <template v-slot:item.maDanhMuc="{ item }">
+          <v-chip :color="getCatColor(item.maDanhMuc)" size="small" variant="tonal" class="font-weight-medium">
+            {{ getDMName(item.maDanhMuc) }}
+          </v-chip>
+        </template>
+
+        <template v-slot:item.maTH="{ item }">
+          <v-chip v-if="item.maTH" size="small" variant="tonal" color="grey-darken-2" class="font-weight-medium">
+            {{ getTHName(item.maTH) }}
+          </v-chip>
+          <span v-else class="text-medium-emphasis">—</span>
+        </template>
+
+        <template v-slot:item.soLuongBienThe="{ item }">
+          <v-chip size="small" variant="tonal" color="info" class="font-weight-medium">
+            {{ item.soLuongBienThe }} biến thể
+          </v-chip>
+        </template>
+
+        <template v-slot:item.trangThai="{ item }">
+          <v-chip
+            :color="item.trangThai ? 'success' : 'grey-darken-1'"
+            size="small"
+            variant="flat"
+            class="font-weight-bold cursor-pointer"
+            @click="toggleStatusSP(item)"
+          >
+            {{ item.trangThai ? "Đang bán" : "Ngừng bán" }}
+          </v-chip>
+        </template>
+
+        <template v-slot:item.actions="{ item }">
+          <div class="d-flex align-center justify-center gap-1">
+            <v-btn icon variant="text" size="small" color="primary" title="Xem" @click="openViewSP(item)">
+              <Eye class="w-4 h-4" />
+            </v-btn>
+            <v-btn icon variant="text" size="small" color="warning" title="Sửa" @click="openEditSP(item)">
+              <Pencil class="w-4 h-4" />
+            </v-btn>
+            <v-btn icon variant="text" size="small" color="error" title="Xóa" @click="delSP(item)">
+              <Trash2 class="w-4 h-4" />
+            </v-btn>
+          </div>
+        </template>
+
+        <template v-slot:expanded-row="{ columns, item }">
           <tr>
-            <th style="width:56px">Ảnh</th>
-            <th>Mã SP</th>
-            <th class="sortable" @click="setSort('tenSP')">
-              Tên sản phẩm <span class="sort-icon">{{ sortIcon("tenSP") }}</span>
-            </th>
-            <th>Danh mục</th>
-            <th>Thương hiệu</th>
-            <th class="sortable" @click="setSort('soLuongBienThe')">
-              Biến thể <span class="sort-icon">{{ sortIcon("soLuongBienThe") }}</span>
-            </th>
-            <th>Trạng thái</th>
-            <th>Thao tác</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="pageData.length === 0">
-            <td colspan="8">
-              <div class="empty-state">
-                <div class="empty-icon">🔍</div>
-                <div class="empty-text">Không tìm thấy sản phẩm nào</div>
+            <td :colspan="columns.length" class="pa-0">
+              <div class="nested-panel pa-4" :class="{ 'nested-panel-dark': isDarkMode }">
+                <div class="d-flex align-center justify-space-between mb-3">
+                  <div class="text-subtitle-2 font-weight-bold">
+                    Biến thể sản phẩm
+                    <v-chip size="x-small" class="ml-1">{{ getBTOfSP(item.maSP).length }}</v-chip>
+                  </div>
+                  <v-btn
+                    color="success"
+                    variant="tonal"
+                    size="small"
+                    rounded="lg"
+                    class="text-none font-weight-bold"
+                    @click="openAddBT(item.maSP)"
+                  >
+                    <template v-slot:prepend><Plus class="w-4 h-4 mr-1" /></template>
+                    Thêm biến thể
+                  </v-btn>
+                </div>
+
+                <div v-if="getBTOfSP(item.maSP).length === 0" class="text-center text-medium-emphasis py-6 text-caption">
+                  Chưa có biến thể. Nhấn "Thêm biến thể" để bắt đầu.
+                </div>
+
+                <v-table v-else density="compact" class="bt-table-inner">
+                  <thead>
+                    <tr>
+                      <th style="width:50px">Ảnh</th>
+                      <th>Mã BT</th>
+                      <th>Tên biến thể</th>
+                      <th>Giá bán</th>
+                      <th>Tồn kho</th>
+                      <th>Hoa hồng</th>
+                      <th>Trạng thái</th>
+                      <th class="text-center">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="bt in getBTOfSP(item.maSP)" :key="bt.maBienThe">
+                      <td>
+                        <v-avatar
+                          rounded="lg"
+                          size="36"
+                          class="cursor-pointer my-1"
+                          @click="bt.hinhAnhDaiDien && openLightbox([bt.hinhAnhDaiDien], 0)"
+                        >
+                          <v-img v-if="bt.hinhAnhDaiDien" :src="bt.hinhAnhDaiDien" cover></v-img>
+                          <ImageOff v-else class="w-3 h-3 text-grey" />
+                        </v-avatar>
+                      </td>
+                      <td><span class="text-caption code-chip">{{ bt.maBienThe }}</span></td>
+                      <td><span class="font-weight-medium">{{ bt.tenBienThe }}</span></td>
+                      <td class="font-weight-bold text-warning-darken-2">{{ fmt(bt.giaBan) }}</td>
+                      <td>
+                        <v-chip :color="bt.soLuong > 0 ? 'success' : 'error'" size="x-small" variant="tonal" class="font-weight-bold">
+                          {{ bt.soLuong }}
+                        </v-chip>
+                      </td>
+                      <td class="text-caption">{{ bt.phanTramHoaHong != null ? bt.phanTramHoaHong + '%' : '—' }}</td>
+                      <td>
+                        <v-chip :color="bt.trangThai ? 'success' : 'grey-darken-1'" size="x-small" variant="flat" class="font-weight-bold">
+                          {{ bt.trangThai ? "Còn hàng" : "Hết hàng" }}
+                        </v-chip>
+                      </td>
+                      <td class="text-center">
+                        <v-btn icon variant="text" size="x-small" color="warning" title="Sửa biến thể" @click="openEditBT(bt)">
+                          <Pencil class="w-3.5 h-3.5" />
+                        </v-btn>
+                        <v-btn icon variant="text" size="x-small" color="error" title="Xóa biến thể" @click="deleteBT(bt)">
+                          <Trash2 class="w-3.5 h-3.5" />
+                        </v-btn>
+                      </td>
+                    </tr>
+                  </tbody>
+                </v-table>
               </div>
             </td>
           </tr>
-
-          <template v-for="sp in pageData" :key="sp.maSP">
-            <!-- Main row -->
-            <tr class="sp-main-row" :class="{ 'row-expanded': isExpanded(sp.maSP) }">
-              <td>
-                <div class="thumb-wrap" @click="sp.hinhAnhDaiDien && openLightbox([sp.hinhAnhDaiDien], 0)">
-                  <img v-if="sp.hinhAnhDaiDien" :src="sp.hinhAnhDaiDien" class="thumb-img" :alt="sp.tenSP" />
-                  <div v-else class="thumb-placeholder">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                      <rect x="3" y="3" width="18" height="18" rx="2"/>
-                      <circle cx="8.5" cy="8.5" r="1.5"/>
-                      <path d="M21 15l-5-5L5 21"/>
-                    </svg>
-                  </div>
-                </div>
-              </td>
-              <td>
-                <button type="button" class="expand-btn" @click="toggleExpand(sp.maSP)">
-                  <svg class="expand-icon" :class="{ open: isExpanded(sp.maSP) }" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M4 6l4 4 4-4"/>
-                  </svg>
-                </button>
-                <span class="code-text">{{ sp.maSP }}</span>
-              </td>
-              <td><div class="sp-name">{{ sp.tenSP }}</div></td>
-              <td>
-                <span class="cat-badge" :class="getCatClass(sp.maDanhMuc)">{{ getDMName(sp.maDanhMuc) }}</span>
-              </td>
-              <td>
-                <span v-if="sp.maTH" class="brand-badge">{{ getTHName(sp.maTH) }}</span>
-                <span v-else class="no-brand">—</span>
-              </td>
-              <td>
-                <span class="bt-count-badge">
-                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <rect x="1" y="5" width="6" height="6" rx="1"/>
-                    <rect x="9" y="5" width="6" height="6" rx="1"/>
-                    <rect x="5" y="2" width="6" height="3" rx="1"/>
-                  </svg>
-                  {{ sp.soLuongBienThe }} biến thể
-                </span>
-              </td>
-              <td>
-                <span class="status-pill" :class="sp.trangThai ? 'active' : 'inactive'">
-                  <span class="status-dot"></span>{{ sp.trangThai ? "Đang bán" : "Ngừng bán" }}
-                </span>
-              </td>
-              <td>
-                <div class="actions">
-                  <button class="icon-btn view" title="Xem" @click="openViewSP(sp)">
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                      <circle cx="8" cy="8" r="3"/><path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z"/>
-                    </svg>
-                  </button>
-                  <button class="icon-btn edit" title="Sửa" @click="openEditSP(sp)">
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                      <path d="M11 2l3 3L5 14H2v-3L11 2z"/>
-                    </svg>
-                  </button>
-                  <button class="icon-btn del" title="Xóa" @click="delSP(sp)">
-                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                      <path d="M2 4h12M6 4V2h4v2M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4"/>
-                    </svg>
-                  </button>
-                </div>
-              </td>
-            </tr>
-
-            <!-- Expanded: Biến thể -->
-            <tr v-if="isExpanded(sp.maSP)" class="sp-detail-row">
-              <td colspan="8">
-                <div class="nested-panel">
-                  <div class="nested-header">
-                    <h4 class="nested-title">
-                      Biến thể sản phẩm
-                      <span class="nested-count">{{ getBTOfSP(sp.maSP).length }}</span>
-                    </h4>
-                    <button type="button" class="btn btn-sm btn-nested-add" @click="openAddBT(sp.maSP)">
-                      + Thêm biến thể
-                    </button>
-                  </div>
-
-                  <div v-if="getBTOfSP(sp.maSP).length === 0" class="nested-empty">
-                    Chưa có biến thể. Nhấn "+ Thêm biến thể" để bắt đầu.
-                  </div>
-
-                  <div v-else class="bt-table-wrap">
-                    <table class="bt-table">
-                      <thead>
-                        <tr>
-                          <th style="width:44px">Ảnh</th>
-                          <th>Mã BT</th>
-                          <th>Tên biến thể</th>
-                          <th>Giá bán</th>
-                          <th>Tồn kho</th>
-                          <th>Hoa hồng</th>
-                          <th>Trạng thái</th>
-                          <th>Thao tác</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr v-for="bt in getBTOfSP(sp.maSP)" :key="bt.maBienThe" class="bt-display-row">
-                          <td>
-                            <div class="thumb-wrap" style="width:36px;height:36px"
-                              @click="bt.hinhAnhDaiDien && openLightbox([bt.hinhAnhDaiDien], 0)">
-                              <img v-if="bt.hinhAnhDaiDien" :src="bt.hinhAnhDaiDien" class="bt-thumb" />
-                              <div v-else class="thumb-placeholder" style="width:36px;height:36px;border-radius:6px">
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                                  <rect x="3" y="3" width="18" height="18" rx="2"/>
-                                  <circle cx="8.5" cy="8.5" r="1.5"/>
-                                  <path d="M21 15l-5-5L5 21"/>
-                                </svg>
-                              </div>
-                            </div>
-                          </td>
-                          <td><span class="code-text">{{ bt.maBienThe }}</span></td>
-                          <td><span class="bt-name">{{ bt.tenBienThe }}</span></td>
-                          <td class="price-cell">{{ fmt(bt.giaBan) }}</td>
-                          <td>
-                            <span class="stock-badge" :class="bt.soLuong > 0 ? 'stock-ok' : 'stock-zero'">
-                              {{ bt.soLuong }}
-                            </span>
-                          </td>
-                          <td class="pct-cell">{{ bt.phanTramHoaHong != null ? bt.phanTramHoaHong + '%' : '—' }}</td>
-                          <td>
-                            <span class="status-pill" :class="bt.trangThai ? 'active' : 'inactive'" style="font-size:11px;padding:2px 8px">
-                              <span class="status-dot"></span>{{ bt.trangThai ? "Còn hàng" : "Hết hàng" }}
-                            </span>
-                          </td>
-                          <td>
-                            <div class="actions">
-                              <button class="icon-btn edit icon-btn-xs" title="Sửa biến thể" @click="openEditBT(bt)">
-                                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
-                                  <path d="M11 2l3 3L5 14H2v-3L11 2z"/>
-                                </svg>
-                              </button>
-                              <button class="icon-btn del icon-btn-xs" title="Xóa biến thể" @click="deleteBT(bt)">
-                                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
-                                  <path d="M2 4h12M6 4V2h4v2M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4"/>
-                                </svg>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </td>
-            </tr>
-          </template>
-        </tbody>
-      </table>
-
-      <!-- Pagination -->
-      <div v-if="filteredData.length > 0 && perPage < 9999" class="pager-wrap">
-        <span>Hiển thị {{ (curPage - 1) * perPage + 1 }}–{{ Math.min(curPage * perPage, filteredData.length) }} / {{ filteredData.length }} mục</span>
-        <div class="pager-btns">
-          <button class="page-btn" :disabled="curPage <= 1" @click="curPage--">‹</button>
-          <button v-for="p in pageRange" :key="p" class="page-btn" :class="{ cur: p === curPage }" @click="curPage = p">{{ p }}</button>
-          <button class="page-btn" :disabled="curPage >= totalPages" @click="curPage++">›</button>
-        </div>
-      </div>
-    </div>
+        </template>
+      </v-data-table>
+    </v-card>
 
     <!-- ══ MODAL SẢN PHẨM ══════════════════════════════════════════ -->
-    <Teleport to="body">
-      <div v-if="spModal.open" class="modal-overlay" :class="{ 'dark-mode': isDarkMode }" @click.self="closeSpModal">
-        <div class="modal modal-wide">
-          <div class="modal-header">
-            <h3 class="modal-title">{{ spModal.title }}</h3>
-            <button class="modal-close" @click="closeSpModal">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M2 2l12 12M14 2L2 14"/>
-              </svg>
-            </button>
-          </div>
-          <div class="modal-body">
+    <v-dialog v-model="spModal.open" max-width="640" scrollable>
+      <v-card rounded="xl">
+        <v-card-title class="pa-6 border-b d-flex align-center justify-space-between">
+          <div class="text-h6 font-weight-bold">{{ spModal.title }}</div>
+          <v-btn icon variant="text" size="small" @click="closeSpModal">
+            <X class="w-5 h-5" />
+          </v-btn>
+        </v-card-title>
 
-            <!-- View mode -->
-            <template v-if="spModal.mode === 'view'">
-              <div class="detail-grid">
-                <div>
-                  <div class="thumb-wrap" style="width:120px;height:120px;cursor:pointer"
-                    @click="spForm.hinhAnhDaiDien && openLightbox([spForm.hinhAnhDaiDien], 0)">
-                    <img v-if="spForm.hinhAnhDaiDien" :src="spForm.hinhAnhDaiDien" style="width:120px;height:120px;object-fit:cover;border-radius:10px;border:1px solid #e5e7eb" />
-                    <div v-else class="thumb-placeholder" style="width:120px;height:120px;border-radius:10px">
-                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
-                        <rect x="3" y="3" width="18" height="18" rx="2"/>
-                        <circle cx="8.5" cy="8.5" r="1.5"/>
-                        <path d="M21 15l-5-5L5 21"/>
-                      </svg>
-                    </div>
-                  </div>
+        <v-card-text class="pa-6">
+          <!-- View mode -->
+          <template v-if="spModal.mode === 'view'">
+            <v-row>
+              <v-col cols="12" sm="4" class="d-flex justify-center">
+                <v-avatar
+                  rounded="lg"
+                  size="120"
+                  class="cursor-pointer"
+                  @click="spForm.hinhAnhDaiDien && openLightbox([spForm.hinhAnhDaiDien], 0)"
+                >
+                  <v-img v-if="spForm.hinhAnhDaiDien" :src="spForm.hinhAnhDaiDien" cover></v-img>
+                  <ImageOff v-else class="w-8 h-8 text-grey" />
+                </v-avatar>
+              </v-col>
+              <v-col cols="12" sm="8">
+                <div class="detail-row"><span class="detail-label">Mã SP</span><span class="text-caption code-chip">{{ spForm.maSP }}</span></div>
+                <div class="detail-row"><span class="detail-label">Tên sản phẩm</span><span class="font-weight-medium">{{ spForm.tenSP }}</span></div>
+                <div class="detail-row">
+                  <span class="detail-label">Danh mục</span>
+                  <v-chip :color="getCatColor(spForm.maDanhMuc)" size="small" variant="tonal">{{ getDMName(spForm.maDanhMuc) }}</v-chip>
                 </div>
-                <div class="detail-info-col">
-                  <div class="detail-row"><span class="detail-label">Mã SP</span><span class="code-text">{{ spForm.maSP }}</span></div>
-                  <div class="detail-row"><span class="detail-label">Tên sản phẩm</span><span class="detail-val">{{ spForm.tenSP }}</span></div>
-                  <div class="detail-row"><span class="detail-label">Danh mục</span>
-                    <span class="cat-badge" :class="getCatClass(spForm.maDanhMuc)">{{ getDMName(spForm.maDanhMuc) }}</span>
-                  </div>
-                  <div class="detail-row"><span class="detail-label">Thương hiệu</span><span class="detail-val">{{ getTHName(spForm.maTH) }}</span></div>
-                  <div class="detail-row"><span class="detail-label">Biến thể</span>
-                    <span class="bt-count-badge">{{ spForm.soLuongBienThe ?? 0 }} biến thể</span>
-                  </div>
-                  <div class="detail-row"><span class="detail-label">Trạng thái</span>
-                    <span class="status-pill" :class="spForm.trangThai ? 'active' : 'inactive'">
-                      <span class="status-dot"></span>{{ spForm.trangThai ? "Đang bán" : "Ngừng bán" }}
-                    </span>
-                  </div>
+                <div class="detail-row"><span class="detail-label">Thương hiệu</span><span>{{ getTHName(spForm.maTH) }}</span></div>
+                <div class="detail-row">
+                  <span class="detail-label">Biến thể</span>
+                  <v-chip color="info" size="small" variant="tonal">{{ spForm.soLuongBienThe ?? 0 }} biến thể</v-chip>
                 </div>
+                <div class="detail-row">
+                  <span class="detail-label">Trạng thái</span>
+                  <v-chip :color="spForm.trangThai ? 'success' : 'grey-darken-1'" size="small" variant="flat" class="font-weight-bold">
+                    {{ spForm.trangThai ? "Đang bán" : "Ngừng bán" }}
+                  </v-chip>
+                </div>
+              </v-col>
+            </v-row>
+
+            <!-- Gallery xem -->
+            <div v-if="spGallery[spForm.maSP]?.length" class="mt-4">
+              <div class="text-subtitle-2 font-weight-bold mb-2">Ảnh gallery ({{ spGallery[spForm.maSP].length }})</div>
+              <div class="d-flex flex-wrap gap-2">
+                <v-avatar
+                  v-for="(h, i) in spGallery[spForm.maSP]" :key="h.maHa"
+                  rounded="lg" size="70" class="cursor-pointer"
+                  @click="openLightbox(spGallery[spForm.maSP].map(x => x.duongDan), i)"
+                >
+                  <v-img :src="h.duongDan" cover></v-img>
+                </v-avatar>
               </div>
-              <!-- Gallery xem -->
-              <div v-if="spGallery[spForm.maSP]?.length" class="gallery-section">
-                <div class="gallery-label">Ảnh gallery ({{ spGallery[spForm.maSP].length }})</div>
-                <div class="gallery-grid">
-                  <div v-for="(h, i) in spGallery[spForm.maSP]" :key="h.maHa" class="gallery-thumb-wrap"
-                    @click="openLightbox(spGallery[spForm.maSP].map(x => x.duongDan), i)">
-                    <img :src="h.duongDan" class="gallery-thumb" />
-                  </div>
-                </div>
-              </div>
-            </template>
+            </div>
+          </template>
 
-            <!-- Form add/edit -->
-            <template v-else>
-              <div class="form-row-2">
-                <div class="form-group" v-if="!editingSpId">
-                  <label class="form-label">Mã sản phẩm *</label>
-                  <input v-model="spForm.maSP" class="form-input" :class="{ 'input-error': spErrors.maSP }" placeholder="VD: SP001" maxlength="10" />
-                  <p v-if="spErrors.maSP" class="field-error">{{ spErrors.maSP }}</p>
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Tên sản phẩm *</label>
-                  <input v-model="spForm.tenSP" class="form-input" :class="{ 'input-error': spErrors.tenSP }" placeholder="Nhập tên sản phẩm" />
-                  <p v-if="spErrors.tenSP" class="field-error">{{ spErrors.tenSP }}</p>
-                </div>
-              </div>
-              <div class="form-row-2">
-                <div class="form-group">
-                  <label class="form-label">Danh mục *</label>
-                  <select v-model="spForm.maDanhMuc" class="form-input" :class="{ 'input-error': spErrors.maDanhMuc }">
-                    <option value="">-- Chọn danh mục --</option>
-                    <option v-for="dm in danhMucSPs" :key="dm.maDMSP" :value="dm.maDMSP">{{ dm.tenDanhMuc }}</option>
-                  </select>
-                  <p v-if="spErrors.maDanhMuc" class="field-error">{{ spErrors.maDanhMuc }}</p>
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Thương hiệu</label>
-                  <select v-model="spForm.maTH" class="form-input">
-                    <option value="">-- Không có --</option>
-                    <option v-for="th in thuongHieus" :key="th.maTh" :value="th.maTh">{{ th.tenThuongHieu }}</option>
-                  </select>
-                </div>
-              </div>
-              <div class="form-row-2">
-                <div class="form-group">
-                  <label class="form-label">Trạng thái</label>
-                  <select v-model.number="spForm.trangThai" class="form-input">
-                    <option :value="1">Đang bán</option>
-                    <option :value="0">Ngừng bán</option>
-                  </select>
-                </div>
-              </div>
+          <!-- Form add/edit -->
+          <v-form v-else @submit.prevent="saveSP">
+            <v-row>
+              <v-col cols="12" sm="6" v-if="!editingSpId">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Mã sản phẩm *</div>
+                <v-text-field
+                  v-model="spForm.maSP"
+                  variant="outlined" density="comfortable" rounded="lg"
+                  placeholder="VD: SP001" maxlength="10"
+                  :error-messages="spErrors.maSP"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12" :sm="editingSpId ? 12 : 6">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Tên sản phẩm *</div>
+                <v-text-field
+                  v-model="spForm.tenSP"
+                  variant="outlined" density="comfortable" rounded="lg"
+                  placeholder="Nhập tên sản phẩm"
+                  :error-messages="spErrors.tenSP"
+                ></v-text-field>
+              </v-col>
 
-              <!-- Ảnh đại diện -->
-              <div class="form-group">
-                <label class="form-label">Ảnh đại diện</label>
-                <div class="upload-zone"
-                  @dragover.prevent
-                  @drop.prevent="async (e) => { const f = e.dataTransfer.files[0]; if (f) { try { spForm.hinhAnhDaiDien = await readFileAsPreview(f); spForm._newAvatarFile = f; } catch {} } }"
-                  @click="spImgInput?.click()">
-                  <div v-if="!spForm.hinhAnhDaiDien" class="upload-placeholder">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
-                    </svg>
-                    <span>Kéo thả hoặc nhấn để chọn ảnh</span>
-                    <span class="upload-hint">PNG, JPG tối đa 5MB</span>
-                  </div>
-                  <div v-else class="upload-preview-single">
-                    <img :src="spForm.hinhAnhDaiDien" class="upload-preview-img" />
-                    <button type="button" class="remove-single-img" @click.stop="spForm.hinhAnhDaiDien = ''; spForm._newAvatarFile = null">✕</button>
-                  </div>
-                </div>
-                <input ref="spImgInput" type="file" accept="image/*" style="display:none" @change="onSPAvatarChange" />
-              </div>
+              <v-col cols="12" sm="6">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Danh mục *</div>
+                <v-select
+                  v-model="spForm.maDanhMuc"
+                  :items="danhMucSPs.map(dm => ({ title: dm.tenDanhMuc, value: dm.maDMSP }))"
+                  variant="outlined" density="comfortable" rounded="lg"
+                  placeholder="-- Chọn danh mục --"
+                  :error-messages="spErrors.maDanhMuc"
+                ></v-select>
+              </v-col>
+              <v-col cols="12" sm="6">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Thương hiệu</div>
+                <v-select
+                  v-model="spForm.maTH"
+                  :items="[{ title: '-- Không có --', value: '' }, ...thuongHieus.map(th => ({ title: th.tenThuongHieu, value: th.maTh }))]"
+                  variant="outlined" density="comfortable" rounded="lg"
+                ></v-select>
+              </v-col>
 
-              <!-- Gallery ảnh sản phẩm -->
-              <div class="form-group">
-                <label class="form-label">Gallery ảnh sản phẩm</label>
+              <v-col cols="12" sm="6">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Trạng thái</div>
+                <v-select
+                  v-model="spForm.trangThai"
+                  :items="[{ title: 'Đang bán', value: 1 }, { title: 'Ngừng bán', value: 0 }]"
+                  variant="outlined" density="comfortable" rounded="lg"
+                ></v-select>
+              </v-col>
+            </v-row>
 
-                <!-- Ảnh gallery đã có (khi edit) -->
-                <div v-if="editingSpId && spGallery[editingSpId]?.length" class="gallery-edit-grid">
-                  <div v-for="h in spGallery[editingSpId]" :key="h.maHa" class="gallery-edit-item">
-                    <img :src="h.duongDan" class="gallery-edit-thumb" @click="openLightbox([h.duongDan], 0)" />
-                    <button type="button" class="gallery-delete-btn" @click="markDeleteSPGallery(h.maHa)" title="Xóa ảnh">✕</button>
-                  </div>
-                </div>
-
-                <!-- Ảnh gallery mới -->
-                <div v-if="spForm._newGalleryFiles.length" class="gallery-edit-grid" style="margin-top:8px">
-                  <div v-for="(g, idx) in spForm._newGalleryFiles" :key="idx" class="gallery-edit-item gallery-new-item">
-                    <img :src="g.preview" class="gallery-edit-thumb" />
-                    <button type="button" class="gallery-delete-btn" @click="removeSPNewGallery(idx)">✕</button>
-                    <span class="gallery-new-badge">Mới</span>
-                  </div>
-                </div>
-
-                <button type="button" class="gallery-add-btn" @click="spGalleryInput?.click()">
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M8 2v12M2 8h12" />
+            <!-- Ảnh đại diện -->
+            <div class="mt-2">
+              <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Ảnh đại diện</div>
+              <div
+                class="upload-zone"
+                @dragover.prevent
+                @drop.prevent="async (e) => { const f = e.dataTransfer.files[0]; if (f) { try { spForm.hinhAnhDaiDien = await readFileAsPreview(f); spForm._newAvatarFile = f; } catch {} } }"
+                @click="spImgInput?.click()"
+              >
+                <div v-if="!spForm.hinhAnhDaiDien" class="upload-placeholder">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
                   </svg>
-                  Thêm ảnh phụ
-                </button>
-                <input ref="spGalleryInput" type="file" accept="image/*" multiple style="display:none" @change="onSPGalleryChange" />
-                <p class="upload-hint" style="margin-top:4px">Tối đa 10 ảnh, mỗi ảnh ≤ 5MB</p>
+                  <span>Kéo thả hoặc nhấn để chọn ảnh</span>
+                  <span class="text-caption text-medium-emphasis">PNG, JPG tối đa 5MB</span>
+                </div>
+                <div v-else class="upload-preview-single">
+                  <v-img :src="spForm.hinhAnhDaiDien" width="90" height="90" cover rounded="lg" class="border"></v-img>
+                  <v-btn icon size="x-small" color="error" class="remove-single-img" @click.stop="spForm.hinhAnhDaiDien = ''; spForm._newAvatarFile = null">
+                    <X class="w-3 h-3" />
+                  </v-btn>
+                </div>
               </div>
-            </template>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-ghost" @click="closeSpModal">
-              {{ spModal.mode === 'view' ? 'Đóng' : 'Hủy' }}
-            </button>
-            <button v-if="spModal.mode !== 'view'" type="button" class="btn btn-primary" :disabled="saving" @click="saveSP">
-              <span v-if="saving" class="spinner"></span>
-              {{ saving ? "Đang lưu..." : editingSpId ? "Cập nhật" : "Thêm mới" }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+              <input ref="spImgInput" type="file" accept="image/*" style="display:none" @change="onSPAvatarChange" />
+            </div>
+
+            <!-- Gallery ảnh sản phẩm -->
+            <div class="mt-4">
+              <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Gallery ảnh sản phẩm</div>
+
+              <div v-if="editingSpId && spGallery[editingSpId]?.length" class="d-flex flex-wrap gap-2 mb-2">
+                <div v-for="h in spGallery[editingSpId]" :key="h.maHa" class="gallery-edit-item">
+                  <v-img :src="h.duongDan" width="72" height="72" cover rounded="lg" class="border cursor-pointer" @click="openLightbox([h.duongDan], 0)"></v-img>
+                  <v-btn icon size="x-small" color="error" class="gallery-delete-btn" title="Xóa ảnh" @click="markDeleteSPGallery(h.maHa)">
+                    <X class="w-3 h-3" />
+                  </v-btn>
+                </div>
+              </div>
+
+              <div v-if="spForm._newGalleryFiles.length" class="d-flex flex-wrap gap-2 mb-2">
+                <div v-for="(g, idx) in spForm._newGalleryFiles" :key="idx" class="gallery-edit-item gallery-new-item">
+                  <v-img :src="g.preview" width="72" height="72" cover rounded="lg" class="border"></v-img>
+                  <v-btn icon size="x-small" color="error" class="gallery-delete-btn" @click="removeSPNewGallery(idx)">
+                    <X class="w-3 h-3" />
+                  </v-btn>
+                  <v-chip size="x-small" color="primary" class="gallery-new-badge">Mới</v-chip>
+                </div>
+              </div>
+
+              <v-btn variant="outlined" rounded="lg" size="small" class="text-none" @click="spGalleryInput?.click()">
+                <template v-slot:prepend><Plus class="w-4 h-4" /></template>
+                Thêm ảnh phụ
+              </v-btn>
+              <input ref="spGalleryInput" type="file" accept="image/*" multiple style="display:none" @change="onSPGalleryChange" />
+              <div class="text-caption text-medium-emphasis mt-1">Tối đa 10 ảnh, mỗi ảnh ≤ 5MB</div>
+            </div>
+          </v-form>
+        </v-card-text>
+
+        <v-card-actions class="pa-4 px-6 d-flex justify-end border-t">
+          <v-btn variant="outlined" rounded="lg" class="text-none font-weight-bold mr-2" color="grey-darken-2" @click="closeSpModal">
+            {{ spModal.mode === 'view' ? 'Đóng' : 'Hủy' }}
+          </v-btn>
+          <v-btn
+            v-if="spModal.mode !== 'view'"
+            variant="flat" rounded="lg" class="text-none font-weight-bold"
+            color="primary" :loading="saving" @click="saveSP"
+          >
+            {{ editingSpId ? "Cập nhật" : "Thêm mới" }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <!-- ══ MODAL BIẾN THỂ ══════════════════════════════════════════ -->
-    <Teleport to="body">
-      <div v-if="btModal.open" class="modal-overlay" :class="{ 'dark-mode': isDarkMode }" @click.self="closeBtModal">
-        <div class="modal modal-wide">
-          <div class="modal-header">
-            <h3 class="modal-title">{{ btModal.title }}</h3>
-            <button class="modal-close" @click="closeBtModal">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M2 2l12 12M14 2L2 14"/>
-              </svg>
-            </button>
-          </div>
-          <div class="modal-body">
-            <!-- Mã biến thể (chỉ khi thêm mới) -->
-            <div class="form-row-2">
-              <div v-if="!editingBtId" class="form-group">
-                <label class="form-label">Mã biến thể *</label>
-                <input v-model="btForm.maBienThe" class="form-input" :class="{ 'input-error': btErrors.maBienThe }" placeholder="VD: BT001" maxlength="10" />
-                <p v-if="btErrors.maBienThe" class="field-error">{{ btErrors.maBienThe }}</p>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Tên biến thể *</label>
-                <input v-model="btForm.tenBienThe" class="form-input" :class="{ 'input-error': btErrors.tenBienThe }" placeholder="VD: Màu đỏ - Size L" />
-                <p v-if="btErrors.tenBienThe" class="field-error">{{ btErrors.tenBienThe }}</p>
-              </div>
-            </div>
-            <div class="form-row-2">
-              <div class="form-group">
-                <label class="form-label">Giá bán (₫) *</label>
-                <input v-model="btForm.giaBan" type="number" min="0" class="form-input" :class="{ 'input-error': btErrors.giaBan }" placeholder="0" />
-                <p v-if="btErrors.giaBan" class="field-error">{{ btErrors.giaBan }}</p>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Số lượng tồn</label>
-                <input v-model.number="btForm.soLuong" type="number" min="0" class="form-input" :class="{ 'input-error': btErrors.soLuong }" placeholder="0" />
-                <p v-if="btErrors.soLuong" class="field-error">{{ btErrors.soLuong }}</p>
-              </div>
-            </div>
-            <div v-if="editingBtId && Number(btForm.soLuong) !== Number(btForm._originalSoLuong)" class="form-row-2">
-              <div class="form-group" style="flex: 1 1 100%;">
-                <label class="form-label">Lý do điều chỉnh số lượng *</label>
-                <input v-model="btForm.ghiChu" class="form-input" :class="{ 'input-error': btErrors.ghiChu }" placeholder="VD: Kiểm kê phát hiện thiếu, hàng lỗi, nhập tay điều chỉnh..." maxlength="255" />
-                <p v-if="btErrors.ghiChu" class="field-error">{{ btErrors.ghiChu }}</p>
-              </div>
-            </div>
-            <div class="form-row-2">
-              <div class="form-group">
-                <label class="form-label">Hoa hồng (%)</label>
-                <input v-model="btForm.phanTramHoaHong" type="number" min="0" max="100" step="0.1" class="form-input" :class="{ 'input-error': btErrors.phanTramHoaHong }" placeholder="0" />
-                <p v-if="btErrors.phanTramHoaHong" class="field-error">{{ btErrors.phanTramHoaHong }}</p>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Trạng thái</label>
-                <select v-model.number="btForm.trangThai" class="form-input">
-                  <option :value="1">Còn hàng</option>
-                  <option :value="0">Hết hàng</option>
-                </select>
-              </div>
-            </div>
+    <v-dialog v-model="btModal.open" max-width="640" scrollable>
+      <v-card rounded="xl">
+        <v-card-title class="pa-6 border-b d-flex align-center justify-space-between">
+          <div class="text-h6 font-weight-bold">{{ btModal.title }}</div>
+          <v-btn icon variant="text" size="small" @click="closeBtModal">
+            <X class="w-5 h-5" />
+          </v-btn>
+        </v-card-title>
+
+        <v-card-text class="pa-6">
+          <v-form @submit.prevent="saveBT">
+            <v-row>
+              <v-col cols="12" sm="6" v-if="!editingBtId">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Mã biến thể *</div>
+                <v-text-field
+                  v-model="btForm.maBienThe"
+                  variant="outlined" density="comfortable" rounded="lg"
+                  placeholder="VD: BT001" maxlength="10"
+                  :error-messages="btErrors.maBienThe"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12" :sm="editingBtId ? 12 : 6">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Tên biến thể *</div>
+                <v-text-field
+                  v-model="btForm.tenBienThe"
+                  variant="outlined" density="comfortable" rounded="lg"
+                  placeholder="VD: Màu đỏ - Size L"
+                  :error-messages="btErrors.tenBienThe"
+                ></v-text-field>
+              </v-col>
+
+              <v-col cols="12" sm="6">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Giá bán (₫) *</div>
+                <v-text-field
+                  v-model="btForm.giaBan" type="number" min="0"
+                  variant="outlined" density="comfortable" rounded="lg" placeholder="0"
+                  :error-messages="btErrors.giaBan"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="6">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Số lượng tồn</div>
+                <v-text-field
+                  v-model.number="btForm.soLuong" type="number" min="0"
+                  variant="outlined" density="comfortable" rounded="lg" placeholder="0"
+                  :error-messages="btErrors.soLuong"
+                ></v-text-field>
+              </v-col>
+
+              <v-col cols="12" v-if="editingBtId && Number(btForm.soLuong) !== Number(btForm._originalSoLuong)">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Lý do điều chỉnh số lượng *</div>
+                <v-text-field
+                  v-model="btForm.ghiChu"
+                  variant="outlined" density="comfortable" rounded="lg"
+                  placeholder="VD: Kiểm kê phát hiện thiếu, hàng lỗi, nhập tay điều chỉnh..." maxlength="255"
+                  :error-messages="btErrors.ghiChu"
+                ></v-text-field>
+              </v-col>
+
+              <v-col cols="12" sm="6">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Hoa hồng (%)</div>
+                <v-text-field
+                  v-model="btForm.phanTramHoaHong" type="number" min="0" max="100" step="0.1"
+                  variant="outlined" density="comfortable" rounded="lg" placeholder="0"
+                  :error-messages="btErrors.phanTramHoaHong"
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="6">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Trạng thái</div>
+                <v-select
+                  v-model="btForm.trangThai"
+                  :items="[{ title: 'Còn hàng', value: 1 }, { title: 'Hết hàng', value: 0 }]"
+                  variant="outlined" density="comfortable" rounded="lg"
+                ></v-select>
+              </v-col>
+            </v-row>
 
             <!-- Ảnh đại diện biến thể -->
-            <div class="form-group">
-              <label class="form-label">Ảnh đại diện biến thể</label>
-              <div class="upload-zone"
+            <div class="mt-2">
+              <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Ảnh đại diện biến thể</div>
+              <div
+                class="upload-zone"
                 @dragover.prevent
                 @drop.prevent="async (e) => { const f = e.dataTransfer.files[0]; if (f) { try { btForm.hinhAnhDaiDien = await readFileAsPreview(f); btForm._newAvatarFile = f; } catch {} } }"
-                @click="btImgInput?.click()">
+                @click="btImgInput?.click()"
+              >
                 <div v-if="!btForm.hinhAnhDaiDien" class="upload-placeholder">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                     <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
                   </svg>
                   <span>Kéo thả hoặc nhấn để chọn ảnh</span>
-                  <span class="upload-hint">PNG, JPG tối đa 5MB</span>
+                  <span class="text-caption text-medium-emphasis">PNG, JPG tối đa 5MB</span>
                 </div>
                 <div v-else class="upload-preview-single">
-                  <img :src="btForm.hinhAnhDaiDien" class="upload-preview-img" />
-                  <button type="button" class="remove-single-img" @click.stop="btForm.hinhAnhDaiDien = ''; btForm._newAvatarFile = null">✕</button>
+                  <v-img :src="btForm.hinhAnhDaiDien" width="90" height="90" cover rounded="lg" class="border"></v-img>
+                  <v-btn icon size="x-small" color="error" class="remove-single-img" @click.stop="btForm.hinhAnhDaiDien = ''; btForm._newAvatarFile = null">
+                    <X class="w-3 h-3" />
+                  </v-btn>
                 </div>
               </div>
               <input ref="btImgInput" type="file" accept="image/*" style="display:none" @change="onBTAvatarChange" />
             </div>
 
             <!-- Gallery ảnh biến thể -->
-            <div class="form-group">
-              <label class="form-label">Gallery ảnh biến thể</label>
+            <div class="mt-4">
+              <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Gallery ảnh biến thể</div>
 
-              <!-- Ảnh gallery đã có (khi edit) -->
-              <div v-if="editingBtId && btGallery[editingBtId]?.length" class="gallery-edit-grid">
+              <div v-if="editingBtId && btGallery[editingBtId]?.length" class="d-flex flex-wrap gap-2 mb-2">
                 <div v-for="h in btGallery[editingBtId]" :key="h.maHa" class="gallery-edit-item">
-                  <img :src="h.duongDan" class="gallery-edit-thumb" @click="openLightbox([h.duongDan], 0)" />
-                  <button type="button" class="gallery-delete-btn" @click="markDeleteBTGallery(h.maHa)">✕</button>
+                  <v-img :src="h.duongDan" width="72" height="72" cover rounded="lg" class="border cursor-pointer" @click="openLightbox([h.duongDan], 0)"></v-img>
+                  <v-btn icon size="x-small" color="error" class="gallery-delete-btn" @click="markDeleteBTGallery(h.maHa)">
+                    <X class="w-3 h-3" />
+                  </v-btn>
                 </div>
               </div>
 
-              <!-- Ảnh gallery mới -->
-              <div v-if="btForm._newGalleryFiles.length" class="gallery-edit-grid" style="margin-top:8px">
+              <div v-if="btForm._newGalleryFiles.length" class="d-flex flex-wrap gap-2 mb-2">
                 <div v-for="(g, idx) in btForm._newGalleryFiles" :key="idx" class="gallery-edit-item gallery-new-item">
-                  <img :src="g.preview" class="gallery-edit-thumb" />
-                  <button type="button" class="gallery-delete-btn" @click="removeBTNewGallery(idx)">✕</button>
-                  <span class="gallery-new-badge">Mới</span>
+                  <v-img :src="g.preview" width="72" height="72" cover rounded="lg" class="border"></v-img>
+                  <v-btn icon size="x-small" color="error" class="gallery-delete-btn" @click="removeBTNewGallery(idx)">
+                    <X class="w-3 h-3" />
+                  </v-btn>
+                  <v-chip size="x-small" color="primary" class="gallery-new-badge">Mới</v-chip>
                 </div>
               </div>
 
-              <button type="button" class="gallery-add-btn" @click="btGalleryInput?.click()">
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <path d="M8 2v12M2 8h12" />
-                </svg>
+              <v-btn variant="outlined" rounded="lg" size="small" class="text-none" @click="btGalleryInput?.click()">
+                <template v-slot:prepend><Plus class="w-4 h-4" /></template>
                 Thêm ảnh phụ
-              </button>
+              </v-btn>
               <input ref="btGalleryInput" type="file" accept="image/*" multiple style="display:none" @change="onBTGalleryChange" />
-              <p class="upload-hint" style="margin-top:4px">Tối đa 10 ảnh, mỗi ảnh ≤ 5MB</p>
+              <div class="text-caption text-medium-emphasis mt-1">Tối đa 10 ảnh, mỗi ảnh ≤ 5MB</div>
             </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-ghost" @click="closeBtModal">Hủy</button>
-            <button type="button" class="btn btn-primary" :disabled="btSaving" @click="saveBT">
-              <span v-if="btSaving" class="spinner"></span>
-              {{ btSaving ? "Đang lưu..." : editingBtId ? "Cập nhật" : "Thêm biến thể" }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+          </v-form>
+        </v-card-text>
+
+        <v-card-actions class="pa-4 px-6 d-flex justify-end border-t">
+          <v-btn variant="outlined" rounded="lg" class="text-none font-weight-bold mr-2" color="grey-darken-2" @click="closeBtModal">Hủy</v-btn>
+          <v-btn variant="flat" rounded="lg" class="text-none font-weight-bold" color="primary" :loading="btSaving" @click="saveBT">
+            {{ editingBtId ? "Cập nhật" : "Thêm biến thể" }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <!-- ══ LIGHTBOX ══════════════════════════════════════════════════ -->
-    <Teleport to="body">
-      <div v-if="lightbox.open" class="lb-overlay" @click.self="lightbox.open = false">
-        <button class="lb-close" @click="lightbox.open = false">✕</button>
-        <button v-if="lightbox.imgs.length > 1" class="lb-nav lb-prev" @click="lbPrev">‹</button>
+    <v-dialog v-model="lightbox.open" max-width="900">
+      <div class="lb-overlay-content">
+        <v-btn icon color="white" variant="text" class="lb-close" @click="lightbox.open = false">
+          <X class="w-5 h-5" />
+        </v-btn>
+        <v-btn v-if="lightbox.imgs.length > 1" icon color="white" variant="text" class="lb-nav lb-prev" @click="lbPrev">‹</v-btn>
         <img :src="lightbox.imgs[lightbox.idx]" class="lb-img" />
-        <button v-if="lightbox.imgs.length > 1" class="lb-nav lb-next" @click="lbNext">›</button>
+        <v-btn v-if="lightbox.imgs.length > 1" icon color="white" variant="text" class="lb-nav lb-next" @click="lbNext">›</v-btn>
         <div v-if="lightbox.imgs.length > 1" class="lb-dots">
-          <span v-for="(_, i) in lightbox.imgs" :key="i" class="lb-dot" :class="{ active: i === lightbox.idx }" @click="lightbox.idx = i"></span>
+          <span
+            v-for="(_, i) in lightbox.imgs" :key="i"
+            class="lb-dot" :class="{ active: i === lightbox.idx }"
+            @click="lightbox.idx = i"
+          ></span>
         </div>
       </div>
-    </Teleport>
+    </v-dialog>
 
-    <!-- ══ TOAST ═════════════════════════════════════════════════════ -->
-    <div class="toast" :class="[{ show: toast.show }, toast.type]">
-      <span>{{ toast.type === "success" ? "✅" : "❌" }}</span>
-      {{ toast.msg }}
-    </div>
-  </div>
+    <!-- ══ SNACKBAR ══════════════════════════════════════════════════ -->
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" location="top right" timeout="3000" rounded="lg">
+      <div class="font-weight-bold d-flex align-center">
+        <Check v-if="snackbar.color === 'success'" class="w-5 h-5 mr-2" />
+        <X v-else class="w-5 h-5 mr-2" />
+        {{ snackbar.text }}
+      </div>
+    </v-snackbar>
+  </v-container>
 </template>
 
 <style scoped>
-/* ── THEME VARIABLES (dark mode) ─────────────────────────────── */
-.sp-manager.dark-mode {
-  --dvc-card-bg: #23232f;
-  --dvc-bg-subtle: #2a2a38;
-  --dvc-bg-subtle2: #1e1e29;
-  --dvc-border: #383846;
-  --dvc-border-strong: #464656;
-  --dvc-text: #e8e8ee;
-  --dvc-text-strong: #cbcbd6;
-  --dvc-text-secondary: #a3a3b2;
-  --dvc-text-muted: #7c7c8c;
-  --dvc-accent: #4b4b6b;
-  --dvc-accent-hover: #5c5c80;
-  --dvc-shadow: rgba(0, 0, 0, 0.35);
-  --dvc-overlay: rgba(0, 0, 0, 0.6);
+.gap-1 { gap: 4px; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+
+.cursor-pointer { cursor: pointer; }
+.code-chip {
+  font-family: "Courier New", monospace;
+  background: rgba(0,0,0,0.06);
+  padding: 2px 7px;
+  border-radius: 4px;
 }
+.rotate-180 { transform: rotate(180deg); }
 
-/* ── ROOT ───────────────────────────────────────────────────────── */
-.sp-manager {
-  /* ── THEME VARIABLES (light default) ─────────────────────────── */
-  --dvc-card-bg: #fff;
-  --dvc-bg-subtle: #f3f4f6;
-  --dvc-bg-subtle2: #f9fafb;
-  --dvc-border: #e5e7eb;
-  --dvc-border-strong: #d1d5db;
-  --dvc-text: #1a1a2e;
-  --dvc-text-strong: #374151;
-  --dvc-text-secondary: #6b7280;
-  --dvc-text-muted: #9ca3af;
-  --dvc-accent: #1a1a2e;
-  --dvc-accent-hover: #2d2d4e;
-  --dvc-shadow: rgba(0, 0, 0, 0.08);
-  --dvc-overlay: rgba(0, 0, 0, 0.45);
-  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+/* Nested variant panel */
+.nested-panel { background: #f9fafb; border-top: 1px solid #e5e7eb; }
+.nested-panel-dark { background: #1e1e29; border-top: 1px solid #383846; }
+.bt-table-inner { background: transparent; }
 
-  font-family: "Jost", "Inter", sans-serif;
-  color: var(--dvc-text);
+/* Detail view rows */
+.detail-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.detail-label { font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, 0.7); min-width: 110px; }
+
+/* Upload zone */
+.upload-zone {
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 10px;
+  background: #f9fafb;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 110px;
+  transition: all 0.15s;
 }
-
-/* ── STATS ──────────────────────────────────────────────────────── */
-.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 20px; }
-.stat-card { background: var(--dvc-card-bg); border: 1px solid var(--dvc-border); border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 3px; }
-.stat-icon { font-size: 20px; margin-bottom: 4px; }
-.stat-label { font-size: 11px; font-weight: 600; color: var(--dvc-text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
-.stat-value { font-size: 26px; font-weight: 700; color: var(--dvc-text); line-height: 1.1; }
-.stat-hint { font-size: 11px; color: var(--dvc-text-muted); margin-top: 2px; }
-.stat-dark { border-top: 3px solid var(--dvc-accent); }
-.stat-green { border-top: 3px solid #22c55e; }
-.stat-blue { border-top: 3px solid #3b82f6; }
-.stat-purple { border-top: 3px solid #8b5cf6; }
-
-/* ── HEADER ─────────────────────────────────────────────────────── */
-.header-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
-.page-title-text { font-size: 17px; font-weight: 700; color: var(--dvc-text); letter-spacing: 0.2px; }
-.header-actions { display: flex; gap: 8px; }
-
-/* ── BUTTONS ────────────────────────────────────────────────────── */
-.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 15px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; font-family: inherit; transition: all 0.15s; white-space: nowrap; }
-.btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.btn-primary { background: var(--dvc-accent); color: #fff; }
-.btn-primary:hover:not(:disabled) { background: var(--dvc-accent-hover); transform: translateY(-1px); }
-.btn-ghost { background: transparent; color: var(--dvc-text-secondary); border: 1px solid var(--dvc-border); }
-.btn-ghost:hover:not(:disabled) { color: var(--dvc-text); border-color: var(--dvc-border-strong); background: var(--dvc-bg-subtle2); }
-.btn-sm { padding: 6px 12px; font-size: 12px; }
-.spinner { width: 13px; height: 13px; border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff; border-radius: 50%; animation: spin 0.6s linear infinite; flex-shrink: 0; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* ── TOOLBAR ────────────────────────────────────────────────────── */
-.toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
-.search-box { display: flex; align-items: center; gap: 8px; background: var(--dvc-card-bg); border: 1px solid var(--dvc-border); border-radius: 8px; padding: 7px 12px; min-width: 200px; flex: 1; max-width: 300px; transition: border 0.15s; }
-.search-box:focus-within { border-color: var(--dvc-text-secondary); }
-.search-box input { background: transparent; border: none; outline: none; color: var(--dvc-text); font-size: 13px; font-family: inherit; width: 100%; }
-.search-box input::placeholder { color: var(--dvc-text-muted); }
-.filter-select { background: var(--dvc-card-bg); border: 1px solid var(--dvc-border); border-radius: 8px; padding: 7px 10px; color: var(--dvc-text-strong); font-size: 13px; font-family: inherit; cursor: pointer; outline: none; }
-.result-count { font-size: 12px; color: var(--dvc-text-muted); margin-left: auto; }
-
-/* ── TABLE ──────────────────────────────────────────────────────── */
-.table-wrap { background: var(--dvc-card-bg); border: 1px solid var(--dvc-border); border-radius: 12px; overflow: hidden; }
-table { width: 100%; border-collapse: collapse; }
-thead th { padding: 11px 14px; text-align: left; font-size: 11px; font-weight: 600; color: var(--dvc-text-muted); letter-spacing: 0.5px; border-bottom: 1px solid var(--dvc-bg-subtle); background: var(--dvc-bg-subtle2); white-space: nowrap; text-transform: uppercase; }
-.sortable { cursor: pointer; user-select: none; }
-.sortable:hover { color: var(--dvc-text-strong); }
-.sort-icon { font-size: 10px; }
-tbody tr { border-bottom: 1px solid var(--dvc-bg-subtle); transition: background 0.12s; }
-tbody tr:last-child { border-bottom: none; }
-tbody tr:hover { background: var(--dvc-bg-subtle2); }
-tbody td { padding: 10px 14px; font-size: 13px; vertical-align: middle; }
-.code-text { font-size: 12px; color: var(--dvc-text-secondary); font-family: "Courier New", monospace; background: var(--dvc-bg-subtle); padding: 2px 7px; border-radius: 4px; }
-.sp-name { font-weight: 500; color: var(--dvc-text); }
-.price-cell { font-weight: 600; color: #d97706; }
-.pct-cell { font-size: 12px; color: var(--dvc-text-secondary); }
-
-/* ── THUMBNAIL ──────────────────────────────────────────────────── */
-.thumb-wrap { position: relative; width: 42px; height: 42px; cursor: pointer; flex-shrink: 0; }
-.thumb-img { width: 42px; height: 42px; object-fit: cover; border-radius: 8px; border: 1px solid var(--dvc-border); display: block; transition: opacity 0.15s; }
-.thumb-img:hover { opacity: 0.82; }
-.thumb-placeholder { width: 42px; height: 42px; border-radius: 8px; border: 1.5px dashed var(--dvc-border-strong); background: var(--dvc-bg-subtle2); display: flex; align-items: center; justify-content: center; color: var(--dvc-border-strong); }
-
-/* ── BADGES ─────────────────────────────────────────────────────── */
-.cat-badge { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 500; }
-.cat-1 { background: #eff6ff; color: #1d4ed8; }
-.cat-2 { background: #fdf4ff; color: #7e22ce; }
-.cat-3 { background: #fff7ed; color: #c2410c; }
-.cat-4 { background: #f0fdf4; color: #15803d; }
-.cat-5 { background: #fef9c3; color: #854d0e; }
-.brand-badge { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 500; background: var(--dvc-bg-subtle); color: var(--dvc-text-strong); }
-.no-brand { color: var(--dvc-border-strong); font-size: 13px; }
-.bt-count-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 500; background: #f0f9ff; color: #0369a1; }
-.stock-badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-.stock-ok { background: #f0fdf4; color: #15803d; }
-.stock-zero { background: #fef2f2; color: #dc2626; }
-
-/* ── STATUS ─────────────────────────────────────────────────────── */
-.status-pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
-.status-pill.active { background: #f0fdf4; color: #15803d; }
-.status-pill.inactive { background: var(--dvc-bg-subtle2); color: var(--dvc-text-muted); }
-.status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-
-/* ── ACTIONS ────────────────────────────────────────────────────── */
-.actions { display: flex; gap: 4px; align-items: center; }
-.icon-btn { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--dvc-border); background: var(--dvc-card-bg); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--dvc-text-muted); transition: all 0.12s; }
-.icon-btn:hover { background: var(--dvc-bg-subtle2); color: var(--dvc-text-strong); border-color: var(--dvc-border-strong); }
-.icon-btn.view:hover { color: #2563eb; border-color: #bfdbfe; background: #eff6ff; }
-.icon-btn.edit:hover { color: #d97706; border-color: #fde68a; background: #fffbeb; }
-.icon-btn.del:hover { color: #dc2626; border-color: #fecaca; background: #fef2f2; }
-.icon-btn-xs { width: 24px; height: 24px; }
-
-/* ── EMPTY ──────────────────────────────────────────────────────── */
-.empty-state { text-align: center; padding: 40px; }
-.empty-icon { font-size: 36px; margin-bottom: 8px; }
-.empty-text { color: var(--dvc-text-muted); font-size: 14px; }
-
-/* ── PAGINATION ─────────────────────────────────────────────────── */
-.pager-wrap { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-top: 1px solid var(--dvc-bg-subtle); font-size: 12px; color: var(--dvc-text-muted); }
-.pager-btns { display: flex; gap: 4px; }
-.page-btn { min-width: 28px; height: 28px; padding: 0 6px; border-radius: 6px; border: 1px solid var(--dvc-border); background: var(--dvc-card-bg); font-size: 12px; cursor: pointer; color: var(--dvc-text-secondary); transition: all 0.12s; }
-.page-btn:disabled { opacity: 0.4; cursor: default; }
-.page-btn:hover:not(:disabled):not(.cur) { border-color: var(--dvc-border-strong); background: var(--dvc-bg-subtle2); }
-.page-btn.cur { background: var(--dvc-accent); color: #fff; border-color: var(--dvc-accent); }
-
-/* ── EXPAND ─────────────────────────────────────────────────────── */
-.expand-btn { background: none; border: none; cursor: pointer; color: var(--dvc-text-muted); padding: 2px 4px; margin-right: 6px; display: inline-flex; align-items: center; transition: color 0.15s; vertical-align: middle; }
-.expand-btn:hover { color: var(--dvc-text); }
-.expand-icon { transition: transform 0.2s; }
-.expand-icon.open { transform: rotate(180deg); }
-
-/* ── NESTED PANEL ───────────────────────────────────────────────── */
-.sp-main-row.row-expanded { background: var(--dvc-bg-subtle); }
-.sp-detail-row { background: var(--dvc-bg-subtle2); }
-.sp-detail-row td { padding: 0 !important; }
-.nested-panel { padding: 14px 18px; border-top: 1px solid var(--dvc-border); background: var(--dvc-bg-subtle2); }
-.nested-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-.nested-title { font-size: 13px; font-weight: 600; color: var(--dvc-text-strong); margin: 0; }
-.nested-count { background: var(--dvc-border); font-size: 11px; padding: 1px 8px; border-radius: 10px; margin-left: 6px; font-weight: 500; }
-.btn-nested-add { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
-.btn-nested-add:hover { background: #dcfce7; }
-.nested-empty { font-size: 12px; color: var(--dvc-text-muted); text-align: center; padding: 16px; }
-
-/* ── BT TABLE ───────────────────────────────────────────────────── */
-.bt-table-wrap { overflow: hidden; border: 1px solid var(--dvc-border); border-radius: 8px; }
-.bt-table { width: 100%; border-collapse: collapse; }
-.bt-table thead th { padding: 8px 12px; text-align: left; font-size: 10px; font-weight: 600; color: var(--dvc-text-muted); letter-spacing: 0.4px; border-bottom: 1px solid var(--dvc-bg-subtle); background: var(--dvc-bg-subtle2); text-transform: uppercase; }
-.bt-table tbody tr { border-bottom: 1px solid var(--dvc-bg-subtle); transition: background 0.1s; }
-.bt-table tbody tr:last-child { border-bottom: none; }
-.bt-table tbody tr:hover { background: var(--dvc-bg-subtle2); }
-.bt-table tbody td { padding: 8px 12px; font-size: 12px; vertical-align: middle; }
-.bt-name { font-weight: 500; color: var(--dvc-text-strong); }
-.bt-thumb { width: 36px; height: 36px; object-fit: cover; border-radius: 6px; border: 1px solid var(--dvc-border); display: block; }
-
-/* ── MODAL ──────────────────────────────────────────────────────── */
-.modal-overlay {
-  /* Teleport đưa modal ra ngoài .sp-manager nên không thừa hưởng được biến màu từ đó -> khai báo lại tại đây */
-  --dvc-card-bg: #fff;
-  --dvc-bg-subtle: #f3f4f6;
-  --dvc-bg-subtle2: #f9fafb;
-  --dvc-border: #e5e7eb;
-  --dvc-border-strong: #d1d5db;
-  --dvc-text: #1a1a2e;
-  --dvc-text-strong: #374151;
-  --dvc-text-secondary: #6b7280;
-  --dvc-text-muted: #9ca3af;
-  --dvc-accent: #1a1a2e;
-  --dvc-accent-hover: #2d2d4e;
-  --dvc-shadow: rgba(0, 0, 0, 0.08);
-  --dvc-overlay: rgba(0, 0, 0, 0.45);
-  font-family: "Jost", "Inter", sans-serif;
-  position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 9000; display: flex; align-items: center; justify-content: center; padding: 20px;
-}
-.modal-overlay.dark-mode {
-  --dvc-card-bg: #23232f;
-  --dvc-bg-subtle: #2a2a38;
-  --dvc-bg-subtle2: #1e1e29;
-  --dvc-border: #383846;
-  --dvc-border-strong: #464656;
-  --dvc-text: #e8e8ee;
-  --dvc-text-strong: #cbcbd6;
-  --dvc-text-secondary: #a3a3b2;
-  --dvc-text-muted: #7c7c8c;
-  --dvc-accent: #4b4b6b;
-  --dvc-accent-hover: #5c5c80;
-  --dvc-shadow: rgba(0, 0, 0, 0.35);
-  --dvc-overlay: rgba(0, 0, 0, 0.6);
-}
-.modal { position: relative; top: auto; left: auto; margin: 0; background: var(--dvc-card-bg); border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); display: flex; flex-direction: column; max-height: 90vh; overflow: hidden; }
-.modal-wide { width: 580px; max-width: 95vw; }
-.modal-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px 14px; border-bottom: 1px solid var(--dvc-bg-subtle); }
-.modal-title { font-size: 15px; font-weight: 700; color: var(--dvc-text); margin: 0; }
-.modal-close { width: 28px; height: 28px; border: 1px solid var(--dvc-border); border-radius: 6px; background: var(--dvc-card-bg); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--dvc-text-muted); }
-.modal-close:hover { background: var(--dvc-bg-subtle2); color: var(--dvc-text-strong); }
-.modal-body { padding: 18px 22px; overflow-y: auto; flex: 1; }
-.modal-footer { padding: 14px 22px; border-top: 1px solid var(--dvc-bg-subtle); display: flex; justify-content: flex-end; gap: 8px; }
-
-/* ── FORM ───────────────────────────────────────────────────────── */
-.form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
-.form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
-.form-label { font-size: 12px; font-weight: 600; color: var(--dvc-text-strong); }
-.form-input { background: var(--dvc-card-bg); border: 1px solid var(--dvc-border); border-radius: 8px; padding: 8px 12px; font-size: 13px; color: var(--dvc-text); font-family: inherit; outline: none; transition: border 0.15s; }
-.form-input:focus { border-color: var(--dvc-text-secondary); box-shadow: 0 0 0 3px rgba(107,114,128,0.07); }
-.input-error { border-color: #f87171 !important; }
-.field-error { font-size: 11px; color: #dc2626; margin: 2px 0 0; }
-
-/* ── UPLOAD ZONE ────────────────────────────────────────────────── */
-.upload-zone { border: 1.5px dashed var(--dvc-border-strong); border-radius: 10px; background: var(--dvc-bg-subtle2); cursor: pointer; display: flex; align-items: center; justify-content: center; min-height: 110px; transition: all 0.15s; }
-.upload-zone:hover { background: var(--dvc-bg-subtle); border-color: var(--dvc-text-muted); }
-.upload-placeholder { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--dvc-text-muted); font-size: 12px; }
-.upload-hint { font-size: 11px; color: var(--dvc-text-muted); }
+.upload-zone:hover { background: #f1f5f9; border-color: #94a3b8; }
+.upload-placeholder { display: flex; flex-direction: column; align-items: center; gap: 6px; color: #9ca3af; font-size: 12px; }
 .upload-preview-single { position: relative; display: inline-block; }
-.upload-preview-img { width: 90px; height: 90px; object-fit: cover; border-radius: 8px; border: 1px solid var(--dvc-border); display: block; }
-.remove-single-img { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; background: var(--dvc-accent); color: #fff; border: none; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.remove-single-img { position: absolute; top: -8px; right: -8px; }
 
-/* ── GALLERY ────────────────────────────────────────────────────── */
-.gallery-section { margin-top: 16px; }
-.gallery-label { font-size: 12px; font-weight: 600; color: var(--dvc-text-strong); margin-bottom: 8px; }
-.gallery-grid { display: flex; gap: 8px; flex-wrap: wrap; }
-.gallery-thumb-wrap { width: 70px; height: 70px; border-radius: 8px; overflow: hidden; cursor: pointer; border: 1px solid var(--dvc-border); }
-.gallery-thumb { width: 70px; height: 70px; object-fit: cover; transition: opacity 0.15s; }
-.gallery-thumb:hover { opacity: 0.8; }
+/* Gallery */
+.gallery-edit-item { position: relative; width: 72px; height: 72px; }
+.gallery-delete-btn { position: absolute; top: -8px; right: -8px; }
+.gallery-new-item { outline: 2px dashed #3b82f6; border-radius: 8px; }
+.gallery-new-badge { position: absolute; bottom: 2px; left: 2px; }
 
-.gallery-edit-grid { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
-.gallery-edit-item { position: relative; width: 72px; height: 72px; border-radius: 8px; overflow: visible; }
-.gallery-edit-thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--dvc-border); cursor: pointer; display: block; }
-.gallery-edit-thumb:hover { opacity: 0.8; }
-.gallery-delete-btn { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; background: #dc2626; color: #fff; border: none; font-size: 9px; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; z-index: 1; }
-.gallery-delete-btn:hover { background: #b91c1c; }
-.gallery-new-item { border: 2px dashed #3b82f6; border-radius: 8px; }
-.gallery-new-badge { position: absolute; bottom: 2px; left: 2px; background: #2563eb; color: #fff; font-size: 9px; padding: 1px 5px; border-radius: 4px; font-weight: 600; }
-.gallery-add-btn { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; border: 1.5px dashed var(--dvc-border-strong); border-radius: 8px; background: var(--dvc-bg-subtle2); color: var(--dvc-text-secondary); font-size: 12px; cursor: pointer; font-family: inherit; transition: all 0.15s; }
-.gallery-add-btn:hover { border-color: var(--dvc-text-muted); background: var(--dvc-bg-subtle); color: var(--dvc-text-strong); }
-
-/* ── DETAIL VIEW ────────────────────────────────────────────────── */
-.detail-grid { display: grid; grid-template-columns: auto 1fr; gap: 20px; align-items: start; }
-.detail-info-col { display: flex; flex-direction: column; gap: 10px; }
-.detail-row { display: flex; align-items: center; gap: 10px; }
-.detail-label { font-size: 12px; font-weight: 600; color: var(--dvc-text-muted); min-width: 120px; }
-.detail-val { font-size: 13px; color: var(--dvc-text); }
-
-/* ── LIGHTBOX ───────────────────────────────────────────────────── */
-.lb-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-.lb-img { max-width: 90vw; max-height: 85vh; border-radius: 8px; object-fit: contain; }
-.lb-close { position: absolute; top: 16px; right: 20px; background: rgba(255,255,255,0.15); color: #fff; border: none; font-size: 20px; cursor: pointer; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-.lb-nav { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.15); color: #fff; border: none; font-size: 28px; cursor: pointer; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-.lb-prev { left: 20px; }
-.lb-next { right: 20px; }
-.lb-dots { position: absolute; bottom: 20px; display: flex; gap: 6px; }
+/* Lightbox */
+.lb-overlay-content { position: relative; display: flex; align-items: center; justify-content: center; min-height: 60vh; }
+.lb-img { max-width: 90vw; max-height: 80vh; border-radius: 8px; object-fit: contain; }
+.lb-close { position: absolute; top: -8px; right: -8px; z-index: 2; background: rgba(0,0,0,0.4); }
+.lb-nav { position: absolute; top: 50%; transform: translateY(-50%); font-size: 28px; background: rgba(0,0,0,0.4); }
+.lb-prev { left: 8px; }
+.lb-next { right: 8px; }
+.lb-dots { position: absolute; bottom: 8px; display: flex; gap: 6px; left: 50%; transform: translateX(-50%); }
 .lb-dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.4); cursor: pointer; transition: background 0.15s; }
-.lb-dot.active { background: var(--dvc-card-bg); }
-
-/* ── TOAST ──────────────────────────────────────────────────────── */
-.toast { position: fixed; bottom: 24px; right: 24px; background: var(--dvc-card-bg); border: 1px solid var(--dvc-border); border-radius: 10px; padding: 12px 16px; font-size: 13px; color: var(--dvc-text); display: flex; align-items: center; gap: 9px; z-index: 1000; transform: translateY(20px); opacity: 0; transition: all 0.25s; pointer-events: none; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 320px; }
-.toast.show { transform: translateY(0); opacity: 1; }
-.toast.success { border-color: #bbf7d0; }
-.toast.error { border-color: #fecaca; }
-
-/* ── RESPONSIVE ─────────────────────────────────────────────────── */
-@media (max-width: 768px) {
-  .stats-row { grid-template-columns: repeat(2, 1fr); }
-  .form-row-2 { grid-template-columns: 1fr; }
-  .detail-grid { grid-template-columns: 1fr; }
-  .header-bar { flex-direction: column; align-items: flex-start; }
-  .result-count { margin-left: 0; }
-  .modal-wide { width: 95vw; }
-}
-@media (max-width: 480px) {
-  .stats-row { grid-template-columns: 1fr 1fr; }
-}
+.lb-dot.active { background: #fff; }
 </style>
