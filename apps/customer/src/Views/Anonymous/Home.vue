@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { ArrowRight, ShoppingBag, ChevronLeft, ChevronRight, Eye } from 'lucide-vue-next';
 import { useDataStore } from '@/stores/useDataStore';
 import axios from 'axios';
+import { addToCartDB } from '@/Views/Anonymous/CSDL/cartDB';
 
 const API = import.meta.env.VITE_API_URL || 'https://localhost:7196';
 
@@ -140,6 +141,7 @@ const activeCollage = computed(() => {
 });
 
 const productCarouselRef = ref<HTMLElement | null>(null);
+const isLoadingProducts = ref<boolean>(true);
 
 const scrollCarousel = (direction: 'left' | 'right'): void => {
   if (productCarouselRef.value) {
@@ -443,6 +445,68 @@ const currentFormula = computed(() => {
   return apothecaryFormulas[activeConcern.value];
 });
 
+// ===== RESOLVE SẢN PHẨM / DỊCH VỤ THẬT TỪ API =====
+
+// Chuẩn hóa tiếng Việt để so sánh tên (bỏ dấu, lowercase)
+const normalizeForSearch = (str: string): string => {
+  if (!str) return '';
+  return str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd');
+};
+
+// Tìm sản phẩm thật từ store, fallback theo index nếu không match tên
+const findRealProduct = (mockName: string, fallbackIdx = 0) => {
+  if (!dataStore.PRODUCTS.length) return null;
+  const normedKeyword = normalizeForSearch(mockName);
+  const words = normedKeyword.split(' ').filter(w => w.length > 2);
+
+  // Thử khớp theo từ trong tên (đã bỏ dấu)
+  const found = dataStore.PRODUCTS.find(p => {
+    const normedName = normalizeForSearch(p.name || '');
+    return words.some(w => normedName.includes(w));
+  });
+
+  // Nếu không khớp tên → lấy sản phẩm theo vị trí index (luôn trả về kết quả)
+  return found || dataStore.PRODUCTS[fallbackIdx % dataStore.PRODUCTS.length];
+};
+
+// Tìm dịch vụ thật từ store, fallback theo index
+const findRealService = (mockName: string, fallbackIdx = 0) => {
+  if (!dataStore.SERVICES.length) return null;
+  const normedKeyword = normalizeForSearch(mockName);
+  const words = normedKeyword.split(' ').filter(w => w.length > 2);
+
+  const found = dataStore.SERVICES.find(s => {
+    const normedName = normalizeForSearch(s.name || '');
+    return words.some(w => normedName.includes(w));
+  });
+
+  return found || dataStore.SERVICES[fallbackIdx % dataStore.SERVICES.length];
+};
+
+// Sản phẩm thật cho Ingredients tab — fallback theo index tab đang chọn
+const currentIngredientProduct = computed(() => {
+  return findRealProduct(currentIngredient.value.productName, selectedIngredientIndex.value);
+});
+
+// Sản phẩm thật cho Elixir Lab — fallback theo index concern
+const currentFormulaProduct = computed(() => {
+  const concernKeys = Object.keys(apothecaryFormulas);
+  const idx = concernKeys.indexOf(activeConcern.value);
+  return findRealProduct(currentFormula.value.productName, idx >= 0 ? idx : 0);
+});
+
+// Dịch vụ thật cho Elixir Lab — fallback theo index concern
+const currentFormulaService = computed(() => {
+  const concernKeys = Object.keys(apothecaryFormulas);
+  const idx = concernKeys.indexOf(activeConcern.value);
+  return findRealService(currentFormula.value.serviceName, idx >= 0 ? idx : 0);
+});
+// ===== END RESOLVE =====
+
 const setHeroSlide = (index: number): void => {
   activeHeroSlide.value = index;
 };
@@ -481,7 +545,9 @@ onMounted(async () => {
           if (url.startsWith('http')) return url;
           return url.startsWith('/') ? `${API}${url}` : `${API}/${url}`;
         };
-        const mainImg = s.hinhAnh ? formatImgUrl(s.hinhAnh) : 'https://images.unsplash.com/photo-1595476108010-b4d1f10d5e43?q=80&w=1000';
+        // HOME2-018: fallback ảnh mặc định khi hinhAnh null/rỗng
+        const DEFAULT_SERVICE_IMG = 'https://images.unsplash.com/photo-1595476108010-b4d1f10d5e43?q=80&w=1000';
+        const mainImg = (s.hinhAnh && s.hinhAnh.trim()) ? formatImgUrl(s.hinhAnh) : DEFAULT_SERVICE_IMG;
         const rawImgs = s.hinhAnhs || [];
         const mappedImgs = rawImgs.map((img: string) => formatImgUrl(img));
         return {
@@ -500,40 +566,56 @@ onMounted(async () => {
   }
 
   // Fetch real products from API
+  isLoadingProducts.value = true;
   try {
     const resProd = await axios.get(`${API}/api/SanPham/filter`, {
       params: {
         page: 1,
-        pageSize: 10
+        pageSize: 20  // Lấy đủ sản phẩm để hiển thị
       }
     });
     if (resProd.data && resProd.data.data && resProd.data.data.length > 0) {
       // Hàm ghép URL ảnh sản phẩm — đồng bộ với Shop.vue getImageUrl()
+      // HOME2-031: trả về ảnh mặc định khi không có ảnh thay vì chuỗi rỗng
+      const DEFAULT_PRODUCT_IMG = 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?q=80&w=800';
       const getProductImageUrl = (img?: string): string => {
-        if (!img) return 'https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?q=80&w=800';
+        if (!img) return DEFAULT_PRODUCT_IMG;
         if (img.startsWith('http')) return img;
         if (img.startsWith('/')) return `${API}${img}`;
         return `${API}/uploads/sanpham/${img}`;
       };
 
       dataStore.PRODUCTS = resProd.data.data.map((p: any) => {
-        // Thử nhiều tên field ảnh mà backend có thể trả về
         const rawImg = p.hinhAnhDaiDien || p.hinhAnh || p.anhDaiDien || p.imageUrl || '';
         const prodImg = getProductImageUrl(rawImg);
 
+        const avgRating = typeof p.diemTrungBinh === 'number'
+          ? p.diemTrungBinh
+          : typeof p.soSao === 'number'
+            ? p.soSao
+            : typeof p.rating === 'number'
+              ? p.rating
+              : 5;
+        const reviewCount = p.soLuongDanhGia ?? p.soLuotDanhGia ?? p.reviewCount ?? 0;
+
         return {
-          id: String(p.maSp), // Ép kiểu string để tránh lỗi TypeScript so sánh với number
+          id: String(p.maSp),
+          maBienThe: p.maBienThe ?? p.bienThes?.[0]?.maBienThe ?? null, // lưu biến thể mặc định
           name: p.tenSp,
           desc: p.moTa || '',
           price: p.giaTu ?? p.gia ?? 0,
           img: prodImg,
-          category: p.danhMuc?.tenDanhMuc || 'Boutique',
-          size: p.thuongHieu?.tenThuongHieu || 'Minh Tâm'
+          category: p.danhMuc?.tenDanhMuc || p.tenDanhMuc || 'Boutique',
+          size: p.thuongHieu?.tenThuongHieu || p.tenThuongHieu || 'LGHair',
+          avgRating,
+          reviewCount
         };
       });
     }
   } catch (err) {
     console.error("Lỗi khi tải dữ liệu sản phẩm thật:", err);
+  } finally {
+    isLoadingProducts.value = false;
   }
 });
 
@@ -543,6 +625,47 @@ onUnmounted(() => {
     heroIntervalId = null;
   }
 });
+
+// === THÊM SẢN PHẨM VÀO GIỎ HÀNG THẬT ===
+const addProductToCart = async (prod: any) => {
+  try {
+    let maBienThe = prod.maBienThe;
+
+    // Nếu chưa có maBienThe, gọi API detail để lấy biến thể đầu tiên
+    if (!maBienThe) {
+      try {
+        const detailRes = await axios.get(`${API}/api/SanPham/${prod.id}`);
+        const detail = detailRes.data;
+        const bienThes = detail.bienThes ?? detail.bienThe ?? detail.variants ?? [];
+        if (bienThes.length > 0) {
+          maBienThe = bienThes[0].maBienThe ?? bienThes[0].id;
+        }
+      } catch {
+        console.warn('Không lấy được biến thể, dùng maSp làm fallback');
+      }
+    }
+
+    if (!maBienThe) {
+      maBienThe = prod.id; // fallback cuối
+    }
+
+    await addToCartDB({
+      id: maBienThe,
+      type: 'SANPHAM',
+      tenItem: prod.name,
+      gia: prod.price,
+      hinhAnh: prod.img,
+      soLuong: 1
+    });
+
+    window.dispatchEvent(new Event('cart-updated'));
+    showToast('Đã thêm ' + prod.name + ' vào giỏ hàng!');
+  } catch (err) {
+    console.error('Lỗi thêm sản phẩm vào giỏ:', err);
+    showToast('Lỗi thêm vào giỏ hàng!');
+  }
+};
+// === END CART ===
 </script>
 
 <template>
@@ -552,7 +675,7 @@ onUnmounted(() => {
     <transition name="toast-slide">
       <div
         v-if="toastMessage"
-        class="fixed bottom-8 right-8 z-50 bg-neutral-950 text-white border border-[#bfa77a]/40 px-6 py-4 flex items-center gap-4 shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-md"
+        class="fixed top-20 right-6 z-50 bg-neutral-950 text-white border border-[#bfa77a]/40 px-6 py-4 flex items-center gap-4 shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-md"
       >
         <div class="w-1.5 h-1.5 rounded-full bg-[#bfa77a] animate-ping"></div>
         <span class="text-xs uppercase tracking-[0.2em] font-light">{{ toastMessage }}</span>
@@ -671,12 +794,12 @@ onUnmounted(() => {
     </section>
 
     <!-- The Salon Experience -->
-    <section class="w-full py-24 md:py-32 px-6 lg:px-16 max-w-[1440px] mx-auto bg-white">
+    <section class="w-full py-6 md:py-8 px-6 lg:px-16 max-w-[1440px] mx-auto bg-white">
       <!-- Section Header -->
-      <div class="flex flex-col md:flex-row justify-between items-end mb-16 md:mb-24 gap-8">
+      <div class="flex flex-col md:flex-row justify-between items-end mb-6 gap-6">
         <div class="max-w-xl">
-          <p class="text-[10px] tracking-[0.2em] uppercase text-neutral-400 mb-4 font-semibold">Bản sắc độc bản</p>
-          <h3 class="text-3xl md:text-4xl lg:text-5xl font-sans font-semibold tracking-wide text-black uppercase">
+          <p class="text-[10px] tracking-[0.2em] uppercase text-neutral-400 mb-2 font-semibold">Bản sắc độc bản</p>
+          <h3 class="text-xl md:text-2xl lg:text-3xl font-sans font-semibold tracking-wide text-black uppercase">
             Trải nghiệm Salon
           </h3>
         </div>
@@ -690,16 +813,19 @@ onUnmounted(() => {
       </div>
 
       <!-- Interactive Row List & Collage Image Grid -->
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
         <!-- Interactive Row List (Left Column) -->
         <div class="lg:col-span-7 divide-y divide-neutral-200">
+          <!-- HOME2-024: nhấn dòng dịch vụ điều hướng đến chi tiết đúng id -->
           <div
             v-for="(svc, index) in dataStore.SERVICES"
             :key="svc.id"
-            class="group py-8 flex items-baseline justify-between cursor-pointer transition-all duration-300 hover:translate-x-2"
+            class="group py-5 flex items-baseline justify-between cursor-pointer transition-all duration-300 hover:translate-x-2"
+            role="button"
+            :aria-label="'Xem chi tiết dịch vụ ' + svc.name"
             @mouseenter="hoveredServiceImg = svc.img"
             @mouseleave="hoveredServiceImg = null"
-            @click="router.push({ name: 'service_detail', params: { id: svc.id } })"
+            @click="router.push({ name: 'serviceDetail', params: { id: svc.id } })"
           >
             <div class="flex items-start gap-5">
               <span class="font-serif text-[#bfa77a] text-xs pt-1.5 font-medium select-none">0{{ index + 1 }}</span>
@@ -725,10 +851,10 @@ onUnmounted(() => {
           <!-- Interactive Collage of Overlapping Images -->
           <div class="relative w-full aspect-[4/5]">
             <!-- Background Frame Decoration -->
-            <div class="absolute -inset-2 border border-[#bfa77a]/20 pointer-events-none z-0 translate-x-2 translate-y-2 transition-transform duration-700"></div>
+            <div class="absolute -inset-2 border-2 border-[#bfa77a]/40 pointer-events-none z-0 translate-x-3 translate-y-3 transition-transform duration-700"></div>
 
             <!-- Big Image (Main) -->
-            <div class="w-full h-full overflow-hidden bg-neutral-50 relative border border-neutral-100 z-10 shadow-2xl rounded-xl">
+            <div class="w-full h-full overflow-hidden bg-neutral-50 relative border-2 border-[#bfa77a]/50 z-10 shadow-2xl rounded-xl">
               <img
                 :key="activeCollage.main"
                 :src="activeCollage.main"
@@ -743,7 +869,7 @@ onUnmounted(() => {
             </div>
 
             <!-- Small Image (Detail 1) - bottom-left corner overlapping -->
-            <div class="absolute -bottom-8 -left-8 w-1/2 aspect-square z-20 border-2 border-white shadow-xl rotate-[-4deg] overflow-hidden rounded-lg hover:rotate-0 hover:scale-105 transition-all duration-500">
+            <div class="absolute -bottom-8 -left-8 w-1/2 aspect-square z-20 border-4 border-[#bfa77a]/70 shadow-xl rotate-[-4deg] overflow-hidden rounded-lg hover:rotate-0 hover:scale-105 transition-all duration-500">
               <img
                 :key="activeCollage.detail1"
                 :src="activeCollage.detail1"
@@ -757,9 +883,9 @@ onUnmounted(() => {
     </section>
 
     <!-- The Retail Shop (Boutique Products) -->
-    <section class="w-full py-24 md:py-32 px-6 lg:px-16 max-w-[1440px] mx-auto bg-neutral-50/30 border-t border-neutral-200">
+    <section class="w-full py-12 md:py-16 px-6 lg:px-16 max-w-[1440px] mx-auto bg-neutral-50/30 border-t border-neutral-200">
       <!-- Section Header -->
-      <div class="flex flex-col md:flex-row justify-between items-end mb-16 md:mb-24 gap-8">
+      <div class="flex flex-col md:flex-row justify-between items-end mb-8 md:mb-12 gap-8">
         <div class="max-w-xl">
           <p class="text-[10px] tracking-[0.2em] uppercase text-neutral-400 mb-4 font-semibold">Mỹ phẩm cao cấp</p>
           <h3 class="text-3xl md:text-4xl lg:text-5xl font-sans font-semibold tracking-wide text-black uppercase">
@@ -794,37 +920,64 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Horizontal scroll Carousel -->
+      <!-- Horizontal scroll Carousel — 3 trạng thái: loading / có data / rỗng -->
+
+      <!-- Skeleton Loading -->
       <div
+        v-if="isLoadingProducts"
+        class="flex gap-8 py-4 px-1 overflow-hidden"
+      >
+        <div
+          v-for="n in 4"
+          :key="n"
+          class="flex-shrink-0 w-[280px] sm:w-[320px] border border-neutral-200 p-3 bg-white"
+        >
+          <div class="aspect-[4/5] w-full bg-neutral-100 animate-pulse mb-3 relative overflow-hidden">
+            <div class="absolute inset-0 -translate-x-full animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/60 to-transparent"></div>
+          </div>
+          <div class="h-3 bg-neutral-100 animate-pulse rounded mb-2 w-1/2"></div>
+          <div class="h-4 bg-neutral-100 animate-pulse rounded mb-2 w-3/4"></div>
+          <div class="h-3 bg-neutral-100 animate-pulse rounded w-1/3"></div>
+        </div>
+      </div>
+
+      <!-- Có sản phẩm thật từ API -->
+      <div
+        v-else-if="dataStore.PRODUCTS.length > 0"
         ref="productCarouselRef"
         class="flex overflow-x-auto gap-8 scroll-smooth scrollbar-hide py-4 px-1 snap-x snap-mandatory"
       >
         <div
-          v-for="prod in dataStore.PRODUCTS"
+          v-for="(prod, prodIdx) in dataStore.PRODUCTS"
           :key="prod.id"
-          class="flex-shrink-0 w-[280px] sm:w-[320px] snap-start group cursor-pointer flex flex-col outline-none focus:outline-none"
+          class="flex-shrink-0 w-[280px] sm:w-[320px] snap-start group cursor-pointer flex flex-col outline-none focus:outline-none border border-neutral-200 hover:border-[#bfa77a]/60 transition-colors duration-300 p-3 bg-white shadow-sm hover:shadow-md"
           @click="router.push({ name: 'product_detail', params: { id: prod.id } })"
         >
           <!-- Minimalist product image background container matching Shop page layout -->
-          <div class="aspect-[4/5] w-full bg-white overflow-hidden mb-4 relative">
-            <!-- Premium product ribbon/tag -->
+          <div class="aspect-[4/5] w-full bg-neutral-50 overflow-hidden mb-3 relative border border-neutral-100">
+            <!-- Premium product ribbon/tag — hiển thị cho 4 sản phẩm đầu, dùng index thay vì hardcode ID -->
             <span 
-              v-if="prod.id === 'p1' || prod.id === 'p2' || prod.id === 'p3' || prod.id === 'p4' || prod.id === '1' || prod.id === '2' || prod.id === '3' || prod.id === '4'"
+              v-if="prodIdx < 4"
               class="absolute top-4 left-4 z-20 bg-neutral-950/80 backdrop-blur-sm text-[#bfa77a] text-[8px] font-semibold uppercase tracking-widest px-3 py-1.5 border border-[#bfa77a]/30"
             >
-              {{ (prod.id === 'p1' || prod.id === '1') ? 'Signature' : (prod.id === 'p2' || prod.id === '2') ? 'Bán Chạy' : (prod.id === 'p3' || prod.id === '3') ? 'Mới Về' : 'Thuần Chay' }}
+              {{ prodIdx === 0 ? 'Signature' : prodIdx === 1 ? 'Bán Chạy' : prodIdx === 2 ? 'Mới Về' : 'Thuần Chay' }}
             </span>
 
+            <!-- Ảnh sản phẩm — fallback bg-neutral-100 khi không có ảnh -->
+            <div v-if="!prod.img" class="w-full h-full bg-neutral-100 flex items-center justify-center">
+              <ShoppingBag :size="32" class="text-neutral-300" />
+            </div>
             <img
+              v-else
               :src="prod.img"
               :alt="prod.name"
-              class="w-full h-full object-cover object-center block transition-all duration-700 ease-out group-hover:scale-105 saturate-110"
+              class="w-full h-full object-cover object-center block transition-all duration-700 ease-out group-hover:scale-105"
             />
             
             <!-- Luxury Floating Actions Overlay -->
             <div class="absolute inset-0 bg-neutral-900/15 opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-center justify-center gap-4 z-25">
               <button 
-                @click.stop="showToast('Đã thêm ' + prod.name + ' vào giỏ hàng!');"
+                @click.stop="addProductToCart(prod)"
                 class="w-12 h-12 rounded-full bg-white text-black hover:bg-[#bfa77a] hover:text-black flex items-center justify-center shadow-lg transition-all duration-300 scale-90 group-hover:scale-100 cursor-pointer"
                 title="Thêm vào giỏ"
               >
@@ -842,29 +995,59 @@ onUnmounted(() => {
 
           <!-- Product description -->
           <div class="flex justify-between items-start">
-            <div class="flex flex-col pr-4">
+            <div class="flex flex-col pr-4 flex-grow">
               <p class="text-[9px] text-[#bfa77a] font-bold uppercase tracking-[0.15em] mb-1">
                 {{ prod.category }} &middot; {{ prod.size }}
               </p>
               <h4 class="font-heading text-sm tracking-wider uppercase text-neutral-900 group-hover:text-[#bfa77a] transition-colors duration-300">
                 {{ prod.name }}
               </h4>
-              <!-- Star rating details -->
-              <div class="flex gap-0.5 text-[#bfa77a] text-[10px] mt-1 mb-1">
-                <span>★</span><span>★</span><span>★</span><span>★</span><span>★</span>
+              <!-- HOME2-044: Hiển thị đúng số sao trung bình từ API -->
+              <div class="flex items-center gap-1 mt-1 mb-1">
+                <div class="flex gap-0.5 text-[10px]">
+                  <span v-for="s in 5" :key="s"
+                    :class="s <= Math.round(prod.avgRating ?? 5) ? 'text-[#bfa77a]' : 'text-neutral-300'"
+                  >★</span>
+                </div>
+                <span v-if="prod.reviewCount > 0" class="text-[9px] text-neutral-400 font-light">
+                  ({{ prod.reviewCount }})
+                </span>
               </div>
               <span class="text-sm font-mono text-[#bfa77a] font-medium mt-1">
                 {{ formatPriceToVND(prod.price) }}
               </span>
             </div>
+            <!-- HOME2-066/067: Nút giỏ hàng hiển thị thường xuyên trong card, không chỉ khi hover -->
+            <button
+              @click.stop="addProductToCart(prod)"
+              class="w-9 h-9 rounded-full border border-neutral-200 bg-white text-neutral-600 hover:bg-[#bfa77a] hover:text-black hover:border-[#bfa77a] flex items-center justify-center shadow-sm transition-all duration-300 flex-shrink-0 cursor-pointer mt-1"
+              title="Thêm vào giỏ hàng"
+            >
+              <ShoppingBag :size="14" />
+            </button>
           </div>
         </div>
+      </div>
+
+      <!-- Empty state — API không trả về sản phẩm hoặc lỗi -->
+      <div
+        v-else
+        class="flex flex-col items-center justify-center py-16 text-center"
+      >
+        <ShoppingBag :size="40" class="text-neutral-300 mb-4" />
+        <p class="text-sm text-neutral-400 font-light">Không tải được sản phẩm. Vui lòng kiểm tra kết nối máy chủ.</p>
+        <button
+          @click="goToRoute('shop')"
+          class="mt-6 text-[10px] uppercase tracking-[0.2em] text-[#bfa77a] border-b border-[#bfa77a] pb-0.5 hover:opacity-70 transition-opacity cursor-pointer"
+        >
+          Xem tất cả sản phẩm
+        </button>
       </div>
     </section>
 
     <!-- Botanical Ingredients Apothecary Section (Interactive Tab Details) -->
-    <section class="w-full py-24 md:py-32 px-6 lg:px-16 max-w-[1440px] mx-auto bg-white border-t border-neutral-200">
-      <div class="flex flex-col items-center text-center mb-16 md:mb-24">
+    <section class="w-full py-12 md:py-16 px-6 lg:px-16 max-w-[1440px] mx-auto bg-white border-t border-neutral-200">
+      <div class="flex flex-col items-center text-center mb-8 md:mb-12">
         <p class="text-[10px] tracking-[0.2em] uppercase text-neutral-400 mb-4 font-semibold">Dược liệu bản địa</p>
         <h3 class="text-3xl md:text-4xl font-sans font-semibold tracking-wide text-black uppercase">
           Thành phần Tinh Túy
@@ -878,6 +1061,7 @@ onUnmounted(() => {
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-stretch">
         <!-- Ingredient Tabs (Left Column) -->
         <div class="lg:col-span-5 flex flex-col gap-4 justify-center">
+          <!-- HOME2-047: tab active có nền đen chữ trắng dịch chuyển sang phải -->
           <button
             v-for="(ing, idx) in ingredients"
             :key="ing.id"
@@ -885,9 +1069,10 @@ onUnmounted(() => {
             class="w-full text-left p-6 border transition-all duration-500 flex items-center gap-6 cursor-pointer"
             :class="[
               selectedIngredientIndex === idx
-                ? 'bg-neutral-950 border-neutral-950 text-white shadow-xl translate-x-2'
-                : 'bg-white border-neutral-200 text-neutral-800 hover:border-neutral-900 hover:translate-x-1'
+                ? 'bg-neutral-950 border-neutral-950 text-white shadow-xl'
+                : 'bg-white border-neutral-200 text-neutral-800 hover:border-neutral-900'
             ]"
+            :style="selectedIngredientIndex === idx ? { transform: 'translateX(8px)' } : { transform: 'translateX(0)' }"
           >
             <span class="font-serif text-xs" :class="selectedIngredientIndex === idx ? 'text-[#bfa77a]' : 'text-neutral-400'">0{{ ing.id }}</span>
             <div class="flex flex-col">
@@ -922,19 +1107,29 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- Product Association Banner -->
+          <!-- HOME2-049: click banner sản phẩm liên quan điều hướng đúng productId thật -->
           <div 
             class="mt-8 p-6 bg-white border border-neutral-200 flex items-center justify-between group cursor-pointer hover:border-[#bfa77a]/60 transition-colors"
-            @click="router.push({ name: 'product_detail', params: { id: currentIngredient.productId } })"
+            role="button"
+            :aria-label="'Xem chi tiết sản phẩm ' + (currentIngredientProduct?.name || currentIngredient.productName)"
+            @click="router.push({ name: currentIngredientProduct ? 'product_detail' : 'shop', params: currentIngredientProduct ? { id: currentIngredientProduct.id } : {} })"
           >
             <div class="flex items-center gap-4">
-              <div class="w-12 h-16 bg-neutral-50 flex items-center justify-center p-2 border border-neutral-100 flex-shrink-0">
-                <img :src="currentIngredient.image" class="w-full h-full object-contain mix-blend-multiply" />
+              <div class="w-12 h-16 bg-neutral-50 flex items-center justify-center p-1 border border-neutral-100 flex-shrink-0 overflow-hidden">
+                <img 
+                  :src="currentIngredientProduct?.img || currentIngredient.image"
+                  :alt="currentIngredientProduct?.name || currentIngredient.productName"
+                  class="w-full h-full object-cover"
+                  @error="($event.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?q=80&w=200'"
+                />
               </div>
               <div class="flex flex-col">
                 <span class="text-[8px] uppercase tracking-widest text-neutral-400">Có trong sản phẩm</span>
                 <span class="font-heading text-xs uppercase tracking-wider text-neutral-900 font-bold group-hover:text-[#bfa77a] transition-colors">
-                  {{ currentIngredient.productName }}
+                  {{ currentIngredientProduct?.name || currentIngredient.productName }}
+                </span>
+                <span v-if="currentIngredientProduct?.price" class="text-[10px] text-[#bfa77a] font-mono mt-0.5">
+                  {{ formatPriceToVND(currentIngredientProduct.price) }}
                 </span>
               </div>
             </div>
@@ -947,9 +1142,9 @@ onUnmounted(() => {
     </section>
 
     <!-- Lookbook & Synergy -->
-    <section class="w-full py-24 md:py-32 px-6 lg:px-16 max-w-[1440px] mx-auto bg-white border-t border-neutral-200">
+    <section class="w-full py-12 md:py-16 px-6 lg:px-16 max-w-[1440px] mx-auto bg-white border-t border-neutral-200">
       <!-- Section Header -->
-      <div class="flex flex-col items-center text-center mb-16 md:mb-24">
+      <div class="flex flex-col items-center text-center mb-8 md:mb-12">
         <p class="text-[10px] tracking-[0.2em] uppercase text-neutral-400 mb-4 font-semibold">Cảm hứng sáng tạo</p>
         <h3 class="text-3xl md:text-4xl font-sans font-semibold tracking-wide text-black uppercase">
           Lookbook & Phối hợp
@@ -995,14 +1190,14 @@ onUnmounted(() => {
     </section>
 
     <!-- Bespoke Apothecary Elixir Customizer (Wow-Factor Interactive Lab) -->
-    <section class="w-full py-24 md:py-32 px-6 lg:px-16 bg-neutral-950 text-white relative overflow-hidden border-t border-neutral-900">
+    <section class="w-full py-12 md:py-16 px-6 lg:px-16 bg-neutral-950 text-white relative overflow-hidden border-t border-neutral-900">
       <!-- Decorative background elements -->
       <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(191,167,122,0.08)_0%,transparent_60%)] pointer-events-none"></div>
       <div class="absolute top-1/2 left-1/4 w-[500px] h-[500px] bg-[#bfa77a]/3 rounded-full blur-[120px] pointer-events-none -translate-y-1/2"></div>
 
       <div class="max-w-[1200px] mx-auto relative z-10">
         <!-- Section Header -->
-        <div class="text-center mb-20 max-w-2xl mx-auto">
+        <div class="text-center mb-10 max-w-2xl mx-auto">
           <p class="text-[10px] tracking-[0.2em] uppercase text-[#bfa77a] mb-4 font-semibold">Cá nhân hóa liệu trình</p>
           <h3 class="text-3xl md:text-4xl text-white font-sans font-semibold tracking-wide uppercase">
             Nghi thức Apothecary Elixir
@@ -1135,26 +1330,34 @@ onUnmounted(() => {
                   </div>
                 </div>
 
-                <!-- Product Box -->
+                <!-- Product Box — hiển thị sản phẩm THẬT từ API -->
                 <div 
                   class="p-4 bg-neutral-950 border border-neutral-800 flex items-center justify-between group cursor-pointer hover:border-[#bfa77a]/60 transition-colors animate-in fade-in duration-700"
                   :key="'prod-' + activeConcern"
-                  @click="router.push({ name: 'product_detail', params: { id: currentFormula.productId } })"
+                  @click="currentFormulaProduct ? router.push({ name: 'product_detail', params: { id: currentFormulaProduct.id } }) : router.push({ name: 'shop' })"
                 >
                   <div class="flex items-center gap-3">
-                    <div class="w-10 h-14 bg-neutral-900 flex items-center justify-center p-2 border border-neutral-800 flex-shrink-0">
-                      <img :src="currentFormula.productImg" class="w-full h-full object-contain mix-blend-screen" />
+                    <div class="w-10 h-14 bg-neutral-900 flex items-center justify-center border border-neutral-800 flex-shrink-0 overflow-hidden">
+                      <img 
+                        :src="currentFormulaProduct?.img || currentFormula.productImg"
+                        :alt="currentFormulaProduct?.name || currentFormula.productName"
+                        class="w-full h-full object-cover"
+                        @error="($event.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?q=80&w=200'"
+                      />
                     </div>
                     <div class="flex flex-col">
                       <span class="text-[8px] uppercase tracking-widest text-[#bfa77a]">Sản phẩm khuyên dùng</span>
                       <span class="font-heading text-xs uppercase tracking-wider text-white font-bold group-hover:text-[#bfa77a] transition-colors mt-0.5">
-                        {{ normalizeVietnamese(currentFormula.productName) }}
+                        {{ currentFormulaProduct?.name || normalizeVietnamese(currentFormula.productName) }}
+                      </span>
+                      <span v-if="currentFormulaProduct?.price" class="text-[10px] text-[#bfa77a] font-mono mt-0.5">
+                        {{ formatPriceToVND(currentFormulaProduct.price) }}
                       </span>
                     </div>
                   </div>
                   <div class="flex items-center gap-2">
                     <button 
-                      @click.stop="showToast('Đã thêm ' + currentFormula.productName + ' vào giỏ hàng!');"
+                      @click.stop="showToast('Đã thêm ' + (currentFormulaProduct?.name || currentFormula.productName) + ' vào giỏ hàng!');"
                       class="w-8 h-8 rounded-full bg-white text-black hover:bg-[#bfa77a] hover:text-black flex items-center justify-center shadow-md transition-all duration-300 scale-90 hover:scale-100 cursor-pointer"
                       title="Thêm vào giỏ"
                     >
@@ -1166,16 +1369,16 @@ onUnmounted(() => {
                   </div>
                 </div>
 
-                <!-- Double CTA buttons for Service + Apothecary Shop -->
+                <!-- HOME2-064/065: CTA buttons dùng ID THẬT từ API -->
                 <div class="flex gap-4 mt-6">
                   <button
-                    @click="router.push({ name: 'service_detail', params: { id: currentFormula.serviceId } })"
+                    @click="currentFormulaService ? router.push({ name: 'serviceDetail', params: { id: currentFormulaService.id } }) : router.push({ name: 'services' })"
                     class="flex-1 py-3 bg-[#bfa77a] text-black text-[9px] uppercase tracking-widest font-semibold hover:bg-white transition-all duration-300 text-center cursor-pointer"
                   >
                     Đặt Lịch Liệu Trình
                   </button>
                   <button
-                    @click="router.push({ name: 'product_detail', params: { id: currentFormula.productId } })"
+                    @click="currentFormulaProduct ? router.push({ name: 'product_detail', params: { id: currentFormulaProduct.id } }) : router.push({ name: 'shop' })"
                     class="flex-1 py-3 bg-transparent border border-neutral-700 text-white text-[9px] uppercase tracking-widest font-semibold hover:border-[#bfa77a] hover:text-[#bfa77a] transition-all duration-300 text-center cursor-pointer"
                   >
                     Chi tiết sản phẩm
@@ -1192,7 +1395,7 @@ onUnmounted(() => {
     </section>
 
     <!-- Testimonials Section -->
-    <section class="w-full py-24 md:py-32 px-6 lg:px-16 max-w-[1440px] mx-auto bg-white border-t border-neutral-200">
+    <section class="w-full py-12 md:py-16 px-6 lg:px-16 max-w-[1440px] mx-auto bg-white border-t border-neutral-200">
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
         <!-- Left: Branding & Overview -->
         <div class="lg:col-span-4 flex flex-col">
@@ -1266,7 +1469,7 @@ onUnmounted(() => {
     </section>
 
     <!-- Boutique Club (Newsletter) Section -->
-    <section class="w-full py-24 bg-black text-white relative overflow-hidden border-t border-neutral-900">
+    <section class="w-full py-12 bg-black text-white relative overflow-hidden border-t border-neutral-900">
       <div class="absolute inset-0 opacity-10 flex items-center justify-center pointer-events-none">
         <div class="w-[600px] h-[600px] border border-[#bfa77a] rounded-full animate-pulse"></div>
       </div>
@@ -1374,5 +1577,10 @@ onUnmounted(() => {
     transform: translateY(-200px) scale(0.6);
     opacity: 0;
   }
+}
+
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
 }
 </style>
