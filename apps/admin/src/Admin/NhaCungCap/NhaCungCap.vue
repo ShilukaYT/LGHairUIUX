@@ -1,12 +1,37 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, watch, computed, onUnmounted } from 'vue'
 import axios from 'axios'
 import Swal from 'sweetalert2'
 import { Search, Plus, Edit3, Trash2, X, Building2, Phone, Mail, MapPin } from 'lucide-vue-next'
 import { logActivity } from '@/utils/activityLogger'
+import { useTheme } from 'vuetify'
 
 const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
 const API_BASE_URL = `${API}/api/admin/nha-cung-cap`
+
+// ── Theme State Detection (Light / Dark Mode Sync) ──
+let isDarkMode = computed(() => false)
+try {
+  const vuetifyTheme = useTheme()
+  isDarkMode = computed(() => vuetifyTheme.global.name.value === 'dark')
+} catch (e) {
+  isDarkMode = computed(() => {
+    return localStorage.getItem('theme_selection') === 'dark'
+  })
+}
+
+// Watch theme change and update body background to prevent white bottom area
+watch(isDarkMode, (dark) => {
+  if (dark) {
+    document.body.style.backgroundColor = '#141416'
+  } else {
+    document.body.style.backgroundColor = ''
+  }
+}, { immediate: true })
+
+onUnmounted(() => {
+  document.body.style.backgroundColor = ''
+})
 
 const listNccAll = ref<any[]>([])
 const isLoading = ref(false)
@@ -154,7 +179,7 @@ const saveNcc = async () => {
                     title: 'Thành công',
                     text: 'Cập nhật thông tin đối tác thành công!',
                     icon: 'success',
-                    confirmButtonColor: '#2563eb'
+                    confirmButtonColor: '#0284c7'
                 });
             }
         } else {
@@ -166,7 +191,7 @@ const saveNcc = async () => {
                     title: 'Thành công',
                     text: 'Thêm nhà cung cấp mới thành công!',
                     icon: 'success',
-                    confirmButtonColor: '#2563eb'
+                    confirmButtonColor: '#0284c7'
                 });
             }
         }
@@ -182,7 +207,7 @@ const saveNcc = async () => {
             title: 'Lỗi',
             text: e.response?.data?.message || "Xảy ra lỗi hệ thống khi lưu dữ liệu.",
             icon: 'error',
-            confirmButtonColor: '#2563eb'
+            confirmButtonColor: '#0284c7'
         });
     }
 }
@@ -209,7 +234,7 @@ const deleteNcc = async (maNcc: string) => {
             title: 'Thành công',
             text: res.data.message || 'Thao tác xóa thành công.',
             icon: 'success',
-            confirmButtonColor: '#2563eb'
+            confirmButtonColor: '#0284c7'
         });
         await fetchNhaCungCaps();
     } catch (e: any) {
@@ -218,7 +243,7 @@ const deleteNcc = async (maNcc: string) => {
             title: 'Lỗi',
             text: e.response?.data?.message || "Không thể thực hiện thao tác xóa.",
             icon: 'error',
-            confirmButtonColor: '#2563eb'
+            confirmButtonColor: '#0284c7'
         });
     }
 }
@@ -256,7 +281,7 @@ const changeNccStatus = async (ncc: any, newStatus: number) => {
             title: 'Lỗi',
             text: 'Không thể cập nhật trạng thái đối tác.',
             icon: 'error',
-            confirmButtonColor: '#2563eb'
+            confirmButtonColor: '#0284c7'
         });
     }
 }
@@ -278,7 +303,7 @@ const getAvatarGradient = (name: string) => {
     if (!name) return 'from-slate-400 to-slate-500'
     const charCode = name.charCodeAt(0) + (name.charCodeAt(1) || 0)
     const gradients = [
-        'from-blue-500 to-indigo-600',
+        'from-sky-500 to-blue-600',
         'from-emerald-500 to-teal-600',
         'from-violet-500 to-purple-600',
         'from-rose-500 to-pink-600',
@@ -305,584 +330,483 @@ onMounted(fetchNhaCungCaps)
 </script>
 
 <template>
-    <div class="hoadon-container">
+    <div 
+        class="ncc-container min-h-screen w-full flex flex-col p-4 md:p-6 lg:p-8 font-sans antialiased relative transition-colors duration-300"
+        :class="isDarkMode ? 'bg-[#141416] text-slate-100' : 'bg-slate-50 text-slate-800'"
+    >
         <!-- Header -->
-        <div class="hd-header">
-            <div class="hd-header-left">
-                <div class="hd-header-icon">
-                    <Building2 class="w-6 h-6" />
+        <div 
+            class="hd-header flex flex-col sm:flex-row sm:items-center justify-between gap-6 rounded-xl border p-6 mb-6 shadow-xs transition-colors duration-300"
+            :class="isDarkMode ? 'bg-[#1e1e2d] border-slate-700/80' : 'bg-white border-slate-200/90'"
+        >
+            <div class="flex items-center gap-5">
+                <div class="w-14 h-14 md:w-16 md:h-16 rounded-xl bg-gradient-to-br from-sky-500 via-sky-600 to-blue-700 flex items-center justify-center text-white shadow-md shadow-sky-500/25 flex-shrink-0">
+                    <Building2 class="w-7 h-7 md:w-8 md:h-8" />
                 </div>
                 <div>
-                    <h2 class="hd-header-title">Quản Lý Nhà Cung Cấp</h2>
-                    <p class="hd-header-subtitle">Kiểm soát thông tin và trạng thái hợp tác của các đối tác cung ứng Salon</p>
+                    <h2 class="text-2xl md:text-3xl font-extrabold tracking-tight" :class="isDarkMode ? 'text-white' : 'text-slate-900'">
+                        Quản Lý Nhà Cung Cấp
+                    </h2>
+                    <p class="text-xs md:text-sm mt-1 font-medium" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">
+                        Kiểm soát thông tin và trạng thái hợp tác của các đối tác cung ứng Salon
+                    </p>
                 </div>
             </div>
-            <button @click="openAddModal" class="hd-btn-export">
-                <Plus class="w-4 h-4" /> Thêm Đối Tác
+
+            <button 
+                @click="openAddModal" 
+                class="hd-btn-export h-11 px-5 text-xs font-bold rounded-lg transition-all cursor-pointer shadow-xs flex items-center justify-center gap-2"
+            >
+                <Plus class="w-4 h-4" />
+                <span>Thêm Đối Tác</span>
             </button>
         </div>
 
         <!-- Filters Grid -->
-        <div class="hd-filters-grid" style="grid-template-columns: 1fr;">
-            <div class="hd-filter-item">
-                <label class="hd-filter-label">Tìm kiếm đối tác</label>
-                <div class="hd-search-wrapper">
-                    <Search class="hd-search-icon" />
-                    <input v-model="searchQuery" @keyup.enter="fetchNhaCungCaps" placeholder="Nhập tên, số điện thoại hoặc mã đối tác..." class="hd-input hd-search-input">
+        <div 
+            class="hd-filters-grid rounded-xl border p-6 mb-6 shadow-xs transition-colors duration-300"
+            :class="isDarkMode ? 'bg-[#1e1e2d] border-slate-700/80' : 'bg-white border-slate-200/90'"
+        >
+            <div class="flex flex-col gap-2">
+                <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Tìm kiếm đối tác</label>
+                <div class="relative flex items-center">
+                    <Search class="absolute left-4 w-4 h-4 pointer-events-none z-10 text-slate-400" />
+                    <input 
+                        v-model="searchQuery" 
+                        @keyup.enter="fetchNhaCungCaps" 
+                        placeholder="Nhập tên, số điện thoại hoặc mã đối tác..." 
+                        class="hd-input hd-search-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
+                        :class="isDarkMode ? 'dark-mode-input' : 'light-mode-input'"
+                    >
                 </div>
             </div>
         </div>
 
         <!-- Tabs -->
-        <div class="hd-tabs">
-            <button @click="statusFilter = 'all'" :class="{ active: statusFilter === 'all' }" class="hd-tab-button">
+        <div class="flex border-b mb-6 gap-2" :class="isDarkMode ? 'border-slate-700/80' : 'border-slate-200'">
+            <button 
+                @click="statusFilter = 'all'" 
+                class="flex items-center gap-2 px-6 py-3.5 text-xs md:text-sm font-extrabold rounded-t-xl transition-all cursor-pointer border-b-2 -mb-[1px]"
+                :class="statusFilter === 'all' 
+                    ? (isDarkMode ? 'bg-sky-950/60 text-sky-300 border-sky-500' : 'bg-sky-50 text-sky-700 border-sky-600') 
+                    : (isDarkMode ? 'text-slate-400 hover:text-slate-200 hover:bg-[#222233] border-transparent' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border-transparent')"
+            >
                 Tất cả đối tác ({{ totalPartners }})
             </button>
-            <button @click="statusFilter = '1'" :class="{ active: statusFilter === '1' }" class="hd-tab-button">
+            <button 
+                @click="statusFilter = '1'" 
+                class="flex items-center gap-2 px-6 py-3.5 text-xs md:text-sm font-extrabold rounded-t-xl transition-all cursor-pointer border-b-2 -mb-[1px]"
+                :class="statusFilter === '1' 
+                    ? (isDarkMode ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500' : 'bg-emerald-50 text-emerald-700 border-emerald-600') 
+                    : (isDarkMode ? 'text-slate-400 hover:text-slate-200 hover:bg-[#222233] border-transparent' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border-transparent')"
+            >
                 Đang hoạt động ({{ activePartners }})
             </button>
-            <button @click="statusFilter = '0'" :class="{ active: statusFilter === '0' }" class="hd-tab-button">
+            <button 
+                @click="statusFilter = '0'" 
+                class="flex items-center gap-2 px-6 py-3.5 text-xs md:text-sm font-extrabold rounded-t-xl transition-all cursor-pointer border-b-2 -mb-[1px]"
+                :class="statusFilter === '0' 
+                    ? (isDarkMode ? 'bg-rose-950/60 text-rose-300 border-rose-500' : 'bg-rose-50 text-rose-700 border-rose-600') 
+                    : (isDarkMode ? 'text-slate-400 hover:text-slate-200 hover:bg-[#222233] border-transparent' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border-transparent')"
+            >
                 Ngừng hợp tác ({{ inactivePartners }})
             </button>
         </div>
 
         <!-- Table Section -->
-        <div class="hd-table-wrapper">
-            <div v-if="isLoading" style="text-align: center; padding: 48px; font-weight: 500; color: #2563eb;">Đang nạp danh sách đối tác hệ thống...</div>
-            <div v-else-if="errorMessage" style="padding: 24px; text-align: center; color: #e11d48; background-color: #fff1f2; border-top: 1px solid #ffe4e6; border-bottom: 1px solid #ffe4e6; font-weight: 600; font-size: 14px;">
+        <div 
+            class="hd-table-wrapper flex-1 w-full rounded-xl border shadow-xs relative overflow-hidden flex flex-col z-10 min-h-[400px] transition-colors duration-300"
+            :class="isDarkMode ? 'bg-[#1e1e2d] border-slate-700/80' : 'bg-white border-slate-200/90'"
+        >
+            <div v-if="isLoading" class="p-12 text-center text-xs font-extrabold text-sky-600 tracking-wider uppercase">
+                <div class="w-8 h-8 border-3 border-slate-200 border-t-sky-600 rounded-full animate-spin mx-auto mb-3"></div>
+                Đang nạp danh sách đối tác hệ thống...
+            </div>
+            
+            <div v-else-if="errorMessage" class="p-6 text-center text-xs font-bold text-rose-500 bg-rose-950/40 border-b border-rose-800">
                 {{ errorMessage }}
             </div>
-            <table v-else class="hd-table">
-                <thead>
-                    <tr>
-                        <th style="width: 12%;">Mã Đối Tác</th>
-                        <th style="width: 25%;">Tên Nhà Cung Cấp</th>
-                        <th style="width: 15%;">Số Điện Thoại</th>
-                        <th style="width: 18%;">Email</th>
-                        <th style="width: 15%;">Địa Chỉ</th>
-                        <th style="width: 18%; text-align: center;">Trạng Thái</th>
-                        <th style="width: 10%; text-align: center;">Thao Tác</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="ncc in listNcc" :key="ncc.maNcc">
-                        <td style="font-weight: 700; color: #2563eb;">{{ ncc.maNcc }}</td>
-                        <td style="font-weight: 500;">
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <div :class="`avatar-circle bg-gradient-to-tr ${getAvatarGradient(ncc.tenNcc)}`" style="width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 750; color: #fff; font-size: 11.5px; flex-shrink: 0;">
-                                    {{ getInitials(ncc.tenNcc) }}
+            
+            <div v-else class="flex-grow overflow-x-auto custom-scrollbar">
+                <table class="w-full text-left text-xs md:text-sm border-collapse min-w-[1000px]">
+                    <thead>
+                        <tr :class="isDarkMode ? 'bg-[#252536] text-slate-200 border-b border-slate-700/80' : 'bg-slate-900 text-white'">
+                            <th class="py-4 px-6 font-extrabold uppercase tracking-wider w-36 whitespace-nowrap">Mã Đối Tác</th>
+                            <th class="py-4 px-6 font-extrabold uppercase tracking-wider min-w-[280px] whitespace-nowrap">Tên Nhà Cung Cấp</th>
+                            <th class="py-4 px-6 font-extrabold uppercase tracking-wider w-44 whitespace-nowrap">Số Điện Thoại</th>
+                            <th class="py-4 px-6 font-extrabold uppercase tracking-wider w-52 whitespace-nowrap">Email</th>
+                            <th class="py-4 px-6 font-extrabold uppercase tracking-wider w-60 whitespace-nowrap">Địa Chỉ</th>
+                            <th class="py-4 px-6 font-extrabold uppercase tracking-wider w-44 text-center whitespace-nowrap">Trạng Thái</th>
+                            <th class="py-4 px-4 font-extrabold uppercase tracking-wider w-28 text-center whitespace-nowrap">Thao Tác</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y" :class="isDarkMode ? 'divide-slate-800/80' : 'divide-slate-100'">
+                        <tr 
+                            v-for="ncc in listNcc" 
+                            :key="ncc.maNcc"
+                            class="transition-colors duration-150"
+                            :class="isDarkMode ? 'hover:bg-slate-800/60 text-slate-200' : 'hover:bg-sky-50/60 text-slate-700'"
+                        >
+                            <td class="py-4 px-6 font-extrabold font-mono text-xs text-sky-500 whitespace-nowrap">
+                                {{ ncc.maNcc }}
+                            </td>
+                            
+                            <td class="py-4 px-6 font-bold min-w-[280px]" :class="isDarkMode ? 'text-white' : 'text-slate-900'">
+                                <div class="flex items-center gap-3">
+                                    <div :class="`avatar-circle bg-gradient-to-tr ${getAvatarGradient(ncc.tenNcc)}`" class="w-9 h-9 rounded-full flex items-center justify-center font-black text-white text-xs flex-shrink-0 shadow-xs">
+                                        {{ getInitials(ncc.tenNcc) }}
+                                    </div>
+                                    <span class="leading-snug">{{ ncc.tenNcc }}</span>
                                 </div>
-                                <span>{{ ncc.tenNcc }}</span>
-                            </div>
-                        </td>
-                        <td style="font-weight: 500;">
-                            <span v-if="ncc.soDienThoai" style="display: inline-flex; align-items: center; gap: 6px;">
-                                <Phone class="w-3.5 h-3.5 text-slate-400" />
-                                {{ ncc.soDienThoai }}
-                            </span>
-                            <span v-else style="color: #94a3b8; font-style: italic; font-size: 13px;">Chưa cập nhật</span>
-                        </td>
-                        <td style="color: #475569;">
-                            <span v-if="ncc.email" style="display: inline-flex; align-items: center; gap: 6px;">
-                                <Mail class="w-3.5 h-3.5 text-slate-400" />
-                                {{ ncc.email }}
-                            </span>
-                            <span v-else style="color: #94a3b8; font-style: italic; font-size: 13px;">Chưa cập nhật</span>
-                        </td>
-                        <td style="color: #475569; max-w: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                            <span v-if="ncc.diaChi" style="display: inline-flex; align-items: center; gap: 6px;" :title="ncc.diaChi">
-                                <MapPin class="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                {{ ncc.diaChi }}
-                            </span>
-                            <span v-else style="color: #94a3b8; font-style: italic; font-size: 13px;">Chưa cập nhật</span>
-                        </td>
-                        <td>
-                            <div class="hd-status-wrapper">
-                                <select :value="ncc.trangThai" @change="changeNccStatus(ncc, Number(($event.target as HTMLSelectElement).value))" class="hd-status-select" :class="ncc.trangThai === 1 ? 'status-completed' : 'status-canceled'">
-                                    <option :value="1" class="text-slate-700 bg-white">Đang hoạt động</option>
-                                    <option :value="0" class="text-slate-700 bg-white">Ngừng hợp tác</option>
-                                </select>
-                                <div class="hd-dropdown-arrow">
-                                    <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                            </td>
+                            
+                            <td class="py-4 px-6 font-medium text-xs font-mono whitespace-nowrap">
+                                <span v-if="ncc.soDienThoai" class="inline-flex items-center gap-1.5" :class="isDarkMode ? 'text-slate-300' : 'text-slate-700'">
+                                    <Phone class="w-3.5 h-3.5 text-sky-500" />
+                                    {{ ncc.soDienThoai }}
+                                </span>
+                                <span v-else class="italic opacity-50" :class="isDarkMode ? 'text-slate-500' : 'text-slate-400'">Chưa cập nhật</span>
+                            </td>
+                            
+                            <td class="py-4 px-6 text-xs whitespace-nowrap">
+                                <span v-if="ncc.email" class="inline-flex items-center gap-1.5" :class="isDarkMode ? 'text-slate-300' : 'text-slate-700'">
+                                    <Mail class="w-3.5 h-3.5 text-sky-500" />
+                                    {{ ncc.email }}
+                                </span>
+                                <span v-else class="italic opacity-50" :class="isDarkMode ? 'text-slate-500' : 'text-slate-400'">Chưa cập nhật</span>
+                            </td>
+                            
+                            <td class="py-4 px-6 text-xs max-w-[240px] truncate">
+                                <span v-if="ncc.diaChi" class="inline-flex items-center gap-1.5 truncate" :title="ncc.diaChi" :class="isDarkMode ? 'text-slate-300' : 'text-slate-700'">
+                                    <MapPin class="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                                    <span class="truncate">{{ ncc.diaChi }}</span>
+                                </span>
+                                <span v-else class="italic opacity-50" :class="isDarkMode ? 'text-slate-500' : 'text-slate-400'">Chưa cập nhật</span>
+                            </td>
+                            
+                            <td class="py-4 px-6 text-center whitespace-nowrap">
+                                <div class="relative flex items-center justify-center">
+                                    <select 
+                                        :value="ncc.trangThai" 
+                                        @change="changeNccStatus(ncc, Number(($event.target as HTMLSelectElement).value))" 
+                                        class="hd-status-select text-xs font-extrabold rounded-lg px-3 py-1.5 outline-none cursor-pointer transition-all box-border border"
+                                        :class="[
+                                            ncc.trangThai === 1 ? (isDarkMode ? 'dark-status-completed' : 'light-status-completed') : (isDarkMode ? 'dark-status-canceled' : 'light-status-canceled'),
+                                            isDarkMode ? 'dark-status-dropdown' : 'light-status-dropdown'
+                                        ]"
+                                    >
+                                        <option :value="1" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'bg-white text-slate-800'">Đang hoạt động</option>
+                                        <option :value="0" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'bg-white text-slate-800'">Ngừng hợp tác</option>
+                                    </select>
                                 </div>
-                            </div>
-                        </td>
-                        <td>
-                            <div style="display: flex; align-items: center; justify-content: center; gap: 4px;">
-                                <button @click="openEditModal(ncc)" class="hd-btn-action" style="color: #2563eb;" title="Sửa">
-                                    <Edit3 class="w-4 h-4" />
-                                </button>
-                                <button @click="deleteNcc(ncc.maNcc)" class="hd-btn-action" style="color: #ef4444;" title="Xóa">
-                                    <Trash2 class="w-4 h-4" />
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                    <tr v-if="listNcc.length === 0">
-                        <td colspan="7" style="padding: 40px; text-align: center; color: #94a3b8; background-color: #f8fafc; border-style: dashed;">Không có dữ liệu đối tác nào trong mục này.</td>
-                    </tr>
-                </tbody>
-            </table>
+                            </td>
+                            
+                            <td class="py-4 px-4 text-center whitespace-nowrap">
+                                <div class="flex items-center justify-center gap-2">
+                                    <button 
+                                        @click="openEditModal(ncc)" 
+                                        title="Chỉnh sửa thông tin đối tác"
+                                        class="w-8 h-8 rounded-lg border flex items-center justify-center transition-all cursor-pointer shadow-2xs"
+                                        :class="isDarkMode ? 'bg-[#2b2b36] border-slate-700 hover:border-sky-500 text-sky-400' : 'bg-white border-slate-200 hover:border-sky-400 text-sky-600 hover:bg-sky-50'"
+                                    >
+                                        <Edit3 class="w-4 h-4" />
+                                    </button>
+                                    <button 
+                                        @click="deleteNcc(ncc.maNcc)" 
+                                        title="Xóa nhà cung cấp"
+                                        class="w-8 h-8 rounded-lg border flex items-center justify-center transition-all cursor-pointer shadow-2xs"
+                                        :class="isDarkMode ? 'bg-[#2b2b36] border-slate-700 hover:border-rose-500 text-rose-400' : 'bg-white border-slate-200 hover:border-rose-400 text-rose-600 hover:bg-rose-50'"
+                                    >
+                                        <Trash2 class="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <!-- Empty State -->
+                        <tr v-if="listNcc.length === 0">
+                            <td colspan="7" class="p-12 text-center text-slate-500">
+                                <div class="flex flex-col items-center gap-2 max-w-sm mx-auto">
+                                    <Building2 class="w-8 h-8 text-slate-400 stroke-[1.5px]" />
+                                    <span class="font-extrabold text-sm" :class="isDarkMode ? 'text-slate-300' : 'text-slate-700'">Không có dữ liệu đối tác nào</span>
+                                    <span class="text-xs" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">Không tìm thấy nhà cung cấp nào trùng khớp với bộ lọc tìm kiếm.</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
-    <!-- Detail/Edit Modal -->
+    <!-- Detail/Edit Modal (Thiết kế lại rộng rãi max-w-2xl, lề lùi px-8 md:px-10 thông thoáng) -->
     <Teleport to="body">
-        <div v-if="isModalOpen" class="hd-modal-overlay">
-            <div class="hd-modal-container" style="max-width: 520px; width: 100%;">
-                <div class="hd-modal-header">
-                    <h3 class="hd-modal-title">
-                        {{ isEditMode ? 'Cập Nhật Thông Tin Đối Tác' : 'Thêm Nhà Cung Cấp Mới' }}
-                    </h3>
-                    <button @click="isModalOpen = false" class="hd-btn-close">
+        <div 
+            v-if="isModalOpen" 
+            class="fixed inset-0 z-[2500] flex items-center justify-center p-4 md:p-6 bg-slate-950/80 backdrop-blur-md transition-all"
+            @click="isModalOpen = false"
+        >
+            <div 
+                class="act-modal-container relative w-full max-w-2xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col transition-all duration-300"
+                :class="isDarkMode ? 'bg-[#1b1b28] border-slate-700/80 text-slate-100' : 'bg-white border-slate-200 text-slate-800'"
+                @click.stop
+            >
+                <!-- Modal Header (Lề lùi px-8 md:px-10) -->
+                <div 
+                    class="px-8 md:px-10 py-5 border-b flex items-center justify-between relative overflow-hidden transition-colors"
+                    :class="isDarkMode ? 'bg-[#242436] border-slate-700/80' : 'bg-slate-50 border-slate-200'"
+                >
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-sky-500/20 text-sky-500 flex items-center justify-center font-bold flex-shrink-0">
+                            <Building2 class="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h3 class="font-extrabold text-base md:text-lg tracking-wide" :class="isDarkMode ? 'text-white' : 'text-slate-900'">
+                                {{ isEditMode ? 'Cập Nhật Thông Tin Đối Tác' : 'Thêm Nhà Cung Cấp Mới' }}
+                            </h3>
+                            <p class="text-xs mt-0.5" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">
+                                {{ isEditMode ? 'Điền các trường thông tin bên dưới để sửa hồ sơ đối tác' : 'Tạo mới hồ sơ nhà cung cấp dịch vụ sản phẩm Salon' }}
+                            </p>
+                        </div>
+                    </div>
+                    <button 
+                        @click="isModalOpen = false" 
+                        class="w-9 h-9 rounded-lg flex items-center justify-center transition-all cursor-pointer"
+                        :class="isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200'"
+                    >
                         <X class="w-5 h-5" />
                     </button>
                 </div>
-                <div class="hd-modal-body">
-                    <div class="modal-form-content">
-                        <!-- Mã Nhà Cung Cấp -->
-                        <div class="hd-filter-item">
-                            <label class="hd-filter-label">Mã Nhà Cung Cấp <span style="color: #ef4444;">*</span></label>
-                            <input type="text" v-model="formNcc.maNcc" :disabled="isEditMode" placeholder="Ví dụ: LOREAL_VN" class="hd-input" :style="errors.maNcc ? 'border-color: #ef4444;' : ''">
-                            <p v-if="errors.maNcc" class="error-text">{{ errors.maNcc }}</p>
-                        </div>
-                        
-                        <!-- Tên Nhà Cung Cấp -->
-                        <div class="hd-filter-item">
-                            <label class="hd-filter-label">Tên Nhà Cung Cấp <span style="color: #ef4444;">*</span></label>
-                            <input type="text" v-model="formNcc.tenNcc" placeholder="Nhập tên công ty hoặc thương hiệu..." class="hd-input" :style="errors.tenNcc ? 'border-color: #ef4444;' : ''">
-                            <p v-if="errors.tenNcc" class="error-text">{{ errors.tenNcc }}</p>
+
+                <!-- Modal Body (Bố cục rộng rãi 2 cột cân đối, cách xa viền 2 bên px-8 md:px-10) -->
+                <div class="p-8 md:px-10 md:py-8 flex flex-col gap-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
+                    
+                    <!-- Hàng 1: Mã NCC & Trạng Thái Hợp Tác -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div class="flex flex-col gap-2">
+                            <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
+                                Mã Nhà Cung Cấp <span class="text-rose-500">*</span>
+                            </label>
+                            <input 
+                                type="text" 
+                                v-model="formNcc.maNcc" 
+                                :disabled="isEditMode" 
+                                placeholder="Ví dụ: LOREAL_VN" 
+                                class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border disabled:opacity-60 disabled:cursor-not-allowed"
+                                :class="[
+                                    isDarkMode ? 'dark-mode-input' : 'light-mode-input',
+                                    errors.maNcc ? 'border-rose-500!' : ''
+                                ]"
+                            >
+                            <p v-if="errors.maNcc" class="text-xs font-semibold text-rose-500 mt-0.5">{{ errors.maNcc }}</p>
                         </div>
 
-                        <!-- Số điện thoại & Email -->
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                            <div class="hd-filter-item">
-                                <label class="hd-filter-label">Số Điện Thoại</label>
-                                <input type="text" v-model="formNcc.soDienThoai" placeholder="Nhập số điện thoại..." class="hd-input" :style="errors.soDienThoai ? 'border-color: #ef4444;' : ''">
-                                <p v-if="errors.soDienThoai" class="error-text">{{ errors.soDienThoai }}</p>
-                            </div>
-                            <div class="hd-filter-item">
-                                <label class="hd-filter-label">Email Đại Diện</label>
-                                <input type="text" v-model="formNcc.email" placeholder="partner@domain.com" class="hd-input" :style="errors.email ? 'border-color: #ef4444;' : ''">
-                                <p v-if="errors.email" class="error-text">{{ errors.email }}</p>
-                            </div>
-                        </div>
-
-                        <!-- Địa chỉ -->
-                        <div class="hd-filter-item">
-                            <label class="hd-filter-label">Địa Chỉ Văn Phòng</label>
-                            <input type="text" v-model="formNcc.diaChi" placeholder="Số nhà, tên đường, thành phố..." class="hd-input" :style="errors.diaChi ? 'border-color: #ef4444;' : ''">
-                            <p v-if="errors.diaChi" class="error-text">{{ errors.diaChi }}</p>
-                        </div>
-
-                        <!-- Trạng thái -->
-                        <div class="hd-filter-item">
-                            <label class="hd-filter-label">Trạng Thế Hợp Tác</label>
-                            <div class="hd-status-wrapper" style="max-width: 100%;">
-                                <select v-model="formNcc.trangThai" class="hd-status-select" :class="formNcc.trangThai === 1 ? 'status-completed' : 'status-canceled'">
-                                    <option :value="1" class="text-slate-700 bg-white">Đang hoạt động</option>
-                                    <option :value="0" class="text-slate-700 bg-white">Ngừng hợp tác</option>
+                        <div class="flex flex-col gap-2">
+                            <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Trạng Thái Hợp Tác</label>
+                            <div class="relative flex items-center">
+                                <select 
+                                    v-model="formNcc.trangThai" 
+                                    class="hd-status-select text-xs md:text-sm font-extrabold rounded-lg px-4 py-2.5 outline-none cursor-pointer transition-all box-border border w-full"
+                                    :class="[
+                                        formNcc.trangThai === 1 ? (isDarkMode ? 'dark-status-completed' : 'light-status-completed') : (isDarkMode ? 'dark-status-canceled' : 'light-status-canceled'),
+                                        isDarkMode ? 'dark-status-dropdown' : 'light-status-dropdown'
+                                    ]"
+                                >
+                                    <option :value="1" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'bg-white text-slate-800'">Đang hoạt động</option>
+                                    <option :value="0" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'bg-white text-slate-800'">Ngừng hợp tác</option>
                                 </select>
-                                <div class="hd-dropdown-arrow">
-                                    <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                                </div>
                             </div>
-                        </div>
-
-                        <!-- Action Buttons -->
-                        <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; border-top: 1px solid #e2e8f0; padding-top: 16px;">
-                            <button @click="isModalOpen = false" class="hd-btn-close-modal">Hủy</button>
-                            <button @click="saveNcc" class="hd-btn-export" style="box-shadow: none;">Lưu Dữ Liệu</button>
                         </div>
                     </div>
+                    
+                    <!-- Hàng 2: Tên Nhà Cung Cấp -->
+                    <div class="flex flex-col gap-2">
+                        <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
+                            Tên Nhà Cung Cấp <span class="text-rose-500">*</span>
+                        </label>
+                        <input 
+                            type="text" 
+                            v-model="formNcc.tenNcc" 
+                            placeholder="Nhập tên công ty hoặc thương hiệu..." 
+                            class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
+                            :class="[
+                                isDarkMode ? 'dark-mode-input' : 'light-mode-input',
+                                errors.tenNcc ? 'border-rose-500!' : ''
+                            ]"
+                        >
+                        <p v-if="errors.tenNcc" class="text-xs font-semibold text-rose-500 mt-0.5">{{ errors.tenNcc }}</p>
+                    </div>
+
+                    <!-- Hàng 3: Số điện thoại & Email -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div class="flex flex-col gap-2">
+                            <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Số Điện Thoại</label>
+                            <input 
+                                type="text" 
+                                v-model="formNcc.soDienThoai" 
+                                placeholder="Nhập số điện thoại..." 
+                                class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
+                                :class="[
+                                    isDarkMode ? 'dark-mode-input' : 'light-mode-input',
+                                    errors.soDienThoai ? 'border-rose-500!' : ''
+                                ]"
+                            >
+                            <p v-if="errors.soDienThoai" class="text-xs font-semibold text-rose-500 mt-0.5">{{ errors.soDienThoai }}</p>
+                        </div>
+
+                        <div class="flex flex-col gap-2">
+                            <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Email Đại Diện</label>
+                            <input 
+                                type="text" 
+                                v-model="formNcc.email" 
+                                placeholder="partner@domain.com" 
+                                class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
+                                :class="[
+                                    isDarkMode ? 'dark-mode-input' : 'light-mode-input',
+                                    errors.email ? 'border-rose-500!' : ''
+                                ]"
+                            >
+                            <p v-if="errors.email" class="text-xs font-semibold text-rose-500 mt-0.5">{{ errors.email }}</p>
+                        </div>
+                    </div>
+
+                    <!-- Hàng 4: Địa chỉ -->
+                    <div class="flex flex-col gap-2">
+                        <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Địa Chỉ Văn Phòng</label>
+                        <input 
+                            type="text" 
+                            v-model="formNcc.diaChi" 
+                            placeholder="Số nhà, tên đường, thành phố..." 
+                            class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
+                            :class="[
+                                isDarkMode ? 'dark-mode-input' : 'light-mode-input',
+                                errors.diaChi ? 'border-rose-500!' : ''
+                            ]"
+                        >
+                        <p v-if="errors.diaChi" class="text-xs font-semibold text-rose-500 mt-0.5">{{ errors.diaChi }}</p>
+                    </div>
+
                 </div>
+
+                <!-- Modal Footer (Nút lưu & hủy lề rộng px-8 md:px-10) -->
+                <div 
+                    class="px-8 md:px-10 py-5 border-t flex items-center justify-end gap-3 transition-colors"
+                    :class="isDarkMode ? 'bg-[#242436] border-slate-700/80' : 'bg-slate-50 border-slate-200'"
+                >
+                    <button 
+                        @click="isModalOpen = false" 
+                        class="h-11 px-8 text-xs font-extrabold rounded-lg transition-all cursor-pointer border"
+                        :class="isDarkMode ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'"
+                    >
+                        Hủy
+                    </button>
+                    <button 
+                        @click="saveNcc" 
+                        class="hd-btn-export h-11 px-8 text-xs font-extrabold rounded-lg transition-all cursor-pointer shadow-md"
+                    >
+                        Lưu Dữ Liệu
+                    </button>
+                </div>
+
             </div>
         </div>
     </Teleport>
 </template>
 
 <style scoped>
-/* ── Container ── */
-.hoadon-container {
-    padding: 24px;
-    background-color: #f8fafc;
-    min-height: 100vh;
-    border-radius: 16px;
-    font-family: 'Inter', -apple-system, sans-serif;
-    color: #1e293b;
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-    box-sizing: border-box;
+/* Enforce dark background on parent containers */
+:global(body.v-theme--dark), 
+:global(.v-theme--dark .v-main),
+:global(.v-theme--dark .v-application) {
+  background-color: #141416 !important;
 }
 
-/* ── Header ── */
-.hd-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid #e2e8f0;
-    padding-bottom: 16px;
-    flex-wrap: wrap;
-    gap: 16px;
+/* Light Mode Input Styling */
+.light-mode-input {
+  background-color: #f8fafc !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03) !important;
 }
-.hd-header-left {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-}
-.hd-header-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 48px;
-    height: 48px;
-    background-color: #2563eb;
-    color: #ffffff !important;
-    border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
-    flex-shrink: 0;
-}
-.hd-header-icon :deep(svg) {
-    width: 24px;
-    height: 24px;
-}
-.hd-header-title {
-    font-size: 24px;
-    font-weight: 700;
-    color: #0f172a;
-    margin: 0;
-    line-height: 1.2;
-}
-.hd-header-subtitle {
-    font-size: 14px;
-    color: #64748b;
-    margin: 4px 0 0 0;
+.light-mode-input:focus {
+  background-color: #ffffff !important;
+  border-color: #0284c7 !important;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15) !important;
 }
 
-/* ── Export/Add Button ── */
+/* Dark Mode Input Styling */
+.dark-mode-input {
+  background-color: #2b2b36 !important;
+  border: 1px solid #475569 !important;
+  color: #ffffff !important;
+}
+.dark-mode-input:focus {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2) !important;
+}
+
+/* Input Dimensions */
+.hd-input {
+  height: 44px !important;
+  border-radius: 8px !important;
+  box-sizing: border-box !important;
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+}
+
+.hd-search-input {
+  padding-left: 2.75rem !important;
+}
+
+/* Export / Add Button Styling */
 .hd-btn-export {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background-color: #2563eb !important;
-    color: #ffffff !important;
-    border: none;
-    padding: 10px 18px;
-    border-radius: 10px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+  background-color: #0284c7 !important;
+  color: #ffffff !important;
+  border: 1px solid #0284c7 !important;
+  font-weight: 700 !important;
 }
 .hd-btn-export:hover {
-    background-color: #1d4ed8 !important;
-    transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.25);
-}
-.hd-btn-export:active {
-    transform: translateY(0);
+  background-color: #0369a1 !important;
+  border-color: #0369a1 !important;
 }
 
-/* ── Filters Grid ── */
-.hd-filters-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 16px;
-    background-color: #ffffff;
-    padding: 20px;
-    border-radius: 14px;
-    border: 1px solid #edf2f7;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+/* Status Badge Classes - Light Mode */
+.light-status-completed {
+  background-color: #f0fdf4 !important;
+  color: #16a34a !important;
+  border-color: #bbf7d0 !important;
 }
-@media (max-width: 768px) {
-    .hd-filters-grid {
-        grid-template-columns: 1fr;
-    }
-}
-.hd-filter-item {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-.hd-filter-label {
-    font-size: 12px;
-    font-weight: 600;
-    color: #475569;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-.hd-input {
-    width: 100%;
-    height: 44px;
-    padding: 0 16px;
-    border-radius: 10px;
-    border: 1px solid #cbd5e1;
-    background-color: #ffffff;
-    font-size: 14px;
-    color: #1e293b;
-    outline: none;
-    transition: all 0.2s ease;
-    box-sizing: border-box;
-}
-.hd-input:focus {
-    border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+.light-status-canceled {
+  background-color: #fef2f2 !important;
+  color: #ef4444 !important;
+  border-color: #fecaca !important;
 }
 
-/* ── Search Input ── */
-.hd-search-wrapper {
-    position: relative;
-    width: 100%;
+/* Status Badge Classes - Dark Mode */
+.dark-status-completed {
+  background-color: #052e16 !important;
+  color: #86efac !important;
+  border-color: #166534 !important;
 }
-.hd-search-icon {
-    position: absolute;
-    left: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #94a3b8;
-    width: 18px;
-    height: 18px;
-    pointer-events: none;
-}
-.hd-search-input {
-    padding-left: 40px !important;
+.dark-status-canceled {
+  background-color: #450a0a !important;
+  color: #fca5a5 !important;
+  border-color: #991b1b !important;
 }
 
-/* ── Tabs ── */
-.hd-tabs {
-    display: flex;
-    border-bottom: 2px solid #e2e8f0;
-    gap: 8px;
-    margin-top: 8px;
+/* Custom styled scrollbars */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
 }
-.hd-tab-button {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 20px;
-    background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -2px;
-    font-size: 14px;
-    font-weight: 700;
-    color: #64748b;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    border-radius: 8px 8px 0 0;
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
 }
-.hd-tab-button:hover {
-    color: #1e293b;
-    background-color: #f1f5f9;
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #0284c7;
+  border-radius: 4px;
 }
-.hd-tab-button.active {
-    color: #2563eb;
-    border-bottom-color: #2563eb;
-    background-color: rgba(37, 99, 235, 0.04);
-}
-
-/* ── Table Wrapper ── */
-.hd-table-wrapper {
-    background-color: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 14px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
-    overflow-x: auto;
-    width: 100%;
-}
-
-/* ── Table ── */
-.hd-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 14px;
-    text-align: left;
-    min-width: 800px;
-}
-.hd-table th {
-    padding: 14px 16px;
-    background-color: #f8fafc;
-    color: #475569;
-    font-size: 12px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    border-bottom: 1px solid #e2e8f0;
-}
-.hd-table td {
-    padding: 16px;
-    border-bottom: 1px solid #f1f5f9;
-    color: #334155;
-    vertical-align: middle;
-}
-.hd-table tbody tr:hover {
-    background-color: rgba(37, 99, 235, 0.01);
-}
-.hd-table tbody tr:last-child td {
-    border-bottom: none;
-}
-
-/* ── Status Dropdown ── */
-.hd-status-wrapper {
-    display: inline-flex;
-    position: relative;
-    min-width: 150px;
-    width: 100%;
-    max-width: 180px;
-}
-.hd-status-select {
-    width: 100%;
-    font-size: 12px;
-    font-weight: 700;
-    border: 1px solid transparent;
-    border-radius: 10px;
-    padding: 8px 32px 8px 12px;
-    cursor: pointer;
-    appearance: none;
-    -webkit-appearance: none;
-    outline: none;
-    transition: all 0.2s ease;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-.hd-status-select:focus {
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
-}
-.hd-dropdown-arrow {
-    position: absolute;
-    right: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    pointer-events: none;
-    width: 16px;
-    height: 16px;
-    color: currentColor;
-    opacity: 0.8;
-}
-
-/* ── Status Colors ── */
-.status-canceled {
-    background-color: #fef2f2 !important;
-    color: #ef4444 !important;
-    border-color: #fecaca !important;
-}
-.status-completed {
-    background-color: #f0fdf4 !important;
-    color: #16a34a !important;
-    border-color: #bbf7d0 !important;
-}
-
-/* ── Action Button ── */
-.hd-btn-action {
-    background: none;
-    border: none;
-    color: #64748b;
-    padding: 8px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-.hd-btn-action:hover {
-    color: #2563eb;
-    background-color: rgba(37, 99, 235, 0.05);
-}
-
-/* ── Modal Overlay ── */
-.hd-modal-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 1000;
-    background-color: rgba(15, 23, 42, 0.5);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
-}
-.hd-modal-container {
-    background-color: #ffffff;
-    border-radius: 16px;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    width: 100%;
-    max-width: 680px;
-    overflow: hidden;
-    animation: hdModalShow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-@keyframes hdModalShow {
-    from { transform: scale(0.95); opacity: 0; }
-    to { transform: scale(1); opacity: 1; }
-}
-.hd-modal-header {
-    padding: 16px 24px;
-    background-color: #f8fafc;
-    border-bottom: 1px solid #e2e8f0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-.hd-modal-title {
-    font-size: 16px;
-    font-weight: 700;
-    color: #1e293b;
-    margin: 0;
-}
-.hd-btn-close {
-    background: none;
-    border: none;
-    color: #94a3b8;
-    padding: 6px;
-    border-radius: 9999px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
-}
-.hd-btn-close:hover {
-    color: #475569;
-    background-color: #e2e8f0;
-}
-.hd-modal-body {
-    padding: 24px;
-    max-height: 80vh;
-    overflow-y: auto;
-}
-
-.modal-form-content {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-}
-
-.error-text {
-    color: #ef4444;
-    font-size: 12px;
-    margin: 4px 0 0 0;
-    font-weight: 500;
-}
-
-.hd-btn-close-modal {
-    padding: 10px 20px;
-    background-color: #f1f5f9;
-    color: #475569;
-    border: 1px solid #cbd5e1;
-    border-radius: 10px;
-    font-weight: 600;
-    cursor: pointer;
-    font-size: 14px;
-    transition: all 0.2s ease;
-}
-.hd-btn-close-modal:hover {
-    background-color: #e2e8f0;
-    color: #1e293b;
-}
-
-/* Avatar styling */
-.avatar-circle {
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #0369a1;
 }
 </style>

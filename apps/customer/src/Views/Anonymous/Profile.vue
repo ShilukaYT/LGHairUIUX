@@ -279,6 +279,42 @@ const fetchProfileData = async () => {
     if (res.data && res.data.success) {
       profileData.value = res.data.data;
       
+      // Recalculate points and spending based on completed orders and services
+      const maKh = customerInfo.value?.maKH;
+      if (maKh && maKh !== 'GUEST' && profileData.value) {
+        try {
+          const [resOrders, resServices] = await Promise.all([
+            axios.get(`${API_BASE_URL}/api/DonHangSanPham/lich-su/${maKh}`, {
+              headers: getAuthHeaders()
+            }).catch(() => ({ data: [] })),
+            axios.get(`${API_BASE_URL}/api/LichSuHoaDon/booking-history/${maKh}`).catch(() => ({ data: [] }))
+          ]);
+
+          const orders = Array.isArray(resOrders.data) ? resOrders.data : [];
+          const services = Array.isArray(resServices.data) ? resServices.data : [];
+
+          const completedOrders = orders.filter((i: any) => i.status?.toLowerCase() === 'completed');
+          const completedServices = services.filter((i: any) => i.status?.toLowerCase() === 'completed');
+
+          const totalSpending = completedOrders.reduce((sum: number, i: any) => sum + (i.amount || 0), 0) +
+                                completedServices.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
+
+          profileData.value.tongTienDaChi = totalSpending;
+          profileData.value.diemTichLuy = Math.floor(totalSpending / 10000);
+
+          // Update rank name based on ranksList
+          if (ranksList.value && ranksList.value.length > 0) {
+            const sortedRanks = [...ranksList.value].sort((a, b) => b.diemToiThieu - a.diemToiThieu);
+            const matchingRank = sortedRanks.find(r => profileData.value!.diemTichLuy >= r.diemToiThieu);
+            if (matchingRank) {
+              profileData.value.tenRank = matchingRank.tenRank;
+            }
+          }
+        } catch (err) {
+          console.error("Lỗi khi tính toán lại điểm tích lũy:", err);
+        }
+      }
+      
       // Update form
       profileForm.value.email = profileData.value?.email || '';
       profileForm.value.sdt = profileData.value?.sdt || '';
@@ -594,12 +630,6 @@ const handleLogout = () => {
   <div class="w-full bg-[#fcfcfc] min-h-screen py-10 lg:py-16 animate-in fade-in duration-500">
     <div class="max-w-[1280px] mx-auto px-4 lg:px-8">
       
-      <!-- Breadcrumbs -->
-      <div class="text-[10px] uppercase tracking-widest text-gray-400 mb-8 font-semibold">
-        <router-link to="/" class="hover:text-black transition-colors">Trang chủ</router-link>
-        <span class="mx-2">/</span>
-        <span class="text-black">Hồ sơ cá nhân</span>
-      </div>
 
       <!-- Guest / Not logged in State -->
       <div v-if="!customerInfo || customerInfo.maKH === 'GUEST'" class="bg-white p-12 border border-gray-200 shadow-sm text-center py-20 rounded-sm">
@@ -912,7 +942,7 @@ const handleLogout = () => {
                         <span class="inline-flex items-center gap-1 text-[8px] uppercase tracking-widest font-bold text-red-500">
                           <Lock :size="9" /> Chưa đạt hạng
                         </span>
-                        <span class="text-[8px] text-gray-400 uppercase tracking-widest font-bold">Cần chi thêm: 10.000.000đ</span>
+                        <span class="text-[8px] text-gray-400 uppercase tracking-widest font-bold">Cần chi: 10.000.000đ</span>
                       </div>
                     </div>
                   </div>
@@ -949,7 +979,7 @@ const handleLogout = () => {
                         <span class="inline-flex items-center gap-1 text-[8px] uppercase tracking-widest font-bold text-red-500">
                           <Lock :size="9" /> Chưa đạt hạng
                         </span>
-                        <span class="text-[8px] text-gray-400 uppercase tracking-widest font-bold">Cần chi thêm: 50.000.000đ</span>
+                        <span class="text-[8px] text-gray-400 uppercase tracking-widest font-bold">Cần chi: 50.000.000đ</span>
                       </div>
                     </div>
                   </div>
@@ -986,7 +1016,7 @@ const handleLogout = () => {
                         <span class="inline-flex items-center gap-1 text-[8px] uppercase tracking-widest font-bold text-red-500">
                           <Lock :size="9" /> Chưa đạt hạng
                         </span>
-                        <span class="text-[8px] text-gray-400 uppercase tracking-widest font-bold">Cần chi thêm: 100.000.000đ</span>
+                        <span class="text-[8px] text-gray-400 uppercase tracking-widest font-bold">Cần chi: 100.000.000đ</span>
                       </div>
                     </div>
                   </div>

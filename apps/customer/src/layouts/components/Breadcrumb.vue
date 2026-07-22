@@ -37,6 +37,10 @@ const breadcrumbs = computed(() => {
     case 'profile':
       crumbs.push({ label: 'Hồ sơ cá nhân', to: { name: 'profile' } });
       break;
+    case 'lich_su_mua_hang':
+      crumbs.push({ label: 'Hồ sơ cá nhân', to: { name: 'profile' } });
+      crumbs.push({ label: 'Lịch sử mua hàng', to: { name: 'lich_su_mua_hang' } });
+      break;
     case 'login':
       crumbs.push({ label: 'Tài khoản', to: { name: 'login' } });
       break;
