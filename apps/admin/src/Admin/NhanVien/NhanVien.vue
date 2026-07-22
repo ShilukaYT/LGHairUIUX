@@ -3,8 +3,39 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import Tesseract from 'tesseract.js';
 import { Html5Qrcode } from 'html5-qrcode';
 import ThongKeNhanVienModal from './ThongKeNhanVienModal.vue';
-import { Search, Plus, Edit3, Trash2, X, Award, Camera, Users, Phone, Mail, MapPin, Calendar, Eye } from 'lucide-vue-next';
+import { Search, Plus, Edit3, Trash2, X, Award, Camera, Users, Phone, Mail, MapPin, Calendar, Eye, Filter } from 'lucide-vue-next';
 import { logActivity } from '@/utils/activityLogger';
+import { useCustomizerStore } from '@/stores/customizer';
+
+const customizer = useCustomizerStore();
+
+// ── Theme State Detection (Light / Dark Mode Sync) ──
+const isDarkMode = computed(() => {
+  if (customizer?.actTheme === 'dark') return true;
+  try {
+    const vuetifyTheme = useTheme();
+    if (vuetifyTheme?.global?.name?.value === 'dark' || vuetifyTheme?.global?.current?.value?.dark) {
+      return true;
+    }
+  } catch (e) {}
+  return localStorage.getItem('theme_selection') === 'dark' 
+      || localStorage.getItem('actTheme') === 'dark'
+      || document.documentElement.classList.contains('dark') 
+      || document.body.classList.contains('v-theme--dark');
+});
+
+// Watch theme change and update body background to prevent white bottom area
+watch(isDarkMode, (dark) => {
+  if (dark) {
+    document.body.style.backgroundColor = '#141416';
+  } else {
+    document.body.style.backgroundColor = '';
+  }
+}, { immediate: true });
+
+onUnmounted(() => {
+  document.body.style.backgroundColor = '';
+});
 
 const nhanViens = ref([]);
 const loading = ref(false);
@@ -111,7 +142,6 @@ const fetchOptions = async () => {
     }
   } catch(e) { console.error("Mất kết nối khi tải Loại NV: ", e); }
 };
-// ----------------------------------------
 
 const fetchNhanViens = async () => {
   loading.value = true;
@@ -141,8 +171,11 @@ const openAddForm = () => {
   showModal.value = true;
 };
 
+const originalStaffData = ref(null);
+
 const openEditForm = (nv) => {
   isEditMode.value = true;
+  originalStaffData.value = { ...nv };
   formData.value = { ...nv, matKhau: '' };
   
   if (nv.ngayVaoLam) {
@@ -179,7 +212,6 @@ const cleanNameLine = (line) => {
 
 const cleanAddressLine = (line) => {
   if (!line) return '';
-  // Loại bỏ nhiễu dấu chấm liên tiếp nếu có (Ví dụ: "Thôn 2... “7v" -> "Thôn 2")
   let cleaned = line.normalize('NFC').split('..')[0];
 
   const leadingNoiseRegex = /^(?:\d{5,}\b|\d+[\s\d)]*[)]\s*|\d+\s+\d+\s*)/;
@@ -285,7 +317,6 @@ const startCameraScanner = async () => {
       
       cameraScanner.value = new Html5Qrcode("camera-scanner-view");
       
-      // Ưu tiên chất lượng HD và camera sau (non-mandatory bằng cách dùng "ideal")
       const cameraConfig = {
         facingMode: { ideal: "environment" },
         width: { ideal: 1280 },
@@ -342,7 +373,6 @@ const startCameraScanner = async () => {
         );
       } catch (startError) {
         console.warn("Khởi động camera với cấu hình HD thất bại, đang chuyển sang cấu hình mặc định (fallback)...", startError);
-        // Fallback tối đa: không áp dụng bất kỳ ràng buộc độ phân giải nào và dùng camera mặc định của trình duyệt
         await cameraScanner.value.start(
           { facingMode: "user" },
           { 
@@ -365,15 +395,6 @@ const startCameraScanner = async () => {
   }, 150);
 };
 
-const selectScanTab = async (tab) => {
-  activeScanTab.value = tab;
-  if (tab === 'camera') {
-    await startCameraScanner();
-  } else {
-    await stopCameraScanner();
-  }
-};
-
 const openScannerModal = () => {
   showScanner.value = true;
   isScanning.value = false;
@@ -393,7 +414,6 @@ const processIdCardImage = async (event) => {
   scanProgress.value = 'Đang quét mã QR từ ảnh...';
 
   try {
-    // 1. Thử quét mã QR từ ảnh trước (Chính xác 100% cho mọi CCCD có QR)
     const html5QrCode = new Html5Qrcode("qr-reader-temp");
     try {
       const decodedText = await html5QrCode.scanFile(file, true);
@@ -426,7 +446,6 @@ const processIdCardImage = async (event) => {
       console.log('Không tìm thấy hoặc không đọc được mã QR từ ảnh, chuyển sang quét văn bản bằng OCR...', qrError);
     }
 
-    // 2. Fallback: Dùng Tesseract OCR nếu không quét được QR
     scanProgress.value = 'Đang phân tích văn bản ảnh bằng OCR... (Sẽ mất 5-10s)';
     const result = await Tesseract.recognize(file, 'vie', { 
         logger: m => {
@@ -443,16 +462,13 @@ const processIdCardImage = async (event) => {
     let cccdExtracted = '';
     let addressParts = [];
 
-    // 1. Số CCCD
     const cccdMatch = text.match(/\b\d{12}\b/) || text.match(/\d{12}/);
     if (cccdMatch) cccdExtracted = cccdMatch[0];
 
-    // 2. Ngày sinh / Năm sinh
     const dobRegex = /(\d{2})\s*[\/\-\.]\s*(\d{2})\s*[\/\-\.]\s*(\d{4})/;
     const dobMatch = text.match(dobRegex);
     if (dobMatch) namSinhExtracted = dobMatch[3]; 
 
-    // 3. Giới tính
     const genderMatch = text.match(/(?:giới tính|sex|gioi tinh)[\s:;\/\|]*([^\n]*)/i);
     if (genderMatch) {
       const genderText = genderMatch[1].toLowerCase();
@@ -462,11 +478,8 @@ const processIdCardImage = async (event) => {
       if (/\b(Nữ|Nu|N[uưứữ])\b/i.test(text)) gioiTinhExtracted = 'Nữ';
     }
 
-    // 4. Họ tên và Địa chỉ
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      
-      // Đọc tên
       if (line.toLowerCase().includes('họ và tên') || line.toLowerCase().includes('full name') || line.toLowerCase().includes('họ tên') || line.toLowerCase().includes('ho ten')) {
         let potentialName = line.replace(/.*(?:tên|name|tên|ten)[\s:;\/\|]*/i, '').trim();
         potentialName = cleanNameLine(potentialName);
@@ -477,7 +490,6 @@ const processIdCardImage = async (event) => {
         if (potentialName) hoTenExtracted = toTitleCase(potentialName);
       }
 
-      // Đọc địa chỉ (Nơi thường trú)
       if (isAddressLabel(line)) {
         let restOfLine = '';
         const colonIndex = line.indexOf(':');
@@ -492,7 +504,6 @@ const processIdCardImage = async (event) => {
           addressParts.push(cleanedFirstLine);
         }
         
-        // Đọc tiếp 5 dòng dưới
         for (let j = 1; j <= 5; j++) {
           if (i + j >= lines.length) break;
           const nextLine = lines[i+j];
@@ -510,7 +521,6 @@ const processIdCardImage = async (event) => {
       }
     }
 
-    // Fallback Đọc tên nếu không tìm thấy label
     if (!hoTenExtracted) {
       const ignoreList = ['CỘNG HÒA', 'ĐỘC LẬP', 'CĂN CƯỚC', 'SOCIALIST', 'INDEPENDENCE', 'CITIZEN'];
       for (let line of lines) {
@@ -637,9 +647,57 @@ const saveNhanVien = async () => {
   try {
     const res = await fetch(url, { method: method, body: submitData });
     if (res.ok) {
+      let detailText = `Đã ${isEditMode.value ? 'cập nhật thông tin' : 'thêm tài khoản'} nhân viên ${formData.value.hoTenNv} (Mã: ${formData.value.maNv})`;
+      
+      if (isEditMode.value && originalStaffData.value) {
+        const orig = originalStaffData.value;
+        const changes = [];
+        
+        if ((formData.value.hoTenNv || '').trim() !== (orig.hoTenNv || '').trim()) {
+          changes.push(`Họ tên: "${orig.hoTenNv || 'Chưa nhập'}" ➔ "${formData.value.hoTenNv.trim()}"`);
+        }
+        if ((formData.value.sdt || '').trim() !== (orig.sdt || '').trim()) {
+          changes.push(`Số điện thoại: "${orig.sdt || 'Chưa có'}" ➔ "${formData.value.sdt.trim()}"`);
+        }
+        if ((formData.value.email || '').trim() !== (orig.email || '').trim()) {
+          changes.push(`Email: "${orig.email || 'Chưa có'}" ➔ "${formData.value.email.trim()}"`);
+        }
+        if ((formData.value.diaChi || '').trim() !== (orig.diaChi || '').trim()) {
+          changes.push(`Địa chỉ: "${orig.diaChi || 'Chưa nhập'}" ➔ "${formData.value.diaChi.trim()}"`);
+        }
+        if ((formData.value.gioiTinh || '').trim() !== (orig.gioiTinh || '').trim()) {
+          changes.push(`Giới tính: "${orig.gioiTinh || 'Nam'}" ➔ "${formData.value.gioiTinh.trim()}"`);
+        }
+        if ((formData.value.cccd || '').trim() !== (orig.cccd || '').trim()) {
+          changes.push(`Số CCCD: "${orig.cccd || 'Chưa có'}" ➔ "${formData.value.cccd.trim()}"`);
+        }
+        if (String(formData.value.namSinh || '') !== String(orig.namSinh || '')) {
+          changes.push(`Năm sinh: "${orig.namSinh || 'Chưa chọn'}" ➔ "${formData.value.namSinh || 'Chưa chọn'}"`);
+        }
+        
+        const origTT = String(orig.trangThai != null ? orig.trangThai : 1);
+        const newTT = String(formData.value.trangThai != null ? formData.value.trangThai : 1);
+        if (origTT !== newTT) {
+          const ttLabel = v => (String(v) === '1' ? 'Đang làm việc' : 'Đã nghỉ / Khóa tài khoản');
+          changes.push(`Trạng thái tài khoản: "${ttLabel(origTT)}" ➔ "${ttLabel(newTT)}"`);
+        }
+
+        if (formData.value.matKhau && formData.value.matKhau.trim()) {
+          changes.push(`Mật khẩu: Đã đổi mật khẩu tài khoản mới`);
+        }
+
+        if (selectedImageFile.value) {
+          changes.push(`Ảnh đại diện: Đã tải lên ảnh đại diện nhân viên mới`);
+        }
+
+        if (changes.length > 0) {
+          detailText = `Cập nhật thông tin nhân viên ${formData.value.hoTenNv} (Mã: ${formData.value.maNv}):\n• ` + changes.join('\n• ');
+        }
+      }
+
       logActivity(
         isEditMode.value ? "Cập nhật nhân viên" : "Thêm nhân viên mới",
-        `Đã ${isEditMode.value ? 'cập nhật thông tin' : 'thêm tài khoản'} nhân viên ${formData.value.hoTenNv} (Mã: ${formData.value.maNv})`,
+        detailText,
         "Nhân sự"
       );
       alert(isEditMode.value ? "Cập nhật thành công!" : "Thêm thành công!");
@@ -703,159 +761,298 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="hoadon-container">
+  <div 
+    class="nhanvien-container min-h-screen w-full flex flex-col p-4 md:p-6 lg:p-8 font-sans antialiased relative transition-colors duration-300 print:hidden"
+    :class="isDarkMode ? 'bg-[#141416] text-slate-100' : 'bg-slate-50 text-slate-800'"
+  >
     <!-- Temporary hidden QR Code reader container -->
     <div id="qr-reader-temp" style="display: none;"></div>
-    <!-- Header -->
-    <div class="hd-header">
-      <div class="hd-header-left">
-        <div class="hd-header-icon">
-          <Users class="w-6 h-6" />
+
+    <!-- Header Section (To ra, rộng rãi, cân đối) -->
+    <div 
+      class="hd-header flex flex-col lg:flex-row lg:items-center justify-between gap-6 rounded-2xl border p-7 md:p-8 mb-8 shadow-sm transition-colors duration-300"
+      :class="isDarkMode ? 'bg-[#1e1e2d] border-slate-700/80' : 'bg-white border-slate-200/90'"
+    >
+      <div class="flex items-center gap-6">
+        <div class="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-gradient-to-br from-sky-500 via-sky-600 to-blue-700 flex items-center justify-center text-white shadow-lg shadow-sky-500/25 flex-shrink-0">
+          <Users class="w-8 h-8 md:w-10 md:h-10" />
         </div>
         <div>
-          <h2 class="hd-header-title">Quản Lý Nhân Viên</h2>
-          <p class="hd-header-subtitle">Quản lý hồ sơ, chức vụ và tài khoản đăng nhập nội bộ</p>
+          <h2 class="text-2xl md:text-3xl lg:text-4xl font-extrabold tracking-tight" :class="isDarkMode ? 'text-white' : 'text-slate-900'">
+            Quản Lý Nhân Viên
+          </h2>
+          <p class="text-sm md:text-base mt-1.5 font-medium" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">
+            Quản lý hồ sơ, chức vụ và tài khoản đăng nhập nội bộ
+          </p>
         </div>
       </div>
       
-      <div style="display: flex; gap: 8px;">
-        <button @click="showThongKeModal = true" class="hd-btn-secondary">
-          <Award class="w-4 h-4" /> Bảng xếp hạng
+      <div class="flex flex-wrap items-center gap-3.5 md:gap-4">
+        <button 
+          @click="showThongKeModal = true" 
+          class="h-12 md:h-[50px] px-5 md:px-6 text-sm font-extrabold rounded-xl border transition-all cursor-pointer shadow-xs flex items-center gap-2.5"
+          :class="isDarkMode ? 'bg-[#2b2b36] border-slate-700 text-slate-200 hover:bg-slate-700 hover:border-slate-600' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'"
+        >
+          <Award class="w-4.5 h-4.5 text-amber-500 shrink-0" /> 
+          <span>Bảng xếp hạng</span>
         </button>
-        <button @click="openScannerModal" class="hd-btn-secondary">
-          <Camera class="w-4 h-4" /> Quét CCCD (Ảnh)
+
+        <button 
+          @click="openScannerModal" 
+          class="h-12 md:h-[50px] px-5 md:px-6 text-sm font-extrabold rounded-xl border transition-all cursor-pointer shadow-xs flex items-center gap-2.5"
+          :class="isDarkMode ? 'bg-[#2b2b36] border-slate-700 text-slate-200 hover:bg-slate-700 hover:border-slate-600' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-100'"
+        >
+          <Camera class="w-4.5 h-4.5 text-sky-500 shrink-0" /> 
+          <span>Quét CCCD (Ảnh)</span>
         </button>
-        <button @click="openAddForm" class="hd-btn-export">
-          <Plus class="w-4 h-4" /> Thêm thủ công
+
+        <button 
+          @click="openAddForm" 
+          class="hd-btn-export h-12 md:h-[50px] px-6 md:px-7 text-sm md:text-base font-extrabold rounded-xl transition-all cursor-pointer shadow-md flex items-center gap-2.5"
+        >
+          <Plus class="w-5 h-5 shrink-0" /> 
+          <span>Thêm thủ công</span>
         </button>
       </div>
     </div>
 
-    <!-- Filters Grid -->
-    <div class="hd-filters-grid">
-      <div class="hd-filter-item">
-        <label class="hd-filter-label">Tìm kiếm nhân viên</label>
-        <div class="hd-search-wrapper">
-          <Search class="hd-search-icon" />
-          <input type="text" v-model="searchQuery" @keyup.enter="fetchNhanViens" placeholder="Nhập tên, mã NV, SĐT, CCCD..." class="hd-input hd-search-input">
-        </div>
-      </div>
-      <div class="hd-filter-item">
-        <label class="hd-filter-label">Trạng thái</label>
-        <div class="hd-status-wrapper" style="max-width: 100%;">
-          <select v-model="filterTrangThai" @change="fetchNhanViens" class="hd-status-select select-filter">
-            <option value="">Tất cả</option>
-            <option value="1">Đang làm việc</option>
-            <option value="0">Đã nghỉ</option>
-          </select>
-          <div class="hd-dropdown-arrow">
-            <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+    <!-- Filters Grid Section (To rộng rãi, cao 50px cân đối) -->
+    <div 
+      class="hd-filters-grid rounded-2xl border p-7 md:p-8 mb-8 shadow-sm transition-colors duration-300"
+      :class="isDarkMode ? 'bg-[#1e1e2d] border-slate-700/80' : 'bg-white border-slate-200/90'"
+    >
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <!-- Col 1: Tìm kiếm -->
+        <div class="flex flex-col gap-2.5">
+          <label class="text-xs md:text-sm font-extrabold uppercase tracking-wider" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">TÌM KIẾM NHÂN VIÊN</label>
+          <div class="relative flex items-center">
+            <Search class="absolute left-4.5 w-5 h-5 pointer-events-none z-10 text-slate-400" />
+            <input 
+              type="text" 
+              v-model="searchQuery" 
+              @keyup.enter="fetchNhanViens" 
+              placeholder="Nhập tên, mã NV, SĐT, CCCD..." 
+              class="hd-input hd-search-input w-full h-[50px] text-sm md:text-base font-medium outline-none transition-all box-border rounded-xl"
+              :class="isDarkMode ? 'dark-mode-input' : 'light-mode-input'"
+            >
           </div>
         </div>
-      </div>
-      <div class="hd-filter-item">
-        <label class="hd-filter-label">Giới tính</label>
-        <div class="hd-status-wrapper" style="max-width: 100%;">
-          <select v-model="filterGioiTinh" @change="fetchNhanViens" class="hd-status-select select-filter">
-            <option value="">Tất cả</option>
-            <option value="Nam">Nam</option>
-            <option value="Nữ">Nữ</option>
-          </select>
-          <div class="hd-dropdown-arrow">
-            <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+
+        <!-- Col 2: Trạng thái -->
+        <div class="flex flex-col gap-2.5">
+          <label class="text-xs md:text-sm font-extrabold uppercase tracking-wider" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">TRẠNG THÁI</label>
+          <div class="relative flex items-center">
+            <select 
+              v-model="filterTrangThai" 
+              @change="fetchNhanViens" 
+              class="hd-select hd-input w-full h-[50px] text-sm md:text-base font-medium outline-none appearance-none cursor-pointer transition-all box-border rounded-xl"
+              :class="isDarkMode ? 'dark-mode-input' : 'light-mode-input'"
+            >
+              <option value="" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'text-slate-800'">Tất cả trạng thái</option>
+              <option value="1" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'text-slate-800'">Đang làm việc</option>
+              <option value="0" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'text-slate-800'">Đã nghỉ</option>
+            </select>
+            <span class="pointer-events-none absolute right-5 text-sm text-sky-500 font-bold z-10">▼</span>
           </div>
         </div>
-      </div>
-      <div class="hd-filter-item" style="justify-content: flex-end;">
-        <button @click="fetchNhanViens" class="hd-btn-export" style="height: 44px; width: 100%; justify-content: center; box-shadow: none;">
-          Lọc Dữ Liệu
-        </button>
+
+        <!-- Col 3: Giới tính -->
+        <div class="flex flex-col gap-2.5">
+          <label class="text-xs md:text-sm font-extrabold uppercase tracking-wider" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">GIỚI TÍNH</label>
+          <div class="relative flex items-center">
+            <select 
+              v-model="filterGioiTinh" 
+              @change="fetchNhanViens" 
+              class="hd-select hd-input w-full h-[50px] text-sm md:text-base font-medium outline-none appearance-none cursor-pointer transition-all box-border rounded-xl"
+              :class="isDarkMode ? 'dark-mode-input' : 'light-mode-input'"
+            >
+              <option value="" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'text-slate-800'">Tất cả giới tính</option>
+              <option value="Nam" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'text-slate-800'">Nam</option>
+              <option value="Nữ" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'text-slate-800'">Nữ</option>
+            </select>
+            <span class="pointer-events-none absolute right-5 text-sm text-sky-500 font-bold z-10">▼</span>
+          </div>
+        </div>
+
+        <!-- Col 4: Nút Lọc Dữ Liệu -->
+        <div class="flex flex-col justify-end">
+          <button 
+            @click="fetchNhanViens" 
+            class="hd-btn-export h-[50px] w-full text-sm md:text-base font-extrabold rounded-xl transition-all cursor-pointer shadow-md flex items-center justify-center gap-2"
+          >
+            <Filter class="w-4.5 h-4.5" />
+            <span>Lọc Dữ Liệu</span>
+          </button>
+        </div>
       </div>
     </div>
 
     <!-- Table Section -->
-    <div class="hd-table-wrapper">
-      <div v-if="loading" style="text-align: center; padding: 48px; font-weight: 500; color: #2563eb;">Đang đồng bộ nạp danh sách nhân viên hệ thống...</div>
-      <table v-else class="hd-table">
-        <thead>
-          <tr>
-            <th style="width: 25%;">Nhân viên</th>
-            <th style="width: 22%;">Nội bộ & Tài khoản</th>
-            <th style="width: 28%;">Liên hệ & Định danh</th>
-            <th style="width: 15%; text-align: center;">Trạng thái</th>
-            <th style="width: 10%; text-align: center;">Hành động</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="nv in pagedNhanViens" :key="nv.maNv">
-            <td>
-              <div style="display: flex; align-items: center; gap: 12px;">
-                <img v-if="nv.hinhAnh" :src="`https://localhost:7196${nv.hinhAnh}`" class="avatar-img" />
-                <div v-else class="avatar-fallback bg-gradient-to-tr from-blue-500 to-indigo-600">
-                  {{ nv.hoTenNv?.charAt(0).toUpperCase() || '?' }}
+    <div 
+      class="hd-table-wrapper flex-1 w-full rounded-2xl border shadow-xs relative overflow-hidden flex flex-col z-10 min-h-[400px] transition-colors duration-300"
+      :class="isDarkMode ? 'bg-[#1e1e2d] border-slate-700/80' : 'bg-white border-slate-200/90'"
+    >
+      <div v-if="loading" class="p-12 text-center text-xs font-extrabold text-sky-600 tracking-wider uppercase">
+        <div class="w-8 h-8 border-3 border-slate-200 border-t-sky-600 rounded-full animate-spin mx-auto mb-3"></div>
+        Đang đồng bộ nạp danh sách nhân viên hệ thống...
+      </div>
+      
+      <div v-else class="flex-grow overflow-x-auto custom-scrollbar">
+        <table class="w-full text-left text-xs md:text-sm border-collapse min-w-[900px]">
+          <thead>
+            <tr :class="isDarkMode ? 'bg-[#252536] text-slate-200 border-b border-slate-700/80' : 'bg-slate-900 text-white'">
+              <th class="py-4 px-6 font-extrabold uppercase tracking-wider w-64 whitespace-nowrap">Nhân viên</th>
+              <th class="py-4 px-6 font-extrabold uppercase tracking-wider w-56 whitespace-nowrap">Nội bộ & Tài khoản</th>
+              <th class="py-4 px-6 font-extrabold uppercase tracking-wider">Liên hệ & Định danh</th>
+              <th class="py-4 px-6 font-extrabold uppercase tracking-wider w-40 text-center whitespace-nowrap">Trạng thái</th>
+              <th class="py-4 px-4 font-extrabold uppercase tracking-wider w-36 text-center whitespace-nowrap">Hành động</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y" :class="isDarkMode ? 'divide-slate-800/80' : 'divide-slate-100'">
+            <tr 
+              v-for="nv in pagedNhanViens" 
+              :key="nv.maNv"
+              class="transition-colors duration-150"
+              :class="isDarkMode ? 'hover:bg-slate-800/60 text-slate-200' : 'hover:bg-sky-50/60 text-slate-700'"
+            >
+              <td class="py-4 px-6">
+                <div class="flex items-center gap-3">
+                  <img v-if="nv.hinhAnh" :src="`https://localhost:7196${nv.hinhAnh}`" class="w-11 h-11 rounded-full object-cover border-2 border-slate-200 flex-shrink-0 shadow-xs" />
+                  <div v-else class="w-11 h-11 rounded-full bg-gradient-to-tr from-sky-500 to-blue-600 flex items-center justify-center font-black text-white text-base flex-shrink-0 border-2 border-slate-200 shadow-xs">
+                    {{ nv.hoTenNv?.charAt(0).toUpperCase() || '?' }}
+                  </div>
+                  <div class="flex flex-col gap-0.5">
+                    <span class="font-extrabold text-sm" :class="isDarkMode ? 'text-white' : 'text-slate-900'">{{ nv.hoTenNv }}</span>
+                    <span class="text-xs font-mono font-extrabold text-sky-500">Mã: {{ nv.maNv }}</span>
+                    <span class="inline-block px-2 py-0.5 text-[10px] font-extrabold rounded-md border w-fit" :class="isDarkMode ? 'bg-sky-950/80 text-sky-300 border-sky-800' : 'bg-sky-50 text-sky-700 border-sky-200'">
+                      {{ nv.tenChucVu }}
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <div style="font-weight: 700; color: #0f172a; font-size: 15px;">{{ nv.hoTenNv }}</div>
-                  <div style="font-size: 12px; color: #64748b; margin-top: 2px;">Mã: <span style="font-weight: 600; color: #2563eb;">{{ nv.maNv }}</span></div>
-                  <span class="role-badge">{{ nv.tenChucVu }}</span>
+              </td>
+
+              <td class="py-4 px-6">
+                <div class="font-extrabold text-xs" :class="isDarkMode ? 'text-slate-200' : 'text-slate-800'">
+                  {{ nv.tenDangNhap || '-- Chưa cấp TK --' }}
                 </div>
-              </div>
-            </td>
-            <td>
-              <div style="font-weight: 600; color: #334155;">{{ nv.tenDangNhap || '-- Chưa cấp TK --' }}</div>
-              <div style="font-size: 12px; color: #64748b; margin-top: 4px; display: flex; align-items: center; gap: 4px;" v-if="nv.ngayVaoLam">
-                <Calendar class="w-3.5 h-3.5 text-slate-400" /> Ngày làm: {{ formatDate(nv.ngayVaoLam) }}
-              </div>
-            </td>
-            <td>
-              <div style="font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 6px;">
-                <Phone class="w-3.5 h-3.5 text-slate-400" /> {{ nv.sdt }}
-              </div>
-              <div style="font-size: 12px; color: #475569; margin-top: 4px;" v-if="nv.cccd">
-                CCCD: <span style="font-weight: 500;">{{ nv.cccd }}</span> - SN: <span style="font-weight: 500;">{{ nv.namSinh }}</span>
-              </div>
-              <div style="font-size: 11px; color: #64748b; margin-top: 4px; display: flex; align-items: flex-start; gap: 4px; max-w: 220px;" v-if="nv.diaChi" :title="nv.diaChi">
-                <MapPin class="w-3 h-3 text-slate-400 shrink-0 mt-0.5" />
-                <span class="truncate">{{ nv.diaChi }}</span>
-              </div>
-            </td>
-            <td style="text-align: center;">
-              <span v-if="nv.trangThai === 1" class="status-badge status-badge-active">Đang làm việc</span>
-              <span v-else class="status-badge status-badge-inactive">Đã nghỉ</span>
-            </td>
-            <td>
-              <div style="display: flex; align-items: center; justify-content: center; gap: 4px;">
-                <button @click="openReviewModal(nv)" class="hd-btn-action" style="color: #d97706;" title="Đánh giá">
-                  <Eye class="w-5 h-5" />
-                </button>
-                <button @click="openEditForm(nv)" class="hd-btn-action" style="color: #2563eb;" title="Sửa">
-                  <Edit3 class="w-5 h-5" />
-                </button>
-                <button @click="deleteNhanVien(nv.maNv)" class="hd-btn-action" style="color: #ef4444;" title="Xóa">
-                  <Trash2 class="w-5 h-5" />
-                </button>
-              </div>
-            </td>
-          </tr>
-          <tr v-if="nhanViens.length === 0">
-            <td colspan="5" style="padding: 40px; text-align: center; color: #94a3b8; background-color: #f8fafc; border-style: dashed;">Không tìm thấy nhân viên nào phù hợp với bộ lọc.</td>
-          </tr>
-        </tbody>
-      </table>
+                <div v-if="nv.ngayVaoLam" class="text-xs font-medium opacity-75 mt-1 flex items-center gap-1.5" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">
+                  <Calendar class="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                  <span>Ngày làm: {{ formatDate(nv.ngayVaoLam) }}</span>
+                </div>
+              </td>
+
+              <td class="py-4 px-6">
+                <div class="font-extrabold text-xs flex items-center gap-1.5" :class="isDarkMode ? 'text-slate-200' : 'text-slate-900'">
+                  <Phone class="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                  <span>{{ nv.sdt }}</span>
+                </div>
+                <div v-if="nv.cccd" class="text-xs font-medium opacity-75 mt-1" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
+                  CCCD: <span class="font-mono font-bold">{{ nv.cccd }}</span> - SN: <span class="font-mono font-bold">{{ nv.namSinh }}</span>
+                </div>
+                <div v-if="nv.diaChi" class="text-xs opacity-75 mt-1 flex items-start gap-1.5 max-w-[220px] truncate" :title="nv.diaChi" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
+                  <MapPin class="w-3.5 h-3.5 text-sky-500 shrink-0 mt-0.5" />
+                  <span class="truncate">{{ nv.diaChi }}</span>
+                </div>
+              </td>
+
+              <td class="py-4 px-6 text-center whitespace-nowrap">
+                <span 
+                  class="inline-block px-3 py-1 text-xs font-extrabold rounded-full border"
+                  :class="nv.trangThai === 1 
+                    ? (isDarkMode ? 'bg-emerald-950/80 text-emerald-300 border-emerald-800' : 'bg-emerald-50 text-emerald-700 border-emerald-200')
+                    : (isDarkMode ? 'bg-rose-950/80 text-rose-300 border-rose-800' : 'bg-rose-50 text-rose-700 border-rose-200')"
+                >
+                  {{ nv.trangThai === 1 ? 'Đang làm việc' : 'Đã nghỉ' }}
+                </span>
+              </td>
+
+              <td class="py-4 px-4 text-center whitespace-nowrap">
+                <div class="flex items-center justify-center gap-2">
+                  <button 
+                    @click="openReviewModal(nv)" 
+                    title="Xem đánh giá khách hàng"
+                    class="w-8 h-8 rounded-lg border flex items-center justify-center transition-all cursor-pointer shadow-2xs"
+                    :class="isDarkMode ? 'bg-[#2b2b36] border-slate-700 hover:border-amber-500 text-amber-400' : 'bg-white border-slate-200 hover:border-amber-400 text-amber-600 hover:bg-amber-50'"
+                  >
+                    <Eye class="w-4 h-4" />
+                  </button>
+
+                  <button 
+                    @click="openEditForm(nv)" 
+                    title="Chỉnh sửa thông tin nhân viên"
+                    class="w-8 h-8 rounded-lg border flex items-center justify-center transition-all cursor-pointer shadow-2xs"
+                    :class="isDarkMode ? 'bg-[#2b2b36] border-slate-700 hover:border-sky-500 text-sky-400' : 'bg-white border-slate-200 hover:border-sky-400 text-sky-600 hover:bg-sky-50'"
+                  >
+                    <Edit3 class="w-4 h-4" />
+                  </button>
+
+                  <button 
+                    @click="deleteNhanVien(nv.maNv)" 
+                    title="Xóa hồ sơ nhân viên"
+                    class="w-8 h-8 rounded-lg border flex items-center justify-center transition-all cursor-pointer shadow-2xs"
+                    :class="isDarkMode ? 'bg-[#2b2b36] border-slate-700 hover:border-rose-500 text-rose-400' : 'bg-white border-slate-200 hover:border-rose-400 text-rose-600 hover:bg-rose-50'"
+                  >
+                    <Trash2 class="w-4 h-4" />
+                  </button>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Empty State -->
+            <tr v-if="nhanViens.length === 0">
+              <td colspan="5" class="p-12 text-center text-slate-500">
+                <div class="flex flex-col items-center gap-2 max-w-sm mx-auto">
+                  <Users class="w-8 h-8 text-slate-400 stroke-[1.5px]" />
+                  <span class="font-extrabold text-sm" :class="isDarkMode ? 'text-slate-300' : 'text-slate-700'">Không tìm thấy dữ liệu nhân viên</span>
+                  <span class="text-xs" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">Không có nhân viên nào trùng khớp với bộ lọc tìm kiếm.</span>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       
       <!-- Pagination Controls -->
-      <div v-if="totalPages > 1" class="hd-pagination print:hidden">
-        <button @click="changePage(currentPage - 1)" :disabled="currentPage === 1" class="hd-page-btn">
-          Trước
-        </button>
-        <div class="hd-page-numbers">
-          <button v-for="p in visiblePages" :key="p" @click="changePage(p)" :class="{ active: currentPage === p }" class="hd-page-number-btn">
-            {{ p }}
+      <div 
+        v-if="totalPages > 1" 
+        class="flex-shrink-0 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 border-t print:hidden"
+        :class="isDarkMode ? 'bg-[#252536] border-slate-700/80 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'"
+      >
+        <div class="text-xs font-bold">
+          Hiển thị trang <span class="text-sky-600">{{ currentPage }}</span> / {{ totalPages }} (Tổng {{ nhanViens.length }} nhân viên)
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button 
+            @click="changePage(currentPage - 1)" 
+            :disabled="currentPage === 1" 
+            class="h-8 px-3 text-xs font-bold rounded-lg border disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-2xs flex items-center gap-1 cursor-pointer"
+            :class="isDarkMode ? 'bg-[#2b2b36] border-slate-700 text-slate-200 hover:border-slate-600' : 'bg-white border-slate-300 text-slate-700 hover:border-slate-400'"
+          >
+            <span>Trước</span>
+          </button>
+
+          <div class="flex items-center gap-1">
+            <button 
+              v-for="p in visiblePages" 
+              :key="p" 
+              @click="changePage(p)" 
+              class="w-8 h-8 text-xs font-bold rounded-lg transition-all shadow-2xs flex items-center justify-center cursor-pointer"
+              :class="currentPage === p ? 'bg-sky-600 text-white font-extrabold shadow-sm' : (isDarkMode ? 'bg-[#2b2b36] text-slate-200 border border-slate-700 hover:border-slate-600' : 'bg-white text-slate-700 border border-slate-300 hover:border-slate-400')"
+            >
+              {{ p }}
+            </button>
+          </div>
+
+          <button 
+            @click="changePage(currentPage + 1)" 
+            :disabled="currentPage === totalPages" 
+            class="h-8 px-3 text-xs font-bold rounded-lg border disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-2xs flex items-center gap-1 cursor-pointer"
+            :class="isDarkMode ? 'bg-[#2b2b36] border-slate-700 text-slate-200 hover:border-slate-600' : 'bg-white border-slate-300 text-slate-700 hover:border-slate-400'"
+          >
+            <span>Sau</span>
           </button>
         </div>
-        <button @click="changePage(currentPage + 1)" :disabled="currentPage === totalPages" class="hd-page-btn">
-          Sau
-        </button>
       </div>
     </div>
   </div>
@@ -863,244 +1060,494 @@ onMounted(() => {
   <!-- Teleport Modals to Body -->
   <Teleport to="body">
     <!-- Scanner Modal -->
-    <div v-if="showScanner" class="hd-modal-overlay">
-      <div class="hd-modal-container" style="max-width: 480px; overflow: hidden;">
-        <div class="hd-modal-header">
-          <h3 class="hd-modal-title">Quét Thông Tin CCCD Từ Ảnh</h3>
-          <button @click="closeScannerModal" class="hd-btn-close">
-            <X class="w-5 h-5" />
-          </button>
-        </div>
-
-        <div class="hd-modal-body" style="padding: 20px;">
-          <!-- File/Image Scan only -->
-          <div style="text-align: center;">
-            <p style="font-size: 13px; color: #64748b; margin-top: 0; margin-bottom: 12px; line-height: 1.5;">
-              Tải lên hình ảnh mặt trước của CCCD để tự động trích xuất thông tin.
-            </p>
-            <div style="background-color: #fffbeb; border: 1px solid #fef3c7; border-radius: 12px; padding: 12px; margin-bottom: 16px;">
-              <p style="font-size: 11px; color: #d97706; font-weight: 700; margin: 0; display: flex; align-items: center; justify-content: center; gap: 6px;">
-                ⚠️ QUAN TRỌNG: Ảnh chụp CCCD phải nằm ngang (chữ đọc từ trái qua phải) và không bị lóa sáng.
-              </p>
-            </div>
-            
-            <label class="cursor-pointer" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 48px; background-color: #2563eb; color: #ffffff; border-radius: 10px; font-weight: 600; font-size: 14px; transition: all 0.2s; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15); margin-top: 8px;">
-              <Camera class="w-5 h-5" />
-              Chọn ảnh / Chụp ảnh CCCD
-              <input type="file" accept="image/*" @change="processIdCardImage" class="hidden">
-            </label>
-
-            <div v-if="isScanning" style="margin-top: 20px; text-align: center;">
-               <div class="animate-spin" style="margin: 0 auto 12px auto; width: 32px; height: 32px; border: 3px solid #dbeafe; border-top-color: #2563eb; border-radius: 50%;"></div>
-               <p style="font-size: 13px; font-weight: 600; color: #2563eb; margin: 0;">{{ scanProgress }}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Review Modal -->
-    <div v-if="showReviewModal" class="hd-modal-overlay">
-      <div class="hd-modal-container" style="max-width: 520px;">
-        <div class="hd-modal-header">
-          <div>
-            <h3 class="hd-modal-title">Đánh Giá Khách Hàng</h3>
-            <p style="font-size: 12px; color: #64748b; margin-top: 4px; margin-bottom: 0;">
-              Nhân viên: <span style="font-weight: 700; color: #0f172a;">{{ selectedNvName }}</span>
-            </p>
-          </div>
-          <button @click="closeReviewModal" class="hd-btn-close">
-            <X class="w-5 h-5" />
-          </button>
-        </div>
-
-        <div class="hd-modal-body" style="padding: 24px; max-height: 60vh; overflow-y: auto;">
-          <div v-if="loadingReviews" style="text-align: center; padding: 24px; color: #64748b; font-weight: 500;">
-            <div class="animate-spin" style="margin: 0 auto 12px auto; width: 28px; height: 28px; border: 3px solid #dbeafe; border-top-color: #2563eb; border-radius: 50%;"></div>
-            Đang tải đánh giá...
-          </div>
-          <div v-else-if="reviewsList.length === 0" style="text-align: center; padding: 32px; color: #94a3b8; font-style: italic;">
-            Nhân viên này chưa có đánh giá nào từ khách hàng.
-          </div>
-          <div v-else style="display: flex; flex-direction: column; gap: 16px;">
-            <div v-for="(review, index) in reviewsList" :key="index" class="review-card">
-              <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 8px;">
-                <span style="color: #fbbf24; font-size: 16px;">★</span>
-                <span style="font-weight: 700; color: #1e293b; font-size: 14px;">{{ review.diem || review.soSao || 5 }} / 5</span>
-              </div>
-              <p style="margin: 0; font-size: 13.5px; color: #475569; font-style: italic; line-height: 1.5;">
-                "{{ review.noiDung || review.binhLuan || 'Không có bình luận...' }}"
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Add/Edit Modal -->
-    <div v-if="showModal" class="hd-modal-overlay">
-      <div class="hd-modal-container" style="max-width: 800px; width: 100%;">
-        <div class="hd-modal-header">
-          <h3 class="hd-modal-title">
-            {{ isEditMode ? 'Cập Nhật Thông Tin Nhân Viên' : 'Thêm Nhân Viên Mới' }}
+    <div 
+      v-if="showScanner" 
+      class="fixed inset-0 z-[2500] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md transition-all"
+      @click="closeScannerModal"
+    >
+      <div 
+        class="act-modal-container relative w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden flex flex-col transition-all duration-300"
+        :class="isDarkMode ? 'bg-[#1b1b28] border-slate-700/80 text-slate-100' : 'bg-white border-slate-200 text-slate-800'"
+        @click.stop
+      >
+        <div 
+          class="px-6 py-4 border-b flex items-center justify-between relative overflow-hidden transition-colors"
+          :class="isDarkMode ? 'bg-[#242436] border-slate-700/80' : 'bg-slate-50 border-slate-200'"
+        >
+          <h3 class="font-extrabold text-base tracking-wide" :class="isDarkMode ? 'text-white' : 'text-slate-900'">
+            Quét Thông Tin CCCD Từ Ảnh
           </h3>
-          <button @click="closeModal" class="hd-btn-close">
+          <button 
+            @click="closeScannerModal" 
+            class="w-8 h-8 rounded-lg flex items-center justify-center transition-all cursor-pointer"
+            :class="isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200'"
+          >
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+
+        <div class="p-6 flex flex-col items-center text-center gap-4">
+          <p class="text-xs leading-relaxed" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
+            Tải lên hình ảnh mặt trước của CCCD để hệ thống tự động trích xuất thông tin nhân viên.
+          </p>
+          
+          <div class="w-full p-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2" :class="isDarkMode ? 'bg-amber-950/40 text-amber-300 border-amber-800' : 'bg-amber-50 text-amber-700 border-amber-200'">
+            <span>⚠️ QUAN TRỌNG: Ảnh chụp CCCD phải nằm ngang và không bị lóa sáng.</span>
+          </div>
+          
+          <label class="hd-btn-export h-11 w-full text-xs font-extrabold rounded-lg transition-all cursor-pointer shadow-md flex items-center justify-center gap-2">
+            <Camera class="w-4 h-4" />
+            <span>Chọn ảnh / Chụp ảnh CCCD</span>
+            <input type="file" accept="image/*" @change="processIdCardImage" class="hidden">
+          </label>
+
+          <div v-if="isScanning" class="mt-4 flex flex-col items-center gap-2">
+             <div class="w-8 h-8 border-3 border-slate-200 border-t-sky-600 rounded-full animate-spin"></div>
+             <p class="text-xs font-extrabold text-sky-500">{{ scanProgress }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Review Modal (Cấu trúc Bảng chuẩn đẹp 100% đồng bộ với trang Xếp hạng nhân viên) -->
+    <div 
+      v-if="showReviewModal" 
+      class="fixed inset-0 z-[2500] flex items-center justify-center p-4 md:p-6 bg-slate-950/80 backdrop-blur-md transition-all"
+      @click="closeReviewModal"
+    >
+      <div 
+        class="relative w-full max-w-5xl rounded-xl border shadow-2xl overflow-hidden flex flex-col transition-all duration-300"
+        :class="isDarkMode ? 'bg-[#1b1b28] border-slate-700/80 text-slate-100' : 'bg-white border-slate-300 text-slate-900'"
+        @click.stop
+      >
+        <!-- Modal Header (Đồng bộ chuẩn 100% với Modal Xếp Hạng) -->
+        <div 
+          class="px-8 py-6 border-b flex items-center justify-between relative overflow-hidden transition-colors"
+          :class="isDarkMode ? 'bg-[#242436] border-slate-700/80' : 'bg-slate-100 border-slate-300'"
+        >
+          <div class="flex items-center gap-5">
+            <div class="w-13 h-13 rounded-xl bg-amber-500/20 text-amber-500 border border-amber-500/30 flex items-center justify-center font-bold flex-shrink-0 shadow-xs">
+              <Award class="w-7 h-7" />
+            </div>
+            <div>
+              <h3 class="text-xl md:text-2xl font-black tracking-tight" :class="isDarkMode ? 'text-white' : 'text-slate-900'">
+                Phản Hồi & Đánh Giá Của Khách Hàng
+              </h3>
+              <p class="text-xs md:text-sm mt-1 font-semibold" :class="isDarkMode ? 'text-slate-300' : 'text-slate-600'">
+                Tổng hợp ý kiến đánh giá thực tế của khách hàng dành cho nhân viên: 
+                <span class="inline-block ml-1 px-3 py-1 rounded-md font-black text-xs md:text-sm" :class="isDarkMode ? 'bg-sky-950 text-sky-300 border border-sky-800' : 'bg-sky-100 text-sky-900 border border-sky-300'">
+                  {{ selectedNvName }}
+                </span>
+              </p>
+            </div>
+          </div>
+
+          <button 
+            @click="closeReviewModal" 
+            class="w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer border"
+            :class="isDarkMode ? 'text-slate-400 hover:text-white bg-slate-800/80 border-slate-700 hover:bg-slate-700' : 'text-slate-700 hover:text-slate-900 bg-white border-slate-300 hover:bg-slate-200'"
+          >
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+
+        <!-- Modal Body (Cấu trúc Bảng Data Table đồng bộ 100%) -->
+        <div class="p-8 flex flex-col gap-6 max-h-[82vh] overflow-y-auto custom-scrollbar">
+          
+          <div v-if="loadingReviews" class="p-16 text-center text-xs font-extrabold text-sky-500 flex flex-col items-center justify-center gap-3">
+            <div class="w-8 h-8 border-3 border-slate-200 border-t-sky-600 rounded-full animate-spin mx-auto mb-1"></div>
+            <span>Đang nạp dữ liệu đánh giá từ khách hàng...</span>
+          </div>
+
+          <div v-else-if="reviewsList.length === 0" class="p-16 text-center text-sm font-semibold italic" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
+            Nhân viên này chưa có phản hồi đánh giá nào từ khách hàng.
+          </div>
+
+          <template v-else>
+            <!-- Bảng hiển thị danh sách đánh giá chuẩn như trang Xếp hạng nhân viên -->
+            <div 
+              class="rounded-xl border shadow-xs overflow-hidden transition-colors"
+              :class="isDarkMode ? 'bg-[#242436] border-slate-700/80' : 'bg-white border-slate-300'"
+            >
+              <table class="w-full text-left text-xs md:text-sm border-collapse min-w-[700px]">
+                <thead>
+                  <tr :class="isDarkMode ? 'bg-[#1e1e2d] text-slate-100 border-b border-slate-700' : 'bg-slate-900 text-white'">
+                    <th class="py-4 px-6 font-extrabold uppercase tracking-wider w-20 text-center whitespace-nowrap">STT</th>
+                    <th class="py-4 px-6 font-extrabold uppercase tracking-wider w-40 text-center whitespace-nowrap">ĐIỂM ĐÁNH GIÁ</th>
+                    <th class="py-4 px-6 font-extrabold uppercase tracking-wider whitespace-nowrap">NỘI DUNG LỜI BÌNH</th>
+                    <th class="py-4 px-6 font-extrabold uppercase tracking-wider w-44 text-center whitespace-nowrap">LOẠI DỊCH VỤ</th>
+                    <th class="py-4 px-6 font-extrabold uppercase tracking-wider w-40 text-center whitespace-nowrap">TRẠNG THÁI</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y" :class="isDarkMode ? 'divide-slate-800/80' : 'divide-slate-200'">
+                  <tr 
+                    v-for="(review, index) in reviewsList" 
+                    :key="index"
+                    class="transition-colors duration-150"
+                    :class="isDarkMode ? 'hover:bg-slate-800/60 text-slate-100' : 'hover:bg-sky-50/60 text-slate-900'"
+                  >
+                    <!-- STT -->
+                    <td class="py-4 px-6 text-center whitespace-nowrap font-extrabold">
+                      <span 
+                        class="inline-flex w-8 h-8 rounded-lg items-center justify-center font-black text-xs shadow-2xs mx-auto"
+                        :class="isDarkMode ? 'bg-slate-800 text-slate-300 border border-slate-700' : 'bg-slate-100 text-slate-700 border border-slate-300'"
+                      >
+                        {{ index + 1 }}
+                      </span>
+                    </td>
+
+                    <!-- Điểm đánh giá -->
+                    <td class="py-4 px-6 text-center whitespace-nowrap">
+                      <div 
+                        class="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg border font-black text-sm"
+                        :class="isDarkMode ? 'bg-slate-800/90 border-slate-700 text-amber-300' : 'bg-amber-100 border-amber-300 text-amber-900'"
+                      >
+                        <span>{{ review.diem || review.soSao || 5 }}.0</span>
+                        <Star class="w-4 h-4 fill-amber-500 text-amber-500" />
+                      </div>
+                    </td>
+
+                    <!-- Nội dung lời bình -->
+                    <td class="py-4 px-6">
+                      <div class="font-bold text-sm md:text-base leading-relaxed italic" :class="isDarkMode ? 'text-slate-100' : 'text-slate-900'">
+                        "{{ review.noiDung || review.binhLuan || 'Khách hàng không để lại bình luận chi tiết.' }}"
+                      </div>
+                    </td>
+
+                    <!-- Loại dịch vụ -->
+                    <td class="py-4 px-6 text-center whitespace-nowrap font-semibold">
+                      <span class="px-3 py-1 rounded-md text-xs font-bold" :class="isDarkMode ? 'bg-slate-800 text-slate-300 border border-slate-700' : 'bg-slate-100 text-slate-700 border border-slate-300'">
+                        Dịch vụ Salon
+                      </span>
+                    </td>
+
+                    <!-- Trạng thái -->
+                    <td class="py-4 px-6 text-center whitespace-nowrap">
+                      <span class="inline-block px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider border bg-emerald-100 text-emerald-800 border-emerald-400">
+                        ĐÃ XÁC MINH
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add/Edit Modal (Thiết kế rộng rãi max-w-3xl, lề lùi px-8 md:px-10) -->
+    <div 
+      v-if="showModal" 
+      class="fixed inset-0 z-[2500] flex items-center justify-center p-4 md:p-6 bg-slate-950/80 backdrop-blur-md transition-all"
+      @click="closeModal"
+    >
+      <div 
+        class="act-modal-container relative w-full max-w-3xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col transition-all duration-300"
+        :class="isDarkMode ? 'bg-[#1b1b28] border-slate-700/80 text-slate-100' : 'bg-white border-slate-200 text-slate-800'"
+        @click.stop
+      >
+        <!-- Modal Header -->
+        <div 
+          class="px-8 md:px-10 py-5 border-b flex items-center justify-between relative overflow-hidden transition-colors"
+          :class="isDarkMode ? 'bg-[#242436] border-slate-700/80' : 'bg-slate-50 border-slate-200'"
+        >
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-sky-500/20 text-sky-500 flex items-center justify-center font-bold flex-shrink-0">
+              <Users class="w-5 h-5" />
+            </div>
+            <div>
+              <h3 class="font-extrabold text-base md:text-lg tracking-wide" :class="isDarkMode ? 'text-white' : 'text-slate-900'">
+                {{ isEditMode ? 'Cập Nhật Thông Tin Nhân Viên' : 'Thêm Nhân Viên Mới' }}
+              </h3>
+              <p class="text-xs mt-0.5" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">
+                {{ isEditMode ? 'Sửa thông tin hồ sơ, chức vụ và tài khoản nhân viên' : 'Nhập đầy đủ thông tin để cấp tài khoản nhân viên mới' }}
+              </p>
+            </div>
+          </div>
+          <button 
+            @click="closeModal" 
+            class="w-9 h-9 rounded-lg flex items-center justify-center transition-all cursor-pointer"
+            :class="isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200'"
+          >
             <X class="w-5 h-5" />
           </button>
         </div>
         
-        <form @submit.prevent="saveNhanVien" class="hd-modal-body" style="padding: 24px; display: flex; flex-direction: column; gap: 20px; max-height: 75vh; overflow-y: auto;">
-          <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+        <form @submit.prevent="saveNhanVien" class="p-8 md:px-10 md:py-8 flex flex-col gap-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
+          <div class="flex flex-col lg:flex-row gap-8">
+            
             <!-- Left Side: Image Preview & Selection -->
-            <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; width: 180px; flex-shrink: 0; margin: 0 auto;">
-              <div style="width: 140px; height: 140px; border-radius: 50%; border: 3px solid #e2e8f0; overflow: hidden; background-color: #f8fafc; display: flex; align-items: center; justify-content: center; position: relative; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
-                <img v-if="imagePreviewUrl" :src="imagePreviewUrl" style="width: 100%; height: 100%; object-fit: cover;" />
-                <span v-else style="color: #94a3b8; font-size: 12px; font-weight: 500; text-align: center; padding: 12px;">Chưa có ảnh</span>
+            <div class="flex flex-col items-center gap-3 w-full lg:w-44 flex-shrink-0">
+              <div class="w-32 h-32 md:w-36 md:h-36 rounded-full border-3 overflow-hidden flex items-center justify-center relative shadow-md" :class="isDarkMode ? 'bg-[#2b2b36] border-slate-700' : 'bg-slate-100 border-slate-200'">
+                <img v-if="imagePreviewUrl" :src="imagePreviewUrl" class="w-full h-full object-cover" />
+                <span v-else class="text-xs font-semibold text-center px-3" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">Chưa có ảnh</span>
               </div>
-              <label class="cursor-pointer" style="display: inline-flex; align-items: center; justify-content: center; padding: 8px 16px; background-color: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 12px; font-weight: 600; color: #475569; hover:bg-slate-50 transition: all 0.2s; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);">
-                Chọn ảnh đại diện
+              <label 
+                class="cursor-pointer h-9 px-4 text-xs font-bold rounded-lg border flex items-center justify-center transition-all shadow-2xs"
+                :class="isDarkMode ? 'bg-[#2b2b36] border-slate-700 text-slate-200 hover:border-slate-600' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'"
+              >
+                <span>Chọn ảnh đại diện</span>
                 <input type="file" class="hidden" accept="image/*" @change="handleImageUpload">
               </label>
             </div>
 
-            <!-- Right Side: Fields Grid -->
-            <div style="flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 20px;">
+            <!-- Right Side: Form Fields Grid -->
+            <div class="flex-1 flex flex-col gap-6">
+              
               <!-- Section 1: Thông tin cá nhân -->
-              <div>
-                <h4 class="form-section-title">Thông Tin Cá Nhân</h4>
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
-                  <div style="grid-column: span 2;">
-                    <label class="form-label">Họ Tên <span style="color: #ef4444;">*</span></label>
-                    <input v-model="formData.hoTenNv" type="text" class="hd-input" :style="errors.hoTenNv ? 'border-color: #ef4444;' : ''" placeholder="Họ và tên đầy đủ">
-                    <p v-if="errors.hoTenNv" class="error-text">{{ errors.hoTenNv }}</p>
+              <div class="flex flex-col gap-4">
+                <h4 class="text-xs font-extrabold uppercase tracking-wider border-b pb-2" :class="isDarkMode ? 'text-sky-400 border-slate-700/80' : 'text-sky-700 border-slate-200'">
+                  Thông Tin Cá Nhân
+                </h4>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div class="sm:col-span-2 flex flex-col gap-1.5">
+                    <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
+                      Họ Tên <span class="text-rose-500">*</span>
+                    </label>
+                    <input 
+                      v-model="formData.hoTenNv" 
+                      type="text" 
+                      class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
+                      :class="[isDarkMode ? 'dark-mode-input' : 'light-mode-input', errors.hoTenNv ? 'border-rose-500!' : '']" 
+                      placeholder="Họ và tên đầy đủ"
+                    >
+                    <p v-if="errors.hoTenNv" class="text-xs font-semibold text-rose-500 mt-0.5">{{ errors.hoTenNv }}</p>
                   </div>
-                  <div>
-                    <label class="form-label">Giới tính</label>
-                    <div class="hd-status-wrapper" style="max-width: 100%;">
-                      <select v-model="formData.gioiTinh" class="hd-status-select select-filter">
-                        <option value="Nam">Nam</option>
-                        <option value="Nữ">Nữ</option>
+
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Giới tính</label>
+                    <div class="relative flex items-center">
+                      <select 
+                        v-model="formData.gioiTinh" 
+                        class="hd-select hd-input w-full text-xs md:text-sm font-medium outline-none appearance-none cursor-pointer transition-all box-border"
+                        :class="isDarkMode ? 'dark-mode-input' : 'light-mode-input'"
+                      >
+                        <option value="Nam" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'text-slate-800'">Nam</option>
+                        <option value="Nữ" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'text-slate-800'">Nữ</option>
                       </select>
-                      <div class="hd-dropdown-arrow">
-                        <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                      </div>
+                      <span class="pointer-events-none absolute right-4 text-xs text-sky-500 font-bold z-10">▼</span>
                     </div>
                   </div>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 16px; margin-top: 16px;">
-                  <div>
-                    <label class="form-label">Năm sinh *</label>
-                    <input v-model="formData.namSinh" type="number" class="hd-input" :style="errors.namSinh ? 'border-color: #ef4444;' : ''" placeholder="VD: 1998">
-                    <p v-if="errors.namSinh" class="error-text">{{ errors.namSinh }}</p>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Năm sinh *</label>
+                    <input 
+                      v-model="formData.namSinh" 
+                      type="number" 
+                      class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
+                      :class="[isDarkMode ? 'dark-mode-input' : 'light-mode-input', errors.namSinh ? 'border-rose-500!' : '']" 
+                      placeholder="VD: 1998"
+                    >
+                    <p v-if="errors.namSinh" class="text-xs font-semibold text-rose-500 mt-0.5">{{ errors.namSinh }}</p>
                   </div>
-                  <div>
-                    <label class="form-label">Số CCCD</label>
-                    <input v-model="formData.cccd" type="text" class="hd-input" :style="errors.cccd ? 'border-color: #ef4444;' : ''" placeholder="12 chữ số">
-                    <p v-if="errors.cccd" class="error-text">{{ errors.cccd }}</p>
+
+                  <div class="sm:col-span-2 flex flex-col gap-1.5">
+                    <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Số CCCD</label>
+                    <input 
+                      v-model="formData.cccd" 
+                      type="text" 
+                      class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
+                      :class="[isDarkMode ? 'dark-mode-input' : 'light-mode-input', errors.cccd ? 'border-rose-500!' : '']" 
+                      placeholder="12 chữ số"
+                    >
+                    <p v-if="errors.cccd" class="text-xs font-semibold text-rose-500 mt-0.5">{{ errors.cccd }}</p>
                   </div>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px;">
-                  <div>
-                    <label class="form-label">Số Điện Thoại <span style="color: #ef4444;">*</span></label>
-                    <input v-model="formData.sdt" type="text" class="hd-input" :style="errors.sdt ? 'border-color: #ef4444;' : ''" placeholder="Số điện thoại di động">
-                    <p v-if="errors.sdt" class="error-text">{{ errors.sdt }}</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
+                      Số Điện Thoại <span class="text-rose-500">*</span>
+                    </label>
+                    <input 
+                      v-model="formData.sdt" 
+                      type="text" 
+                      class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
+                      :class="[isDarkMode ? 'dark-mode-input' : 'light-mode-input', errors.sdt ? 'border-rose-500!' : '']" 
+                      placeholder="Số điện thoại di động"
+                    >
+                    <p v-if="errors.sdt" class="text-xs font-semibold text-rose-500 mt-0.5">{{ errors.sdt }}</p>
                   </div>
-                  <div>
-                    <label class="form-label">Email</label>
-                    <input v-model="formData.email" type="email" class="hd-input" placeholder="example@domain.com">
+
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Email</label>
+                    <input 
+                      v-model="formData.email" 
+                      type="email" 
+                      class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
+                      :class="isDarkMode ? 'dark-mode-input' : 'light-mode-input'" 
+                      placeholder="example@domain.com"
+                    >
                   </div>
                 </div>
 
-                <div style="margin-top: 16px;">
-                  <label class="form-label">Địa chỉ thường trú</label>
-                  <input v-model="formData.diaChi" type="text" class="hd-input" placeholder="Số nhà, tên đường, khu vực...">
+                <div class="flex flex-col gap-1.5">
+                  <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Địa chỉ thường trú</label>
+                  <input 
+                    v-model="formData.diaChi" 
+                    type="text" 
+                    class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
+                    :class="isDarkMode ? 'dark-mode-input' : 'light-mode-input'" 
+                    placeholder="Số nhà, tên đường, khu vực..."
+                  >
                 </div>
               </div>
 
               <!-- Section 2: Thông tin công việc -->
-              <div>
-                <h4 class="form-section-title">Thông Tin Công Việc</h4>
-                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
-                  <div>
-                    <label class="form-label">Mã NV <span style="color: #ef4444;">*</span></label>
-                    <input v-model="formData.maNv" type="text" :disabled="isEditMode" class="hd-input" :style="errors.maNv ? 'border-color: #ef4444;' : ''" placeholder="NV001">
-                    <p v-if="errors.maNv" class="error-text">{{ errors.maNv }}</p>
+              <div class="flex flex-col gap-4">
+                <h4 class="text-xs font-extrabold uppercase tracking-wider border-b pb-2" :class="isDarkMode ? 'text-sky-400 border-slate-700/80' : 'text-sky-700 border-slate-200'">
+                  Thông Tin Công Việc
+                </h4>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
+                      Mã NV <span class="text-rose-500">*</span>
+                    </label>
+                    <input 
+                      v-model="formData.maNv" 
+                      type="text" 
+                      :disabled="isEditMode" 
+                      class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border disabled:opacity-60 disabled:cursor-not-allowed"
+                      :class="[isDarkMode ? 'dark-mode-input' : 'light-mode-input', errors.maNv ? 'border-rose-500!' : '']" 
+                      placeholder="NV001"
+                    >
+                    <p v-if="errors.maNv" class="text-xs font-semibold text-rose-500 mt-0.5">{{ errors.maNv }}</p>
                   </div>
-                  <div>
-                    <label class="form-label">Chức vụ</label>
-                    <div class="hd-status-wrapper" style="max-width: 100%;">
-                      <select v-model="formData.maRole" class="hd-status-select select-filter">
-                        <option value="">-- Chọn chức vụ --</option>
-                        <option v-for="r in roles" :key="r.maRole || r.MaRole" :value="r.maRole || r.MaRole">{{ r.tenChucVu || r.TenChucVu }}</option>
+
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Chức vụ</label>
+                    <div class="relative flex items-center">
+                      <select 
+                        v-model="formData.maRole" 
+                        class="hd-select hd-input w-full text-xs md:text-sm font-medium outline-none appearance-none cursor-pointer transition-all box-border"
+                        :class="isDarkMode ? 'dark-mode-input' : 'light-mode-input'"
+                      >
+                        <option value="" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'text-slate-800'">-- Chọn chức vụ --</option>
+                        <option v-for="r in roles" :key="r.maRole || r.MaRole" :value="r.maRole || r.MaRole" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'text-slate-800'">{{ r.tenChucVu || r.TenChucVu }}</option>
                       </select>
-                      <div class="hd-dropdown-arrow">
-                        <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                      </div>
+                      <span class="pointer-events-none absolute right-4 text-xs text-sky-500 font-bold z-10">▼</span>
                     </div>
-                  </div>
-                  <div>
-                    <label class="form-label">Phân loại NV</label>
-                    <div class="hd-status-wrapper" style="max-width: 100%;">
-                      <select v-model="formData.maLoaiNv" class="hd-status-select select-filter">
-                        <option value="">-- Chọn loại --</option>
-                        <option v-for="l in loaiNvs" :key="l.maLoaiNv || l.MaLoaiNv" :value="l.maLoaiNv || l.MaLoaiNv">{{ l.tenLoai || l.TenLoai }}</option>
-                      </select>
-                      <div class="hd-dropdown-arrow">
-                        <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <label class="form-label">Lương cơ bản</label>
-                    <input :value="formatVND(currentLoaiLuong)" type="text" class="hd-input" readonly disabled style="background-color: #f8fafc; font-weight: 600; color: #475569;" />
                   </div>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px;">
-                  <div>
-                    <label class="form-label">Ngày vào làm</label>
-                    <input v-model="formData.ngayVaoLam" type="date" class="hd-input">
-                  </div>
-                  <div>
-                    <label class="form-label">Trạng thái công việc</label>
-                    <div class="hd-status-wrapper" style="max-width: 100%;">
-                      <select v-model="formData.trangThai" class="hd-status-select select-filter" :class="formData.trangThai === 1 ? 'status-completed' : 'status-canceled'">
-                        <option :value="1" class="text-slate-700 bg-white">Đang làm việc</option>
-                        <option :value="0" class="text-slate-700 bg-white">Đã nghỉ</option>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Phân loại NV</label>
+                    <div class="relative flex items-center">
+                      <select 
+                        v-model="formData.maLoaiNv" 
+                        class="hd-select hd-input w-full text-xs md:text-sm font-medium outline-none appearance-none cursor-pointer transition-all box-border"
+                        :class="isDarkMode ? 'dark-mode-input' : 'light-mode-input'"
+                      >
+                        <option value="" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'text-slate-800'">-- Chọn loại --</option>
+                        <option v-for="l in loaiNvs" :key="l.maLoaiNv || l.MaLoaiNv" :value="l.maLoaiNv || l.MaLoaiNv" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'text-slate-800'">{{ l.tenLoai || l.TenLoai }}</option>
                       </select>
-                      <div class="hd-dropdown-arrow">
-                        <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                      </div>
+                      <span class="pointer-events-none absolute right-4 text-xs text-sky-500 font-bold z-10">▼</span>
+                    </div>
+                  </div>
+
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Lương cơ bản</label>
+                    <input 
+                      :value="formatVND(currentLoaiLuong)" 
+                      type="text" 
+                      class="hd-input w-full text-xs md:text-sm font-bold font-mono outline-none transition-all box-border opacity-80 cursor-not-allowed"
+                      :class="isDarkMode ? 'bg-[#242436] border-slate-700 text-sky-400' : 'bg-slate-100 border-slate-300 text-slate-700'" 
+                      readonly 
+                      disabled
+                    />
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Ngày vào làm</label>
+                    <input 
+                      v-model="formData.ngayVaoLam" 
+                      type="date" 
+                      class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
+                      :class="isDarkMode ? 'dark-mode-input [color-scheme:dark]' : 'light-mode-input'"
+                    >
+                  </div>
+
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Trạng thái công việc</label>
+                    <div class="relative flex items-center">
+                      <select 
+                        v-model="formData.trangThai" 
+                        class="hd-status-select text-xs md:text-sm font-extrabold rounded-lg px-4 py-2.5 outline-none cursor-pointer transition-all box-border border w-full"
+                        :class="[
+                          formData.trangThai === 1 ? (isDarkMode ? 'dark-status-completed' : 'light-status-completed') : (isDarkMode ? 'dark-status-canceled' : 'light-status-canceled'),
+                          isDarkMode ? 'dark-status-dropdown' : 'light-status-dropdown'
+                        ]"
+                      >
+                        <option :value="1" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'bg-white text-slate-800'">Đang làm việc</option>
+                        <option :value="0" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'bg-white text-slate-800'">Đã nghỉ</option>
+                      </select>
                     </div>
                   </div>
                 </div>
               </div>
 
               <!-- Section 3: Tài khoản hệ thống -->
-              <div style="background-color: #f8fafc; padding: 16px; border-radius: 12px; border: 1px solid #f1f5f9;">
-                <h4 class="form-section-title" style="margin-top: 0; color: #475569; font-size: 12px; letter-spacing: 0.05em;">Tài Khoản Đăng Nhập</h4>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                  <div>
-                    <label class="form-label">Tên đăng nhập</label>
-                    <input v-model="formData.tenDangNhap" type="text" class="hd-input" :style="errors.tenDangNhap ? 'border-color: #ef4444;' : ''" placeholder="Không chứa khoảng trắng">
-                    <p v-if="errors.tenDangNhap" class="error-text">{{ errors.tenDangNhap }}</p>
+              <div class="p-5 rounded-xl border flex flex-col gap-4" :class="isDarkMode ? 'bg-[#242436] border-slate-700/80' : 'bg-slate-50 border-slate-200'">
+                <h4 class="text-xs font-extrabold uppercase tracking-wider" :class="isDarkMode ? 'text-slate-300' : 'text-slate-700'">
+                  Tài Khoản Đăng Nhập Hệ Thống
+                </h4>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Tên đăng nhập</label>
+                    <input 
+                      v-model="formData.tenDangNhap" 
+                      type="text" 
+                      class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
+                      :class="[isDarkMode ? 'dark-mode-input' : 'light-mode-input', errors.tenDangNhap ? 'border-rose-500!' : '']" 
+                      placeholder="Không chứa khoảng trắng"
+                    >
+                    <p v-if="errors.tenDangNhap" class="text-xs font-semibold text-rose-500 mt-0.5">{{ errors.tenDangNhap }}</p>
                   </div>
-                  <div>
-                    <label class="form-label">Mật khẩu đăng nhập</label>
-                    <input v-model="formData.matKhau" type="password" class="hd-input" :style="errors.matKhau ? 'border-color: #ef4444;' : ''" :placeholder="isEditMode ? '(Giữ nguyên mật khẩu cũ)' : 'Mật khẩu khởi tạo'">
-                    <p v-if="errors.matKhau" class="error-text">{{ errors.matKhau }}</p>
+
+                  <div class="flex flex-col gap-1.5">
+                    <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Mật khẩu đăng nhập</label>
+                    <input 
+                      v-model="formData.matKhau" 
+                      type="password" 
+                      class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
+                      :class="[isDarkMode ? 'dark-mode-input' : 'light-mode-input', errors.matKhau ? 'border-rose-500!' : '']" 
+                      :placeholder="isEditMode ? '(Giữ nguyên mật khẩu cũ)' : 'Mật khẩu khởi tạo'"
+                    >
+                    <p v-if="errors.matKhau" class="text-xs font-semibold text-rose-500 mt-0.5">{{ errors.matKhau }}</p>
                   </div>
                 </div>
               </div>
+
             </div>
           </div>
 
           <!-- Form Actions -->
-          <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 16px; border-top: 1px solid #e2e8f0; padding-top: 20px;">
-            <button type="button" @click="closeModal" class="hd-btn-close-modal">Hủy bỏ</button>
-            <button type="submit" class="hd-btn-export" style="box-shadow: none;">Lưu thông tin</button>
+          <div 
+            class="pt-5 border-t flex items-center justify-end gap-3 transition-colors mt-2"
+            :class="isDarkMode ? 'border-slate-700/80' : 'border-slate-200'"
+          >
+            <button 
+              type="button" 
+              @click="closeModal" 
+              class="h-11 px-8 text-xs font-extrabold rounded-lg transition-all cursor-pointer border"
+              :class="isDarkMode ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'"
+            >
+              Hủy bỏ
+            </button>
+            <button 
+              type="submit" 
+              class="hd-btn-export h-11 px-8 text-xs font-extrabold rounded-lg transition-all cursor-pointer shadow-md"
+            >
+              Lưu thông tin
+            </button>
           </div>
         </form>
       </div>
@@ -1112,568 +1559,113 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* ── Container ── */
-.hoadon-container {
-    padding: 24px;
-    background-color: #f8fafc;
-    min-height: 100vh;
-    border-radius: 16px;
-    font-family: 'Inter', -apple-system, sans-serif;
-    color: #1e293b;
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-    box-sizing: border-box;
+/* Enforce dark background on parent containers */
+:global(body.v-theme--dark), 
+:global(.v-theme--dark .v-main),
+:global(.v-theme--dark .v-application) {
+  background-color: #141416 !important;
 }
 
-/* ── Header ── */
-.hd-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid #e2e8f0;
-    padding-bottom: 16px;
-    flex-wrap: wrap;
-    gap: 16px;
+/* Light Mode Input Styling */
+.light-mode-input {
+  background-color: #f8fafc !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03) !important;
 }
-.hd-header-left {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-}
-.hd-header-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 48px;
-    height: 48px;
-    background-color: #2563eb;
-    color: #ffffff !important;
-    border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
-    flex-shrink: 0;
-}
-.hd-header-icon :deep(svg) {
-    width: 24px;
-    height: 24px;
-    stroke: currentColor;
-}
-.hd-header-title {
-    font-size: 24px;
-    font-weight: 700;
-    color: #0f172a;
-    margin: 0;
-    line-height: 1.2;
-}
-.hd-header-subtitle {
-    font-size: 14px;
-    color: #64748b;
-    margin: 4px 0 0 0;
+.light-mode-input:focus {
+  background-color: #ffffff !important;
+  border-color: #0284c7 !important;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15) !important;
 }
 
-/* ── Premium Buttons ── */
+/* Dark Mode Input Styling */
+.dark-mode-input {
+  background-color: #2b2b36 !important;
+  border: 1px solid #475569 !important;
+  color: #ffffff !important;
+}
+.dark-mode-input:focus {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2) !important;
+}
+
+/* Input Dimensions - Tăng chiều cao lên 50px, bo góc 12px rộng rãi */
+.hd-input {
+  height: 50px !important;
+  border-radius: 12px !important;
+  box-sizing: border-box !important;
+  padding-left: 1.25rem !important;
+  padding-right: 1.25rem !important;
+  font-size: 14px !important;
+}
+
+.hd-select {
+  padding-left: 1.25rem !important;
+  padding-right: 3rem !important;
+}
+
+.hd-search-input {
+  padding-left: 3rem !important;
+}
+
+/* Primary Button Styling */
 .hd-btn-export {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background-color: #2563eb !important;
-    color: #ffffff !important;
-    border: none;
-    padding: 10px 18px;
-    border-radius: 10px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+  background-color: #0284c7 !important;
+  color: #ffffff !important;
+  border: 1px solid #0284c7 !important;
+  font-weight: 800 !important;
 }
 .hd-btn-export:hover {
-    background-color: #1d4ed8 !important;
-    transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.25);
-}
-.hd-btn-export:active {
-    transform: translateY(0);
+  background-color: #0369a1 !important;
+  border-color: #0369a1 !important;
 }
 
-.hd-btn-secondary {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background-color: #ffffff !important;
-    color: #475569 !important;
-    border: 1px solid #cbd5e1;
-    padding: 10px 18px;
-    border-radius: 10px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+/* Status Badge Classes - Light Mode */
+.light-status-completed {
+  background-color: #f0fdf4 !important;
+  color: #16a34a !important;
+  border-color: #bbf7d0 !important;
 }
-.hd-btn-secondary:hover {
-    background-color: #f8fafc !important;
-    color: #0f172a !important;
-    border-color: #94a3b8;
-    transform: translateY(-1px);
-}
-.hd-btn-secondary:active {
-    transform: translateY(0);
+.light-status-canceled {
+  background-color: #fef2f2 !important;
+  color: #ef4444 !important;
+  border-color: #fecaca !important;
 }
 
-/* ── Filters Grid ── */
-.hd-filters-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    background-color: #ffffff;
-    padding: 20px;
-    border-radius: 14px;
-    border: 1px solid #edf2f7;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+/* Status Badge Classes - Dark Mode */
+.dark-status-completed {
+  background-color: #052e16 !important;
+  color: #86efac !important;
+  border-color: #166534 !important;
 }
-@media (max-width: 1024px) {
-    .hd-filters-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-@media (max-width: 640px) {
-    .hd-filters-grid {
-        grid-template-columns: 1fr;
-    }
-}
-.hd-filter-item {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-.hd-filter-label {
-    font-size: 12px;
-    font-weight: 600;
-    color: #475569;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-.hd-input {
-    width: 100%;
-    height: 44px;
-    padding: 0 16px;
-    border-radius: 10px;
-    border: 1px solid #cbd5e1;
-    background-color: #ffffff;
-    font-size: 14px;
-    color: #1e293b;
-    outline: none;
-    transition: all 0.2s ease;
-    box-sizing: border-box;
-}
-.hd-input:focus {
-    border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+.dark-status-canceled {
+  background-color: #450a0a !important;
+  color: #fca5a5 !important;
+  border-color: #991b1b !important;
 }
 
-/* ── Search Input ── */
-.hd-search-wrapper {
-    position: relative;
-    width: 100%;
+/* Custom styled scrollbars */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
 }
-.hd-search-icon {
-    position: absolute;
-    left: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #94a3b8;
-    width: 18px;
-    height: 18px;
-    pointer-events: none;
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
 }
-.hd-search-input {
-    padding-left: 40px !important;
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #0284c7;
+  border-radius: 4px;
 }
-
-/* ── Table Wrapper ── */
-.hd-table-wrapper {
-    background-color: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 14px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
-    overflow-x: auto;
-    width: 100%;
-}
-
-/* ── Table ── */
-.hd-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 14px;
-    text-align: left;
-    min-width: 800px;
-}
-.hd-table th {
-    padding: 14px 16px;
-    background-color: #f8fafc;
-    color: #475569;
-    font-size: 12px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    border-bottom: 1px solid #e2e8f0;
-}
-.hd-table td {
-    padding: 16px;
-    border-bottom: 1px solid #f1f5f9;
-    color: #334155;
-    vertical-align: middle;
-}
-.hd-table tbody tr:hover {
-    background-color: rgba(37, 99, 235, 0.01);
-}
-.hd-table tbody tr:last-child td {
-    border-bottom: none;
-}
-
-/* ── Dropdown Select style ── */
-.hd-status-wrapper {
-    display: inline-flex;
-    position: relative;
-    min-width: 120px;
-    width: 100%;
-}
-.hd-status-select {
-    width: 100%;
-    font-size: 12px;
-    font-weight: 700;
-    border: 1px solid transparent;
-    border-radius: 10px;
-    padding: 8px 32px 8px 12px;
-    cursor: pointer;
-    appearance: none;
-    -webkit-appearance: none;
-    outline: none;
-    transition: all 0.2s ease;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-.hd-status-select:focus {
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
-}
-.hd-dropdown-arrow {
-    position: absolute;
-    right: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    pointer-events: none;
-    width: 16px;
-    height: 16px;
-    color: currentColor;
-    opacity: 0.8;
-}
-
-.select-filter {
-    background-color: #ffffff !important;
-    color: #1e293b !important;
-    border: 1px solid #cbd5e1 !important;
-    height: 44px;
-    padding-right: 36px;
-    font-size: 14px;
-    font-weight: 500;
-}
-
-/* ── Status Colors ── */
-.status-canceled {
-    background-color: #fef2f2 !important;
-    color: #ef4444 !important;
-    border-color: #fecaca !important;
-}
-.status-completed {
-    background-color: #f0fdf4 !important;
-    color: #16a34a !important;
-    border-color: #bbf7d0 !important;
-}
-
-/* ── Action Buttons ── */
-.hd-btn-action {
-    background: none;
-    border: none;
-    color: #64748b;
-    padding: 8px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-.hd-btn-action:hover {
-    background-color: rgba(37, 99, 235, 0.05);
-}
-
-/* ── Modal Overlay ── */
-.hd-modal-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 1000;
-    background-color: rgba(15, 23, 42, 0.5);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
-}
-.hd-modal-container {
-    background-color: #ffffff;
-    border-radius: 16px;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    width: 100%;
-    overflow: hidden;
-    animation: hdModalShow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-@keyframes hdModalShow {
-    from { transform: scale(0.95); opacity: 0; }
-    to { transform: scale(1); opacity: 1; }
-}
-.hd-modal-header {
-    padding: 16px 24px;
-    background-color: #f8fafc;
-    border-bottom: 1px solid #e2e8f0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-.hd-modal-title {
-    font-size: 16px;
-    font-weight: 700;
-    color: #1e293b;
-    margin: 0;
-}
-.hd-btn-close {
-    background: none;
-    border: none;
-    color: #94a3b8;
-    padding: 6px;
-    border-radius: 9999px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
-}
-.hd-btn-close:hover {
-    color: #475569;
-    background-color: #e2e8f0;
-}
-
-.hd-modal-body {
-    padding: 24px;
-}
-
-/* ── Pagination ── */
-.hd-pagination {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 14px 20px;
-    border-top: 1px solid #f1f5f9;
-    background-color: #ffffff;
-    border-radius: 0 0 14px 14px;
-}
-.hd-page-btn {
-    background-color: #ffffff;
-    border: 1px solid #cbd5e1;
-    color: #475569;
-    padding: 8px 14px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-.hd-page-btn:hover:not(:disabled) {
-    background-color: #f8fafc;
-    border-color: #94a3b8;
-    color: #0f172a;
-}
-.hd-page-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-.hd-page-numbers {
-    display: flex;
-    gap: 6px;
-}
-.hd-page-number-btn {
-    background: none;
-    border: 1px solid transparent;
-    color: #475569;
-    width: 34px;
-    height: 34px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
-}
-.hd-page-number-btn:hover {
-    background-color: #f1f5f9;
-    color: #0f172a;
-}
-.hd-page-number-btn.active {
-    background-color: #2563eb;
-    color: #ffffff;
-    border-color: #2563eb;
-}
-
-/* ── Custom Elements for Employees ── */
-.avatar-img {
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    object-fit: cover;
-    border: 2px solid #e2e8f0;
-}
-.avatar-fallback {
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #ffffff;
-    font-weight: 700;
-    font-size: 16px;
-    border: 2px solid #e2e8f0;
-}
-.role-badge {
-    display: inline-block;
-    padding: 2px 8px;
-    background-color: #eff6ff;
-    color: #2563eb;
-    border-radius: 6px;
-    font-size: 11px;
-    font-weight: 600;
-    margin-top: 4px;
-}
-.status-badge {
-    display: inline-block;
-    padding: 6px 12px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 700;
-}
-.status-badge-active {
-    background-color: #f0fdf4;
-    color: #16a34a;
-    border: 1px solid #bbf7d0;
-}
-.status-badge-inactive {
-    background-color: #fef2f2;
-    color: #ef4444;
-    border: 1px solid #fecaca;
-}
-
-.review-card {
-    padding: 16px;
-    border-radius: 12px;
-    border: 1px solid #f1f5f9;
-    background-color: #f8fafc;
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.02);
-}
-
-.form-section-title {
-    font-size: 13px;
-    font-weight: 800;
-    color: #1e293b;
-    border-bottom: 2px solid #f1f5f9;
-    padding-bottom: 6px;
-    margin: 20px 0 12px 0;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-.form-section-title:first-of-type {
-    margin-top: 0;
-}
-.form-label {
-    display: block;
-    font-size: 12px;
-    font-weight: 600;
-    color: #475569;
-    margin-bottom: 6px;
-}
-.error-text {
-    color: #ef4444;
-    font-size: 11px;
-    font-weight: 600;
-    margin: 4px 0 0 0;
-}
-.hd-btn-close-modal {
-    background-color: #ffffff !important;
-    color: #475569 !important;
-    border: 1px solid #cbd5e1;
-    padding: 10px 18px;
-    border-radius: 10px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-.hd-btn-close-modal:hover {
-    background-color: #f8fafc !important;
-    color: #0f172a !important;
-    border-color: #94a3b8;
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #0369a1;
 }
 
 @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 .animate-spin {
-    animation: spin 1s linear infinite;
-}
-
-/* ── Live Scanner Styles ── */
-.scanner-tabs {
-  display: flex;
-  background-color: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
-}
-.scanner-tab-btn {
-  flex: 1;
-  border: none;
-  background: none;
-  padding: 12px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #64748b;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: all 0.2s ease;
-}
-.scanner-tab-btn:hover {
-  color: #1e293b;
-  background-color: #f1f5f9;
-}
-.scanner-tab-btn.active {
-  color: #2563eb;
-  border-bottom-color: #2563eb;
-  background-color: #ffffff;
-}
-
-.scan-laser-line {
-  position: absolute;
-  left: 0;
-  width: 100%;
-  height: 2px;
-  background-color: #2563eb;
-  box-shadow: 0 0 8px #2563eb, 0 0 12px #2563eb;
-  z-index: 10;
-  animation: laserScan 2s linear infinite;
-}
-
-@keyframes laserScan {
-  0% { top: 0%; }
-  50% { top: 100%; }
-  100% { top: 0%; }
+  animation: spin 1s linear infinite;
 }
 </style>
