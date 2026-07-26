@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue';
-import { User, Package, Calendar, LogOut, Star, Award, Loader2 } from 'lucide-vue-next';
+import { User, Package, Calendar, LogOut, Star } from 'lucide-vue-next';
 import axios from 'axios';
 import { useRouter } from 'vue-router';
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
@@ -59,94 +59,8 @@ const productImagesMap = ref<Record<string, string>>({});
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://localhost:7196';
 
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('token') || 
-                localStorage.getItem('access_token') || 
-                localStorage.getItem('accessToken') || 
-                sessionStorage.getItem('token') || 
-                sessionStorage.getItem('access_token') || 
-                sessionStorage.getItem('accessToken');
+  const token = localStorage.getItem('access_token') || localStorage.getItem('accessToken') || sessionStorage.getItem('access_token') || sessionStorage.getItem('accessToken');
   return token ? { 'Authorization': `Bearer ${token}` } : {};
-};
-
-const ranksList = ref<any[]>([]);
-const profileData = ref<any>(null);
-
-const rankKey = computed(() => {
-  const rank = profileData.value?.tenRank?.toLowerCase().trim() || '';
-  if (rank.includes('kim cương') || rank.includes('diamond')) return 'kimcuong';
-  if (rank.includes('vàng') || rank.includes('gold')) return 'vang';
-  if (rank.includes('bạc') || rank.includes('silver')) return 'bac';
-  return 'dong'; // default to Đồng
-});
-
-const sidebarBadgeClass = computed(() => {
-  const key = rankKey.value;
-  if (key === 'kimcuong') return 'bg-[#0284c7] text-white';
-  if (key === 'vang') return 'bg-[#b45309] text-white';
-  if (key === 'bac') return 'bg-slate-600 text-white';
-  return 'bg-[#5c381c] text-white'; // đồng
-});
-
-const fetchRanks = async () => {
-  try {
-    const res = await axios.get(`${API_BASE_URL}/api/Profile/ranks`, {
-      headers: getAuthHeaders()
-    });
-    if (res.data && res.data.success) {
-      ranksList.value = res.data.data || [];
-    }
-  } catch (error) {
-    console.error("Lỗi khi lấy danh sách hạng thành viên:", error);
-  }
-};
-
-const fetchProfileData = async () => {
-  try {
-    const res = await axios.get(`${API_BASE_URL}/api/Profile/me`, {
-      headers: getAuthHeaders()
-    });
-    if (res.data && res.data.success) {
-      profileData.value = res.data.data;
-      
-      // Recalculate points and spending based on completed orders and services
-      const maKh = customerInfo.value?.maKH;
-      if (maKh && maKh !== 'GUEST' && profileData.value) {
-        try {
-          const [resOrders, resServices] = await Promise.all([
-            axios.get(`${API_BASE_URL}/api/DonHangSanPham/lich-su/${maKh}`, {
-              headers: getAuthHeaders()
-            }).catch(() => ({ data: [] })),
-            axios.get(`${API_BASE_URL}/api/LichSuHoaDon/booking-history/${maKh}`).catch(() => ({ data: [] }))
-          ]);
-
-          const orders = Array.isArray(resOrders.data) ? resOrders.data : [];
-          const services = Array.isArray(resServices.data) ? resServices.data : [];
-
-          const completedOrders = orders.filter((i: any) => i.status?.toLowerCase() === 'completed');
-          const completedServices = services.filter((i: any) => i.status?.toLowerCase() === 'completed');
-
-          const totalSpending = completedOrders.reduce((sum: number, i: any) => sum + (i.amount || 0), 0) +
-                                completedServices.reduce((sum: number, i: any) => sum + (i.amount || 0), 0);
-
-          profileData.value.tongTienDaChi = totalSpending;
-          profileData.value.diemTichLuy = Math.floor(totalSpending / 10000);
-
-          // Update rank name based on ranksList
-          if (ranksList.value && ranksList.value.length > 0) {
-            const sortedRanks = [...ranksList.value].sort((a, b) => b.diemToiThieu - a.diemToiThieu);
-            const matchingRank = sortedRanks.find(r => profileData.value!.diemTichLuy >= r.diemToiThieu);
-            if (matchingRank) {
-              profileData.value.tenRank = matchingRank.tenRank;
-            }
-          }
-        } catch (err) {
-          console.error("Lỗi khi tính toán lại điểm tích lũy:", err);
-        }
-      }
-    }
-  } catch (error: any) {
-    console.error("Lỗi khi tải thông tin cá nhân từ server:", error);
-  }
 };
 
 const formatPrice = (price?: number | null) => {
@@ -170,26 +84,30 @@ const statusText = (status?: string) => {
 
 const getStatusBadgeClass = (status?: string) => {
   const s = status?.toLowerCase() || '';
-  if (s === 'pending') return 'bg-yellow-50 text-yellow-800 border-yellow-200/60 font-semibold';
-  if (s === 'shipping') return 'bg-blue-50 text-blue-800 border-blue-200/60 font-semibold';
-  if (s === 'completed') return 'bg-green-50 text-green-800 border-green-200/60 font-semibold';
-  if (s === 'cancelled') return 'bg-red-50 text-red-800 border-red-200/60 font-semibold';
-  return 'bg-gray-50 text-gray-800 border-gray-200/60 font-semibold';
+  if (s === 'pending') return 'bg-yellow-500 text-yellow-950 border-yellow-600/50 shadow-sm font-extrabold';
+  if (s === 'shipping') return 'bg-blue-600 text-white border-blue-700/50 shadow-sm font-extrabold';
+  if (s === 'completed') return 'bg-green-600 text-white border-green-700/50 shadow-sm font-extrabold';
+  if (s === 'cancelled') return 'bg-red-600 text-white border-red-700/50 shadow-sm font-extrabold';
+  return 'bg-gray-500 text-white border-gray-600/50 shadow-sm font-extrabold';
 };
 
 const getStatusDotClass = (status?: string) => {
   const s = status?.toLowerCase() || '';
-  if (s === 'pending') return 'bg-yellow-500';
-  if (s === 'shipping') return 'bg-blue-500';
-  if (s === 'completed') return 'bg-green-500';
-  if (s === 'cancelled') return 'bg-red-500';
-  return 'bg-gray-500';
+  if (s === 'pending') return 'bg-yellow-950';
+  return 'bg-white';
 };
 
 const getTabClass = (tabKey: string) => {
-  return currentTab.value === tabKey 
-    ? 'border-black text-black font-extrabold' 
-    : 'border-transparent text-gray-400 hover:text-black';
+  if (currentTab.value !== tabKey) {
+    return 'border-transparent text-gray-400 hover:text-black';
+  }
+  
+  if (tabKey === 'all') return 'border-black text-black font-extrabold';
+  if (tabKey === 'pending') return 'border-yellow-500 text-yellow-600 font-extrabold';
+  if (tabKey === 'shipping') return 'border-blue-600 text-blue-600 font-extrabold';
+  if (tabKey === 'completed') return 'border-green-600 text-green-600 font-extrabold';
+  if (tabKey === 'cancelled') return 'border-red-600 text-red-600 font-extrabold';
+  return 'border-black text-black font-extrabold';
 };
 
 const getImageUrl = (path?: string) => {
@@ -197,13 +115,6 @@ const getImageUrl = (path?: string) => {
   if (path.startsWith("http")) return path;
   if (path.startsWith("/")) return `${API_BASE_URL}${path}`;
   return `${API_BASE_URL}/${path}`;
-};
-
-const handleImageError = (event: Event) => {
-  const target = event.target as HTMLImageElement;
-  if (target) {
-    target.src = 'https://placehold.co/100x100?text=Hair';
-  }
 };
 
 const getProductImage = (summaryOrName?: string) => {
@@ -455,7 +366,7 @@ const confirmCancelOrder = async () => {
   }
 };
 
-onMounted(async () => {
+onMounted(() => {
   const info = getCustomerInfo();
   customerInfo.value = info;
 
@@ -464,8 +375,6 @@ onMounted(async () => {
     profileForm.value.firstName = names[0] || '';
     profileForm.value.lastName = names.slice(1).join(' ') || '';
 
-    await fetchRanks();
-    await fetchProfileData();
     loadProductCache();
     fetchPurchaseHistory();
   } else {
@@ -481,10 +390,6 @@ const handleLogout = () => {
     localStorage.removeItem('user');
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
-    localStorage.removeItem('token');
-    localStorage.removeItem('accessToken');
-    sessionStorage.removeItem('user');
-    sessionStorage.removeItem('token');
     window.location.href = '/login';
   }
 };
@@ -492,38 +397,35 @@ const handleLogout = () => {
 
 <template>
   <div class="w-full bg-[#fcfcfc] min-h-screen py-10 lg:py-16 animate-in fade-in duration-500">
-    <div class="max-w-[1280px] mx-auto px-4 lg:px-8">
+    <div class="max-w-[1440px] mx-auto px-4 lg:px-8">
       
+      <!-- Breadcrumbs -->
+      <div class="text-[10px] uppercase tracking-widest text-gray-400 mb-8">
+        <router-link to="/" class="hover:text-black transition-colors">Trang chủ</router-link>
+        <span class="mx-2">/</span>
+        <router-link to="/profile" class="hover:text-black transition-colors">Hồ sơ cá nhân</router-link>
+        <span class="mx-2">/</span>
+        <span class="text-black font-semibold">Lịch sử mua hàng</span>
+      </div>
+
       <div class="flex flex-col lg:flex-row gap-8 lg:gap-12">
 
-        <!-- Sidebar Navigation -->
+        <!-- Sidebar Navigation (Consistent with Profile.vue) -->
         <aside class="w-full lg:w-64 shrink-0">
           <div class="mb-8 hidden lg:block">
-            <h2 class="font-heading text-base uppercase tracking-widest text-black mb-1.5 font-bold truncate">
-              {{ profileData?.hoTen || customerInfo?.hoTen || 'Khách Hàng' }}
-            </h2>
-            <div :class="['inline-flex items-center gap-1.5 px-3 py-1 text-[9px] uppercase tracking-widest font-semibold rounded-sm shadow-sm transition-colors duration-300', sidebarBadgeClass]">
-              <Award :size="10" />
-              <span>{{ profileData?.tenRank || 'Mới' }}</span>
-            </div>
+            <h2 class="font-heading text-xl uppercase tracking-widest text-black mb-2">Xin chào, {{ greetingName }}</h2>
+            <div class="inline-block px-3 py-1 bg-black text-white text-[9px] uppercase tracking-widest font-medium">
+              BEFOR {{ customerInfo?.tenRank || 'Member' }}</div>
           </div>
 
           <!-- Mobile Profile Header -->
           <div class="mb-6 lg:hidden flex items-center justify-between border-b border-gray-200 pb-4">
-            <div>
-              <span class="text-[9px] text-gray-400 uppercase tracking-widest font-bold">Xin chào</span>
-              <h2 class="font-heading text-sm uppercase tracking-widest text-black font-bold">
-                {{ profileData?.hoTen || customerInfo?.hoTen || 'Khách' }}
-              </h2>
-            </div>
-            <div :class="['inline-flex items-center gap-1 px-2.5 py-1 text-[8px] uppercase tracking-widest font-semibold rounded-sm shadow-sm transition-colors duration-300', sidebarBadgeClass]">
-              <Award :size="10" />
-              <span>{{ profileData?.tenRank || 'Mới' }}</span>
-            </div>
+            <h2 class="font-heading text-lg uppercase tracking-widest text-black">Hồ sơ</h2>
+            <div class="inline-block px-2 py-1 bg-black text-white text-[8px] uppercase tracking-widest font-medium">
+              {{ customerInfo?.tenRank || 'Member' }}</div>
           </div>
 
-          <!-- Vertical Nav Menu -->
-          <nav class="flex flex-row lg:flex-col gap-1 overflow-x-auto pb-4 lg:pb-0 scrollbar-hide whitespace-nowrap border-b border-gray-200 lg:border-b-0">
+          <nav class="flex flex-row lg:flex-col gap-2 overflow-x-auto pb-4 lg:pb-0 scrollbar-hide whitespace-nowrap">
             <button @click="router.push({ name: 'profile', query: { tab: 'profile' } })"
               class="flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest transition-all rounded-sm text-gray-500 hover:text-black hover:bg-gray-100/50 border-l-2 border-transparent">
               <User :size="15" :stroke-width="1.8" />
@@ -537,7 +439,7 @@ const handleLogout = () => {
             <button @click="router.push({ name: 'profile', query: { tab: 'appointments' } })"
               class="flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest transition-all rounded-sm text-gray-500 hover:text-black hover:bg-gray-100/50 border-l-2 border-transparent">
               <Calendar :size="15" :stroke-width="1.8" />
-              Lịch Hẹn
+              Lịch Hẹn & Hóa Đơn
             </button>
             <button @click="router.push({ name: 'profile', query: { tab: 'reviews' } })"
               class="flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest transition-all rounded-sm text-gray-500 hover:text-black hover:bg-gray-100/50 border-l-2 border-transparent">
@@ -545,11 +447,11 @@ const handleLogout = () => {
               Đánh Giá Của Tôi
             </button>
 
-            <div class="w-px h-6 lg:w-full lg:h-px bg-gray-200 my-auto lg:my-3 shrink-0 mx-2 lg:mx-0"></div>
+            <div class="w-px h-6 lg:w-full lg:h-px bg-gray-200 my-auto lg:my-3 shrink-0"></div>
 
             <button @click="handleLogout"
-              class="flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors border-l-2 border-transparent rounded-sm">
-              <LogOut :size="15" :stroke-width="1.8" />
+              class="flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors border-l-2 border-transparent rounded-sm">
+              <LogOut :size="16" :stroke-width="1.5" />
               Đăng Xuất
             </button>
           </nav>
@@ -677,7 +579,7 @@ const handleLogout = () => {
                         <td class="py-5 px-5 text-xs text-gray-500">{{ formatDate(item.date) }}</td>
                         <td class="py-5 px-5 text-xs text-gray-900 max-w-[450px]">
                           <div class="flex items-center gap-3.5 min-w-0">
-                            <img :src="getProductImage(item.productSummary)" @error="handleImageError" class="w-11 h-11 rounded-sm object-cover border border-gray-200 shrink-0 shadow-sm" />
+                            <img :src="getProductImage(item.productSummary)" class="w-11 h-11 rounded-sm object-cover border border-gray-200 shrink-0 shadow-sm" />
                             <span class="truncate font-medium block" :title="item.productSummary">
                               {{ item.productSummary }}
                               <span v-if="getItemQuantity(item)" class="text-gray-400 font-normal text-[10px] ml-1">
@@ -785,7 +687,7 @@ const handleLogout = () => {
               <div class="border border-gray-100 rounded-sm divide-y divide-gray-100 max-h-64 overflow-y-auto">
                 <div v-for="pro in orderDetail.items" :key="pro.maSP || pro.maSp || pro.id" class="flex justify-between items-center p-3 text-xs">
                   <div class="flex items-center gap-3 max-w-[70%]">
-                    <img :src="getProductImage(pro.tenSP || pro.tenSp || pro.ten || pro.name)" @error="handleImageError" class="w-10 h-10 rounded-sm object-cover border border-gray-200 shrink-0" />
+                    <img :src="getProductImage(pro.tenSP || pro.tenSp || pro.ten || pro.name)" class="w-10 h-10 rounded-sm object-cover border border-gray-200 shrink-0" />
                     <div class="space-y-0.5 min-w-0">
                       <span class="text-black font-medium block truncate" :title="pro.tenSP || pro.tenSp || pro.ten || pro.name">{{ pro.tenSP || pro.tenSp || pro.ten || pro.name }}</span>
                       <span class="text-[10px] text-gray-400 font-medium">Số lượng: x{{ pro.soLuong ?? pro.SoLuong ?? pro.quantity ?? pro.Quantity ?? 1 }}</span>
