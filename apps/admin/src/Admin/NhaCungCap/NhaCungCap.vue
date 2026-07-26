@@ -66,47 +66,90 @@ const validateForm = (): boolean => {
     let isValid = true
     errors.value = { maNcc: '', tenNcc: '', soDienThoai: '', email: '', diaChi: '' }
 
+    // Trim all form inputs to prevent empty space tricks
+    formNcc.value.maNcc = formNcc.value.maNcc.trim()
+    formNcc.value.tenNcc = formNcc.value.tenNcc.trim()
+    formNcc.value.soDienThoai = formNcc.value.soDienThoai.trim()
+    formNcc.value.email = formNcc.value.email.trim()
+    formNcc.value.diaChi = formNcc.value.diaChi.trim()
+
     // 1. Kiểm tra Mã NCC
-    if (!formNcc.value.maNcc.trim()) {
+    if (!formNcc.value.maNcc) {
         errors.value.maNcc = 'Mã nhà cung cấp không được để trống.'
         isValid = false
-    } else if (formNcc.value.maNcc.trim().length > 30) {
+    } else if (formNcc.value.maNcc.length < 3) {
+        errors.value.maNcc = 'Mã nhà cung cấp phải có tối thiểu 3 ký tự.'
+        isValid = false
+    } else if (formNcc.value.maNcc.length > 30) {
         errors.value.maNcc = 'Mã nhà cung cấp không được vượt quá 30 ký tự.'
         isValid = false
+    } else {
+        const maNccRegex = /^[a-zA-Z0-9_-]+$/
+        if (!maNccRegex.test(formNcc.value.maNcc)) {
+            errors.value.maNcc = 'Mã nhà cung cấp chỉ được chứa chữ cái không dấu, chữ số, gạch nối (-) hoặc gạch dưới (_).'
+            isValid = false
+        } else if (!isEditMode.value) {
+            // Check for code uniqueness on client side during creation
+            const isDuplicate = listNccAll.value.some(
+                ncc => ncc.maNcc.toLowerCase() === formNcc.value.maNcc.toLowerCase()
+            )
+            if (isDuplicate) {
+                errors.value.maNcc = 'Mã nhà cung cấp này đã tồn tại trong hệ thống.'
+                isValid = false
+            }
+        }
     }
 
     // 2. Kiểm tra Tên NCC
-    if (!formNcc.value.tenNcc.trim()) {
+    if (!formNcc.value.tenNcc) {
         errors.value.tenNcc = 'Tên nhà cung cấp không được để trống.'
         isValid = false
-    } else if (formNcc.value.tenNcc.trim().length > 150) {
-        errors.value.tenNcc = 'Tên nhà cung cấp quá dài (Tối đa 150 ký tự).'
+    } else if (formNcc.value.tenNcc.length < 3) {
+        errors.value.tenNcc = 'Tên nhà cung cấp phải có tối thiểu 3 ký tự.'
+        isValid = false
+    } else if (formNcc.value.tenNcc.length > 50) {
+        errors.value.tenNcc = 'Tên nhà cung cấp quá dài (Tối đa 50 ký tự).'
+        isValid = false
+    } else if (!/[a-zA-ZÀ-ỹ]/.test(formNcc.value.tenNcc)) {
+        errors.value.tenNcc = 'Tên nhà cung cấp phải chứa ít nhất một chữ cái.'
         isValid = false
     }
 
     // 3. Kiểm tra Số điện thoại
-    if (formNcc.value.soDienThoai.trim()) {
-        const phoneRegex = /^\d{9,11}$/
-        if (!phoneRegex.test(formNcc.value.soDienThoai.trim())) {
-            errors.value.soDienThoai = 'Số điện thoại không hợp lệ (Phải là số từ 9 - 11 chữ số).'
+    if (!formNcc.value.soDienThoai) {
+        errors.value.soDienThoai = 'Số điện thoại không được để trống.'
+        isValid = false
+    } else {
+        const phoneRegex = /^0\d{8,10}$/
+        if (!phoneRegex.test(formNcc.value.soDienThoai)) {
+            errors.value.soDienThoai = 'Số điện thoại không hợp lệ (Phải bắt đầu bằng số 0, gồm 9 - 11 chữ số).'
             isValid = false
         }
     }
 
     // 4. Kiểm tra định dạng Email
-    if (formNcc.value.email.trim()) {
+    if (!formNcc.value.email) {
+        errors.value.email = 'Email không được để trống.'
+        isValid = false
+    } else {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-        if (!emailRegex.test(formNcc.value.email.trim())) {
+        if (!emailRegex.test(formNcc.value.email)) {
             errors.value.email = 'Định dạng Email không hợp lệ (Ví dụ: abc@gmail.com).'
             isValid = false
-        } else if (formNcc.value.email.trim().length > 100) {
+        } else if (formNcc.value.email.length > 100) {
             errors.value.email = 'Email không được vượt quá 100 ký tự.'
             isValid = false
         }
     }
 
     // 5. Kiểm tra Địa chỉ
-    if (formNcc.value.diaChi.trim() && formNcc.value.diaChi.trim().length > 255) {
+    if (!formNcc.value.diaChi) {
+        errors.value.diaChi = 'Địa chỉ không được để trống.'
+        isValid = false
+    } else if (formNcc.value.diaChi.length < 5) {
+        errors.value.diaChi = 'Địa chỉ quá ngắn (Tối thiểu 5 ký tự).'
+        isValid = false
+    } else if (formNcc.value.diaChi.length > 255) {
         errors.value.diaChi = 'Địa chỉ không được vượt quá 255 ký tự.'
         isValid = false
     }
@@ -118,6 +161,7 @@ watch(() => formNcc.value.maNcc, () => { errors.value.maNcc = '' })
 watch(() => formNcc.value.tenNcc, () => { errors.value.tenNcc = '' })
 watch(() => formNcc.value.soDienThoai, () => { errors.value.soDienThoai = '' })
 watch(() => formNcc.value.email, () => { errors.value.email = '' })
+watch(() => formNcc.value.diaChi, () => { errors.value.diaChi = '' })
 
 const getAuthHeaders = () => {
     const token = sessionStorage.getItem('adminToken')
@@ -584,13 +628,19 @@ onMounted(fetchNhaCungCaps)
                     <!-- Hàng 1: Mã NCC & Trạng Thái Hợp Tác -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         <div class="flex flex-col gap-2">
-                            <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
-                                Mã Nhà Cung Cấp <span class="text-rose-500">*</span>
-                            </label>
+                            <div class="flex justify-between items-center">
+                                <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
+                                    Mã Nhà Cung Cấp <span class="text-rose-500">*</span>
+                                </label>
+                                <span v-if="!isEditMode" class="text-[10px] font-bold font-mono opacity-60" :class="formNcc.maNcc.length >= 25 ? 'text-rose-500' : (isDarkMode ? 'text-slate-400' : 'text-slate-500')">
+                                    {{ formNcc.maNcc.length }}/30
+                                </span>
+                            </div>
                             <input 
                                 type="text" 
                                 v-model="formNcc.maNcc" 
                                 :disabled="isEditMode" 
+                                maxlength="30"
                                 placeholder="Ví dụ: LOREAL_VN" 
                                 class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border disabled:opacity-60 disabled:cursor-not-allowed"
                                 :class="[
@@ -621,12 +671,18 @@ onMounted(fetchNhaCungCaps)
                     
                     <!-- Hàng 2: Tên Nhà Cung Cấp -->
                     <div class="flex flex-col gap-2">
-                        <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
-                            Tên Nhà Cung Cấp <span class="text-rose-500">*</span>
-                        </label>
+                        <div class="flex justify-between items-center">
+                            <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
+                                Tên Nhà Cung Cấp <span class="text-rose-500">*</span>
+                            </label>
+                            <span class="text-[10px] font-bold font-mono opacity-60" :class="formNcc.tenNcc.length >= 45 ? 'text-rose-500' : (isDarkMode ? 'text-slate-400' : 'text-slate-500')">
+                                {{ formNcc.tenNcc.length }}/50
+                            </span>
+                        </div>
                         <input 
                             type="text" 
                             v-model="formNcc.tenNcc" 
+                            maxlength="50"
                             placeholder="Nhập tên công ty hoặc thương hiệu..." 
                             class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
                             :class="[
@@ -640,10 +696,19 @@ onMounted(fetchNhaCungCaps)
                     <!-- Hàng 3: Số điện thoại & Email -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         <div class="flex flex-col gap-2">
-                            <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Số Điện Thoại</label>
+                            <div class="flex justify-between items-center">
+                                <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
+                                    Số Điện Thoại <span class="text-rose-500">*</span>
+                                </label>
+                                <span class="text-[10px] font-bold font-mono opacity-60" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">
+                                    {{ formNcc.soDienThoai.length }}/11
+                                </span>
+                            </div>
                             <input 
                                 type="text" 
                                 v-model="formNcc.soDienThoai" 
+                                @input="formNcc.soDienThoai = formNcc.soDienThoai.replace(/\D/g, '')"
+                                maxlength="11"
                                 placeholder="Nhập số điện thoại..." 
                                 class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
                                 :class="[
@@ -655,10 +720,18 @@ onMounted(fetchNhaCungCaps)
                         </div>
 
                         <div class="flex flex-col gap-2">
-                            <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Email Đại Diện</label>
+                            <div class="flex justify-between items-center">
+                                <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
+                                    Email Đại Diện <span class="text-rose-500">*</span>
+                                </label>
+                                <span class="text-[10px] font-bold font-mono opacity-60" :class="formNcc.email.length >= 90 ? 'text-rose-500' : (isDarkMode ? 'text-slate-400' : 'text-slate-500')">
+                                    {{ formNcc.email.length }}/100
+                                </span>
+                            </div>
                             <input 
                                 type="text" 
                                 v-model="formNcc.email" 
+                                maxlength="100"
                                 placeholder="partner@domain.com" 
                                 class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
                                 :class="[
@@ -672,10 +745,18 @@ onMounted(fetchNhaCungCaps)
 
                     <!-- Hàng 4: Địa chỉ -->
                     <div class="flex flex-col gap-2">
-                        <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Địa Chỉ Văn Phòng</label>
+                        <div class="flex justify-between items-center">
+                            <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
+                                Địa Chỉ Văn Phòng <span class="text-rose-500">*</span>
+                            </label>
+                            <span class="text-[10px] font-bold font-mono opacity-60" :class="formNcc.diaChi.length >= 240 ? 'text-rose-500' : (isDarkMode ? 'text-slate-400' : 'text-slate-500')">
+                                {{ formNcc.diaChi.length }}/255
+                            </span>
+                        </div>
                         <input 
                             type="text" 
                             v-model="formNcc.diaChi" 
+                            maxlength="255"
                             placeholder="Số nhà, tên đường, thành phố..." 
                             class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
                             :class="[

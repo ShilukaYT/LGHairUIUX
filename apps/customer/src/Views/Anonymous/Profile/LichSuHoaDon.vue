@@ -2,10 +2,11 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import axios from 'axios';
 import { useRouter } from 'vue-router';
-import { Search, Calendar, ChevronLeft, ChevronRight } from 'lucide-vue-next';
+import { Search, Calendar, ChevronLeft, ChevronRight, CalendarClock, XCircle } from 'lucide-vue-next';
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 import ChiTietHoaDonModal from './ChiTietHoaDonModal.vue';
 import HuyDonModal from './HuyDonModal.vue';
+import DoiLichModal from './DoiLichModal.vue';
 
 const router = useRouter();
 const isLoading = ref(true);
@@ -24,6 +25,8 @@ const isModalOpen = ref(false);
 const selectedBookingId = ref('');
 const isCancelModalOpen = ref(false);
 const selectedCancelId = ref('');
+const isRescheduleModalOpen = ref(false);
+const selectedRescheduleId = ref('');
 
 const API_URL = "https://localhost:7196/api/LichSuHoaDon/booking-history";
 
@@ -150,8 +153,18 @@ const cancelOrder = (id) => {
   isCancelModalOpen.value = true;
 };
 
+const rescheduleOrder = (id) => {
+  selectedRescheduleId.value = id;
+  isRescheduleModalOpen.value = true;
+};
+
 const handleCancelSuccess = async () => {
   isCancelModalOpen.value = false;
+  await fetchHistory();
+};
+
+const handleRescheduleSuccess = async () => {
+  isRescheduleModalOpen.value = false;
   await fetchHistory();
 };
 </script>
@@ -255,7 +268,7 @@ const handleCancelSuccess = async () => {
               </td>
             </tr>
             
-            <tr v-for="item in paginatedData" :key="item.id" class="hover:bg-gray-50/30 transition-colors">
+            <tr v-for="item in paginatedData" :key="item.id" class="hover:bg-gray-50/30 transition-colors cursor-pointer" @click="viewDetail(item)">
               <td class="py-5 px-5 text-xs font-bold text-black tracking-wider">#{{ item.id }}</td>
               <td class="py-5 px-5 text-xs text-gray-500">{{ formatDate(item.date) }}</td>
               <td class="py-5 px-5 text-xs text-gray-900 max-w-[300px] truncate font-medium" :title="item.service">
@@ -269,19 +282,22 @@ const handleCancelSuccess = async () => {
                 </span>
               </td>
               <td class="py-5 px-5 text-xs text-right whitespace-nowrap">
-                <button 
-                  @click="viewDetail(item)"
-                  class="border border-black hover:bg-black hover:text-white text-black px-4 py-2 text-[9px] uppercase tracking-widest font-bold transition-all duration-200 rounded-sm"
-                >
-                  Chi tiết
-                </button>
-                <button 
-                  v-if="item.status === 'pending'" 
-                  @click="cancelOrder(item.id)"
-                  class="border border-red-200 hover:bg-red-50 hover:border-red-300 text-red-600 px-4 py-2 text-[9px] uppercase tracking-widest font-bold transition-all duration-200 rounded-sm ml-2.5 animate-in fade-in"
-                >
-                  Hủy đơn
-                </button>
+                <div class="flex items-center justify-end gap-2">
+                  <button 
+                    v-if="item.status === 'pending' || item.status === 'paid-full'" 
+                    @click.stop="rescheduleOrder(item.id)"
+                    class="inline-flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 px-3 py-1.5 text-[9px] uppercase tracking-widest font-bold transition-all duration-200 rounded-sm whitespace-nowrap"
+                  >
+                    <CalendarClock :size="12" /> Dời lịch
+                  </button>
+                  <button 
+                    v-if="item.status === 'pending'" 
+                    @click.stop="cancelOrder(item.id)"
+                    class="inline-flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-3 py-1.5 text-[9px] uppercase tracking-widest font-bold transition-all duration-200 rounded-sm whitespace-nowrap"
+                  >
+                    <XCircle :size="12" /> Hủy đơn
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -319,6 +335,12 @@ const handleCancelSuccess = async () => {
       :bookingId="selectedCancelId"
       @close="isCancelModalOpen = false"
       @success="handleCancelSuccess"
+    />
+    <DoiLichModal
+      :isOpen="isRescheduleModalOpen"
+      :bookingId="selectedRescheduleId"
+      @close="isRescheduleModalOpen = false"
+      @success="handleRescheduleSuccess"
     />
   </div>
 </template>

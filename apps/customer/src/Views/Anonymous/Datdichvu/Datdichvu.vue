@@ -615,7 +615,7 @@ watch(
                                     <p v-if="mstError" class="text-danger small mt-1 mb-0 font-bold">{{ mstError }}</p>
                                 </div>
                             </div>
-                        </transition>
+                        </transition> 
 
                         <div class="section-heading-wrapper mt-10">
                             <h3 class="font-playfair section-heading-title font-bold text-black">
@@ -633,8 +633,23 @@ watch(
                             <div v-for="stylist in stylists" :key="stylist.id" class="stylist-card" :class="{
                                 'active': bookingData.stylistId === stylist.id,
                                 'is-disabled': !stylist.isAvailable
-                            }" @click="stylist.isAvailable ? bookingData.stylistId = stylist.id : null"
-                                :title="!stylist.isAvailable ? stylist.unAvailableReason : ''">
+                            }" @click="stylist.isAvailable ? bookingData.stylistId = stylist.id : null">
+                                <div class="stylist-schedule-info" v-if="stylist.lichTrinh && stylist.lichTrinh.length > 0">
+                                    <div class="schedule-header">Ca Làm : {{ stylist.caLam }}</div>
+                                    <div class="schedule-group mt-2">
+                                        <div class="font-bold text-green-600 text-xs mb-1" style="font-size: 11px;"><i class="fas fa-check-circle me-1"></i>Lịch trống:</div>
+                                        <div v-for="(line, index) in stylist.lichTrinh.filter((l: string) => l.includes('Lịch trống'))" :key="'free-'+index" class="schedule-line text-green-700 font-medium">
+                                            {{ line.replace('Lịch trống:', '').trim() }}
+                                        </div>
+                                    </div>
+                                    <div class="schedule-group mt-2 pt-2 border-t border-gray-200 border-dashed" v-if="stylist.lichTrinh.some((l: string) => l.includes('Có hẹn'))">
+                                        <div class="font-bold text-red-500 text-xs mb-1" style="font-size: 11px;"><i class="fas fa-calendar-times me-1"></i>Ca bận:</div>
+                                        <div v-for="(line, index) in stylist.lichTrinh.filter((l: string) => l.includes('Có hẹn'))" :key="'busy-'+index" class="schedule-line text-red-500 opacity-80">
+                                            {{ line.replace('Có hẹn:', '').trim() }}
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div class="avatar-box">
                                     <img :src="stylist.img.startsWith('http') ? stylist.img : (API + stylist.img)"
                                         alt="Stylist" onerror="this.onerror=null; this.src='/images/no-image.png'">
@@ -643,10 +658,10 @@ watch(
                                         <i class="fas fa-heart"></i>
                                     </div>
                                 </div>
-
-                                <div class="stylist-meta">
+    
+                                <div class="stylist-meta mt-auto">
                                     <span class="s-name font-bold">{{ stylist.name }}</span>
-
+    
                                     <template v-if="stylist.isAvailable">
                                         <span class="s-role text-black">{{ stylist.role }}</span>
                                         <div class="stylist-rating-badge">
@@ -654,7 +669,7 @@ watch(
                                             <i class="fas fa-star rating-star-icon"></i>
                                         </div>
                                     </template>
-
+    
                                     <template v-else>
                                         <span class="font-bold mt-1 text-center"
                                             style="color: #ef4444; font-size: 10px; line-height: 1.3;">
@@ -1092,30 +1107,99 @@ select.booking-input {
     color: var(--text-primary);
 }
 
-/* Stylist Selection Carousel */
 .stylist-flex {
     display: flex;
     gap: 16px;
     overflow-x: auto;
-    padding: 10px 4px;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
+    padding: 10px 4px 15px 4px; /* Trả lại padding bình thường */
+    -webkit-overflow-scrolling: touch;
 }
 
+/* Hiển thị thanh cuộn (scrollbar) để người dùng có thể kéo ngang trên máy tính */
 .stylist-flex::-webkit-scrollbar {
-    display: none;
+    height: 6px;
+}
+
+.stylist-flex::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.stylist-flex::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.stylist-flex::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
 }
 
 .stylist-card {
-    flex: 0 0 120px;
+    flex: 0 0 140px;
     text-align: center;
     cursor: pointer;
     background: #ffffff;
     border: 1px solid var(--border-color);
-    border-radius: 0px;
+    border-radius: 8px;
     padding: 16px 8px;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.01);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    /* Các card sẽ tự động bằng chiều cao nhau nhờ flexbox mặc định (align-items: stretch) */
+}
+
+.stylist-schedule-info {
+    position: relative; /* Không dùng absolute nữa */
+    background-color: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px;
+    margin-bottom: 20px; /* Tăng khoảng cách xuống ảnh đại diện một chút */
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.stylist-schedule-info::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 5px;
+    border-style: solid;
+    border-color: #ffffff transparent transparent transparent;
+    z-index: 2;
+}
+
+.stylist-schedule-info::before {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 6px;
+    border-style: solid;
+    border-color: var(--border-color) transparent transparent transparent;
+    z-index: 1;
+}
+
+.schedule-header {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    border-bottom: 1px dashed var(--border-color);
+    padding-bottom: 4px;
+}
+
+.schedule-line {
+    font-size: 10px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    margin-top: 2px;
 }
 
 .stylist-card:hover {
@@ -1134,7 +1218,7 @@ select.booking-input {
     position: relative;
     width: 68px;
     height: 68px;
-    margin: 0 auto 10px;
+    margin: auto auto 10px auto;
 }
 
 .avatar-box img {
