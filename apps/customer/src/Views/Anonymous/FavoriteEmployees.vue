@@ -4,6 +4,9 @@ import { useRouter } from 'vue-router';
 import axios from 'axios';
 import { Heart, Star, Calendar, Trash2, Sparkles } from 'lucide-vue-next';
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
+import { useWishlistStore } from '@/stores/useWishlistStore';
+
+const wishlistStore = useWishlistStore();
 
 const API = import.meta.env.VITE_API_URL || 'https://localhost:7196';
 const router = useRouter();
@@ -11,9 +14,7 @@ const router = useRouter();
 // ==========================================
 // STATE
 // ==========================================
-const employees = ref<any[]>([]);
-const favorites = ref<string[]>([]);
-const loading = ref(true);
+const loading = ref(false);
 const error = ref(false);
 const customer = ref<any>(null);
 
@@ -27,11 +28,6 @@ const getEmployeeImageUrl = (img?: string) => {
   return `${API}/${img}`;
 };
 
-const getCustomerKey = () => {
-  const maKH = customer.value?.maKH || 'GUEST';
-  return `favorite_employees_${maKH}`;
-};
-
 const getStarFillWidth = (starIndex: number, rating: number) => {
   if (rating >= starIndex) return '100%';
   if (rating > starIndex - 1) {
@@ -40,72 +36,25 @@ const getStarFillWidth = (starIndex: number, rating: number) => {
   return '0%';
 };
 
-const loadFavorites = () => {
-  const saved = localStorage.getItem(getCustomerKey());
-  if (saved) {
-    try {
-      favorites.value = JSON.parse(saved);
-    } catch (e) {
-      favorites.value = [];
-    }
-  } else {
-    favorites.value = [];
-  }
-};
-
 const removeFavorite = (id: string) => {
-  const updated = favorites.value.filter(favId => favId !== id);
-  favorites.value = updated;
-  localStorage.setItem(getCustomerKey(), JSON.stringify(updated));
-  
-  // Dispatch event to sync with Header
-  window.dispatchEvent(new CustomEvent('favorite-employees-updated'));
+  wishlistStore.removeEmployee(id);
 };
 
 const navigateToBooking = (stylistId: string) => {
   router.push({ name: 'datdichvu', query: { stylistId } });
 };
 
-// ==========================================
-// API FETCH
-// ==========================================
-const fetchEmployees = async () => {
-  try {
-    loading.value = true;
-    error.value = false;
-    const res = await axios.get(`${API}/api/YeuThich/employees`);
-    if (res.data) {
-      employees.value = res.data.map((nv: any) => ({
-        id: nv.id || nv.maNv,
-        name: nv.name || nv.hoTenNv || 'Nhân viên',
-        image: nv.image || nv.hinhAnh || '',
-        role: nv.role || 'Stylist',
-        rating: nv.rating || 5.0,
-        category: nv.category || 'Nhân viên'
-      }));
-    }
-  } catch (err) {
-    console.error('Lỗi khi fetch danh sách nhân viên:', err);
-    error.value = true;
-  } finally {
-    loading.value = false;
-  }
-};
-
 // Filter the employees list to only show favorites
 const favoriteEmployeesList = computed(() => {
-  return employees.value.filter(emp => favorites.value.includes(emp.id));
+  return wishlistStore.favoriteEmployees;
 });
 
 onMounted(() => {
   customer.value = getCustomerInfo();
-  loadFavorites();
-  fetchEmployees();
   
   // Storage listener to sync logins
   window.addEventListener('storage', () => {
     customer.value = getCustomerInfo();
-    loadFavorites();
   });
 });
 </script>
@@ -133,13 +82,7 @@ onMounted(() => {
         <p class="text-[11px] uppercase tracking-[0.2em] text-gray-400 font-heading">Đang tải danh sách...</p>
       </div>
 
-      <!-- ERROR -->
-      <div v-else-if="error" class="flex flex-col items-center justify-center py-24 text-center">
-        <p class="text-sm tracking-widest uppercase text-gray-400 mb-6 font-heading">Lỗi kết nối. Không thể tải danh sách nhân viên.</p>
-        <button @click="fetchEmployees" class="px-8 py-3.5 bg-black text-white text-[11px] uppercase tracking-widest hover:bg-gray-800 transition-colors cursor-pointer font-heading">
-          Thử lại
-        </button>
-      </div>
+
 
       <!-- EMPTY STATE -->
       <div v-else-if="favoriteEmployeesList.length === 0" class="flex flex-col items-center justify-center py-24 text-center">

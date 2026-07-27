@@ -2,20 +2,86 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import axios from 'axios';
+import Swal from 'sweetalert2';
 import { useWishlistStore } from '@/stores/useWishlistStore';
 import { addToCartDB } from "@/Views/Anonymous/CSDL/cartDB";
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
-import { Heart, X, Clock, ShoppingBag } from 'lucide-vue-next';
+import { Heart, X, Clock, ShoppingBag, Star, Calendar } from 'lucide-vue-next';
 
 const router = useRouter();
 const wishlistStore = useWishlistStore();
-const activeTab = ref<'products' | 'services'>('products');
-
-onMounted(() => {
-  wishlistStore.loadWishlist();
-});
-
+const activeTab = ref<'products' | 'services' | 'employees'>('products');
 const API = import.meta.env.VITE_API_URL;
+
+const productStatuses = ref<Record<string | number, 'active' | 'inactive' | 'deleted'>>({});
+const serviceStatuses = ref<Record<string | number, 'active' | 'inactive' | 'deleted'>>({});
+const checking = ref(false);
+
+const checkStatuses = async () => {
+  checking.value = true;
+  
+  // Check Products
+  const prodPromises = wishlistStore.favoriteProducts.map(async (prod) => {
+    const id = prod.maSp;
+    try {
+      const res = await axios.get(`${API}/api/SanPham/${id}`);
+      const data = res.data;
+      if (!data) {
+        productStatuses.value[id] = 'deleted';
+      } else if (data.trangThai === 0) {
+        productStatuses.value[id] = 'inactive';
+      } else {
+        productStatuses.value[id] = 'active';
+      }
+    } catch (err) {
+      console.error(`Error checking status for product ${id}:`, err);
+      productStatuses.value[id] = 'deleted';
+    }
+  });
+
+  // Check Services
+  const svcPromises = wishlistStore.favoriteServices.map(async (svc) => {
+    const id = svc.maDv;
+    try {
+      const res = await axios.get(`${API}/api/services/${id}`);
+      const data = res.data;
+      if (!data) {
+        serviceStatuses.value[id] = 'deleted';
+      } else if (data.trangThai === 0 || data.trangthai === 0 || data.status === 0) {
+        serviceStatuses.value[id] = 'inactive';
+      } else {
+        serviceStatuses.value[id] = 'active';
+      }
+    } catch (err) {
+      console.error(`Error checking status for service ${id}:`, err);
+      serviceStatuses.value[id] = 'deleted';
+    }
+  });
+
+  await Promise.all([...prodPromises, ...svcPromises]);
+  checking.value = false;
+};
+
+onMounted(async () => {
+  const customer = getCustomerInfo();
+  if (!customer || customer.maKH === 'GUEST') {
+    Swal.fire({
+      title: 'Yêu cầu đăng nhập',
+      text: 'Vui lòng đăng nhập để sử dụng tính năng này',
+      icon: 'warning',
+      confirmButtonColor: '#000',
+      confirmButtonText: 'Đăng nhập',
+      allowOutsideClick: false
+    }).then((result) => {
+      if (result.isConfirmed) {
+        router.push({ name: 'login' });
+      }
+    });
+    return;
+  }
+  wishlistStore.loadWishlist();
+  await checkStatuses();
+});
 
 const getImageUrl = (path?: string) => {
   if (!path) return `${API}/assets/images/default.jpg`;
@@ -116,6 +182,25 @@ const addProductToCart = async (prod: any, isBuyNow = false) => {
     alert("Có lỗi xảy ra, vui lòng thử lại sau!");
   }
 };
+
+const getEmployeeImageUrl = (img?: string) => {
+  if (!img) return 'https://ui-avatars.com/api/?name=NV&background=e0e0e0&color=000000';
+  if (img.startsWith('http://') || img.startsWith('https://')) return img;
+  if (img.startsWith('/')) return `${API}${img}`;
+  return `${API}/${img}`;
+};
+
+const getStarFillWidth = (starIndex: number, rating: number) => {
+  if (rating >= starIndex) return '100%';
+  if (rating > starIndex - 1) {
+    return `${(rating - (starIndex - 1)) * 100}%`;
+  }
+  return '0%';
+};
+
+const navigateToBooking = (stylistId: string) => {
+  router.push({ name: 'datdichvu', query: { stylistId } });
+};
 </script>
 
 <template>
@@ -125,7 +210,7 @@ const addProductToCart = async (prod: any, isBuyNow = false) => {
       <div class="max-w-[1440px] mx-auto px-6 lg:px-12 text-center">
         <h1 class="text-3xl lg:text-4xl font-heading uppercase tracking-[0.2em] mb-4">Danh Sách Yêu Thích</h1>
         <p class="text-[11px] uppercase tracking-widest text-gray-500">
-          {{ wishlistStore.favoriteProducts.length }} Sản phẩm &middot; {{ wishlistStore.favoriteServices.length }} Dịch vụ được lưu
+          {{ wishlistStore.favoriteProducts.length }} Sản phẩm &middot; {{ wishlistStore.favoriteServices.length }} Dịch vụ &middot; {{ wishlistStore.favoriteEmployees.length }} Chuyên viên được lưu
         </p>
       </div>
     </div>
@@ -151,6 +236,15 @@ const addProductToCart = async (prod: any, isBuyNow = false) => {
         >
           Dịch vụ yêu thích ({{ wishlistStore.favoriteServices.length }})
         </button>
+        <button 
+          @click="activeTab = 'employees'"
+          :class="[
+            'pb-4 px-8 text-xs uppercase tracking-[0.2em] font-medium transition-all relative border-b-2',
+            activeTab === 'employees' ? 'border-black text-black font-semibold' : 'border-transparent text-gray-400 hover:text-black'
+          ]"
+        >
+          Chuyên viên yêu thích ({{ wishlistStore.favoriteEmployees.length }})
+        </button>
       </div>
     </div>
 
@@ -175,9 +269,22 @@ const addProductToCart = async (prod: any, isBuyNow = false) => {
           <div 
             v-for="prod in wishlistStore.favoriteProducts" 
             :key="prod.maSp" 
-            class="group flex flex-col cursor-pointer relative bg-white border border-gray-100 hover:border-black transition-all duration-300 p-4"
-            @click="router.push({ name: 'productDetail', params: { id: prod.maSp } })"
+            :class="[
+              'group flex flex-col relative bg-white border border-gray-100 transition-all duration-300 p-4',
+              (productStatuses[prod.maSp] === 'inactive' || productStatuses[prod.maSp] === 'deleted') 
+                ? 'opacity-60 cursor-not-allowed' 
+                : 'cursor-pointer hover:border-black'
+            ]"
+            @click="productStatuses[prod.maSp] === 'deleted' ? null : router.push({ name: 'productDetail', params: { id: prod.maSp } })"
           >
+            <!-- Badge trạng thái ngừng bán / đã xóa -->
+            <div v-if="productStatuses[prod.maSp] === 'inactive'" class="absolute top-6 left-6 z-20 bg-[#852121] text-white text-[9px] uppercase tracking-widest px-2.5 py-1 font-semibold">
+              Ngừng bán
+            </div>
+            <div v-else-if="productStatuses[prod.maSp] === 'deleted'" class="absolute top-6 left-6 z-20 bg-gray-500 text-white text-[9px] uppercase tracking-widest px-2.5 py-1 font-semibold">
+              Đã xóa khỏi hệ thống
+            </div>
+
             <!-- Xóa Icon -->
             <button 
               @click.stop="wishlistStore.removeProduct(prod.maSp)" 
@@ -216,7 +323,8 @@ const addProductToCart = async (prod: any, isBuyNow = false) => {
                 <template v-else>{{ formatPrice(prod.price) }}</template>
               </span>
               
-              <span v-if="prod.soLuongTon === 0" class="text-[10px] uppercase tracking-widest text-red-500 font-medium">Hết hàng</span>
+              <span v-if="productStatuses[prod.maSp] === 'inactive' || productStatuses[prod.maSp] === 'deleted'" class="text-[10px] uppercase tracking-widest text-gray-400 font-medium">Không khả dụng</span>
+              <span v-else-if="prod.soLuongTon === 0" class="text-[10px] uppercase tracking-widest text-red-500 font-medium">Hết hàng</span>
               <span v-else class="text-[10px] uppercase tracking-widest text-emerald-600 font-medium">Còn hàng</span>
             </div>
 
@@ -224,13 +332,25 @@ const addProductToCart = async (prod: any, isBuyNow = false) => {
             <div class="mt-4 pt-3 border-t border-gray-100 flex gap-2 w-full">
               <button 
                 @click.stop.prevent="addProductToCart(prod, false)"
-                class="flex-1 border border-black bg-white text-black py-2.5 text-[10px] font-medium uppercase tracking-wider hover:bg-black hover:text-white transition-all duration-200 text-center"
+                :disabled="productStatuses[prod.maSp] === 'inactive' || productStatuses[prod.maSp] === 'deleted'"
+                :class="[
+                  'flex-1 border py-2.5 text-[10px] font-medium uppercase tracking-wider text-center transition-all duration-200',
+                  (productStatuses[prod.maSp] === 'inactive' || productStatuses[prod.maSp] === 'deleted')
+                    ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                    : 'border-black bg-white text-black hover:bg-black hover:text-white'
+                ]"
               >
                 Thêm giỏ hàng
               </button>
               <button 
                 @click.stop.prevent="addProductToCart(prod, true)"
-                class="flex-1 bg-black text-white py-2.5 text-[10px] font-medium uppercase tracking-wider hover:bg-gray-800 transition-all duration-200 text-center"
+                :disabled="productStatuses[prod.maSp] === 'inactive' || productStatuses[prod.maSp] === 'deleted'"
+                :class="[
+                  'flex-1 py-2.5 text-[10px] font-medium uppercase tracking-wider text-center transition-all duration-200',
+                  (productStatuses[prod.maSp] === 'inactive' || productStatuses[prod.maSp] === 'deleted')
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-black text-white hover:bg-gray-800'
+                ]"
               >
                 Mua ngay
               </button>
@@ -257,9 +377,22 @@ const addProductToCart = async (prod: any, isBuyNow = false) => {
           <div 
             v-for="svc in wishlistStore.favoriteServices" 
             :key="svc.maDv" 
-            class="group flex flex-col cursor-pointer relative bg-white border border-gray-100 hover:border-black transition-all duration-300 p-5"
-            @click="router.push({ name: 'serviceDetail', params: { id: svc.maDv } })"
+            :class="[
+              'group flex flex-col relative bg-white border border-gray-100 transition-all duration-300 p-5',
+              (serviceStatuses[svc.maDv] === 'inactive' || serviceStatuses[svc.maDv] === 'deleted') 
+                ? 'opacity-60 cursor-not-allowed' 
+                : 'cursor-pointer hover:border-black'
+            ]"
+            @click="serviceStatuses[svc.maDv] === 'deleted' ? null : router.push({ name: 'serviceDetail', params: { id: svc.maDv } })"
           >
+            <!-- Badge trạng thái ngừng cung cấp / đã xóa -->
+            <div v-if="serviceStatuses[svc.maDv] === 'inactive'" class="absolute top-6 left-6 z-20 bg-[#852121] text-white text-[9px] uppercase tracking-widest px-2.5 py-1 font-semibold">
+              Ngừng cung cấp
+            </div>
+            <div v-else-if="serviceStatuses[svc.maDv] === 'deleted'" class="absolute top-6 left-6 z-20 bg-gray-500 text-white text-[9px] uppercase tracking-widest px-2.5 py-1 font-semibold">
+              Đã xóa khỏi hệ thống
+            </div>
+
             <!-- Xóa Icon -->
             <button 
               @click.stop="wishlistStore.removeService(svc.maDv)" 
@@ -297,11 +430,89 @@ const addProductToCart = async (prod: any, isBuyNow = false) => {
               
               <button 
                 @click.stop.prevent="bookService(svc)"
-                class="px-5 py-2.5 bg-black text-white text-[10px] uppercase tracking-wider hover:bg-gray-800 transition-colors flex items-center gap-2"
+                :disabled="serviceStatuses[svc.maDv] === 'inactive' || serviceStatuses[svc.maDv] === 'deleted'"
+                :class="[
+                  'px-5 py-2.5 text-[10px] uppercase tracking-wider transition-colors flex items-center gap-2',
+                  (serviceStatuses[svc.maDv] === 'inactive' || serviceStatuses[svc.maDv] === 'deleted')
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-black text-white hover:bg-gray-800'
+                ]"
               >
                 <ShoppingBag :size="12" />
                 Đặt lịch
               </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========================================== -->
+      <!-- TAB 3: EMPLOYEE WISHLIST                    -->
+      <!-- ========================================== -->
+      <div v-else-if="activeTab === 'employees'">
+        <!-- Empty State -->
+        <div v-if="wishlistStore.favoriteEmployees.length === 0" class="flex flex-col items-center justify-center py-24 text-center">
+          <Heart :size="48" class="text-gray-200 mb-6" :stroke-width="1" />
+          <p class="text-sm tracking-widest uppercase text-gray-400 mb-8 font-heading">Chưa có chuyên viên nào trong danh sách yêu thích.</p>
+          <button @click="router.push({ name: 'employees' })" class="px-10 py-4 bg-black text-white text-[11px] uppercase tracking-[0.2em] hover:bg-gray-800 transition-colors">
+            Khám phá đội ngũ
+          </button>
+        </div>
+
+        <!-- Grid -->
+        <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 lg:gap-8">
+          <div 
+            v-for="emp in wishlistStore.favoriteEmployees" 
+            :key="emp.id" 
+            class="group bg-white border border-gray-100/80 flex flex-col relative overflow-hidden transition-all duration-300 hover:shadow-[0_12px_30px_rgba(0,0,0,0.05)] p-5"
+          >
+            <!-- Xóa Icon -->
+            <button 
+              @click.stop="wishlistStore.removeEmployee(emp.id)" 
+              class="absolute top-6 right-6 z-10 w-8 h-8 bg-white border border-gray-100 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:border-red-500 transition-all shadow-sm opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 cursor-pointer"
+              title="Xóa khỏi yêu thích"
+            >
+              <X :size="14" :stroke-width="2" />
+            </button>
+
+            <!-- Image -->
+            <div class="aspect-[3/4] overflow-hidden bg-gray-50 mb-6 relative border border-gray-100">
+              <img :src="getEmployeeImageUrl(emp.image)" :alt="emp.name" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+              <div class="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            </div>
+            
+            <!-- Info -->
+            <div class="flex flex-col flex-grow">
+              <span class="text-[10px] text-gray-400 uppercase tracking-widest mb-1.5 font-heading">{{ emp.role || 'Stylist' }}</span>
+              <h3 class="font-heading text-sm text-black uppercase tracking-widest font-semibold mb-3 group-hover:text-gray-800 transition-colors">
+                {{ emp.name }}
+              </h3>
+              
+              <!-- Ratings -->
+              <div class="flex items-center gap-1.5 mb-6 mt-auto">
+                <div class="flex items-center gap-0.5">
+                  <div v-for="i in 5" :key="i" class="relative inline-block">
+                    <Star :size="12" class="text-gray-200 fill-gray-100" />
+                    <div 
+                      class="absolute top-0 left-0 overflow-hidden"
+                      :style="{ width: getStarFillWidth(i, emp.rating || 5) }"
+                    >
+                      <Star :size="12" class="text-amber-400 fill-amber-400 max-w-none" />
+                    </div>
+                  </div>
+                </div>
+                <span class="text-[11px] text-gray-500 font-medium font-sans">({{ (emp.rating || 5.0).toFixed(1) }})</span>
+              </div>
+
+              <!-- Booking CTA -->
+              <div class="pt-3 border-t border-gray-100 mt-auto">
+                <button 
+                  @click="navigateToBooking(emp.id)"
+                  class="w-full h-11 bg-black text-white text-[10px] uppercase tracking-widest hover:bg-gray-800 transition-colors flex items-center justify-center gap-2 cursor-pointer font-medium font-heading"
+                >
+                  <Calendar :size="12" /> Đặt lịch chuyên viên
+                </button>
+              </div>
             </div>
           </div>
         </div>
