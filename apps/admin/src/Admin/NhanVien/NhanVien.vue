@@ -5,9 +5,23 @@ import { Html5Qrcode } from 'html5-qrcode';
 import ThongKeNhanVienModal from './ThongKeNhanVienModal.vue';
 import { Search, Plus, Edit3, Trash2, X, Award, Camera, Users, Phone, Mail, MapPin, Calendar, Eye, Filter } from 'lucide-vue-next';
 import { logActivity } from '@/utils/activityLogger';
+import Swal from 'sweetalert2';
 import { useCustomizerStore } from '@/stores/customizer';
 
 const customizer = useCustomizerStore();
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196';
+
+const getAuthHeaders = () => {
+  const token = sessionStorage.getItem('adminToken')
+             || localStorage.getItem('staffToken')
+             || sessionStorage.getItem('staffToken')
+             || localStorage.getItem('accessToken') 
+             || localStorage.getItem('token') 
+             || sessionStorage.getItem('accessToken') 
+             || sessionStorage.getItem('token')
+             || '';
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
 
 // ── Theme State Detection (Light / Dark Mode Sync) ──
 const isDarkMode = computed(() => {
@@ -50,7 +64,7 @@ const formData = ref({
   maNv: '', hoTenNv: '', maRole: '', maLoaiNv: '', 
   gioiTinh: 'Nam', cccd: '', namSinh: '', sdt: '', 
   email: '', diaChi: '', ngayVaoLam: '', 
-  trangThai: 1, tenDangNhap: '', matKhau: ''
+  trangThai: 1, tenDangNhap: '', matKhau: '', matKhauCu: ''
 });
 
 const selectedImageFile = ref(null);
@@ -125,7 +139,7 @@ const changePage = (p) => {
 // --- HÀM TẢI OPTION ĐÃ ĐƯỢC CHỐNG LỖI ---
 const fetchOptions = async () => {
   try {
-    const resRole = await fetch('https://localhost:7196/api/NhanVien/roles');
+    const resRole = await fetch(`${API}/api/NhanVien/roles`, { headers: getAuthHeaders() });
     if (resRole.ok) {
         roles.value = await resRole.json();
     } else {
@@ -134,7 +148,7 @@ const fetchOptions = async () => {
   } catch(e) { console.error("Mất kết nối khi tải Roles: ", e); }
 
   try {
-    const resLoai = await fetch('https://localhost:7196/api/NhanVien/loai-nv');
+    const resLoai = await fetch(`${API}/api/NhanVien/loai-nv`, { headers: getAuthHeaders() });
     if (resLoai.ok) {
         loaiNvs.value = await resLoai.json();
     } else {
@@ -151,7 +165,7 @@ const fetchNhanViens = async () => {
     if (filterTrangThai.value !== '') params.append('trangThai', filterTrangThai.value);
     if (filterGioiTinh.value) params.append('gioiTinh', filterGioiTinh.value);
 
-    const res = await fetch(`https://localhost:7196/api/NhanVien?${params.toString()}`);
+    const res = await fetch(`${API}/api/NhanVien?${params.toString()}`, { headers: getAuthHeaders() });
     if (res.ok) nhanViens.value = await res.json();
   } catch (err) { console.error(err); } 
   finally { loading.value = false; }
@@ -163,7 +177,7 @@ const openAddForm = () => {
       maNv: '', hoTenNv: '', maRole: '', maLoaiNv: '', 
       gioiTinh: 'Nam', cccd: '', namSinh: '', sdt: '', 
       email: '', diaChi: '', ngayVaoLam: '', 
-      trangThai: 1, tenDangNhap: '', matKhau: '' 
+      trangThai: 1, tenDangNhap: '', matKhau: '', matKhauCu: '' 
   };
   selectedImageFile.value = null;
   imagePreviewUrl.value = null;
@@ -176,14 +190,14 @@ const originalStaffData = ref(null);
 const openEditForm = (nv) => {
   isEditMode.value = true;
   originalStaffData.value = { ...nv };
-  formData.value = { ...nv, matKhau: '' };
+  formData.value = { ...nv, matKhau: '', matKhauCu: '' };
   
   if (nv.ngayVaoLam) {
       formData.value.ngayVaoLam = nv.ngayVaoLam.split('T')[0];
   }
 
   selectedImageFile.value = null;
-  imagePreviewUrl.value = nv.hinhAnh ? `https://localhost:7196${nv.hinhAnh}` : null;
+  imagePreviewUrl.value = nv.hinhAnh ? `${API}${nv.hinhAnh}` : null;
   errors.value = {}; 
   showModal.value = true;
 };
@@ -568,7 +582,7 @@ const openReviewModal = async (nv) => {
   showReviewModal.value = true;
   loadingReviews.value = true;
   try {
-    const res = await fetch(`https://localhost:7196/api/NhanVien/${nv.maNv}/danh-gia`);
+    const res = await fetch(`${API}/api/NhanVien/${nv.maNv}/danh-gia`, { headers: getAuthHeaders() });
     if (res.ok) reviewsList.value = await res.json();
     else alert("Lỗi tải đánh giá!");
   } catch (err) { console.error(err); } 
@@ -580,6 +594,17 @@ const closeReviewModal = () => { showReviewModal.value = false; };
 const handleImageUpload = (event) => {
   const file = event.target.files[0];
   if (file) {
+    if (file.size > 2 * 1024 * 1024) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Ảnh quá lớn',
+        text: 'Dung lượng ảnh đại diện không được vượt quá 2MB!',
+        confirmButtonColor: '#0284c7'
+      });
+      event.target.value = ''; // clear input
+      selectedImageFile.value = null;
+      return;
+    }
     selectedImageFile.value = file;
     imagePreviewUrl.value = URL.createObjectURL(file); 
   }
@@ -617,6 +642,12 @@ const validateForm = () => {
   if (!isEditMode.value && formData.value.tenDangNhap && !formData.value.matKhau) {
     errors.value.matKhau = 'Vui lòng cấp mật khẩu.'; isValid = false;
   }
+  if (isEditMode.value && formData.value.matKhau && formData.value.matKhau.trim()) {
+    if (!formData.value.matKhauCu || !formData.value.matKhauCu.trim()) {
+      errors.value.matKhauCu = 'Bắt buộc nhập mật khẩu cũ để xác thực.';
+      isValid = false;
+    }
+  }
   return isValid;
 };
 
@@ -624,7 +655,7 @@ const saveNhanVien = async () => {
   if (!validateForm()) return; 
 
   const method = isEditMode.value ? 'PUT' : 'POST';
-  const url = isEditMode.value ? `https://localhost:7196/api/NhanVien/${formData.value.maNv}` : 'https://localhost:7196/api/NhanVien';
+  const url = isEditMode.value ? `${API}/api/NhanVien/${formData.value.maNv}` : `${API}/api/NhanVien`;
 
   const submitData = new FormData();
   submitData.append('MaNv', formData.value.maNv || '');
@@ -642,10 +673,11 @@ const saveNhanVien = async () => {
   submitData.append('TrangThai', formData.value.trangThai);
   submitData.append('TenDangNhap', formData.value.tenDangNhap || '');
   submitData.append('MatKhau', formData.value.matKhau || '');
+  submitData.append('MatKhauCu', formData.value.matKhauCu || '');
   if (selectedImageFile.value) submitData.append('HinhAnhFile', selectedImageFile.value);
 
   try {
-    const res = await fetch(url, { method: method, body: submitData });
+    const res = await fetch(url, { method: method, body: submitData, headers: getAuthHeaders() });
     if (res.ok) {
       let detailText = `Đã ${isEditMode.value ? 'cập nhật thông tin' : 'thêm tài khoản'} nhân viên ${formData.value.hoTenNv} (Mã: ${formData.value.maNv})`;
       
@@ -700,7 +732,12 @@ const saveNhanVien = async () => {
         detailText,
         "Nhân sự"
       );
-      alert(isEditMode.value ? "Cập nhật thành công!" : "Thêm thành công!");
+      Swal.fire({
+        icon: 'success',
+        title: 'Thành công',
+        text: isEditMode.value ? "Cập nhật nhân viên thành công!" : "Thêm nhân viên thành công!",
+        confirmButtonColor: '#0284c7'
+      });
       closeModal(); fetchNhanViens(); 
     } else { 
       logActivity(
@@ -709,26 +746,80 @@ const saveNhanVien = async () => {
         "Nhân sự",
         "Thất bại"
       );
-      alert("Lỗi từ máy chủ: " + await res.text()); 
+      const errorMsg = await res.text();
+      let textToShow = errorMsg;
+      try {
+        const json = JSON.parse(errorMsg);
+        if (json.message) textToShow = json.message;
+      } catch(e) {}
+      Swal.fire({
+        icon: 'error',
+        title: 'Lỗi',
+        text: textToShow || 'Thao tác thất bại!',
+        confirmButtonColor: '#0284c7'
+      });
     }
-  } catch (err) { alert("Không thể kết nối đến máy chủ."); }
+  } catch (err) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Lỗi kết nối',
+      text: 'Không thể kết nối đến máy chủ.',
+      confirmButtonColor: '#0284c7'
+    });
+  }
 };
 
 const deleteNhanVien = async (id) => {
   const nv = nhanViens.value.find(n => n.maNv === id);
   const name = nv ? nv.hoTenNv : id;
-  if (!confirm(`Xóa nhân viên ${id}?`)) return;
+  
+  const result = await Swal.fire({
+    title: 'Xác nhận xóa?',
+    text: `Bạn có chắc chắn muốn xóa hồ sơ nhân viên ${name} (Mã: ${id})?`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    cancelButtonColor: '#3085d6',
+    confirmButtonText: 'Đồng ý xóa',
+    cancelButtonText: 'Hủy bỏ'
+  });
+  
+  if (!result.isConfirmed) return;
+  
   try {
-    const res = await fetch(`https://localhost:7196/api/NhanVien/${id}`, { method: 'DELETE' });
+    const res = await fetch(`${API}/api/NhanVien/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
     if (res.ok) {
       logActivity("Xóa nhân viên", `Đã xóa hồ sơ nhân viên ${name} (Mã: ${id})`, "Nhân sự");
+      Swal.fire({
+        icon: 'success',
+        title: 'Đã xóa',
+        text: `Đã xóa nhân viên ${name} thành công.`,
+        confirmButtonColor: '#0284c7'
+      });
       fetchNhanViens(); 
     } else { 
       const errMsg = await res.text();
+      let textToShow = errMsg;
+      try {
+        const json = JSON.parse(errMsg);
+        if (json.message) textToShow = json.message;
+      } catch(e) {}
       logActivity("Xóa nhân viên", `Xóa thất bại nhân viên ${name} (Mã: ${id}) - Lý do: ${errMsg}`, "Nhân sự", "Thất bại");
-      alert("Lỗi: " + errMsg); 
+      Swal.fire({
+        icon: 'error',
+        title: 'Lỗi',
+        text: textToShow || 'Xóa nhân viên thất bại.',
+        confirmButtonColor: '#0284c7'
+      });
     }
-  } catch (err) {}
+  } catch (err) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Lỗi kết nối',
+      text: 'Không thể kết nối đến máy chủ.',
+      confirmButtonColor: '#0284c7'
+    });
+  }
 };
 
 const formatDate = (dateString) => {
@@ -917,7 +1008,7 @@ onMounted(() => {
             >
               <td class="py-4 px-6">
                 <div class="flex items-center gap-3">
-                  <img v-if="nv.hinhAnh" :src="`https://localhost:7196${nv.hinhAnh}`" class="w-11 h-11 rounded-full object-cover border-2 border-slate-200 flex-shrink-0 shadow-xs" />
+                  <img v-if="nv.hinhAnh" :src="`${API}${nv.hinhAnh}`" class="w-11 h-11 rounded-full object-cover border-2 border-slate-200 flex-shrink-0 shadow-xs" />
                   <div v-else class="w-11 h-11 rounded-full bg-gradient-to-tr from-sky-500 to-blue-600 flex items-center justify-center font-black text-white text-base flex-shrink-0 border-2 border-slate-200 shadow-xs">
                     {{ nv.hoTenNv?.charAt(0).toUpperCase() || '?' }}
                   </div>
@@ -1513,15 +1604,31 @@ onMounted(() => {
                   </div>
 
                   <div class="flex flex-col gap-1.5">
-                    <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Mật khẩu đăng nhập</label>
+                    <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
+                      {{ isEditMode ? 'Mật khẩu mới' : 'Mật khẩu đăng nhập' }}
+                    </label>
                     <input 
                       v-model="formData.matKhau" 
                       type="password" 
                       class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
                       :class="[isDarkMode ? 'dark-mode-input' : 'light-mode-input', errors.matKhau ? 'border-rose-500!' : '']" 
-                      :placeholder="isEditMode ? '(Giữ nguyên mật khẩu cũ)' : 'Mật khẩu khởi tạo'"
+                      :placeholder="isEditMode ? '(Để trống nếu giữ nguyên)' : 'Mật khẩu khởi tạo'"
                     >
                     <p v-if="errors.matKhau" class="text-xs font-semibold text-rose-500 mt-0.5">{{ errors.matKhau }}</p>
+                  </div>
+
+                  <div v-if="isEditMode" class="flex flex-col gap-1.5 sm:col-span-2">
+                    <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
+                      Nhập mật khẩu cũ <span v-if="formData.matKhau?.trim()" class="text-rose-500 font-extrabold">*</span>
+                    </label>
+                    <input 
+                      v-model="formData.matKhauCu" 
+                      type="password" 
+                      class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
+                      :class="[isDarkMode ? 'dark-mode-input' : 'light-mode-input', errors.matKhauCu ? 'border-rose-500!' : '']" 
+                      placeholder="Nhập mật khẩu cũ để xác thực trước khi đổi"
+                    >
+                    <p v-if="errors.matKhauCu" class="text-xs font-semibold text-rose-500 mt-0.5">{{ errors.matKhauCu }}</p>
                   </div>
                 </div>
               </div>
@@ -1667,5 +1774,11 @@ onMounted(() => {
 }
 .animate-spin {
   animation: spin 1s linear infinite;
+}
+</style>
+
+<style>
+.swal2-container {
+  z-index: 3000 !important;
 }
 </style>

@@ -16,7 +16,7 @@ let checkSessionInterval: ReturnType<typeof setInterval>;
 
 const cartCount = ref(0);
 const wishlistStore = useWishlistStore();
-const wishlistCount = computed(() => (wishlistStore.favoriteProducts?.length || 0) + (wishlistStore.favoriteServices?.length || 0));
+const wishlistCount = computed(() => (wishlistStore.favoriteProducts?.length || 0) + (wishlistStore.favoriteServices?.length || 0) + (wishlistStore.favoriteEmployees?.length || 0));
 
 
 
@@ -54,6 +54,7 @@ const checkUser = () => {
 const handleLogout = () => {
   localStorage.removeItem('user');
   currentUser.value = null;
+  window.dispatchEvent(new Event('user-updated'));
   router.push({ name: 'login' });
 };
 

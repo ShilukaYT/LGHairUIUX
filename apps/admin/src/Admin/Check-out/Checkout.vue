@@ -71,7 +71,7 @@ const productSuggestions = computed(() => {
             groups[parentName] = [];
         }
         groups[parentName].push({
-            id: p.id,
+            id: p.id || p.maBienThe || p.Id,
             name: variantName,
             fullName: p.tenSanPham || 'Sản phẩm không tên',
             price: Number(p.gia || 0),
@@ -326,9 +326,17 @@ const updateOrder = async () => {
         const payload = {
             maLd: selectedAppointment.value.maLd,
             maStylist: selectedStylistId.value,
-            services: selectedAppointment.value.dichVus.map((s: any) => ({ id: s.id, gia: Number(s.gia) })),
-            products: selectedAppointment.value.sanPhams.map((p: any) => ({ id: p.id, gia: Number(p.gia), soLuong: Number(p.soLuong) }))
+            services: (selectedAppointment.value.dichVus || []).map((s: any) => ({ 
+                id: s.id || s.Id, 
+                gia: Number(s.gia || s.Price || 0) 
+            })),
+            products: (selectedAppointment.value.sanPhams || []).map((p: any) => ({ 
+                id: p.id || p.maBienThe, 
+                gia: Number(p.gia || p.price || p.GiaBan || 0), 
+                soLuong: Number(p.soLuong || 1) 
+            }))
         };
+        console.log("Payload sending to update-order:", payload);
 
         const res = await axios.post(`${API_BASE_URL}/update-order`, payload);
         toast.success(res.data.message || "Cập nhật đơn hàng thành công!");
@@ -971,4 +979,4 @@ watch(filterDate, fetchData);
 .v-theme--dark .product-variant-title {
     color: #f1f5f9;
 }
-</style>
+</style>  
