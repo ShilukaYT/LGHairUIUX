@@ -370,6 +370,9 @@ async function saveSP() {
       fd.append("GalleryFiles", g.file);
 
     if (editingSpId.value) {
+      for (const id of spForm._deleteGalleryIds) {
+        await axios.delete(`${API}/api/QuanLySanPham/gallery/${id}`);
+      }
       await axios.put(`${API}/api/QuanLySanPham/${editingSpId.value}`, fd, { headers: { "Content-Type": "multipart/form-data" } });
       logActivity("Cập nhật sản phẩm", `Đã cập nhật sản phẩm ${spForm.tenSP} (Mã: ${editingSpId.value})`, "Sản phẩm");
       showToast("Cập nhật sản phẩm thành công!");
@@ -760,7 +763,7 @@ onMounted(async () => {
                       <td class="text-caption">{{ bt.phanTramHoaHong != null ? bt.phanTramHoaHong + '%' : '—' }}</td>
                       <td>
                         <v-chip :color="bt.trangThai ? 'success' : 'grey-darken-1'" size="x-small" variant="flat" class="font-weight-bold">
-                          {{ bt.trangThai ? "Còn hàng" : "Hết hàng" }}
+                          {{ bt.trangThai ? "Còn hàng" : "Ngừng hoạt động" }}
                         </v-chip>
                       </td>
                       <td class="text-center">
@@ -1038,7 +1041,7 @@ onMounted(async () => {
                 <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Trạng thái</div>
                 <v-select
                   v-model="btForm.trangThai"
-                  :items="[{ title: 'Còn hàng', value: 1 }, { title: 'Hết hàng', value: 0 }]"
+                  :items="[{ title: 'Còn hàng', value: 1 }, { title: 'Ngừng hoạt động', value: 0 }]"
                   variant="outlined" density="comfortable" rounded="lg"
                 ></v-select>
               </v-col>
