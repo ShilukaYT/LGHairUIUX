@@ -371,7 +371,7 @@ onMounted(async () => {
                   class="dv-filter-font w-full flex items-center justify-between px-4 py-2.5 text-[11px] uppercase tracking-widest font-semibold text-black bg-gray-50/70"
                   @click="toggleSection('sanPham')"
                 >
-                  <span>Danh Mục Sản Phẩm</span>
+                  <span>Sản Phẩm</span>
                   <svg
                     width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
                     class="transition-transform duration-300"

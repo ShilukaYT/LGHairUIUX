@@ -321,7 +321,7 @@ function resetPnForm() {
 }
 
 function openAddPN() {
-  clearPnErrors(); resetPnForm(); btSearchKw.value = ""; btSuggestions.value = [];
+  clearPnErrors(); resetPnForm(); pnForm.ngayNhap = todayStr(); btSearchKw.value = ""; btSuggestions.value = [];
   pnModal.mode = "form"; pnModal.title = "Tạo phiếu nhập mới"; pnModal.open = true;
 }
 
@@ -1393,7 +1393,9 @@ onMounted(async () => {
                   variant="outlined"
                   density="comfortable"
                   rounded="lg"
-                  :max="todayStr()"
+                  readonly
+                  hint="Tự động lấy ngày hiện tại"
+                  persistent-hint
                   :error-messages="pnErrors.ngayNhap"
                 ></v-text-field>
               </v-col>
