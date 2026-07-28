@@ -13,7 +13,8 @@ import Swal from 'sweetalert2'
 import QrScannerModal from './QrScannerModal.vue'
 
 // Sử dụng đúng API của CheckOutController
-const API_BASE_URL = 'https://localhost:7196/api/CheckOut'
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196';
+const API_BASE_URL = `${API}/api/CheckOut`;
 
 // --- State ---
 const appointments = ref<any[]>([])
@@ -44,6 +45,7 @@ const showProductList = ref(false)
 const originalServices = ref<any[]>([])
 const originalProducts = ref<any[]>([])
 const allProductsFromApi = ref<any[]>([])
+const originalStylistId = ref<string | null>(null)
 
 // Tính toán trực tiếp danh sách gợi ý khi gõ chữ (Phân nhóm theo sản phẩm chính giống ThanhToanTong.vue)
 const productSuggestions = computed(() => {
@@ -69,7 +71,7 @@ const productSuggestions = computed(() => {
             groups[parentName] = [];
         }
         groups[parentName].push({
-            id: p.id,
+            id: p.id || p.maBienThe || p.Id,
             name: variantName,
             fullName: p.tenSanPham || 'Sản phẩm không tên',
             price: Number(p.gia || 0),
@@ -133,8 +135,8 @@ const fetchData = async () => {
     try {
         const [resList, resStylists, resServices, resProducts] = await Promise.all([
             axios.get(`${API_BASE_URL}/get-checkout-list`, { params: { date: filterDate.value } }),
-            axios.get('https://localhost:7196/api/DatDichVu/get-stylists'),
-            axios.get('https://localhost:7196/api/CheckIn/all-services-combos'),
+            axios.get(`${API}/api/DatDichVu/get-stylists`),
+            axios.get(`${API}/api/CheckIn/all-services-combos`),
             // THÊM API TẢI SẢN PHẨM VÀO ĐÂY
             axios.get(`${API_BASE_URL}/get-all-products`) 
         ]);
@@ -159,6 +161,7 @@ const setSelectedAppointment = async (appt: any) => {
         if (res.data) {
             selectedAppointment.value = res.data;
             selectedStylistId.value = res.data.maNv ? String(res.data.maNv) : null;
+            originalStylistId.value = res.data.maNv ? String(res.data.maNv) : null;
             originalServices.value = JSON.parse(JSON.stringify(res.data.dichVus ?? []));
             originalProducts.value = JSON.parse(JSON.stringify(res.data.sanPhams ?? []));
         }
@@ -177,6 +180,7 @@ const handleScanData = async (qrData: string) => {
         if (res.data) {
             selectedAppointment.value = res.data;
             selectedStylistId.value = res.data.maNv ? String(res.data.maNv) : null;
+            originalStylistId.value = res.data.maNv ? String(res.data.maNv) : null;
             originalServices.value = JSON.parse(JSON.stringify(res.data.dichVus ?? []));
             originalProducts.value = JSON.parse(JSON.stringify(res.data.sanPhams ?? []));
             toast.success("Đã tìm thấy hóa đơn từ QR Code!");
@@ -222,17 +226,32 @@ const removeService = (index: number) => {
     selectedAppointment.value.dichVus.splice(index, 1);
 };
 
+
 // --- Sản phẩm UI logic ---
+const getMaxInventory = (id: string) => {
+    const prod = allProductsFromApi.value.find(p => p.id === id || p.maBienThe === id);
+    return prod ? (prod.soLuongTon || 0) : 999;
+};
+
 const addProduct = (prod: any) => {
     if (!selectedAppointment.value) return;
     if (!selectedAppointment.value.sanPhams) selectedAppointment.value.sanPhams = [];
     
     const productName = prod.fullName || prod.name;
     const existing = selectedAppointment.value.sanPhams.find((p: any) => p.id === prod.id);
+    
     if (existing) {
+        if (existing.soLuong >= prod.soLuongTon) {
+            toast.warning(`Sản phẩm này chỉ còn ${prod.soLuongTon} trong kho!`);
+            return;
+        }
         existing.soLuong += 1;
         toast.success(`Đã tăng số lượng: ${productName}`);
     } else {
+        if (prod.soLuongTon < 1) {
+            toast.warning('Sản phẩm này đã hết hàng!');
+            return;
+        }
         selectedAppointment.value.sanPhams.push({
             id: prod.id,
             ten: productName,
@@ -248,6 +267,15 @@ const addProduct = (prod: any) => {
 const updateProductQty = (index: number, delta: number) => {
     if (!selectedAppointment.value) return;
     const p = selectedAppointment.value.sanPhams[index];
+    
+    if (delta > 0) {
+        const maxTon = getMaxInventory(p.id);
+        if (p.soLuong >= maxTon) {
+            toast.warning(`Chỉ có thể mua tối đa ${maxTon} sản phẩm này!`);
+            return;
+        }
+    }
+
     p.soLuong += delta;
     if (p.soLuong <= 0) {
         selectedAppointment.value.sanPhams.splice(index, 1);
@@ -263,6 +291,7 @@ const removeProduct = (index: number) => {
 // --- Kiểm tra thay đổi ---
 const isOrderModified = computed(() => {
     if (!selectedAppointment.value) return false;
+    if (selectedStylistId.value !== originalStylistId.value) return true;
     const sCurrent = selectedAppointment.value.dichVus || [];
     const sOrig = originalServices.value || [];
     const pCurrent = selectedAppointment.value.sanPhams || [];
@@ -297,9 +326,17 @@ const updateOrder = async () => {
         const payload = {
             maLd: selectedAppointment.value.maLd,
             maStylist: selectedStylistId.value,
-            services: selectedAppointment.value.dichVus.map((s: any) => ({ id: s.id, gia: Number(s.gia) })),
-            products: selectedAppointment.value.sanPhams.map((p: any) => ({ id: p.id, gia: Number(p.gia), soLuong: Number(p.soLuong) }))
+            services: (selectedAppointment.value.dichVus || []).map((s: any) => ({ 
+                id: s.id || s.Id, 
+                gia: Number(s.gia || s.Price || 0) 
+            })),
+            products: (selectedAppointment.value.sanPhams || []).map((p: any) => ({ 
+                id: p.id || p.maBienThe, 
+                gia: Number(p.gia || p.price || p.GiaBan || 0), 
+                soLuong: Number(p.soLuong || 1) 
+            }))
         };
+        console.log("Payload sending to update-order:", payload);
 
         const res = await axios.post(`${API_BASE_URL}/update-order`, payload);
         toast.success(res.data.message || "Cập nhật đơn hàng thành công!");
@@ -942,4 +979,4 @@ watch(filterDate, fetchData);
 .v-theme--dark .product-variant-title {
     color: #f1f5f9;
 }
-</style>
+</style>  

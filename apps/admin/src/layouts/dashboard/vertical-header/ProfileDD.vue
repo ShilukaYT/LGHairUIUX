@@ -180,7 +180,7 @@ const navigateToProfile = () => {
           <v-list-item-title class="text-body-1"> Xem thông tin</v-list-item-title>
         </v-list-item>
         
-        <v-list-item color="primary" rounded="0" value="Account settings">
+        <v-list-item @click="navigateToProfile" color="primary" rounded="0" value="Account settings">
           <template v-slot:prepend>
             <SettingOutlined :style="{ fontSize: '14px' }" class="mr-4" />
           </template>

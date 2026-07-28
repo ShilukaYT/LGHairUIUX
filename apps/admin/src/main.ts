@@ -31,13 +31,15 @@ app.use(vue3GoogleLogin, {
 // 1. Luôn cho phép gửi Cookie
 axios.defaults.withCredentials = true;
 
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196';
+
 // 1.5. Trạm gác chặn các Request gửi đi (Gắn Token vào Header)
 axios.interceptors.request.use(
   (config) => {
     const requestUrl = config.url || '';
     let token = '';
-
-    if (requestUrl.includes('/api/admin') || requestUrl.includes('/api/nhan-vien')) {
+    const urlLower = requestUrl.toLowerCase();
+    if (urlLower.includes('/api/admin') || urlLower.includes('/api/nhan-vien') || urlLower.includes('/api/nhanvien')) {
       token = sessionStorage.getItem('adminToken') || localStorage.getItem('staffToken') || sessionStorage.getItem('staffToken') || '';
     } else {
       token = localStorage.getItem('userToken') || sessionStorage.getItem('userToken') || '';
@@ -72,17 +74,18 @@ axios.interceptors.response.use(
       originalRequest._retry = true; 
 
       // KIỂM TRA CHÍNH XÁC LOẠI API ĐANG GỌI
-      const isAdminApi = requestUrl.includes('/api/admin');
-      const isStaffApi = requestUrl.includes('/api/nhan-vien'); // Bổ sung API nhân viên
+      const urlLower = requestUrl.toLowerCase();
+      const isAdminApi = urlLower.includes('/api/admin');
+      const isStaffApi = urlLower.includes('/api/nhan-vien') || urlLower.includes('/api/nhanvien'); // Bổ sung API nhân viên
 
       try {
         let refreshRes;
         if (isAdminApi) {
-          refreshRes = await axios.post('https://localhost:7196/api/admin/auth/refresh-token');
+          refreshRes = await axios.post(`${API}/api/admin/auth/refresh-token`);
         } else if (isStaffApi) {
-          refreshRes = await axios.post('https://localhost:7196/api/admin/auth/refresh-token'); 
+          refreshRes = await axios.post(`${API}/api/admin/auth/refresh-token`); 
         } else {
-          refreshRes = await axios.post('https://localhost:7196/api/account/refresh-token');
+          refreshRes = await axios.post(`${API}/api/account/refresh-token`);
         }
 
         // Cập nhật Token mới vào Storage & Header nếu API trả về Token

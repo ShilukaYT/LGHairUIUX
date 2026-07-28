@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196';
 import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
 import Swal from 'sweetalert2';
@@ -23,8 +24,12 @@ const staffData = ref<StaffInfo | null>(null);
 const isLoading = ref(true);
 const isSaving = ref(false);
 
+const oldPassword = ref('');
 const newPassword = ref('');
+const confirmPassword = ref('');
+const showOldPassword = ref(false);
 const showPassword = ref(false);
+const showConfirmPassword = ref(false);
 const fileInput = ref<HTMLInputElement | null>(null);
 const selectedFile = ref<File | null>(null);
 const localPreviewUrl = ref('');
@@ -45,7 +50,7 @@ const fetchProfile = async () => {
 
   try {
     isLoading.value = true;
-    const res = await axios.get(`https://localhost:7196/api/NhanVien/profile/${maNv}`);
+    const res = await axios.get(`${API}/api/NhanVien/profile/${maNv}`);
     staffData.value = res.data;
 
     // ĐỒNG BỘ SESSIONSTORAGE
@@ -89,6 +94,21 @@ const onFileSelected = (event: Event) => {
 const handleUpdateProfile = async () => {
   if (!staffData.value) return;
 
+  if (newPassword.value.trim() !== '') {
+    if (oldPassword.value.trim() === '') {
+      Swal.fire('Lỗi', 'Vui lòng nhập mật khẩu cũ để xác thực thay đổi.', 'error');
+      return;
+    }
+    if (confirmPassword.value.trim() === '') {
+      Swal.fire('Lỗi', 'Vui lòng xác nhận mật khẩu mới.', 'error');
+      return;
+    }
+    if (newPassword.value.trim() !== confirmPassword.value.trim()) {
+      Swal.fire('Lỗi', 'Xác nhận mật khẩu mới không trùng khớp.', 'error');
+      return;
+    }
+  }
+
   try {
     isSaving.value = true;
 
@@ -102,12 +122,13 @@ const handleUpdateProfile = async () => {
 
     if (newPassword.value.trim() !== '') {
       formData.append('matKhauMoi', newPassword.value.trim());
+      formData.append('matKhauCu', oldPassword.value.trim());
     }
     if (selectedFile.value) {
       formData.append('hinhAnhFile', selectedFile.value);
     }
 
-    await axios.put(`https://localhost:7196/api/NhanVien/update-profile`, formData, {
+    await axios.put(`${API}/api/NhanVien/update-profile`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     });
 
@@ -125,7 +146,9 @@ const handleUpdateProfile = async () => {
       showConfirmButton: false
     });
 
+    oldPassword.value = '';
     newPassword.value = '';
+    confirmPassword.value = '';
     selectedFile.value = null;
     localPreviewUrl.value = '';
     await fetchProfile();
@@ -146,7 +169,7 @@ const displayAvatar = computed(() => {
   if (localPreviewUrl.value) return localPreviewUrl.value;
   if (staffData.value?.hinhAnh) {
     return staffData.value.hinhAnh.startsWith('/')
-      ? `https://localhost:7196${staffData.value.hinhAnh}`
+      ? `${API}${staffData.value.hinhAnh}`
       : staffData.value.hinhAnh;
   }
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(staffData.value?.hoTenNv || 'NV')}&background=6366f1&color=fff&size=128`;
@@ -374,6 +397,20 @@ onMounted(fetchProfile);
 
           <v-card-text class="pa-5">
             <v-text-field
+              v-model="oldPassword"
+              :type="showOldPassword ? 'text' : 'password'"
+              label="Mật khẩu cũ"
+              variant="outlined"
+              density="comfortable"
+              prepend-inner-icon="mdi-lock-open-outline"
+              :append-inner-icon="showOldPassword ? 'mdi-eye-off' : 'mdi-eye'"
+              color="error"
+              placeholder="Nhập mật khẩu cũ"
+              @click:append-inner="showOldPassword = !showOldPassword"
+              class="mb-3"
+            />
+
+            <v-text-field
               v-model="newPassword"
               :type="showPassword ? 'text' : 'password'"
               label="Mật khẩu mới"
@@ -384,9 +421,23 @@ onMounted(fetchProfile);
               color="error"
               placeholder="Để trống nếu không muốn đổi"
               @click:append-inner="showPassword = !showPassword"
+              class="mb-3"
             />
-            <p class="text-caption text-medium-emphasis mt-1">
-              Mật khẩu sẽ giữ nguyên như cũ nếu bạn bỏ trống trường này và nhấn Lưu.
+
+            <v-text-field
+              v-model="confirmPassword"
+              :type="showConfirmPassword ? 'text' : 'password'"
+              label="Xác nhận mật khẩu mới"
+              variant="outlined"
+              density="comfortable"
+              prepend-inner-icon="mdi-lock-check-outline"
+              :append-inner-icon="showConfirmPassword ? 'mdi-eye-off' : 'mdi-eye'"
+              color="error"
+              placeholder="Nhập lại mật khẩu mới"
+              @click:append-inner="showConfirmPassword = !showConfirmPassword"
+            />
+            <p class="text-caption text-medium-emphasis mt-2">
+              Để thay đổi mật khẩu, vui lòng điền đầy đủ cả 3 thông tin trên. Nếu để trống mật khẩu mới, mật khẩu hiện tại sẽ được giữ nguyên.
             </p>
           </v-card-text>
         </v-card>

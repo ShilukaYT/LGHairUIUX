@@ -923,6 +923,23 @@ onMounted(async () => {
                                     'is-disabled': !stylist.isAvailable
                                 }" @click="stylist.isAvailable ? bookingData.stylistId = stylist.id : null"
                                     :title="!stylist.isAvailable ? stylist.unAvailableReason : ''">
+                                    
+                                    <div class="stylist-schedule-info" v-if="stylist.lichTrinh && stylist.lichTrinh.length > 0">
+                                        <div class="schedule-header">Ca Làm : {{ stylist.caLam }}</div>
+                                        <div class="schedule-group mt-2">
+                                            <div class="font-bold text-green-600 text-xs mb-1" style="font-size: 11px;"><i class="fas fa-check-circle me-1"></i>Lịch trống:</div>
+                                            <div v-for="(line, index) in stylist.lichTrinh.filter((l: string) => l.includes('Lịch trống'))" :key="'free-'+index" class="schedule-line text-green-700 font-medium">
+                                                {{ line.replace('Lịch trống:', '').trim() }}
+                                            </div>
+                                        </div>
+                                        <div class="schedule-group mt-2 pt-2 border-t border-gray-200 border-dashed" v-if="stylist.lichTrinh.some((l: string) => l.includes('Có hẹn'))">
+                                            <div class="font-bold text-red-500 text-xs mb-1" style="font-size: 11px;"><i class="fas fa-calendar-times me-1"></i>Ca bận:</div>
+                                            <div v-for="(line, index) in stylist.lichTrinh.filter((l: string) => l.includes('Có hẹn'))" :key="'busy-'+index" class="schedule-line text-red-500 opacity-80">
+                                                {{ line.replace('Có hẹn:', '').trim() }}
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <div class="avatar-box">
                                         <img :src="stylist.img.startsWith('http') ? stylist.img : (API + stylist.img)"
                                             alt="Stylist" onerror="this.onerror=null; this.src='/images/no-image.png'">
@@ -932,7 +949,7 @@ onMounted(async () => {
                                         </div>
                                     </div>
  
-                                    <div class="stylist-meta">
+                                    <div class="stylist-meta mt-auto">
                                         <span class="s-name font-bold">{{ stylist.name }}</span>
  
                                         <template v-if="stylist.isAvailable">
@@ -1630,6 +1647,9 @@ textarea.booking-input {
     padding: 16px 8px;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.01);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .stylist-card:hover {
@@ -1648,7 +1668,7 @@ textarea.booking-input {
     position: relative;
     width: 68px;
     height: 68px;
-    margin: 0 auto 10px;
+    margin: auto auto 10px auto;
 }
 
 .avatar-box img {
@@ -2737,5 +2757,56 @@ textarea.booking-input {
 /* Hiệu ứng đập nhẹ khi hover vào thợ yêu thích */
 .stylist-card:hover .favorite-heart-badge {
     transform: scale(1.15);
+}
+.stylist-schedule-info {
+    position: relative;
+    background-color: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px;
+    margin-bottom: 20px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.stylist-schedule-info::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 5px;
+    border-style: solid;
+    border-color: #ffffff transparent transparent transparent;
+    z-index: 2;
+}
+
+.stylist-schedule-info::before {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 6px;
+    border-style: solid;
+    border-color: var(--border-color) transparent transparent transparent;
+    z-index: 1;
+}
+
+.schedule-header {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    border-bottom: 1px dashed var(--border-color);
+    padding-bottom: 4px;
+}
+
+.schedule-line {
+    font-size: 10px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    margin-top: 2px;
 }
 </style>
