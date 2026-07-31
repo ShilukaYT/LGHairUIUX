@@ -4,6 +4,9 @@ import { useRouter } from 'vue-router';
 import axios from 'axios';
 import { Heart, Search, Star, Calendar, Sparkles } from 'lucide-vue-next';
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
+import { useWishlistStore } from '@/stores/useWishlistStore';
+
+const wishlistStore = useWishlistStore();
 
 const API = import.meta.env.VITE_API_URL || 'https://localhost:7196';
 const router = useRouter();
@@ -12,7 +15,6 @@ const router = useRouter();
 // STATE
 // ==========================================
 const employees = ref<any[]>([]);
-const favorites = ref<string[]>([]);
 const searchQuery = ref('');
 const selectedRole = ref('all');
 const loading = ref(true);
@@ -29,66 +31,12 @@ const getEmployeeImageUrl = (img?: string) => {
   return `${API}/${img}`;
 };
 
-const getCustomerKey = () => {
-  const maKH = customer.value?.maKH || 'GUEST';
-  return `favorite_employees_${maKH}`;
-};
-
 const getStarFillWidth = (starIndex: number, rating: number) => {
   if (rating >= starIndex) return '100%';
   if (rating > starIndex - 1) {
     return `${(rating - (starIndex - 1)) * 100}%`;
   }
   return '0%';
-};
-
-const loadFavorites = () => {
-  const saved = localStorage.getItem(getCustomerKey());
-  if (saved) {
-    try {
-      favorites.value = JSON.parse(saved);
-    } catch (e) {
-      favorites.value = [];
-    }
-  } else {
-    favorites.value = [];
-  }
-};
-
-const toggleFavorite = (employee: any) => {
-  const user = localStorage.getItem('user');
-  if (!user) {
-    alert("Vui lòng đăng nhập để thêm chuyên viên vào danh sách yêu thích!");
-    router.push({ name: 'login' });
-    return;
-  }
-  const index = favorites.value.indexOf(employee.id);
-  let updatedFavorites = [...favorites.value];
-  
-  if (index >= 0) {
-    updatedFavorites.splice(index, 1);
-  } else {
-    updatedFavorites.push(employee.id);
-    
-    // Save details to quick reference for header dropdown
-    localStorage.setItem(`employee_details_${employee.id}`, JSON.stringify({
-      id: employee.id,
-      name: employee.name,
-      image: employee.image,
-      role: employee.role,
-      rating: employee.rating
-    }));
-  }
-  
-  favorites.value = updatedFavorites;
-  localStorage.setItem(getCustomerKey(), JSON.stringify(updatedFavorites));
-  
-  // Dispatch custom event to notify Header.vue
-  window.dispatchEvent(new CustomEvent('favorite-employees-updated'));
-};
-
-const isFavorite = (id: string) => {
-  return favorites.value.includes(id);
 };
 
 const navigateToBooking = (stylistId: string) => {
@@ -197,13 +145,11 @@ watch([searchQuery, selectedRole], () => {
 
 onMounted(() => {
   customer.value = getCustomerInfo();
-  loadFavorites();
   fetchEmployees();
   
   // Listen for login/logout changes to reload favorites
   window.addEventListener('storage', () => {
     customer.value = getCustomerInfo();
-    loadFavorites();
   });
 });
 </script>
@@ -284,13 +230,13 @@ onMounted(() => {
             >
               <!-- Favorite button -->
               <button 
-                @click.stop="toggleFavorite(emp)"
+                @click.stop="wishlistStore.toggleEmployeeFavorite(emp)"
                 class="absolute top-4 right-4 z-10 w-9 h-9 bg-white/80 backdrop-blur-xs rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-white transition-all shadow-sm border border-gray-100 cursor-pointer"
-                :aria-label="isFavorite(emp.id) ? 'Xóa khỏi yêu thích' : 'Thêm vào yêu thích'"
+                :aria-label="wishlistStore.isEmployeeFavorite(emp.id) ? 'Xóa khỏi yêu thích' : 'Thêm vào yêu thích'"
               >
                 <Heart 
                   :size="16" 
-                  :class="{'fill-red-500 text-red-500 scale-110': isFavorite(emp.id)}" 
+                  :class="{'fill-red-500 text-red-500 scale-110': wishlistStore.isEmployeeFavorite(emp.id)}" 
                   class="transition-transform duration-300"
                 />
               </button>

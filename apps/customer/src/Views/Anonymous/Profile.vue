@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { 
   User, 
   Package, 
@@ -27,11 +27,18 @@ import Swal from 'sweetalert2';
 import LichSuDanhGia from './Profile/lichsudanhgia.vue';
 // @ts-ignore
 import LichSuDanhGiaSanPham from './Profile/lichsudanhgiasanpham.vue';
+// @ts-ignore
+import LichSuHoaDon from './Profile/LichSuHoaDon.vue';
 
 const router = useRouter();
 const route = useRoute();
 const activeTab = ref('profile');
 const reviewSubTab = ref('services_staff');
+
+const changeTab = (tab: string) => {
+  activeTab.value = tab;
+  router.push({ name: 'profile', query: { tab } });
+};
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://localhost:7196';
 
@@ -264,8 +271,11 @@ const fetchRanks = async () => {
     if (res.data && res.data.success) {
       ranksList.value = res.data.data || [];
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Lỗi khi lấy danh sách hạng thành viên:", error);
+    if (error.response && error.response.status === 401) {
+      forceLogout();
+    }
   }
 };
 
@@ -302,6 +312,17 @@ const fetchProfileData = async () => {
     }
   } catch (error: any) {
     console.error("Lỗi khi tải thông tin cá nhân từ server:", error);
+    if (error.response && error.response.status === 401) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Phiên đăng nhập hết hạn',
+        text: 'Vui lòng đăng nhập lại.',
+        confirmButtonColor: '#000'
+      }).then(() => {
+        forceLogout();
+      });
+      return;
+    }
     const msg = error.response?.data?.message || "Không thể kết nối đến máy chủ để tải thông tin.";
     Swal.fire({
       icon: 'error',
@@ -343,6 +364,13 @@ onMounted(async () => {
   if (route.query.tab) {
     activeTab.value = route.query.tab as string;
   }
+
+  // Watch for changes in route query to update active tab
+  watch(() => route.query.tab, (newTab) => {
+    if (newTab) {
+      activeTab.value = newTab as string;
+    }
+  });
 
   if (info && info.maKH !== 'GUEST') {
     await fetchRanks();
@@ -576,16 +604,20 @@ const handleAvatarChange = async (event: Event) => {
   }
 };
 
+const forceLogout = () => {
+  localStorage.removeItem('user');
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('token');
+  localStorage.removeItem('accessToken');
+  sessionStorage.removeItem('user');
+  sessionStorage.removeItem('token');
+  window.location.href = '/login';
+};
+
 const handleLogout = () => {
   if (confirm('Bạn có chắc chắn muốn đăng xuất?')) {
-    localStorage.removeItem('user');
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('token');
-    localStorage.removeItem('accessToken');
-    sessionStorage.removeItem('user');
-    sessionStorage.removeItem('token');
-    window.location.href = '/login';
+    forceLogout();
   }
 };
 </script>
@@ -643,7 +675,7 @@ const handleLogout = () => {
 
           <!-- Vertical Nav Menu -->
           <nav class="flex flex-row lg:flex-col gap-1 overflow-x-auto pb-4 lg:pb-0 scrollbar-hide whitespace-nowrap border-b border-gray-200 lg:border-b-0">
-            <button @click="activeTab = 'profile'"
+            <button @click="changeTab('profile')"
               :class="['flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest transition-all rounded-sm', activeTab === 'profile' ? 'bg-white border-l-2 border-black text-black shadow-sm font-semibold' : 'text-gray-500 hover:text-black hover:bg-gray-100/50 border-l-2 border-transparent']">
               <User :size="15" :stroke-width="1.8" />
               Hồ Sơ Của Tôi
@@ -653,12 +685,12 @@ const handleLogout = () => {
               <Package :size="15" :stroke-width="1.8" />
               Lịch Sử Đơn Hàng
             </button>
-            <button @click="activeTab = 'appointments'"
+            <button @click="changeTab('appointments')"
               :class="['flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest transition-all rounded-sm', activeTab === 'appointments' ? 'bg-white border-l-2 border-black text-black shadow-sm font-semibold' : 'text-gray-500 hover:text-black hover:bg-gray-100/50 border-l-2 border-transparent']">
               <Calendar :size="15" :stroke-width="1.8" />
-              Lịch Hẹn
+              Lịch Hẹn & Hóa Đơn
             </button>
-            <button @click="activeTab = 'reviews'"
+            <button @click="changeTab('reviews')"
               :class="['flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest transition-all rounded-sm', activeTab === 'reviews' ? 'bg-white border-l-2 border-black text-black shadow-sm font-semibold' : 'text-gray-500 hover:text-black hover:bg-gray-100/50 border-l-2 border-transparent']">
               <Star :size="15" :stroke-width="1.8" />
               Đánh Giá Của Tôi
@@ -995,16 +1027,11 @@ const handleLogout = () => {
               </div>
             </div>
 
-            <!-- Tab: Appointments (Lịch hẹn) -->
-            <div v-else-if="activeTab === 'appointments'"
-              class="bg-white p-8 lg:p-12 border border-gray-200 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500 text-center py-20 rounded-sm">
-              <Calendar class="w-12 h-12 mx-auto text-gray-200 mb-6" :stroke-width="1" />
-              <h3 class="font-heading text-base uppercase tracking-widest mb-2 font-semibold text-black">Chưa Có Lịch Hẹn</h3>
-              <p class="text-xs tracking-widest text-gray-400 mb-8 max-w-xs mx-auto leading-relaxed">Bạn không có lịch hẹn dịch vụ chăm sóc tóc nào sắp tới.</p>
-              <router-link :to="{ name: 'datdichvu' }"
-                class="inline-block bg-black text-white px-8 py-3.5 text-[10px] uppercase tracking-[0.2em] hover:bg-gray-900 transition-all rounded-sm font-semibold hover:shadow-md">
-                Đặt lịch dịch vụ ngay
-              </router-link>
+            <!-- Tab: Appointments (Lịch hẹn & Hóa đơn) -->
+            <div v-else-if="activeTab === 'appointments'">
+              <div class="bg-white p-6 lg:p-10 border border-gray-200 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500 rounded-sm">
+                <LichSuHoaDon />
+              </div>
             </div>
 
             <!-- Tab: Reviews (Đánh giá của tôi) -->

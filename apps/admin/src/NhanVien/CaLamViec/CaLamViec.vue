@@ -49,7 +49,9 @@ const next7Days = ref<any[]>([])
 
 // 1. Hàm lấy thông tin nhân viên đang đăng nhập từ LocalStorage
 const getCurrentUser = () => {
-    const raw = sessionStorage.getItem("staffUser") || sessionStorage.getItem("nhanVienUser") || sessionStorage.getItem("adminUser")
+    const raw = localStorage.getItem("staffUser") || sessionStorage.getItem("staffUser") || 
+                localStorage.getItem("nhanVienUser") || sessionStorage.getItem("nhanVienUser") || 
+                sessionStorage.getItem("adminUser") || localStorage.getItem("adminUser")
     if (!raw) return null
     try {
         return JSON.parse(raw)
@@ -75,7 +77,7 @@ const fetchShifts = async () => {
         })
 
         if (res.data.success) {
-            const allShifts = res.data.data
+            const allShifts = res.data.data || []
             
             const today = new Date();
             const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;

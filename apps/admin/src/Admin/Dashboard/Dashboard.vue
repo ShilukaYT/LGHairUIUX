@@ -1,6 +1,9 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
+import { logActivity } from '@/utils/activityLogger';
 import { Line } from 'vue-chartjs';
+import { useCustomizerStore } from '@/stores/customizer';
+import { useTheme } from 'vuetify';
 import {
   Chart as ChartJS,
   Title,
@@ -31,6 +34,19 @@ import {
 } from 'lucide-vue-next';
 
 ChartJS.register(Title, Tooltip, Legend, LineElement, PointElement, CategoryScale, LinearScale, Filler);
+
+const customizer = useCustomizerStore();
+const isDarkMode = computed(() => {
+  if (customizer?.actTheme === 'dark') return true;
+  try {
+    const vuetifyTheme = useTheme();
+    if (vuetifyTheme?.global?.name?.value === 'dark' || vuetifyTheme?.global?.current?.value?.dark) return true;
+  } catch (e) {}
+  return localStorage.getItem('theme_selection') === 'dark' 
+      || localStorage.getItem('actTheme') === 'dark'
+      || document.documentElement.classList.contains('dark') 
+      || document.body.classList.contains('v-theme--dark');
+});
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const today   = new Date();
@@ -244,36 +260,115 @@ const getAuthHeaders = () => {
   return { 'Authorization': `Bearer ${token}` };
 };
 
+const getInvoiceItems = (hd) => {
+  if (!hd) return [];
+  const list = hd.chiTiet || hd.ChiTiet || hd.chiTietDichVu || hd.ChiTietDichVu || [];
+  if (Array.isArray(list) && list.length > 0) return list;
+  return [];
+};
+
+const getItemName = (item) => {
+  if (!item) return 'Hạng mục Salon';
+  return item.ten || item.Ten || item.tenHangMuc || item.TenHangMuc || item.tenSP || item.tenSp || item.tenDichVu || item.TenDichVu || 'Dịch vụ Salon';
+};
+
+const getItemQty = (item) => {
+  if (!item) return 1;
+  return item.soLuong || item.SoLuong || item.soluong || 1;
+};
+
+const getItemPrice = (item) => {
+  if (!item) return 0;
+  if (item.thanhTien != null) return Number(item.thanhTien);
+  if (item.ThanhTien != null) return Number(item.ThanhTien);
+  const gia = Number(item.gia || item.Gia || item.giaBan || item.GiaBan || 0);
+  const sl = getItemQty(item);
+  return gia * sl;
+};
+
 const viewDetail = async (maHd) => {
   try {
-    const tokenHeaders = getAuthHeaders();
-    const res = await fetch(`https://localhost:7196/api/admin/hoa-don/chi-tiet/${maHd}`, {
-      method: 'GET',
-      headers: {
-        ...tokenHeaders,
-        'Content-Type': 'application/json'
+    // Tìm dữ liệu hóa đơn đã có sẵn từ stats (fallback)
+    const allInvoices = [...(stats.value.hoaDonSanPham || []), ...(stats.value.hoaDonDichVu || [])];
+    const localMatch = allInvoices.find(h => String(h.maHd || h.MaHd || '').toUpperCase() === String(maHd).toUpperCase());
+
+    let detail = null;
+
+    // Thử gọi API chi tiết trước
+    try {
+      const tokenHeaders = getAuthHeaders();
+      const res = await fetch(`https://localhost:7196/api/admin/hoa-don/chi-tiet/${maHd}`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          ...tokenHeaders,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (res.ok) {
+        const result = await res.json();
+        if (result.success && result.data) {
+          detail = result.data;
+        }
       }
-    });
-    const result = await res.json();
-    if (result.success) {
-      const detail = result.data;
-      const match = stats.value.hoaDonSanPham?.find(h => String(h.maHd || h.MaHd || '').toUpperCase() === String(maHd).toUpperCase());
-      if (match && (match.chiTiet || match.ChiTiet)) {
-        detail.chiTiet = match.chiTiet || match.ChiTiet;
-      }
-      selectedHd.value = detail;
-      isModalOpen.value = true;
-    } else {
-      alert("Không thể tải chi tiết hóa đơn: " + (result.message || ""));
+    } catch (apiErr) {
+      console.warn('API chi tiết hóa đơn không phản hồi, sử dụng dữ liệu có sẵn:', apiErr);
     }
+
+    // Nếu API không trả dữ liệu, fallback sang dữ liệu local
+    if (!detail) {
+      if (localMatch) {
+        detail = { ...localMatch };
+      } else {
+        alert("Không thể tải chi tiết hóa đơn");
+        return;
+      }
+    }
+
+    // Bổ sung dữ liệu từ local nếu thiếu
+    if (localMatch) {
+      if (!detail.chiTiet && !detail.chiTietDichVu) {
+        detail.chiTiet = localMatch.chiTiet || localMatch.ChiTiet || localMatch.chiTietDichVu || localMatch.ChiTietDichVu;
+      }
+      if (!detail.tenKh && (localMatch.khachHang || localMatch.tenKhachHang || localMatch.tenKh)) {
+        detail.tenKh = localMatch.khachHang || localMatch.tenKhachHang || localMatch.tenKh;
+      }
+      if (!detail.tenThuNgan && (localMatch.tenThuNgan || localMatch.thuNgan)) {
+        detail.tenThuNgan = localMatch.tenThuNgan || localMatch.thuNgan;
+      }
+      if (detail.tongTien == null && localMatch.tongTien != null) {
+        detail.tongTien = localMatch.tongTien;
+      }
+      if (detail.thanhTien == null && localMatch.thanhTien != null) {
+        detail.thanhTien = localMatch.thanhTien;
+      }
+      if (!detail.maHd) {
+        detail.maHd = localMatch.maHd || localMatch.MaHd;
+      }
+      if (!detail.ngayTao && localMatch.ngayTao) {
+        detail.ngayTao = localMatch.ngayTao;
+      }
+    }
+
+    selectedHd.value = detail;
+    isModalOpen.value = true;
+    logActivity('Xem chi tiết hóa đơn', `Xem chi tiết hóa đơn #${maHd}:\n• Khách hàng: "${detail.tenKh || detail.khachHang || 'Khách vãng lai'}"\n• Thu ngân: "${detail.tenThuNgan || 'Hệ thống'}"\n• Tổng thanh toán: "${(detail.thanhTien || 0).toLocaleString()}₫"`, 'Hóa đơn');
   } catch (e) {
+    logActivity('Xem chi tiết hóa đơn', `Thất bại khi tải chi tiết hóa đơn #${maHd} - Lỗi: ${e.message || 'Không xác định'}`, 'Hóa đơn', 'Thất bại');
     alert("Không thể tải chi tiết hóa đơn");
   }
 };
 
-const printInvoice = () => { window.print(); };
+const printInvoice = () => {
+  const maHd = selectedHd.value?.maHd || 'N/A';
+  const tenKh = selectedHd.value?.tenKh || selectedHd.value?.khachHang || 'Khách vãng lai';
+  const thanhTien = (selectedHd.value?.thanhTien || 0).toLocaleString();
+  logActivity('In hóa đơn', `In phiếu thanh toán hóa đơn #${maHd}:\n• Khách hàng: "${tenKh}"\n• Tổng thanh toán: "${thanhTien}₫"\n• Phương thức in: "Máy in POS K80"`, 'Hóa đơn');
+  window.print();
+};
 
 const resetFilter = () => {
+  logActivity('Đặt lại bộ lọc Dashboard', `Đặt lại toàn bộ bộ lọc trang Tổng quan Salon về mặc định:\n• Ngày bắt đầu: "${fmtInput(firstDay)}"\n• Ngày kết thúc: "${fmtInput(today)}"\n• Từ khóa tìm kiếm: "Đã xóa"`, 'Hóa đơn');
   startDate.value  = fmtInput(firstDay);
   endDate.value    = fmtInput(today);
   searchMaHd.value = '';
@@ -716,74 +811,174 @@ onMounted(() => {
     </template>
   </v-container>
 
-  <!-- Detail Modal -->
+  <!-- Detail Modal & Thermal Receipt Print Template (Đồng bộ 100% với HoaDon.vue) -->
   <Teleport to="body">
-    <div v-if="isModalOpen" class="hd-modal-overlay">
-      <div class="hd-modal-container">
-        <div class="hd-modal-header print:hidden">
-          <h3 class="hd-modal-title">Hóa đơn chi tiết: #{{ selectedHd.maHd }}</h3>
-          <div class="hd-modal-header-actions">
-            <button @click="printInvoice" class="hd-btn-print">
-              <Printer class="w-4 h-4" /> In Hóa Đơn
+    <div 
+      v-if="isModalOpen && selectedHd" 
+      class="fixed inset-0 z-[2500] flex items-center justify-center p-4 md:p-6 lg:p-8 bg-slate-950/80 backdrop-blur-md transition-all print:p-0 print:bg-white print:static print:inset-auto"
+      @click="isModalOpen = false"
+    >
+      <div 
+        class="act-modal-container relative w-full max-w-4xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col transition-all duration-300 print:shadow-none print:border-none print:max-w-full print:w-full print:bg-white"
+        :class="isDarkMode ? 'bg-[#1b1b28] border-slate-700/80 text-slate-100' : 'bg-white border-slate-200 text-slate-800'"
+        @click.stop
+      >
+        <!-- Modal Header -->
+        <div class="px-8 md:px-12 py-5 border-b flex items-center justify-between relative overflow-hidden bg-gradient-to-r from-sky-600 via-blue-700 to-indigo-800 text-white print:hidden">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white shadow-md flex-shrink-0">
+              <Receipt class="w-5 h-5" />
+            </div>
+            <div>
+              <h3 class="font-extrabold text-base md:text-lg text-white tracking-wide">
+                HÓA ĐƠN CHI TIẾT
+              </h3>
+              <p class="text-xs text-sky-100 font-mono opacity-90">
+                Mã hóa đơn: #{{ selectedHd.maHd }}
+              </p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <button 
+              @click="printInvoice" 
+              class="h-9 px-4 text-xs font-extrabold bg-white/20 hover:bg-white/30 text-white rounded-lg border border-white/30 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+            >
+              <Printer class="w-4 h-4" /> In Hóa Đơn (Máy in POS)
             </button>
-            <button @click="isModalOpen = false" class="hd-btn-close">
+            <button 
+              @click="isModalOpen = false" 
+              class="w-9 h-9 rounded-lg bg-white/15 hover:bg-white/25 border border-white/20 flex items-center justify-center text-white transition-all cursor-pointer"
+            >
               <X class="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        <div class="hd-modal-body">
-          <div id="invoice-print" class="hd-invoice-print">
-            <div class="hd-invoice-print-header">
-              <h1>Minh Tâm Hair Salon</h1>
-              <p>Địa chỉ: 123 Đường ABC, Quận X, TP. HCM</p>
-              <p style="font-weight: 700;">Hotline: 0123.456.789</p>
+        <!-- Modal Body -->
+        <div class="p-6 md:p-10 flex flex-col items-center justify-center max-h-[80vh] overflow-y-auto custom-scrollbar print:max-h-none print:p-0 print:overflow-visible">
+          
+          <div id="invoice-print" class="w-full max-w-3xl mx-auto px-4 md:px-8 py-2 flex flex-col gap-6 print:max-w-full print:px-0 print:py-0 print:gap-2.5">
+            
+            <!-- Header Tiêu Đề Salon -->
+            <div class="text-center border-b pb-4 print:border-b print:border-black print:pb-1.5">
+              <h1 class="text-2xl print:text-base font-black uppercase tracking-wider text-sky-500 print:text-black mb-1">MINH TÂM HAIR SALON</h1>
+              <p class="text-xs font-medium print:text-[10px] print:text-black" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">Địa chỉ: 123 Đường ABC, Quận X, TP. HCM</p>
+              <p class="text-xs font-extrabold text-sky-600 print:text-[10px] print:text-black mt-0.5">Hotline: 0123.456.789</p>
             </div>
 
-            <div class="hd-invoice-info-grid">
-              <div class="hd-invoice-info-left">
-                <p><span class="hd-invoice-info-label">Mã HĐ:</span> <span class="hd-invoice-info-value">#{{ selectedHd.maHd }}</span></p>
-                <p><span class="hd-invoice-info-label">Ngày tạo:</span> <span class="hd-invoice-info-value" style="color: #334155;">{{ new Date(selectedHd.ngayTao).toLocaleString('vi-VN') }}</span></p>
+            <!-- Tiêu đề Phiếu thanh toán khi in máy in thực tế -->
+            <div class="hidden print:block text-center font-extrabold text-xs uppercase tracking-wider border-b border-dashed border-black pb-1.5">
+              PHIẾU THANH TOÁN HÓA ĐƠN
+            </div>
+
+            <!-- Invoice Info Cards Grid -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-5 rounded-xl border print:hidden" :class="isDarkMode ? 'bg-[#242436] border-slate-700/80' : 'bg-slate-50 border-slate-200'">
+              
+              <div class="flex flex-col gap-1.5 text-left items-start overflow-hidden px-2">
+                <span class="text-[11px] font-extrabold uppercase tracking-wider opacity-75 whitespace-nowrap" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">MÃ HÓA ĐƠN</span>
+                <span class="text-xs md:text-sm font-extrabold font-mono text-sky-500 whitespace-nowrap">#{{ selectedHd.maHd }}</span>
               </div>
-              <div class="hd-invoice-info-right">
-                <p><span class="hd-invoice-info-label">Khách hàng:</span> <span class="hd-invoice-info-value">{{ selectedHd.tenKh }}</span></p>
-                <p><span class="hd-invoice-info-label">Tổng thu ngân:</span> <span class="hd-invoice-info-value" style="color: #334155;">{{ selectedHd.tenThuNgan }}</span></p>
+
+              <div class="flex flex-col gap-1.5 text-left items-start overflow-hidden px-2">
+                <span class="text-[11px] font-extrabold uppercase tracking-wider opacity-75 whitespace-nowrap" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">NGÀY TẠO</span>
+                <span class="text-xs font-bold font-mono whitespace-nowrap" :class="isDarkMode ? 'text-slate-200' : 'text-slate-800'">{{ new Date(selectedHd.ngayTao).toLocaleString('vi-VN') }}</span>
+              </div>
+
+              <div class="flex flex-col gap-1.5 text-left items-start overflow-hidden px-2">
+                <span class="text-[11px] font-extrabold uppercase tracking-wider opacity-75 whitespace-nowrap" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">KHÁCH HÀNG</span>
+                <span class="text-xs md:text-sm font-black truncate w-full" :class="isDarkMode ? 'text-white' : 'text-slate-900'">{{ selectedHd.tenKh || selectedHd.khachHang || 'Khách vãng lai' }}</span>
+              </div>
+
+              <div class="flex flex-col gap-1.5 text-left items-start overflow-hidden px-2">
+                <span class="text-[11px] font-extrabold uppercase tracking-wider opacity-75 whitespace-nowrap" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">THU NGÂN</span>
+                <span class="text-xs font-bold truncate w-full" :class="isDarkMode ? 'text-slate-200' : 'text-slate-800'">{{ selectedHd.tenThuNgan || 'Hệ thống' }}</span>
+              </div>
+
+            </div>
+
+            <!-- Khung thông tin hóa đơn DÀNH RIÊNG CHO MÁY IN POS -->
+            <div class="hidden print:flex flex-col gap-1 text-[11px] border-b border-dashed border-black pb-2 font-mono">
+              <div class="flex justify-between"><span>Mã hóa đơn:</span> <strong>#{{ selectedHd.maHd }}</strong></div>
+              <div class="flex justify-between"><span>Ngày tạo:</span> <span>{{ new Date(selectedHd.ngayTao).toLocaleString('vi-VN') }}</span></div>
+              <div class="flex justify-between"><span>Khách hàng:</span> <strong>{{ selectedHd.tenKh || selectedHd.khachHang || 'Khách vãng lai' }}</strong></div>
+              <div class="flex justify-between"><span>Thu ngân:</span> <span>{{ selectedHd.tenThuNgan || 'Hệ thống' }}</span></div>
+            </div>
+
+            <!-- Invoice Items Table -->
+            <div class="overflow-x-auto rounded-xl border print:border-none print:rounded-none print:overflow-visible print:w-full" :class="isDarkMode ? 'border-slate-700/80' : 'border-slate-200'">
+              <table class="w-full text-left text-xs md:text-sm border-collapse min-w-[550px] print:min-w-0 print:w-full print:text-[10px] print:table-fixed">
+                <thead>
+                  <tr :class="[isDarkMode ? 'bg-[#252536] text-slate-200 border-b border-slate-700/80' : 'bg-slate-100 text-slate-700 border-b border-slate-200', 'print:bg-transparent print:text-black print:border-t print:border-b print:border-dashed print:border-black']">
+                    <th class="py-3.5 px-6 font-extrabold uppercase print:py-1 print:px-0 print:w-[50%] print:text-left">Tên Sản phẩm / Dịch vụ</th>
+                    <th class="py-3.5 px-6 font-extrabold uppercase text-center w-20 print:w-[15%] print:py-1 print:px-0 print:text-center">SL</th>
+                    <th class="py-3.5 px-6 font-extrabold uppercase print:py-1 print:px-0 print:hidden">Ghi chú</th>
+                    <th class="py-3.5 px-6 font-extrabold uppercase text-right print:w-[35%] print:py-1 print:px-0 print:text-right">Thành tiền</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y print:divide-y-0" :class="isDarkMode ? 'divide-slate-800' : 'divide-slate-100'">
+                  <tr 
+                    v-for="(item, index) in getInvoiceItems(selectedHd)" 
+                    :key="index"
+                    :class="[isDarkMode ? 'text-slate-200' : 'text-slate-800', 'print:text-black']"
+                  >
+                    <td class="py-4 px-6 font-bold print:py-1 print:px-0 print:font-normal print:w-[50%] print:break-words text-left" :class="isDarkMode ? 'text-white' : 'text-slate-900'">
+                      {{ getItemName(item) }}
+                    </td>
+                    <td class="py-4 px-6 text-center font-bold font-mono print:py-1 print:px-0 print:font-normal print:w-[15%] print:text-center">
+                      {{ getItemQty(item) }}
+                    </td>
+                    <td class="py-4 px-6 print:hidden">
+                      <span class="inline-block px-2.5 py-0.5 rounded text-[10px] font-bold border" :class="isDarkMode ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-600 border-slate-200'">
+                        {{ selectedHd.maHd?.toUpperCase().startsWith('SP') || selectedHd.maHd?.toUpperCase().startsWith('HDSP') ? 'Sản phẩm' : (item.thoThucHien || 'Hệ thống') }}
+                      </span>
+                    </td>
+                    <td class="py-4 px-6 text-right font-black font-mono print:py-1 print:px-0 print:font-bold print:w-[35%] print:text-right" :class="isDarkMode ? 'text-sky-400' : 'text-slate-900'">
+                      {{ getItemPrice(item).toLocaleString() }}₫
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Total Revenue Footer -->
+            <div class="flex flex-col items-end gap-2 pt-5 px-2 border-t print:pt-2 print:border-t print:border-dashed print:border-black print:items-stretch" :class="isDarkMode ? 'border-slate-700/80' : 'border-slate-200'">
+              <div class="flex items-center justify-between w-full text-xs print:text-[11px]" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">
+                <span>Tạm tính gốc:</span>
+                <strong :class="isDarkMode ? 'text-slate-200' : 'text-slate-700'" class="print:text-black">{{ selectedHd.tongTien?.toLocaleString() }}₫</strong>
+              </div>
+              <div v-if="selectedHd.giamGiaVip" class="flex items-center justify-between w-full text-xs font-bold text-rose-500 print:text-[11px] print:text-black">
+                <span>Giảm giá VIP:</span>
+                <span>-{{ selectedHd.giamGiaVip }}%</span>
+              </div>
+              <div class="flex items-center justify-between w-full text-base md:text-lg font-bold print:text-xs print:pt-1 print:border-t print:border-black">
+                <span :class="isDarkMode ? 'text-slate-300' : 'text-slate-700'" class="print:text-black font-extrabold">TỔNG THANH TOÁN:</span>
+                <span class="font-black text-sky-500 font-mono text-lg md:text-xl print:text-black print:text-sm print:font-extrabold">{{ selectedHd.thanhTien?.toLocaleString() }}₫</span>
               </div>
             </div>
 
-            <table class="hd-invoice-table">
-              <thead>
-                <tr>
-                  <th style="text-align: left;">Tên Sản phẩm / Dịch vụ</th>
-                  <th style="text-align: center; width: 80px;">Số lượng</th>
-                  <th style="text-align: left;">Người thực hiện / Ghi chú</th>
-                  <th style="text-align: right;">Thành tiền</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(item, index) in (selectedHd.maHd?.toUpperCase().startsWith('SP') || selectedHd.maHd?.toUpperCase().startsWith('HDSP') ? (selectedHd.chiTiet || selectedHd.chiTietDichVu || []) : (selectedHd.chiTietDichVu || []))" :key="index">
-                  <td style="font-weight: 500;">{{ item.ten || item.Ten || item.tenHangMuc || item.tenSP || item.tenSp }}</td>
-                  <td style="text-align: center; font-weight: 600;">{{ item.soLuong || item.SoLuong || item.soluong || 1 }}</td>
-                  <td><span class="hd-invoice-badge">{{ selectedHd.maHd?.toUpperCase().startsWith('SP') || selectedHd.maHd?.toUpperCase().startsWith('HDSP') ? 'Sản phẩm' : (item.thoThucHien || 'Hệ thống') }}</span></td>
-                  <td style="text-align: right; font-weight: 700; color: #0f172a;">{{ (item.gia || item.Gia || item.giaBan || 0).toLocaleString() }}₫</td>
-                </tr>
-              </tbody>
-            </table>
-
-            <div class="print:hidden hd-invoice-quick-update">
-              <span class="hd-invoice-quick-update-label">Trạng thái hóa đơn:</span>
-              <span class="hd-invoice-badge" style="font-size: 12px; font-weight: 700; text-transform: uppercase;">
-                {{ trangThaiLabel(selectedHd.trangThai) }}
-              </span>
+            <!-- Lời cảm ơn dành riêng cho trang in hóa đơn máy in nhiệt POS K80 -->
+            <div class="hidden print:flex flex-col items-center justify-center text-center mt-3 pt-3 border-t border-dashed border-black gap-1">
+              <p class="text-[11px] font-bold">Cảm ơn Quý khách & Hẹn gặp lại!</p>
+              <p class="text-[9px]">Hotline CSKH: 0123.456.789 - Website: lghair.vn</p>
             </div>
 
-            <div class="hd-invoice-total">
-              <p class="hd-invoice-total-sub">Tạm tính gốc: <strong>{{ selectedHd.tongTien?.toLocaleString() }}₫</strong></p>
-              <p v-if="selectedHd.giamGiaVip" class="hd-invoice-total-vip">Giảm giá VIP: -{{ selectedHd.giamGiaVip }}%</p>
-              <p class="hd-invoice-total-main">Tổng doanh thu nhận về: {{ selectedHd.thanhTien?.toLocaleString() }}₫</p>
-            </div>
           </div>
         </div>
+
+        <!-- Modal Footer -->
+        <div 
+          class="px-8 md:px-12 py-4 border-t flex items-center justify-center print:hidden transition-colors"
+          :class="isDarkMode ? 'bg-[#242436] border-slate-700/80' : 'bg-slate-50 border-slate-200'"
+        >
+          <button 
+            @click="isModalOpen = false" 
+            class="act-modal-close-btn h-11 px-10 text-xs font-extrabold rounded-xl transition-all cursor-pointer shadow-md flex items-center justify-center"
+          >
+            <span>Đóng cửa sổ</span>
+          </button>
+        </div>
+
       </div>
     </div>
   </Teleport>
@@ -804,227 +999,48 @@ td {
   font-size: 0.855rem;
 }
 
-/* ── Modal overlay for detail view ── */
-.hd-modal-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 1000;
-    background-color: rgba(15, 23, 42, 0.5);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
+/* Nút Đóng Cửa Sổ khóa cố định màu nền xanh Sky sáng chữ Trắng 100% trong cả sáng và tối */
+.act-modal-close-btn {
+  background-color: #0284c7 !important;
+  color: #ffffff !important;
+  border: 1px solid #0284c7 !important;
 }
-.hd-modal-container {
-    background-color: #ffffff;
-    border-radius: 16px;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    width: 100%;
-    max-width: 680px;
-    overflow: hidden;
-    animation: hdModalShow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+.act-modal-close-btn:hover {
+  background-color: #0369a1 !important;
+  border-color: #0369a1 !important;
 }
-@keyframes hdModalShow {
-    from { transform: scale(0.95); opacity: 0; }
-    to { transform: scale(1); opacity: 1; }
-}
-.hd-modal-header {
-    padding: 16px 24px;
-    background-color: #f8fafc;
-    border-bottom: 1px solid #e2e8f0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-.hd-modal-title {
-    font-size: 16px;
-    font-weight: 700;
-    color: #1e293b;
-    margin: 0;
-}
-.hd-modal-header-actions {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-}
-.hd-btn-print {
-    background-color: #2563eb !important;
-    color: #ffffff !important;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 8px;
-    font-size: 12px;
-    font-weight: 700;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    transition: all 0.2s ease;
-}
-.hd-btn-print:hover {
-    background-color: #1d4ed8 !important;
-}
-.hd-btn-close {
-    background: none;
-    border: none;
-    color: #94a3b8;
-    padding: 6px;
-    border-radius: 9999px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease;
-}
-.hd-btn-close:hover {
-    color: #475569;
-    background-color: #e2e8f0;
-}
-
-.hd-modal-body {
-    padding: 24px;
-    max-height: 80vh;
-    overflow-y: auto;
-}
-
-.hd-invoice-print {
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-    color: #1e293b;
-}
-.hd-invoice-print-header {
-    text-align: center;
-    border-bottom: 1px solid #e2e8f0;
-    padding-bottom: 16px;
-}
-.hd-invoice-print-header h1 {
-    font-size: 22px;
-    font-weight: 800;
-    text-transform: uppercase;
-    color: #2563eb;
-    margin: 0 0 4px 0;
-    letter-spacing: 0.05em;
-}
-.hd-invoice-print-header p {
-    font-size: 13px;
-    color: #64748b;
-    margin: 2px 0;
-}
-.hd-invoice-info-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    background-color: #f8fafc;
-    padding: 16px;
-    border-radius: 10px;
-    border: 1px solid #edf2f7;
-    font-size: 13px;
-}
-.hd-invoice-info-left {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-.hd-invoice-info-right {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    text-align: right;
-}
-.hd-invoice-info-label {
-    color: #94a3b8;
-    text-transform: uppercase;
-    font-size: 11px;
-    font-weight: 600;
-    margin-right: 4px;
-}
-.hd-invoice-info-value {
-    color: #334155;
-    font-weight: 700;
-}
-.hd-invoice-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    overflow: hidden;
-}
-.hd-invoice-table th {
-    padding: 10px 14px;
-    background-color: #f8fafc;
-    color: #475569;
-    font-weight: 700;
-    text-transform: uppercase;
-    font-size: 11px;
-    letter-spacing: 0.05em;
-    border-bottom: 1px solid #e2e8f0;
-}
-.hd-invoice-table td {
-    padding: 12px 14px;
-    border-bottom: 1px solid #f1f5f9;
-    color: #334155;
-}
-.hd-invoice-table tbody tr:last-child td {
-    border-bottom: none;
-}
-.hd-invoice-badge {
-    padding: 2px 8px;
-    border-radius: 4px;
-    background-color: #f1f5f9;
-    color: #475569;
-    font-size: 10px;
-    font-weight: 600;
-    border: 1px solid #cbd5e1;
-}
-.hd-invoice-total {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 6px;
-    padding-top: 16px;
-    border-top: 1px solid #e2e8f0;
-}
-.hd-invoice-total-sub {
-    font-size: 13px;
-    color: #64748b;
-}
-.hd-invoice-total-vip {
-    font-size: 13px;
-    color: #ef4444;
-    font-weight: 600;
-}
-.hd-invoice-total-main {
-    font-size: 18px;
-    font-weight: 800;
-    color: #2563eb;
+.act-modal-close-btn span {
+  color: #ffffff !important;
 }
 </style>
 
 <style>
+/* Style dành riêng cho máy in hóa đơn nhiệt POS K80 / Máy in thực tế (Đồng bộ chuẩn 100% với HoaDon.vue) */
 @media print {
-    #app {
+    @page {
+        size: 80mm auto;
+        margin: 0;
+    }
+    
+    html, body {
+        background: #ffffff !important;
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        font-family: Arial, Helvetica, sans-serif !important;
+    }
+    
+    #app, .v-application, .v-overlay-container, .v-layout {
         display: none !important;
     }
-    body {
-        background-color: #ffffff !important;
-        margin: 0 !important;
-        padding: 0 !important;
+
+    .print\:hidden {
+        display: none !important;
     }
-    .hd-modal-overlay {
-        position: static !important;
-        background: none !important;
-        backdrop-filter: none !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        width: 100% !important;
-        height: auto !important;
-        display: block !important;
-    }
-    .hd-modal-container {
+
+    .act-modal-container {
         box-shadow: none !important;
         border: none !important;
         width: 100% !important;
@@ -1032,21 +1048,54 @@ td {
         margin: 0 !important;
         padding: 0 !important;
         background: #ffffff !important;
+        color: #000000 !important;
+        border-radius: 0 !important;
     }
-    .hd-invoice-print {
-        padding: 0 !important;
-        margin: 0 !important;
+
+    /* Reset toàn bộ nền đen/xám của Dark Mode thành màu trắng tinh khi in giấy nhiệt */
+    #invoice-print,
+    #invoice-print * {
+        background-color: transparent !important;
+        background: transparent !important;
+        color: #000000 !important;
+        border-color: #000000 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        text-shadow: none !important;
+    }
+
+    #invoice-print {
+        width: 76mm !important;
+        max-width: 76mm !important;
+        margin: 0 auto !important;
+        padding: 3mm 2mm !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Force table to fit within 76mm print width - no scrollbar, no overflow, all columns visible */
+    #invoice-print table {
         width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        table-layout: fixed !important;
+        border-collapse: collapse !important;
+        font-size: 10px !important;
     }
-    .hd-modal-overlay,
-    .hd-modal-overlay *,
-    .hd-modal-container,
-    .hd-modal-container * {
-        visibility: visible !important;
+
+    #invoice-print th,
+    #invoice-print td {
+        white-space: normal !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+        padding: 2px 1px !important;
+        font-size: 10px !important;
     }
-    .print\:hidden,
-    .hd-modal-header {
-        display: none !important;
+
+    #invoice-print div[class*="overflow"] {
+        overflow: visible !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
     }
 }
 </style>

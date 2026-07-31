@@ -2,8 +2,10 @@
 import { ref, computed, reactive, onMounted } from "vue";
 import axios from "axios";
 import { logActivity } from "@/utils/activityLogger";
-
 import { useTheme } from "vuetify";
+import {
+  Plus, Pencil, Trash2, Eye, Search, ImageOff, X, Check, RotateCcw, Upload,
+} from "lucide-vue-next";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -19,14 +21,11 @@ function toAbsUrl(path) {
 
 // ══ DATA ══════════════════════════════════════════════════════════
 const danhMucs = ref([]);
+const isLoading = ref(false);
 
 // ══ STATE ══════════════════════════════════════════════════════════
 const search = ref("");
 const filterStatus = ref("");
-const curPage = ref(1);
-const perPage = ref(10);
-const sortField = ref(null);
-const sortDir = ref(1);
 const saving = ref(false);
 
 // ══ MODAL ══════════════════════════════════════════════════════════
@@ -130,6 +129,7 @@ function removeImg() {
 
 // ══ LOAD DATA ═════════════════════════════════════════════════════
 async function loadData() {
+  isLoading.value = true;
   try {
     const res = await axios.get(`${API}/api/QuanLyDanhMucSP`);
     danhMucs.value = res.data.map(d => ({
@@ -140,57 +140,49 @@ async function loadData() {
       soSanPham: d.soSanPham ?? 0,
     }));
   } catch { showToast("Lỗi tải danh sách danh mục!", "error"); }
+  finally { isLoading.value = false; }
 }
 
-// ══ COMPUTED ══════════════════════════════════════════════════════
-const toast = reactive({ show: false, msg: "", type: "success" });
-const lightbox = reactive({ open: false, src: "" });
+// ══ SNACKBAR (Vuetify) ═════════════════════════════════════════════
+const snackbar = ref({ show: false, text: "", color: "success" });
+function showToast(msg, type = "success") {
+  snackbar.value.text = msg;
+  snackbar.value.color = type === "success" ? "success" : "error";
+  snackbar.value.show = true;
+}
 
+// ══ LIGHTBOX ══════════════════════════════════════════════════════
+const lightbox = reactive({ open: false, src: "" });
+function openLightbox(src) { lightbox.src = src; lightbox.open = true; }
+
+// ══ COMPUTED ══════════════════════════════════════════════════════
 const totalActive = computed(() => danhMucs.value.filter(d => d.trangThai === 1).length);
 const totalProducts = computed(() => danhMucs.value.reduce((s, d) => s + (d.soSanPham ?? 0), 0));
 
 const filteredData = computed(() => {
   const q = search.value.toLowerCase().trim();
-  let arr = danhMucs.value.filter(d => {
+  return danhMucs.value.filter(d => {
     const mq = !q || d.tenDanhMuc.toLowerCase().includes(q) || d.maDMSP.toLowerCase().includes(q);
     const ms = filterStatus.value === "" || String(d.trangThai) === filterStatus.value;
     return mq && ms;
   });
-  if (sortField.value)
-    arr = [...arr].sort((a, b) =>
-      a[sortField.value] > b[sortField.value] ? sortDir.value : -sortDir.value
-    );
-  return arr;
 });
 
-const totalPages = computed(() => Math.ceil(filteredData.value.length / perPage.value));
-const pageData = computed(() => {
-  const s = (curPage.value - 1) * perPage.value;
-  return filteredData.value.slice(s, s + perPage.value);
-});
-const pageRange = computed(() => {
-  const t = totalPages.value, c = curPage.value;
-  const lo = Math.max(1, c - 2), hi = Math.min(t, lo + 4);
-  return Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
-});
+// ══ HEADERS cho v-data-table ═══════════════════════════════════════
+const headers = [
+  { title: "Ảnh", key: "hinhAnh", align: "center", sortable: false, width: 70 },
+  { title: "Mã DM", key: "maDMSP", align: "start", sortable: true },
+  { title: "Tên danh mục", key: "tenDanhMuc", align: "start", sortable: true },
+  { title: "Số SP", key: "soSanPham", align: "center", sortable: true },
+  { title: "Trạng thái", key: "trangThai", align: "center", sortable: true },
+  { title: "Thao tác", key: "actions", align: "center", sortable: false },
+];
 
 // ══ HELPERS ═══════════════════════════════════════════════════════
-function sortIcon(f) { return sortField.value !== f ? "↕" : sortDir.value === 1 ? "↑" : "↓"; }
-function setSort(f) {
-  sortField.value === f ? (sortDir.value *= -1) : ((sortField.value = f), (sortDir.value = 1));
-  curPage.value = 1;
-}
-
-const CAT_COLORS = ["cat-1", "cat-2", "cat-3", "cat-4", "cat-5"];
-function getCatClass(maDMSP) {
+const CAT_COLORS = ["blue", "purple", "orange", "green", "amber-darken-2"];
+function getCatColor(maDMSP) {
   const idx = danhMucs.value.findIndex(x => x.maDMSP === maDMSP);
-  return CAT_COLORS[idx % CAT_COLORS.length] ?? "cat-1";
-}
-
-// ══ TOAST ═════════════════════════════════════════════════════════
-function showToast(msg, type = "success") {
-  toast.msg = msg; toast.type = type; toast.show = true;
-  setTimeout(() => { toast.show = false; }, 3000);
+  return CAT_COLORS[idx % CAT_COLORS.length] ?? "blue";
 }
 
 // ══ MODAL ACTIONS ══════════════════════════════════════════════════
@@ -316,502 +308,332 @@ onMounted(loadData);
 </script>
 
 <template>
-  <div class="dm-manager" :class="{ 'dark-mode': isDarkMode }">
+  <v-container fluid class="pa-6 fill-height align-start" style="min-height: 100vh;">
+    <v-card width="100%" elevation="2" rounded="xl">
+      <v-card-title class="d-flex flex-column flex-md-row align-md-center justify-space-between pa-6">
+        <div>
+          <h2 class="text-h5 font-weight-bold mb-1">Quản Lý Danh Mục Sản Phẩm</h2>
+          <div class="text-subtitle-2 text-medium-emphasis">
+            {{ danhMucs.length }} danh mục · {{ totalActive }} đang hiện · {{ totalProducts }} sản phẩm
+          </div>
+        </div>
 
-    <!-- ── STATS ──────────────────────────────────────────────────── -->
+        <div class="d-flex align-center gap-3 mt-4 mt-md-0 flex-wrap">
+          <v-btn
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            class="text-none font-weight-bold"
+            @click="openAdd"
+          >
+            <template v-slot:prepend><Plus class="w-4 h-4 mr-1" /></template>
+            Thêm danh mục
+          </v-btn>
 
-    <!-- ── HEADER BAR ──────────────────────────────────────────────── -->
-    <div class="header-bar">
-      <div class="page-title-text">Quản lý danh mục sản phẩm</div>
-      <div class="header-actions">
-        <button type="button" class="btn btn-primary btn-sm" @click="openAdd">
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M8 2v12M2 8h12" />
-          </svg>
-          Thêm danh mục
-        </button>
-      </div>
-    </div>
+          <v-btn variant="outlined" color="grey-darken-1" size="40" rounded="lg" @click="loadData">
+            <RotateCcw class="w-5 h-5" />
+          </v-btn>
+        </div>
+      </v-card-title>
 
-    <!-- ── TOOLBAR ────────────────────────────────────────────────── -->
-    <div class="toolbar">
-      <div class="search-box">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-          <circle cx="7" cy="7" r="5" /><path d="M11 11l3 3" />
-        </svg>
-        <input v-model="search" placeholder="Tìm tên, mã danh mục..." @input="curPage = 1" />
-      </div>
-      <select v-model="filterStatus" class="filter-select" @change="curPage = 1">
-        <option value="">Tất cả trạng thái</option>
-        <option value="1">Đang hoạt động</option>
-        <option value="0">Tạm ẩn</option>
-      </select>
-      <span class="result-count">{{ filteredData.length }} kết quả</span>
-      <select v-model.number="perPage" class="filter-select" style="width:auto;min-width:110px" @change="curPage = 1">
-        <option :value="10">10 / trang</option>
-        <option :value="20">20 / trang</option>
-        <option :value="50">50 / trang</option>
-        <option :value="9999">Tất cả</option>
-      </select>
-    </div>
+      <v-divider></v-divider>
 
-    <!-- ── TABLE ──────────────────────────────────────────────────── -->
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th style="width:56px">Ảnh</th>
-            <th class="sortable" @click="setSort('maDMSP')">
-              Mã DM <span class="sort-icon">{{ sortIcon("maDMSP") }}</span>
-            </th>
-            <th class="sortable" @click="setSort('tenDanhMuc')">
-              Tên danh mục <span class="sort-icon">{{ sortIcon("tenDanhMuc") }}</span>
-            </th>
-            <th class="sortable" @click="setSort('soSanPham')">
-              Số SP <span class="sort-icon">{{ sortIcon("soSanPham") }}</span>
-            </th>
-            <th>Trạng thái</th>
-            <th>Thao tác</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="pageData.length === 0">
-            <td colspan="6">
-              <div class="empty-state">
-                <div class="empty-icon">🔍</div>
-                <div class="empty-text">Không tìm thấy danh mục nào</div>
+      <!-- ── TOOLBAR ────────────────────────────────────────────── -->
+      <v-card-text class="pb-0">
+        <v-row dense>
+          <v-col cols="12" md="5">
+            <v-text-field
+              v-model="search"
+              label="Tìm tên, mã danh mục..."
+              variant="outlined"
+              density="compact"
+              hide-details
+              clearable
+              rounded="lg"
+            >
+              <template v-slot:prepend-inner>
+                <Search class="w-5 h-5 text-grey-darken-1 mr-2" />
+              </template>
+            </v-text-field>
+          </v-col>
+          <v-col cols="6" md="3">
+            <v-select
+              v-model="filterStatus"
+              :items="[{ title: 'Tất cả trạng thái', value: '' }, { title: 'Đang hoạt động', value: '1' }, { title: 'Tạm ẩn', value: '0' }]"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+            ></v-select>
+          </v-col>
+          <v-col cols="6" md="4" class="d-flex align-center">
+            <span class="text-caption text-medium-emphasis">{{ filteredData.length }} kết quả</span>
+          </v-col>
+        </v-row>
+      </v-card-text>
+
+      <v-data-table
+        :headers="headers"
+        :items="filteredData"
+        :loading="isLoading"
+        items-per-page="10"
+        item-value="maDMSP"
+        hover
+        class="mt-2"
+      >
+        <template v-slot:item.hinhAnh="{ item }">
+          <div class="d-flex justify-center py-2">
+            <v-avatar
+              rounded="lg"
+              size="42"
+              class="cursor-pointer"
+              @click="item.hinhAnh && openLightbox(item.hinhAnh)"
+            >
+              <v-img v-if="item.hinhAnh" :src="item.hinhAnh" cover></v-img>
+              <ImageOff v-else class="w-4 h-4 text-grey" />
+            </v-avatar>
+          </div>
+        </template>
+
+        <template v-slot:item.maDMSP="{ item }">
+          <span class="text-caption font-weight-medium code-chip">{{ item.maDMSP }}</span>
+        </template>
+
+        <template v-slot:item.tenDanhMuc="{ item }">
+          <div class="font-weight-medium">{{ item.tenDanhMuc }}</div>
+          <v-chip :color="getCatColor(item.maDMSP)" size="x-small" variant="tonal" class="font-weight-medium mt-1">
+            {{ item.maDMSP }}
+          </v-chip>
+        </template>
+
+        <template v-slot:item.soSanPham="{ item }">
+          <v-chip size="small" variant="tonal" color="info" class="font-weight-medium">
+            {{ item.soSanPham }} sản phẩm
+          </v-chip>
+        </template>
+
+        <template v-slot:item.trangThai="{ item }">
+          <v-chip
+            :color="item.trangThai === 1 ? 'success' : 'grey-darken-1'"
+            size="small"
+            variant="flat"
+            class="font-weight-bold cursor-pointer"
+            :title="item.trangThai === 1 ? 'Nhấn để tạm ẩn' : 'Nhấn để kích hoạt'"
+            @click="toggleStatus(item)"
+          >
+            {{ item.trangThai === 1 ? "Đang hiện" : "Tạm ẩn" }}
+          </v-chip>
+        </template>
+
+        <template v-slot:item.actions="{ item }">
+          <div class="d-flex align-center justify-center gap-1">
+            <v-btn icon variant="text" size="small" color="primary" title="Xem" @click="openView(item)">
+              <Eye class="w-4 h-4" />
+            </v-btn>
+            <v-btn icon variant="text" size="small" color="warning" title="Sửa" @click="openEdit(item)">
+              <Pencil class="w-4 h-4" />
+            </v-btn>
+            <v-btn icon variant="text" size="small" color="error" title="Xóa" @click="deleteDM(item)">
+              <Trash2 class="w-4 h-4" />
+            </v-btn>
+          </div>
+        </template>
+      </v-data-table>
+    </v-card>
+
+    <!-- ══ MODAL DANH MỤC ══════════════════════════════════════════ -->
+    <v-dialog v-model="modal.open" max-width="560" scrollable>
+      <v-card rounded="xl">
+        <v-card-title class="pa-6 border-b d-flex align-center justify-space-between">
+          <div class="text-h6 font-weight-bold">{{ modal.title }}</div>
+          <v-btn icon variant="text" size="small" @click="closeModal">
+            <X class="w-5 h-5" />
+          </v-btn>
+        </v-card-title>
+
+        <v-card-text class="pa-6">
+          <!-- VIEW MODE -->
+          <template v-if="modal.mode === 'view'">
+            <v-row>
+              <v-col cols="12" sm="4" class="d-flex justify-center">
+                <v-avatar
+                  rounded="lg"
+                  size="120"
+                  class="cursor-pointer"
+                  @click="form.hinhAnh && openLightbox(form.hinhAnh)"
+                >
+                  <v-img v-if="form.hinhAnh" :src="form.hinhAnh" cover></v-img>
+                  <ImageOff v-else class="w-8 h-8 text-grey" />
+                </v-avatar>
+              </v-col>
+              <v-col cols="12" sm="8">
+                <div class="detail-row"><span class="detail-label">Mã danh mục</span><span class="text-caption code-chip">{{ form.maDMSP }}</span></div>
+                <div class="detail-row"><span class="detail-label">Tên danh mục</span><span class="font-weight-medium">{{ form.tenDanhMuc }}</span></div>
+                <div class="detail-row">
+                  <span class="detail-label">Số sản phẩm</span>
+                  <v-chip color="info" size="small" variant="tonal">{{ form.soSanPham ?? 0 }} sản phẩm</v-chip>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Trạng thái</span>
+                  <v-chip :color="form.trangThai === 1 ? 'success' : 'grey-darken-1'" size="small" variant="flat" class="font-weight-bold">
+                    {{ form.trangThai === 1 ? "Đang hiện" : "Tạm ẩn" }}
+                  </v-chip>
+                </div>
+              </v-col>
+            </v-row>
+          </template>
+
+          <!-- FORM MODE -->
+          <v-form v-else @submit.prevent="saveDM">
+            <!-- Mã danh mục (chỉ khi thêm mới) -->
+            <div v-if="!editingId" class="mb-4">
+              <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Mã danh mục *</div>
+              <v-text-field
+                v-model="form.maDMSP"
+                variant="outlined" density="comfortable" rounded="lg"
+                placeholder="Ví dụ: DM001" maxlength="10"
+                autocomplete="off"
+                :error-messages="touched.maDMSP ? errors.maDMSP : ''"
+                @blur="onBlur('maDMSP')"
+                @update:model-value="touched.maDMSP && validateField('maDMSP')"
+              ></v-text-field>
+            </div>
+
+            <!-- Tên danh mục -->
+            <div class="mb-4">
+              <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2 d-flex align-center">
+                <span>Tên danh mục *</span>
+                <span
+                  class="ml-auto text-caption"
+                  :class="{ 'text-warning': tenDanhMucLength > 80 && tenDanhMucLength <= 100, 'text-error font-weight-bold': tenDanhMucLength > 100 }"
+                >{{ tenDanhMucLength }}/100</span>
               </div>
-            </td>
-          </tr>
+              <v-text-field
+                v-model="form.tenDanhMuc"
+                variant="outlined" density="comfortable" rounded="lg"
+                placeholder="Nhập tên danh mục..." maxlength="100"
+                autocomplete="off"
+                :error-messages="touched.tenDanhMuc ? errors.tenDanhMuc : ''"
+                @blur="onBlur('tenDanhMuc')"
+                @update:model-value="touched.tenDanhMuc && validateField('tenDanhMuc')"
+              ></v-text-field>
+            </div>
 
-          <tr v-for="dm in pageData" :key="dm.maDMSP">
-            <td>
-              <div class="thumb-wrap" @click="dm.hinhAnh && (lightbox.src = dm.hinhAnh, lightbox.open = true)">
-                <img v-if="dm.hinhAnh" :src="dm.hinhAnh" class="thumb-img" :alt="dm.tenDanhMuc" />
-                <div v-else class="thumb-placeholder">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <rect x="3" y="3" width="18" height="18" rx="2"/>
-                    <circle cx="8.5" cy="8.5" r="1.5"/>
-                    <path d="M21 15l-5-5L5 21"/>
-                  </svg>
+            <!-- Trạng thái -->
+            <div class="mb-4">
+              <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Trạng thái</div>
+              <v-select
+                v-model="form.trangThai"
+                :items="[
+                  { title: 'Đang hiện — hiển thị cho khách hàng', value: 1 },
+                  { title: 'Tạm ẩn — không hiển thị cho khách hàng', value: 0 },
+                ]"
+                variant="outlined" density="comfortable" rounded="lg"
+              ></v-select>
+            </div>
+
+            <!-- Hình ảnh -->
+            <div>
+              <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">
+                Hình ảnh đại diện <span class="text-caption text-medium-emphasis font-weight-regular">(không bắt buộc)</span>
+              </div>
+              <input ref="imgInput" type="file" accept="image/*" style="display:none" @change="onImgChange" />
+              <div class="upload-zone" @click="imgInput?.click()">
+                <div v-if="!form.hinhAnh" class="upload-placeholder">
+                  <Upload class="w-6 h-6" />
+                  <span>Nhấn để chọn ảnh</span>
+                  <span class="text-caption text-medium-emphasis">PNG, JPG, WEBP – tối đa 5MB</span>
+                </div>
+                <div v-else class="upload-preview-single" @click.stop>
+                  <v-img :src="form.hinhAnh" width="90" height="90" cover rounded="lg" class="border"></v-img>
+                  <v-btn icon size="x-small" color="error" class="remove-single-img" title="Xóa ảnh" @click.stop="removeImg">
+                    <X class="w-3 h-3" />
+                  </v-btn>
                 </div>
               </div>
-            </td>
-            <td>
-              <span class="code-text">{{ dm.maDMSP }}</span>
-            </td>
-            <td>
-              <div class="sp-name">{{ dm.tenDanhMuc }}</div>
-              <span class="cat-badge" :class="getCatClass(dm.maDMSP)">{{ dm.maDMSP }}</span>
-            </td>
-            <td>
-              <span class="bt-count-badge">
-                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
-                  <rect x="1" y="5" width="6" height="6" rx="1"/>
-                  <rect x="9" y="5" width="6" height="6" rx="1"/>
-                  <rect x="5" y="1" width="6" height="6" rx="1"/>
-                </svg>
-                {{ dm.soSanPham }} sản phẩm
-              </span>
-            </td>
-            <td>
-              <button
-                type="button"
-                class="status-toggle"
-                :class="dm.trangThai === 1 ? 'active' : 'inactive'"
-                @click="toggleStatus(dm)"
-                :title="dm.trangThai === 1 ? 'Nhấn để tạm ẩn' : 'Nhấn để kích hoạt'"
-              >
-                <span class="status-dot"></span>
-                {{ dm.trangThai === 1 ? "Đang hiện" : "Tạm ẩn" }}
-              </button>
-            </td>
-            <td>
-              <div class="action-btns">
-                <button type="button" class="icon-btn view" title="Xem" @click="openView(dm)">
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M1 8s3-5 7-5 7 5 7 5-3 5-7 5-7-5-7-5z"/>
-                    <circle cx="8" cy="8" r="2"/>
-                  </svg>
-                </button>
-                <button type="button" class="icon-btn edit" title="Sửa" @click="openEdit(dm)">
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M11 2l3 3-9 9H2v-3l9-9z"/>
-                  </svg>
-                </button>
-                <button type="button" class="icon-btn del" title="Xóa" @click="deleteDM(dm)">
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M2 4h12M5 4V2h6v2M6 7v5M10 7v5M3 4l1 10h8l1-10"/>
-                  </svg>
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- ── PAGINATION ─────────────────────────────────────────────── -->
-    <div class="pager-wrap">
-      <span>Hiển thị {{ Math.min((curPage - 1) * perPage + 1, filteredData.length) }}–{{ Math.min(curPage * perPage, filteredData.length) }} / {{ filteredData.length }}</span>
-      <div class="pager-btns">
-        <button class="page-btn" :disabled="curPage <= 1" @click="curPage--">‹</button>
-        <button v-for="p in pageRange" :key="p" class="page-btn" :class="{ cur: p === curPage }" @click="curPage = p">{{ p }}</button>
-        <button class="page-btn" :disabled="curPage >= totalPages" @click="curPage++">›</button>
-      </div>
-    </div>
-
-    <!-- ══ MODAL ══════════════════════════════════════════════════════ -->
-    <div v-if="modal.open" class="modal-overlay" @click.self="closeModal">
-      <div class="modal modal-wide">
-        <div class="modal-header">
-          <h3 class="modal-title">{{ modal.title }}</h3>
-          <button type="button" class="modal-close" @click="closeModal">✕</button>
-        </div>
-
-        <!-- VIEW MODE -->
-        <div v-if="modal.mode === 'view'" class="modal-body">
-          <div class="detail-grid">
-            <div>
-              <div v-if="form.hinhAnh" class="thumb-wrap-lg" @click="lightbox.src = form.hinhAnh; lightbox.open = true">
-                <img :src="form.hinhAnh" class="detail-img" :alt="form.tenDanhMuc" />
-              </div>
-              <div v-else class="thumb-placeholder-lg">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--dvc-border-strong)" stroke-width="1.2">
-                  <rect x="3" y="3" width="18" height="18" rx="2"/>
-                  <circle cx="8.5" cy="8.5" r="1.5"/>
-                  <path d="M21 15l-5-5L5 21"/>
-                </svg>
-              </div>
             </div>
-            <div class="detail-info-col">
-              <div class="detail-row">
-                <span class="detail-label">Mã danh mục</span>
-                <span class="detail-val code-text">{{ form.maDMSP }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Tên danh mục</span>
-                <span class="detail-val">{{ form.tenDanhMuc }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Số sản phẩm</span>
-                <span class="detail-val">{{ form.soSanPham ?? 0 }}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Trạng thái</span>
-                <span class="status-toggle" :class="form.trangThai === 1 ? 'active' : 'inactive'" style="cursor:default">
-                  <span class="status-dot"></span>
-                  {{ form.trangThai === 1 ? "Đang hiện" : "Tạm ẩn" }}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
+          </v-form>
+        </v-card-text>
 
-        <!-- FORM MODE -->
-        <div v-if="modal.mode === 'form'" class="modal-body">
-          <!-- Mã danh mục (chỉ khi thêm mới) -->
-          <div v-if="!editingId" class="form-group">
-            <label class="form-label">Mã danh mục <span class="required-star">*</span></label>
-            <input
-              v-model="form.maDMSP"
-              class="form-input"
-              :class="{ 'input-error': errors.maDMSP, 'input-ok': touched.maDMSP && !errors.maDMSP }"
-              placeholder="Ví dụ: DM001"
-              maxlength="10"
-              @blur="onBlur('maDMSP')"
-              @input="touched.maDMSP && validateField('maDMSP')"
-              autocomplete="off"
-            />
-            <!-- <div class="field-hint">Chỉ chữ cái A–Z và chữ số, từ 2–10 ký tự. Hệ thống sẽ tự chuyển thành chữ hoa.</div> -->
-            <div v-if="errors.maDMSP" class="field-error">
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm-.75 3.5h1.5v5h-1.5v-5zm0 6h1.5v1.5h-1.5V10.5z"/></svg>
-              {{ errors.maDMSP }}
-            </div>
-          </div>
-
-          <!-- Tên danh mục -->
-          <div class="form-group">
-            <label class="form-label">
-              Tên danh mục <span class="required-star">*</span>
-              <span class="char-counter" :class="{ warn: tenDanhMucLength > 80, over: tenDanhMucLength > 100 }">
-                {{ tenDanhMucLength }}/100
-              </span>
-            </label>
-            <input
-              v-model="form.tenDanhMuc"
-              class="form-input"
-              :class="{ 'input-error': errors.tenDanhMuc, 'input-ok': touched.tenDanhMuc && !errors.tenDanhMuc }"
-              placeholder="Nhập tên danh mục..."
-              maxlength="100"
-              @blur="onBlur('tenDanhMuc')"
-              @input="touched.tenDanhMuc && validateField('tenDanhMuc')"
-              autocomplete="off"
-            />
-            <div v-if="errors.tenDanhMuc" class="field-error">
-              <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm-.75 3.5h1.5v5h-1.5v-5zm0 6h1.5v1.5h-1.5V10.5z"/></svg>
-              {{ errors.tenDanhMuc }}
-            </div>
-          </div>
-
-          <!-- Trạng thái -->
-          <div class="form-group">
-            <label class="form-label">Trạng thái</label>
-            <select v-model.number="form.trangThai" class="form-input">
-              <option :value="1">Đang hiện — hiển thị cho khách hàng</option>
-              <option :value="0">Tạm ẩn — không hiển thị cho khách hàng</option>
-            </select>
-          </div>
-
-          <!-- Hình ảnh -->
-          <div class="form-group">
-            <label class="form-label">Hình ảnh đại diện <span class="field-optional">(không bắt buộc)</span></label>
-            <input ref="imgInput" type="file" accept="image/*" style="display:none" @change="onImgChange" />
-            <div class="upload-zone" @click="imgInput.click()">
-              <div v-if="!form.hinhAnh" class="upload-placeholder">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
-                  <polyline points="17 8 12 3 7 8"/>
-                  <line x1="12" y1="3" x2="12" y2="15"/>
-                </svg>
-                <span>Nhấn để chọn ảnh</span>
-                <span class="upload-hint">PNG, JPG, WEBP – tối đa 5MB</span>
-              </div>
-              <div v-else class="upload-preview-single" @click.stop>
-                <img :src="form.hinhAnh" class="upload-preview-img" alt="preview" />
-                <button type="button" class="remove-single-img" @click.stop="removeImg" title="Xóa ảnh">✕</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="modal-footer">
-          <button type="button" class="btn btn-ghost btn-sm" @click="closeModal">Hủy</button>
-          <button v-if="modal.mode === 'form'" type="button" class="btn btn-primary btn-sm" :disabled="saving" @click="saveDM">
-            <svg v-if="saving" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite">
-              <path d="M21 12a9 9 0 11-6.219-8.56"/>
-            </svg>
-            {{ saving ? "Đang lưu..." : (editingId ? "Cập nhật" : "Thêm mới") }}
-          </button>
-          <button v-if="modal.mode === 'view'" type="button" class="btn btn-secondary btn-sm" @click="openEdit(form)">
+        <v-card-actions class="pa-4 px-6 d-flex justify-end border-t">
+          <v-btn variant="outlined" rounded="lg" class="text-none font-weight-bold mr-2" color="grey-darken-2" @click="closeModal">
+            Hủy
+          </v-btn>
+          <v-btn
+            v-if="modal.mode === 'form'"
+            variant="flat" rounded="lg" class="text-none font-weight-bold"
+            color="primary" :loading="saving" @click="saveDM"
+          >
+            {{ editingId ? "Cập nhật" : "Thêm mới" }}
+          </v-btn>
+          <v-btn
+            v-if="modal.mode === 'view'"
+            variant="tonal" rounded="lg" class="text-none font-weight-bold"
+            color="primary" @click="openEdit(form)"
+          >
             Chỉnh sửa
-          </button>
-        </div>
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- ══ LIGHTBOX ══════════════════════════════════════════════════ -->
+    <v-dialog v-model="lightbox.open" max-width="900">
+      <div class="lb-overlay-content">
+        <v-btn icon color="white" variant="text" class="lb-close" @click="lightbox.open = false">
+          <X class="w-5 h-5" />
+        </v-btn>
+        <img :src="lightbox.src" class="lb-img" />
       </div>
-    </div>
+    </v-dialog>
 
-    <!-- ── LIGHTBOX ────────────────────────────────────────────────── -->
-    <div v-if="lightbox.open" class="lb-overlay" @click="lightbox.open = false">
-      <img :src="lightbox.src" class="lb-img" />
-      <button class="lb-close" @click="lightbox.open = false">✕</button>
-    </div>
-
-    <!-- ── TOAST ──────────────────────────────────────────────────── -->
-    <div class="toast" :class="[toast.type, { show: toast.show }]">
-      <span>{{ toast.type === "success" ? "✅" : "❌" }}</span>
-      {{ toast.msg }}
-    </div>
-
-  </div>
+    <!-- ══ SNACKBAR ══════════════════════════════════════════════════ -->
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" location="top right" timeout="3000" rounded="lg">
+      <div class="font-weight-bold d-flex align-center">
+        <Check v-if="snackbar.color === 'success'" class="w-5 h-5 mr-2" />
+        <X v-else class="w-5 h-5 mr-2" />
+        {{ snackbar.text }}
+      </div>
+    </v-snackbar>
+  </v-container>
 </template>
 
 <style scoped>
-/* ── THEME VARIABLES (dark mode) ─────────────────────────────── */
-.dm-manager.dark-mode {
-  --dvc-card-bg: #23232f;
-  --dvc-bg-subtle: #2a2a38;
-  --dvc-bg-subtle2: #1e1e29;
-  --dvc-border: #383846;
-  --dvc-border-strong: #464656;
-  --dvc-text: #e8e8ee;
-  --dvc-text-strong: #cbcbd6;
-  --dvc-text-secondary: #a3a3b2;
-  --dvc-text-muted: #7c7c8c;
-  --dvc-accent: #4b4b6b;
-  --dvc-accent-hover: #5c5c80;
-  --dvc-shadow: rgba(0, 0, 0, 0.35);
-  --dvc-overlay: rgba(0, 0, 0, 0.6);
+.gap-1 { gap: 4px; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+
+.cursor-pointer { cursor: pointer; }
+.code-chip {
+  font-family: "Courier New", monospace;
+  background: rgba(0,0,0,0.06);
+  padding: 2px 7px;
+  border-radius: 4px;
 }
 
-.dm-manager {
-  /* ── THEME VARIABLES (light default) ─────────────────────────── */
-  --dvc-card-bg: #fff;
-  --dvc-bg-subtle: #f3f4f6;
-  --dvc-bg-subtle2: #f9fafb;
-  --dvc-border: #e5e7eb;
-  --dvc-border-strong: #d1d5db;
-  --dvc-text: #1a1a2e;
-  --dvc-text-strong: #374151;
-  --dvc-text-secondary: #6b7280;
-  --dvc-text-muted: #9ca3af;
-  --dvc-accent: #1a1a2e;
-  --dvc-accent-hover: #2d2d4e;
-  --dvc-shadow: rgba(0, 0, 0, 0.08);
-  --dvc-overlay: rgba(0, 0, 0, 0.45);
-  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
- font-family: "Inter", sans-serif; font-size: 13px; color: var(--dvc-text-strong); }
+/* Detail view rows */
+.detail-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.detail-label { font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.7); min-width: 120px; }
 
-/* ── STATS ────────────────────────────────────────────────────────── */
-.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
-.stat-card { border-radius: 12px; padding: 16px; position: relative; overflow: hidden; }
-.stat-dark  { background: var(--dvc-accent); color: #fff; }
-.stat-green { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
-.stat-blue  { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
-.stat-purple{ background: #faf5ff; color: #6b21a8; border: 1px solid #e9d5ff; }
-.stat-icon  { font-size: 20px; margin-bottom: 6px; }
-.stat-label { font-size: 11px; font-weight: 600; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.5px; }
-.stat-value { font-size: 26px; font-weight: 700; line-height: 1.2; margin: 4px 0 2px; }
-.stat-hint  { font-size: 11px; opacity: 0.65; }
-
-/* ── HEADER BAR ──────────────────────────────────────────────────── */
-.header-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px; }
-.page-title-text { font-size: 16px; font-weight: 700; color: var(--dvc-text); }
-.header-actions { display: flex; gap: 8px; }
-
-/* ── BTN ─────────────────────────────────────────────────────────── */
-.btn { border: none; border-radius: 8px; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s; }
-.btn-sm { padding: 7px 14px; }
-.btn-primary { background: var(--dvc-accent); color: #fff; }
-.btn-primary:hover { background: var(--dvc-accent-hover); }
-.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
-.btn-ghost { background: var(--dvc-bg-subtle); color: var(--dvc-text-strong); border: 1px solid var(--dvc-border); }
-.btn-ghost:hover { background: var(--dvc-border); }
-.btn-secondary { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
-.btn-secondary:hover { background: #dbeafe; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* ── TOOLBAR ─────────────────────────────────────────────────────── */
-.toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
-.search-box { display: flex; align-items: center; gap: 8px; background: var(--dvc-card-bg); border: 1px solid var(--dvc-border); border-radius: 8px; padding: 7px 12px; min-width: 220px; }
-.search-box input { border: none; outline: none; font-family: inherit; font-size: 13px; color: var(--dvc-text-strong); background: transparent; width: 100%; }
-.filter-select { border: 1px solid var(--dvc-border); border-radius: 8px; padding: 7px 10px; font-family: inherit; font-size: 13px; color: var(--dvc-text-strong); background: var(--dvc-card-bg); outline: none; min-width: 150px; cursor: pointer; }
-.result-count { font-size: 12px; color: var(--dvc-text-muted); font-weight: 500; margin-left: 4px; }
-
-/* ── TABLE ───────────────────────────────────────────────────────── */
-.table-wrap { background: var(--dvc-card-bg); border-radius: 12px; border: 1px solid var(--dvc-border); overflow: hidden; }
-table { width: 100%; border-collapse: collapse; }
-thead tr { background: var(--dvc-bg-subtle2); border-bottom: 1px solid var(--dvc-border); }
-thead th { padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 600; color: var(--dvc-text-muted); letter-spacing: 0.5px; text-transform: uppercase; white-space: nowrap; }
-thead th.sortable { cursor: pointer; user-select: none; }
-thead th.sortable:hover { color: var(--dvc-text-strong); }
-.sort-icon { color: var(--dvc-border-strong); font-size: 10px; margin-left: 3px; }
-tbody tr { border-bottom: 1px solid var(--dvc-bg-subtle); transition: background 0.1s; }
-tbody tr:last-child { border-bottom: none; }
-tbody tr:hover { background: var(--dvc-bg-subtle2); }
-tbody td { padding: 10px 12px; vertical-align: middle; }
-
-/* ── THUMB ───────────────────────────────────────────────────────── */
-.thumb-wrap { width: 40px; height: 40px; border-radius: 8px; overflow: hidden; border: 1px solid var(--dvc-border); cursor: pointer; background: var(--dvc-bg-subtle2); }
-.thumb-img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.thumb-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--dvc-border-strong); }
-
-/* ── BADGES ──────────────────────────────────────────────────────── */
-.code-text { font-family: monospace; font-size: 12px; color: var(--dvc-text-secondary); background: var(--dvc-bg-subtle); padding: 2px 6px; border-radius: 4px; }
-.sp-name { font-weight: 500; color: var(--dvc-text); margin-bottom: 3px; }
-
-.cat-badge { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
-.cat-1 { background: #eff6ff; color: #1e40af; }
-.cat-2 { background: #fdf4ff; color: #7e22ce; }
-.cat-3 { background: #fff7ed; color: #c2410c; }
-.cat-4 { background: #f0fdf4; color: #166534; }
-.cat-5 { background: #fef3c7; color: #92400e; }
-
-.bt-count-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--dvc-text-secondary); }
-
-/* ── STATUS TOGGLE ───────────────────────────────────────────────── */
-.status-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 12px; border: 1px solid; cursor: pointer; background: none; font-family: inherit; transition: all 0.15s; }
-.status-toggle.active  { color: #166534; border-color: #86efac; background: #f0fdf4; }
-.status-toggle.active:hover { background: #dcfce7; }
-.status-toggle.inactive { color: var(--dvc-text-muted); border-color: var(--dvc-border); background: var(--dvc-bg-subtle2); }
-.status-toggle.inactive:hover { background: var(--dvc-bg-subtle); }
-.status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-
-/* ── ACTION BTNS ──────────────────────────────────────────────────── */
-.action-btns { display: flex; gap: 4px; }
-.icon-btn { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 6px; border: 1px solid var(--dvc-border); background: var(--dvc-card-bg); cursor: pointer; color: var(--dvc-text-muted); transition: all 0.12s; }
-.icon-btn.view:hover { color: #2563eb; border-color: #bfdbfe; background: #eff6ff; }
-.icon-btn.edit:hover { color: #d97706; border-color: #fde68a; background: #fffbeb; }
-.icon-btn.del:hover  { color: #dc2626; border-color: #fecaca; background: #fef2f2; }
-
-/* ── EMPTY ───────────────────────────────────────────────────────── */
-.empty-state { text-align: center; padding: 40px; }
-.empty-icon  { font-size: 36px; margin-bottom: 8px; }
-.empty-text  { color: var(--dvc-text-muted); font-size: 14px; }
-
-/* ── PAGINATION ──────────────────────────────────────────────────── */
-.pager-wrap { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-top: 1px solid var(--dvc-bg-subtle); font-size: 12px; color: var(--dvc-text-muted); }
-.pager-btns { display: flex; gap: 4px; }
-.page-btn { min-width: 28px; height: 28px; padding: 0 6px; border-radius: 6px; border: 1px solid var(--dvc-border); background: var(--dvc-card-bg); font-size: 12px; cursor: pointer; color: var(--dvc-text-secondary); transition: all 0.12s; }
-.page-btn:disabled { opacity: 0.4; cursor: default; }
-.page-btn:hover:not(:disabled):not(.cur) { border-color: var(--dvc-border-strong); background: var(--dvc-bg-subtle2); }
-.page-btn.cur { background: var(--dvc-accent); color: #fff; border-color: var(--dvc-accent); }
-
-/* ── MODAL ───────────────────────────────────────────────────────── */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 9000; display: flex; align-items: center; justify-content: center; padding: 20px; }
-.modal { position: relative; top: auto; left: auto; margin: 0; background: var(--dvc-card-bg); border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); display: flex; flex-direction: column; max-height: 90vh; overflow: hidden; }
-.modal-wide { width: 520px; max-width: 95vw; }
-.modal-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px 14px; border-bottom: 1px solid var(--dvc-bg-subtle); }
-.modal-title { font-size: 15px; font-weight: 700; color: var(--dvc-text); margin: 0; }
-.modal-close { width: 28px; height: 28px; border: 1px solid var(--dvc-border); border-radius: 6px; background: var(--dvc-card-bg); cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--dvc-text-muted); }
-.modal-close:hover { background: var(--dvc-bg-subtle2); color: var(--dvc-text-strong); }
-.modal-body { padding: 18px 22px; overflow-y: auto; flex: 1; }
-.modal-footer { padding: 14px 22px; border-top: 1px solid var(--dvc-bg-subtle); display: flex; justify-content: flex-end; gap: 8px; }
-
-/* ── FORM ────────────────────────────────────────────────────────── */
-.form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 16px; }
-.form-label { font-size: 12px; font-weight: 600; color: var(--dvc-text-strong); display: flex; align-items: center; gap: 6px; }
-.required-star { color: #ef4444; font-size: 13px; line-height: 1; }
-.field-optional { font-size: 11px; font-weight: 400; color: var(--dvc-text-muted); }
-.form-input { background: var(--dvc-card-bg); border: 1.5px solid var(--dvc-border); border-radius: 8px; padding: 8px 12px; font-size: 13px; color: var(--dvc-text); font-family: inherit; outline: none; transition: border 0.15s, box-shadow 0.15s; }
-.form-input:focus { border-color: var(--dvc-text-secondary); box-shadow: 0 0 0 3px rgba(107,114,128,0.08); }
-.input-error { border-color: #f87171 !important; box-shadow: 0 0 0 3px rgba(248,113,113,0.1) !important; }
-.input-ok   { border-color: #4ade80 !important; box-shadow: 0 0 0 3px rgba(74,222,128,0.08) !important; }
-.field-error { font-size: 11.5px; color: #dc2626; display: flex; align-items: center; gap: 4px; margin-top: 2px; }
-.field-hint  { font-size: 11px; color: var(--dvc-text-muted); margin-top: 2px; line-height: 1.5; }
-
-/* Char counter */
-.char-counter { margin-left: auto; font-size: 11px; font-weight: 400; color: var(--dvc-text-muted); }
-.char-counter.warn { color: #f59e0b; }
-.char-counter.over { color: #ef4444; font-weight: 600; }
-
-/* ── UPLOAD ──────────────────────────────────────────────────────── */
-.upload-zone { border: 1.5px dashed var(--dvc-border-strong); border-radius: 10px; background: var(--dvc-bg-subtle2); cursor: pointer; display: flex; align-items: center; justify-content: center; min-height: 110px; transition: all 0.15s; }
-.upload-zone:hover { background: var(--dvc-bg-subtle); border-color: var(--dvc-text-muted); }
-.upload-placeholder { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--dvc-text-muted); font-size: 12px; }
-.upload-hint { font-size: 11px; }
+/* Upload zone */
+.upload-zone {
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 10px;
+  background: #f9fafb;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 110px;
+  transition: all 0.15s;
+}
+.upload-zone:hover { background: #f1f5f9; border-color: #94a3b8; }
+.upload-placeholder { display: flex; flex-direction: column; align-items: center; gap: 6px; color: #9ca3af; font-size: 12px; }
 .upload-preview-single { position: relative; display: inline-block; }
-.upload-preview-img { width: 90px; height: 90px; object-fit: cover; border-radius: 8px; border: 1px solid var(--dvc-border); display: block; }
-.remove-single-img { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; background: var(--dvc-accent); color: #fff; border: none; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.remove-single-img { position: absolute; top: -8px; right: -8px; }
 
-/* ── DETAIL VIEW ─────────────────────────────────────────────────── */
-.detail-grid { display: grid; grid-template-columns: auto 1fr; gap: 20px; align-items: start; }
-.detail-info-col { display: flex; flex-direction: column; gap: 12px; }
-.detail-row { display: flex; align-items: center; gap: 10px; }
-.detail-label { font-size: 12px; font-weight: 600; color: var(--dvc-text-muted); min-width: 120px; }
-.detail-val { font-size: 13px; color: var(--dvc-text); }
-.thumb-wrap-lg { width: 120px; height: 120px; border-radius: 12px; overflow: hidden; border: 1px solid var(--dvc-border); cursor: pointer; }
-.detail-img { width: 100%; height: 100%; object-fit: cover; }
-.thumb-placeholder-lg { width: 120px; height: 120px; border-radius: 12px; border: 1px solid var(--dvc-border); display: flex; align-items: center; justify-content: center; background: var(--dvc-bg-subtle2); }
-
-/* ── LIGHTBOX ────────────────────────────────────────────────────── */
-.lb-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 9999; display: flex; align-items: center; justify-content: center; cursor: zoom-out; }
-.lb-img { max-width: 90vw; max-height: 85vh; border-radius: 8px; object-fit: contain; }
-.lb-close { position: absolute; top: 16px; right: 20px; background: rgba(255,255,255,0.15); color: #fff; border: none; font-size: 20px; cursor: pointer; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-
-/* ── TOAST ───────────────────────────────────────────────────────── */
-.toast { position: fixed; bottom: 24px; right: 24px; background: var(--dvc-card-bg); border: 1px solid var(--dvc-border); border-radius: 10px; padding: 12px 16px; font-size: 13px; color: var(--dvc-text); display: flex; align-items: center; gap: 9px; z-index: 1000; transform: translateY(20px); opacity: 0; transition: all 0.25s; pointer-events: none; box-shadow: 0 4px 16px rgba(0,0,0,0.1); max-width: 320px; }
-.toast.show { transform: translateY(0); opacity: 1; }
-.toast.success { border-color: #bbf7d0; }
-.toast.error   { border-color: #fecaca; }
-
-/* ── RESPONSIVE ──────────────────────────────────────────────────── */
-@media (max-width: 768px) {
-  .stats-row { grid-template-columns: repeat(2, 1fr); }
-  .header-bar { flex-direction: column; align-items: flex-start; }
-  .result-count { margin-left: 0; }
-  .detail-grid { grid-template-columns: 1fr; }
-}
-@media (max-width: 480px) {
-  .stats-row { grid-template-columns: 1fr 1fr; }
-}
+/* Lightbox */
+.lb-overlay-content { position: relative; display: flex; align-items: center; justify-content: center; min-height: 50vh; }
+.lb-img { max-width: 90vw; max-height: 80vh; border-radius: 8px; object-fit: contain; }
+.lb-close { position: absolute; top: -8px; right: -8px; z-index: 2; background: rgba(0,0,0,0.4); }
 </style>

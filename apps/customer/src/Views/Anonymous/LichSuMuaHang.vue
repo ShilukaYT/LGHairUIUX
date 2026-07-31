@@ -427,24 +427,24 @@ const handleLogout = () => {
 
           <nav class="flex flex-row lg:flex-col gap-2 overflow-x-auto pb-4 lg:pb-0 scrollbar-hide whitespace-nowrap">
             <button @click="router.push({ name: 'profile', query: { tab: 'profile' } })"
-              class="flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest transition-all rounded-sm text-gray-600 hover:text-black hover:bg-gray-100/50 border-l-2 border-transparent">
-              <User :size="16" :stroke-width="1.5" />
+              class="flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest transition-all rounded-sm text-gray-500 hover:text-black hover:bg-gray-100/50 border-l-2 border-transparent">
+              <User :size="15" :stroke-width="1.8" />
               Hồ Sơ Của Tôi
             </button>
             <button @click="router.push({ name: 'lich_su_mua_hang' })"
               class="flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest transition-all rounded-sm bg-white border-l-2 border-black text-black shadow-sm font-semibold">
-              <Package :size="16" :stroke-width="1.5" />
-              Đơn Hàng
+              <Package :size="15" :stroke-width="1.8" />
+              Lịch Sử Đơn Hàng
             </button>
             <button @click="router.push({ name: 'profile', query: { tab: 'appointments' } })"
-              class="flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest transition-all rounded-sm text-gray-600 hover:text-black hover:bg-gray-100/50 border-l-2 border-transparent">
-              <Calendar :size="16" :stroke-width="1.5" />
+              class="flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest transition-all rounded-sm text-gray-500 hover:text-black hover:bg-gray-100/50 border-l-2 border-transparent">
+              <Calendar :size="15" :stroke-width="1.8" />
               Lịch Hẹn & Hóa Đơn
             </button>
             <button @click="router.push({ name: 'profile', query: { tab: 'reviews' } })"
-              class="flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest transition-all rounded-sm text-gray-600 hover:text-black hover:bg-gray-100/50 border-l-2 border-transparent">
-              <Star :size="16" :stroke-width="1.5" />
-              Đánh Giá
+              class="flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest transition-all rounded-sm text-gray-500 hover:text-black hover:bg-gray-100/50 border-l-2 border-transparent">
+              <Star :size="15" :stroke-width="1.8" />
+              Đánh Giá Của Tôi
             </button>
 
             <div class="w-px h-6 lg:w-full lg:h-px bg-gray-200 my-auto lg:my-3 shrink-0"></div>
