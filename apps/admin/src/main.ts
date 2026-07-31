@@ -10,8 +10,6 @@ import vuetify from './plugins/vuetify';
 import '@/scss/style.scss';
 import './style.css'
 import { PerfectScrollbarPlugin } from 'vue3-perfect-scrollbar';
-import VueTablerIcons from 'vue-tabler-icons';
-import VueApexCharts from 'vue3-apexcharts';
 // google-fonts
 import '@fontsource/public-sans/400.css';
 import '@fontsource/public-sans/500.css';
@@ -142,8 +140,6 @@ axios.interceptors.response.use(
 app.use(router)
 app.use(createPinia())
 app.use(PerfectScrollbarPlugin)
-app.use(VueTablerIcons)
-app.use(VueApexCharts)
 app.use(vuetify)
 
 app.mount('#app')

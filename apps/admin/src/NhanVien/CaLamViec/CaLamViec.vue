@@ -6,10 +6,40 @@ import { Html5Qrcode } from 'html5-qrcode'
 const API_BASE_URL = 'https://localhost:7196/api/nhan-vien/ca-lam'
 axios.defaults.withCredentials = true; // Bắt buộc để gửi kèm Cookie/Token
 
+const formatDateDDMMYYYY = (dateInput?: any) => {
+    if (!dateInput) {
+        const today = new Date();
+        const day = String(today.getDate()).padStart(2, '0');
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const year = today.getFullYear();
+        return `${day}/${month}/${year}`;
+    }
+    if (typeof dateInput === 'string' && dateInput.includes('-')) {
+        const parts = dateInput.substring(0, 10).split('-');
+        if (parts.length === 3 && parts[0].length === 4) {
+            return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
+    }
+    if (typeof dateInput === 'string' && dateInput.includes('/')) {
+        const parts = dateInput.split('/');
+        if (parts.length === 3) {
+            const day = parts[0].padStart(2, '0');
+            const month = parts[1].padStart(2, '0');
+            return `${day}/${month}/${parts[2]}`;
+        }
+    }
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return formatDateDDMMYYYY();
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+};
+
 // State lưu trữ dữ liệu thực
 const todayShift = ref({
     maLich: 0,
-    ngay: new Date().toLocaleDateString('vi-VN'),
+    ngay: formatDateDDMMYYYY(),
     caLam: 'Đang tải...',
     trangThai: 0,
 })
@@ -50,19 +80,27 @@ const fetchShifts = async () => {
             const today = new Date();
             const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-            // 1. Cập nhật bảng lịch sử 7 ngày
-            const pastAndToday = allShifts.filter((l: any) => l.ngayLamViec && l.ngayLamViec.substring(0, 10) <= todayStr).slice(-7);
+            // 1. Cập nhật bảng lịch sử 7 ngày gần nhất (xếp từ ngày mới nhất trở về trước)
+            const pastAndToday = allShifts
+                .filter((l: any) => l.ngayLamViec && l.ngayLamViec.substring(0, 10) <= todayStr)
+                .sort((a: any, b: any) => (b.ngayLamViec > a.ngayLamViec ? 1 : -1))
+                .slice(0, 7);
+            
             last7Days.value = pastAndToday.map((l: any) => ({
                 maLich: l.maLich,
-                ngay: new Date(l.ngayLamViec).toLocaleDateString('vi-VN'),
+                ngay: formatDateDDMMYYYY(l.ngayLamViec),
                 caLam: l.caLam,
                 trangThai: l.trangThai
             }))
 
-            const future = allShifts.filter((l: any) => l.ngayLamViec && l.ngayLamViec.substring(0, 10) > todayStr).reverse().slice(0, 7);
+            const future = allShifts
+                .filter((l: any) => l.ngayLamViec && l.ngayLamViec.substring(0, 10) > todayStr)
+                .sort((a: any, b: any) => (a.ngayLamViec > b.ngayLamViec ? 1 : -1))
+                .slice(0, 7);
+
             next7Days.value = future.map((l: any) => ({
                 maLich: l.maLich,
-                ngay: new Date(l.ngayLamViec).toLocaleDateString('vi-VN'),
+                ngay: formatDateDDMMYYYY(l.ngayLamViec),
                 caLam: l.caLam,
                 trangThai: l.trangThai
             }))
@@ -72,7 +110,7 @@ const fetchShifts = async () => {
             if (tShift) {
                 todayShift.value = {
                     maLich: tShift.maLich,
-                    ngay: new Date(tShift.ngayLamViec).toLocaleDateString('vi-VN'),
+                    ngay: formatDateDDMMYYYY(tShift.ngayLamViec),
                     caLam: tShift.caLam,
                     trangThai: tShift.trangThai
                 }
@@ -80,7 +118,7 @@ const fetchShifts = async () => {
                 // HẾT BỊ KẸT "ĐANG TẢI...": Nếu mảng không có ca của hôm nay thì báo nghỉ
                 todayShift.value = {
                     maLich: 0,
-                    ngay: new Date().toLocaleDateString('vi-VN'),
+                    ngay: formatDateDDMMYYYY(),
                     caLam: 'Nghỉ / Không có ca',
                     trangThai: 0
                 }
@@ -96,24 +134,49 @@ const isScanning = ref(false)
 let html5QrCode: Html5Qrcode | null = null
 
 const startScanner = async () => {
+  if (html5QrCode) {
+    try {
+      await html5QrCode.stop()
+      html5QrCode.clear()
+    } catch(e) {}
+    html5QrCode = null
+  }
+
   isScannerOpen.value = true
   isScanning.value = true
+
   setTimeout(async () => {
     try {
+      const element = document.getElementById("qr-reader")
+      if (!element) {
+        throw new Error("Khung hiển thị camera chưa sẵn sàng.")
+      }
+
       html5QrCode = new Html5Qrcode("qr-reader")
-      await html5QrCode.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        onScanSuccess,
-        onScanFailure
-      )
+      
+      try {
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          onScanSuccess,
+          onScanFailure
+        )
+      } catch (camErr) {
+        console.warn("Chuyển sang camera mặc định...", camErr)
+        await html5QrCode.start(
+          { facingMode: "user" },
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          onScanSuccess,
+          onScanFailure
+        )
+      }
     } catch (err) {
       console.error("Lỗi khi mở camera: ", err)
       showSnackbar("Không thể mở camera. Vui lòng cấp quyền truy cập camera.", "error")
       isScannerOpen.value = false
       isScanning.value = false
     }
-  }, 100)
+  }, 350)
 }
 
 const onScanSuccess = async (decodedText: string, decodedResult: any) => {

@@ -23,11 +23,7 @@ export interface menu {
 
 const sidebarItemNhanVien: menu[] = [
   { header: 'Khu vực nhân viên' },
-  {
-    title: 'Tổng quan',
-    icon: DashboardOutlined,
-    to: '/nhanvien'
-  },
+
   {
     title: 'Ca làm việc',
     icon: CalendarOutlined,

@@ -111,7 +111,7 @@ const migrateAnonymousRoom = async () => {
   const anonRooms = getAnonymousRoomKeys()
   if (anonRooms.length === 0) return
 
-  const anonRoomId: string = anonRooms[0].roomId
+  const anonRoomId: string = anonRooms[0]!.roomId
   const customerInfo = getCustomerInfo()
 
   try {

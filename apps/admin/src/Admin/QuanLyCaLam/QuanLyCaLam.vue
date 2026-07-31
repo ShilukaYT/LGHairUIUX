@@ -229,6 +229,10 @@ const openEditModal = (item: any) => {
 }
 
 const submitEditSchedule = async () => {
+  if (editState.value.ngayBatDauSua < todayStr.value) {
+    showSnackbar("Không thể thiết lập ca làm việc cho ngày trong quá khứ.", "error");
+    return;
+  }
   isSubmitting.value = true;
   try {
      const chunkSize = 5;
@@ -247,8 +251,9 @@ const submitEditSchedule = async () => {
      isEditModalOpen.value = false;
      await fetchLichLamViec();
   } catch (error: any) {
-     logActivity("Sửa lịch ca làm", `Thất bại khi sửa lịch làm việc của thợ ${editState.value.tenNv} - Lỗi: ${error.message || ''}`, "Ca làm", "Thất bại");
-     showSnackbar("Lỗi cập nhật ca làm.", "error");
+     const errorMsg = error.response?.data?.message || "Lỗi cập nhật ca làm.";
+     logActivity("Sửa lịch ca làm", `Thất bại khi sửa lịch làm việc của thợ ${editState.value.tenNv} - Lỗi: ${errorMsg}`, "Ca làm", "Thất bại");
+     showSnackbar(errorMsg, "error");
   } finally {
      isSubmitting.value = false;
   }
@@ -286,6 +291,10 @@ watch(() => holidayState.value.tuNgay, (newVal) => {
 })
 
 const submitHoliday = async () => {
+  if (holidayState.value.tuNgay < todayStr.value) {
+    showSnackbar("Không thể thiết lập ngày nghỉ lễ trong quá khứ.", "error");
+    return;
+  }
   const tuNgayDate = new Date(holidayState.value.tuNgay);
   const denNgayDate = new Date(holidayState.value.denNgay);
   const diffTime = denNgayDate.getTime() - tuNgayDate.getTime();
@@ -384,6 +393,8 @@ watch(() => route.query.search, (newSearch) => {
           <v-text-field
             v-model="searchQuery"
             label="Tìm tên thợ..."
+            maxlength="100"
+            @input="searchQuery = searchQuery ? searchQuery.slice(0, 100) : ''"
             variant="outlined"
             density="compact"
             hide-details
@@ -511,6 +522,7 @@ watch(() => route.query.search, (newSearch) => {
                   density="comfortable"
                   rounded="lg"
                   :min="todayStr"
+                  @keydown.prevent
                 ></v-text-field>
               </v-col>
               <v-col cols="12" sm="6" class="pb-0">
@@ -539,9 +551,10 @@ watch(() => route.query.search, (newSearch) => {
                 <v-chip-group
                   v-model="editState.selectedDaysOfWeek"
                   multiple
+                  column
                   selected-class="bg-primary text-white"
                 >
-                  <v-chip v-for="day in dayOfWeekOptions" :key="day.value" :value="day.value" filter>
+                  <v-chip v-for="day in dayOfWeekOptions" :key="day.value" :value="day.value" filter size="small" class="ma-1">
                     {{ day.title }}
                   </v-chip>
                 </v-chip-group>
@@ -617,6 +630,7 @@ watch(() => route.query.search, (newSearch) => {
                   density="comfortable"
                   rounded="lg"
                   :min="todayStr"
+                  @keydown.prevent
                 ></v-text-field>
               </v-col>
               <v-col cols="12" sm="6" class="pb-0">
@@ -629,6 +643,7 @@ watch(() => route.query.search, (newSearch) => {
                   rounded="lg"
                   :min="holidayState.tuNgay"
                   :max="maxHolidayDate"
+                  @keydown.prevent
                 ></v-text-field>
               </v-col>
               <v-col cols="12" class="pb-0 pt-2">

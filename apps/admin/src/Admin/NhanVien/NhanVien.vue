@@ -737,7 +737,7 @@ onMounted(() => {
         <label class="hd-filter-label">Tìm kiếm nhân viên</label>
         <div class="hd-search-wrapper">
           <Search class="hd-search-icon" />
-          <input type="text" v-model="searchQuery" @keyup.enter="fetchNhanViens" placeholder="Nhập tên, mã NV, SĐT, CCCD..." class="hd-input hd-search-input">
+          <input type="text" v-model="searchQuery" maxlength="100" @input="searchQuery = searchQuery ? searchQuery.slice(0, 100) : ''" @keyup.enter="fetchNhanViens" placeholder="Nhập tên, mã NV, SĐT, CCCD..." class="hd-input hd-search-input">
         </div>
       </div>
       <div class="hd-filter-item">
