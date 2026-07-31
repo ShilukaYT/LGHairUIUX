@@ -1,6 +1,6 @@
 <template>
   <div class="logo">
-    <RouterLink to="/admin/dashboard" aria-label="logo" class="d-flex align-center" style="gap: 8px; overflow: hidden;">
+    <RouterLink to="/nhanvien/ca-lam-viec" aria-label="logo" class="d-flex align-center" style="gap: 8px; overflow: hidden;">
       <svg
         width="40"
         height="55"

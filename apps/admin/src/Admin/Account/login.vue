@@ -74,8 +74,8 @@ const handleLogin = async () => {
         // Nếu là Admin -> Chuyển vào Dashboard Quản trị
         router.push('/admin/Dashboard') 
       } else {
-        // Nếu là Role khác (Ví dụ: Thợ cắt tóc, Thu ngân...) -> Chuyển vào trang Nhân viên
-        router.push('/nhanvien') 
+        // Nếu là Role khác (Ví dụ: Thợ cắt tóc, Thu ngân...) -> Chuyển vào trang Ca làm việc của Nhân viên
+        router.push('/nhanvien/ca-lam-viec') 
       }
     }
   } catch (error: any) {

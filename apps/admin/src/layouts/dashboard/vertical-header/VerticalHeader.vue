@@ -9,7 +9,6 @@ import NotificationDD from './NotificationDD.vue';
 import Searchbar from './SearchBarPanel.vue';
 import ProfileDD from './ProfileDD.vue';
 import { useTheme } from 'vuetify';
-import { SunIcon, MoonIcon } from 'vue-tabler-icons';
 
 const customizer = useCustomizerStore();
 const theme = useTheme();
