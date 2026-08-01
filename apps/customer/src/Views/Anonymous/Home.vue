@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { ArrowRight, ShoppingBag, ChevronLeft, ChevronRight, Eye } from 'lucide-vue-next';
+import { ShoppingBag } from 'lucide-vue-next';
 import { useDataStore } from '@/stores/useDataStore';
+import { useWishlistStore } from '@/stores/useWishlistStore';
 import axios from 'axios';
 import { addToCartDB } from '@/Views/Anonymous/CSDL/cartDB';
 
 const API = import.meta.env.VITE_API_URL || 'https://localhost:7196';
 
+// ===== TYPES =====
 type HeroSlide = {
   id: number;
   image: string;
@@ -16,15 +18,6 @@ type HeroSlide = {
   title: string;
   desc: string;
   route: string;
-};
-
-type LookbookItem = {
-  id: number;
-  image: string;
-  title: string;
-  desc: string;
-  recommendation: string;
-  heightClass: string;
 };
 
 type Testimonial = {
@@ -43,21 +36,12 @@ type Pillar = {
   desc: string;
 };
 
-type Ingredient = {
-  id: number;
-  name: string;
-  scientificName: string;
-  desc: string;
-  origin: string;
-  benefits: string[];
-  productName: string;
-  productId: string;
-  image: string;
-};
-
+// ===== SETUP =====
 const router = useRouter();
 const dataStore = useDataStore();
+const wishlistStore = useWishlistStore();
 
+// Hero slider
 const activeHeroSlide = ref<number>(0);
 let heroIntervalId: number | null = null;
 
@@ -91,68 +75,34 @@ const heroSlides: HeroSlide[] = [
   }
 ];
 
-const hoveredServiceImg = ref<string | null>(null);
-
-const serviceCollages = {
-  s1: {
-    main: 'https://images.unsplash.com/photo-1595476108010-b4d1f10d5e43?q=80&w=1000',
-    detail1: 'https://images.unsplash.com/photo-1562322140-8baeececf3df?q=80&w=600',
-    detail2: 'https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?q=80&w=600'
-  },
-  s2: {
-    main: 'https://images.unsplash.com/photo-1615014664205-045388c422c5?q=80&w=1000',
-    detail1: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?q=80&w=600',
-    detail2: 'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?q=80&w=600'
-  },
-  s3: {
-    main: 'https://images.unsplash.com/photo-1592856695076-3f2fd7dbfd82?q=80&w=1000',
-    detail1: 'https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=600',
-    detail2: 'https://images.unsplash.com/photo-1599305090598-fe179d501227?q=80&w=600'
-  },
-  s4: {
-    main: 'https://images.unsplash.com/photo-1604263445414-9dd62d2ac089?q=80&w=1000',
-    detail1: 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?q=80&w=600',
-    detail2: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?q=80&w=600'
+// Flash sale countdown
+const flashTimer = ref({ h: '00', m: '00', s: '00' });
+let flashTimerInterval: number | null = null;
+const startFlashTimer = (endDateStr: string) => {
+  const endDate = new Date(endDateStr).getTime();
+  if (flashTimerInterval !== null) {
+    window.clearInterval(flashTimerInterval);
   }
-};
-
-const activeCollage = computed(() => {
-  const activeSvc = dataStore.SERVICES.find(s => s.img === hoveredServiceImg.value) || dataStore.SERVICES[0];
-  if (activeSvc) {
-    const realImgs = (activeSvc as any).imgs || [];
-    const mainImg = realImgs[0] || activeSvc.img;
-    
-    // Lấy ảnh thứ 2 từ DB. Nếu dịch vụ chỉ có 1 ảnh, lấy ảnh đầu tiên của dịch vụ tiếp theo trong DB làm ảnh nhỏ để không bị trùng và không dùng ảnh mẫu.
-    let detail1Img = realImgs[1];
-    if (!detail1Img && dataStore.SERVICES.length > 1) {
-      const activeIdx = dataStore.SERVICES.indexOf(activeSvc);
-      const nextIdx = (activeIdx + 1) % dataStore.SERVICES.length;
-      detail1Img = dataStore.SERVICES[nextIdx]?.img || mainImg;
-    } else if (!detail1Img) {
-      detail1Img = mainImg;
+  flashTimerInterval = window.setInterval(() => {
+    const now = new Date().getTime();
+    const distance = endDate - now;
+    if (distance < 0) {
+      window.clearInterval(flashTimerInterval!);
+      flashTimer.value = { h: '00', m: '00', s: '00' };
+      return;
     }
-
-    return {
-      main: mainImg,
-      detail1: detail1Img
+    const h = Math.floor(distance / (1000 * 60 * 60));
+    const m = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+    const s = Math.floor((distance % (1000 * 60)) / 1000);
+    flashTimer.value = {
+      h: String(h).padStart(2, '0'),
+      m: String(m).padStart(2, '0'),
+      s: String(s).padStart(2, '0')
     };
-  }
-  return serviceCollages.s1;
-});
-
-const productCarouselRef = ref<HTMLElement | null>(null);
-const isLoadingProducts = ref<boolean>(true);
-
-const scrollCarousel = (direction: 'left' | 'right'): void => {
-  if (productCarouselRef.value) {
-    const scrollAmount = 350;
-    productCarouselRef.value.scrollBy({
-      left: direction === 'left' ? -scrollAmount : scrollAmount,
-      behavior: 'smooth'
-    });
-  }
+  }, 1000);
 };
 
+// Toast
 const toastMessage = ref<string | null>(null);
 const showToast = (message: string): void => {
   toastMessage.value = message;
@@ -163,152 +113,54 @@ const showToast = (message: string): void => {
   }, 3000);
 };
 
+// Format giá VND
 const formatPriceToVND = (priceVal: string | number): string => {
   if (typeof priceVal === 'number') {
-    if (priceVal > 5000) {
-      return priceVal.toLocaleString('vi-VN') + ' đ';
-    }
-    const vnd = priceVal * 25000;
-    return vnd.toLocaleString('vi-VN') + ' đ';
+    if (priceVal > 5000) return priceVal.toLocaleString('vi-VN') + ' đ';
+    return (priceVal * 25000).toLocaleString('vi-VN') + ' đ';
   }
   if (typeof priceVal === 'string') {
     if (priceVal.includes('120') && !priceVal.includes('000')) return '1.200.000 đ';
     if (priceVal.includes('250') && !priceVal.includes('000')) return 'Từ 2.500.000 đ';
     if (priceVal.includes('300') && !priceVal.includes('000')) return '3.000.000 đ';
     if (priceVal.includes('150') && !priceVal.includes('000')) return '1.500.000 đ';
-    
     const cleanNum = parseFloat(priceVal.replace(/[^0-9.]/g, ''));
     if (!isNaN(cleanNum)) {
       if (cleanNum > 5000) {
         return (priceVal.toLowerCase().includes('từ') ? 'Từ ' : '') + cleanNum.toLocaleString('vi-VN') + ' đ';
       }
-      const vnd = cleanNum * 25000;
-      return (priceVal.toLowerCase().includes('từ') ? 'Từ ' : '') + vnd.toLocaleString('vi-VN') + ' đ';
+      return (priceVal.toLowerCase().includes('từ') ? 'Từ ' : '') + (cleanNum * 25000).toLocaleString('vi-VN') + ' đ';
     }
   }
   return String(priceVal);
 };
 
-const normalizeVietnamese = (str: string): string => {
-  return str.normalize('NFC');
-};
+const normalizeVietnamese = (str: string): string => str.normalize('NFC');
 
-const lookbookItems: LookbookItem[] = [
+// Danh mục (pillars)
+const pillars: Pillar[] = [
   {
     id: 1,
-    image: 'https://images.unsplash.com/photo-1562322140-8baeececf3df?q=80&w=800',
-    title: 'Sóng lơi quyến rũ',
-    desc: 'Kiểu tóc uốn lơi tự nhiên, bồng bềnh chuẩn Salon.',
-    recommendation: 'Sử dụng Máy uốn hơi nước & Huyết Thanh Lụa Signature',
-    heightClass: 'h-[400px]'
+    title: 'Làm Sạch & Dưỡng Ẩm',
+    subtitle: 'Cleansing & Conditioning',
+    desc: 'Dầu gội và dầu xả chứa dưỡng chất tự nhiên giúp cân bằng bã nhờn, nuôi dưỡng nang tóc khỏe mạnh.'
   },
   {
     id: 2,
-    image: 'https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=800',
-    title: 'Cắt tỉa Layer cá tính',
-    desc: 'Đường cắt layer sắc sảo tạo độ phồng tự nhiên cho mái tóc.',
-    recommendation: 'Sử dụng Lược tròn & Xịt Tạo Kiểu Khô',
-    heightClass: 'h-[480px]'
+    title: 'Phục Hồi Chuyên Sâu',
+    subtitle: 'Intensive Restoration',
+    desc: 'Mặt nạ phục hồi chuyên sâu tái cấu trúc sợi tóc hư tổn do uốn nhuộm hóa chất.'
   },
   {
     id: 3,
-    image: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?q=80&w=800',
-    title: 'Màu nhuộm Bạch Kim Balayage',
-    desc: 'Màu nhuộm đa tầng chuyển sắc mượt mà không hư tổn.',
-    recommendation: 'Sử dụng Mặt Nạ Phục Hồi Tóc & Dầu Gội Cân Bằng',
-    heightClass: 'h-[440px]'
-  },
-  {
-    id: 4,
-    image: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?q=80&w=800',
-    title: 'Tạo kiểu Undercut lịch lãm',
-    desc: 'Đường nét nam tính, giữ nếp suốt cả ngày.',
-    recommendation: 'Sử dụng Gôm xịt định hình & Xịt Tạo Nếp Muối Biển',
-    heightClass: 'h-[420px]'
-  },
-  {
-    id: 5,
-    image: 'https://images.unsplash.com/photo-1492106087820-71f1a00d2b11?q=80&w=800',
-    title: 'Phục hồi bóng mượt Silk',
-    desc: 'Mái tóc thẳng mượt như nhung, óng ả dưới mọi góc nhìn.',
-    recommendation: 'Sử dụng Dầu hấp Silk & Dầu Xả Mỏng Nhẹ',
-    heightClass: 'h-[460px]'
-  },
-  {
-    id: 6,
-    image: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=800',
-    title: 'Uốn xoăn sóng nước',
-    desc: 'Sóng tóc xoăn nhẹ nhàng tự nhiên giúp tôn lên đường nét nữ tính.',
-    recommendation: 'Sử dụng Xịt Tạo Nếp Muối Biển & Huyết Thanh Lụa',
-    heightClass: 'h-[400px]'
+    title: 'Tạo Kiểu Chuyên Nghiệp',
+    subtitle: 'Professional Styling',
+    desc: 'Các dòng huyết thanh lụa, xịt tạo phồng muối biển giúp giữ nếp sóng lơi bồng bềnh.'
   }
 ];
 
-const selectedIngredientIndex = ref<number>(0);
-
-const ingredients: Ingredient[] = [
-  {
-    id: 1,
-    name: 'Tinh Dầu Argan & Squalane',
-    scientificName: 'Argania Spinosa & Squalane',
-    desc: 'Được ép lạnh từ hạt cây Argan cổ thụ vùng Maroc kết hợp với squalane mía lên men tự nhiên. Sự kết hợp này mang lại khả năng tái tạo lớp màng lipid tóc vượt trội và làm óng thân tóc tức thì.',
-    origin: 'Nhập khẩu hữu cơ từ Thung lũng Souss, Maroc',
-    benefits: ['Nuôi dưỡng biểu bì tóc sâu', 'Chống xơ rối tóc lên đến 48 giờ', 'Tạo độ sáng bóng gương tự nhiên'],
-    productName: 'Huyết Thanh Lụa Signature',
-    productId: 'p1',
-    image: 'https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?q=80&w=800'
-  },
-  {
-    id: 2,
-    name: 'Keratin & Protein Lụa Thủy Phân',
-    scientificName: 'Hydrolyzed Keratin & Silk Protein',
-    desc: 'Chuỗi axit amin siêu nhỏ thu hoạch từ tơ tằm thiên nhiên Nhật Bản, có cấu trúc tương thích sinh học 98% với chất sừng tự nhiên của sợi tóc người để nhanh chóng phục hồi hư tổn cốt lõi.',
-    origin: 'Sản xuất tại phòng thí nghiệm Kyoto, Nhật Bản',
-    benefits: ['Lấp đầy các vết nứt gãy trên thân tóc', 'Tăng độ đàn hồi cho sợi tóc thêm 35%', 'Ngăn ngừa chẻ ngọn và đứt rụng'],
-    productName: 'Mặt Nạ Phục Hồi Tóc',
-    productId: 'p2',
-    image: 'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?q=80&w=800'
-  },
-  {
-    id: 3,
-    name: 'Tinh Thể Muối Biển & Tảo Bẹ',
-    scientificName: 'Sea Kelp & Marine Minerals',
-    desc: 'Khoáng chất biển sâu kết hợp chiết xuất tảo bẹ khổng lồ giúp giữ nếp sóng lơi và tạo độ phồng chân tóc hoàn hảo mà không làm mất đi độ ẩm tự nhiên của tóc.',
-    origin: 'Khai thác bền vững tại vùng biển Brittany, Pháp',
-    benefits: ['Tạo độ phồng chân tóc tự nhiên', 'Kháng khuẩn nhẹ cho da đầu sạch thoáng', 'Giữ nếp sóng lơi bồng bềnh lâu dài'],
-    productName: 'Xịt Tạo Nếp Muối Biển',
-    productId: 'p5',
-    image: 'https://images.unsplash.com/photo-1599305090598-fe179d501227?q=80&w=800'
-  },
-  {
-    id: 4,
-    name: 'Trà Xanh & Cỏ Đuôi Ngựa',
-    scientificName: 'Camellia Sinensis & Equisetum Arvense',
-    desc: 'Hợp chất EGCG dồi dào từ trà xanh hữu cơ hòa quyện cùng hàm lượng silica thực vật tự nhiên từ cây cỏ đuôi ngựa giúp thanh lọc nang tóc và kích thích mọc tóc dày dặn.',
-    origin: 'Thu hoạch từ các trang trại hữu cơ Jeju, Hàn Quốc',
-    benefits: ['Cân bằng lượng dầu thừa da đầu', 'Kích thích lưu thông máu thúc đẩy mọc tóc', 'Thanh lọc nang tóc khỏi hóa chất tích tụ'],
-    productName: 'Dầu Gội Cân Bằng',
-    productId: 'p3',
-    image: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?q=80&w=800'
-  }
-];
-
-const currentIngredient = computed(() => {
-  return ingredients[selectedIngredientIndex.value] || {
-    id: 0,
-    name: '',
-    scientificName: '',
-    desc: '',
-    origin: '',
-    benefits: [],
-    productName: '',
-    productId: '',
-    image: ''
-  };
-});
-
+// Testimonials
 const activeTestimonial = ref<number>(0);
-
 const testimonials: Testimonial[] = [
   {
     id: 1,
@@ -322,7 +174,7 @@ const testimonials: Testimonial[] = [
     id: 2,
     name: 'Trần Minh Hằng',
     role: 'Content Creator',
-    quote: 'Tôi đã uốn kỹ thuật số và nhuộm Balayage tại Minh Tâm. Tóc lên màu chuẩn xác, sóng lơi mềm mại mà không hề bị khô xơ nhờ dùng kèm Huyết Thanh Lụa.',
+    quote: 'Tôi đã uốn kỹ thuật số và nhuộm Balayage tại đây. Tóc lên màu chuẩn xác, sóng lơi mềm mại mà không hề bị khô xơ nhờ dùng kèm Huyết Thanh Lụa.',
     rating: 5,
     service: 'Nhuộm Màu & Uốn Sóng Lơi'
   },
@@ -330,7 +182,7 @@ const testimonials: Testimonial[] = [
     id: 3,
     name: 'Nguyễn Thế Anh',
     role: 'Creative Director',
-    quote: 'Rất ấn tượng với khu apothecary sản phẩm. Dầu gội cân bằng và mặt nạ phục hồi tóc dùng rất thích, thiết kế chai lọ tối giản rất hợp gu.',
+    quote: 'Rất ấn tượng với khu sản phẩm. Dầu gội cân bằng và mặt nạ phục hồi tóc dùng rất thích, thiết kế chai lọ tối giản rất hợp gu.',
     rating: 5,
     service: 'Chăm Sóc Tóc Nam & Boutique'
   }
@@ -338,175 +190,21 @@ const testimonials: Testimonial[] = [
 
 const currentTestimonial = computed(() => {
   return testimonials[activeTestimonial.value] || {
-    id: 0,
-    name: '',
-    role: '',
-    quote: '',
-    rating: 5,
-    service: ''
+    id: 0, name: '', role: '', quote: '', rating: 5, service: ''
   };
 });
 
-const pillars: Pillar[] = [
-  {
-    id: 1,
-    title: 'Làm Sạch & Dưỡng Ẩm',
-    subtitle: 'Cleansing & Conditioning',
-    desc: 'Dầu gội và dầu xả chứa dưỡng chất tự nhiên giúp cân bằng bã nhờn, nuôi dưỡng nang tóc khỏe mạnh và duy trì độ ẩm mềm mượt.'
-  },
-  {
-    id: 2,
-    title: 'Phục Hồi Chuyên Sâu',
-    subtitle: 'Intensive Restoration',
-    desc: 'Mặt nạ phục hồi chuyên sâu tái cấu trúc sợi tóc hư tổn do uốn nhuộm hóa chất, trả lại độ đàn hồi tự nhiên từ sâu bên trong.'
-  },
-  {
-    id: 3,
-    title: 'Tạo Kiểu Chuyên Nghiệp',
-    subtitle: 'Professional Styling',
-    desc: 'Các dòng huyết thanh lụa, xịt tạo phồng muối biển giúp giữ nếp sóng lơi bồng bềnh, bảo vệ tóc trước nhiệt độ của máy sấy.'
-  }
-];
+// Products loading state
+const isLoadingProducts = ref<boolean>(true);
 
-// Bespoke Apothecary Elixir Blending Lab State
-type ElixirFormula = {
-  concernName: string;
-  desc: string;
-  ingredients: Array<{ name: string; percentage: number; color: string }>;
-  productName: string;
-  productId: string;
-  productImg: string;
-  serviceName: string;
-  serviceId: string;
-};
+// Flash Sale state
+const activeFlashSale = ref<any>(null);
+const flashSaleItems = ref<any[]>([]);
 
-const activeConcern = ref<'dry' | 'damaged' | 'flat' | 'oily'>('dry');
+// Stylists
+const stylists = ref<any[]>([]);
 
-const apothecaryFormulas: Record<'dry' | 'damaged' | 'flat' | 'oily', ElixirFormula> = {
-  dry: {
-    concernName: 'Khô xơ & Mất nước',
-    desc: 'Mái tóc thiếu ẩm, xơ rối dưới thời tiết và nhiệt độ cao. Tỷ lệ vàng này tập trung phục hồi lớp màng Lipid bảo vệ biểu bì tóc, cung cấp độ ẩm sâu tức thì.',
-    ingredients: [
-      { name: 'Tinh Dầu Argan hữu cơ', percentage: 60, color: 'bg-amber-500' },
-      { name: 'Protein Lụa Thủy Phân', percentage: 30, color: 'bg-yellow-200' },
-      { name: 'Tinh chất Hoa Hồng Thượng Hạng', percentage: 10, color: 'bg-rose-400' }
-    ],
-    productName: 'Huyết Thanh Lụa Signature',
-    productId: 'p1',
-    productImg: 'https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?q=80&w=800',
-    serviceName: 'Nhuộm Màu Thiết Kế',
-    serviceId: 's2'
-  },
-  damaged: {
-    concernName: 'Hư tổn & Gãy rụng',
-    desc: 'Cấu trúc keratin bị phá vỡ do hóa chất hoặc nhiệt. Công thức đậm đặc tái liên kết các sợi peptide đứt gãy, củng cố độ đàn hồi của lõi tóc từ sâu bên trong.',
-    ingredients: [
-      { name: 'Keratin sinh học tinh khiết', percentage: 50, color: 'bg-yellow-600' },
-      { name: 'Axit Amin từ kén Tơ Tằm', percentage: 35, color: 'bg-orange-200' },
-      { name: 'Chiết xuất Dầu Hạt Chùm Ngây', percentage: 15, color: 'bg-emerald-600' }
-    ],
-    productName: 'Mặt Nạ Phục Hồi Tóc',
-    productId: 'p2',
-    productImg: 'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc?q=80&w=800',
-    serviceName: 'Phục Hồi Lụa Silk',
-    serviceId: 's4'
-  },
-  flat: {
-    concernName: 'Mỏng xẹp & Thiếu sức sống',
-    desc: 'Chất tóc mảnh, thiếu độ phồng chân tóc. Tỷ lệ khoáng chất biển sâu giúp định hình form sóng lơi tự nhiên mà không gây nặng tóc hay bết dính.',
-    ingredients: [
-      { name: 'Tinh thể Muối Biển Brittany', percentage: 45, color: 'bg-sky-400' },
-      { name: 'Chiết xuất Tảo Bẹ khổng lồ', percentage: 40, color: 'bg-teal-600' },
-      { name: 'Collagen thực vật mỏng nhẹ', percentage: 15, color: 'bg-emerald-200' }
-    ],
-    productName: 'Xịt Tạo Nếp Muối Biển',
-    productId: 'p5',
-    productImg: 'https://images.unsplash.com/photo-1599305090598-fe179d501227?q=80&w=800',
-    serviceName: 'Uốn Kỹ Thuật Số',
-    serviceId: 's3'
-  },
-  oily: {
-    concernName: 'Dầu thừa & Nang tóc yếu',
-    desc: 'Da đầu tiết nhiều bã nhờn gây bít tắc nang tóc. Hợp chất thảo dược kháng khuẩn, thanh lọc bã nhờn da đầu và hỗ trợ mọc tóc dày dặn.',
-    ingredients: [
-      { name: 'EGCG Trà Xanh hữu cơ', percentage: 50, color: 'bg-emerald-500' },
-      { name: 'Silica cỏ Đuôi Ngựa Jeju', percentage: 30, color: 'bg-green-700' },
-      { name: 'Bột lá Bạc Hà làm mát', percentage: 20, color: 'bg-cyan-400' }
-    ],
-    productName: 'Dầu Gội Cân Bằng',
-    productId: 'p3',
-    productImg: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?q=80&w=800',
-    serviceName: 'Chăm Sóc Tóc Nam',
-    serviceId: 's1'
-  }
-};
-
-const currentFormula = computed(() => {
-  return apothecaryFormulas[activeConcern.value];
-});
-
-// ===== RESOLVE SẢN PHẨM / DỊCH VỤ THẬT TỪ API =====
-
-// Chuẩn hóa tiếng Việt để so sánh tên (bỏ dấu, lowercase)
-const normalizeForSearch = (str: string): string => {
-  if (!str) return '';
-  return str
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd');
-};
-
-// Tìm sản phẩm thật từ store, fallback theo index nếu không match tên
-const findRealProduct = (mockName: string, fallbackIdx = 0) => {
-  if (!dataStore.PRODUCTS.length) return null;
-  const normedKeyword = normalizeForSearch(mockName);
-  const words = normedKeyword.split(' ').filter(w => w.length > 2);
-
-  // Thử khớp theo từ trong tên (đã bỏ dấu)
-  const found = dataStore.PRODUCTS.find(p => {
-    const normedName = normalizeForSearch(p.name || '');
-    return words.some(w => normedName.includes(w));
-  });
-
-  // Nếu không khớp tên → lấy sản phẩm theo vị trí index (luôn trả về kết quả)
-  return found || dataStore.PRODUCTS[fallbackIdx % dataStore.PRODUCTS.length];
-};
-
-// Tìm dịch vụ thật từ store, fallback theo index
-const findRealService = (mockName: string, fallbackIdx = 0) => {
-  if (!dataStore.SERVICES.length) return null;
-  const normedKeyword = normalizeForSearch(mockName);
-  const words = normedKeyword.split(' ').filter(w => w.length > 2);
-
-  const found = dataStore.SERVICES.find(s => {
-    const normedName = normalizeForSearch(s.name || '');
-    return words.some(w => normedName.includes(w));
-  });
-
-  return found || dataStore.SERVICES[fallbackIdx % dataStore.SERVICES.length];
-};
-
-// Sản phẩm thật cho Ingredients tab — fallback theo index tab đang chọn
-const currentIngredientProduct = computed(() => {
-  return findRealProduct(currentIngredient.value.productName, selectedIngredientIndex.value);
-});
-
-// Sản phẩm thật cho Elixir Lab — fallback theo index concern
-const currentFormulaProduct = computed(() => {
-  const concernKeys = Object.keys(apothecaryFormulas);
-  const idx = concernKeys.indexOf(activeConcern.value);
-  return findRealProduct(currentFormula.value.productName, idx >= 0 ? idx : 0);
-});
-
-// Dịch vụ thật cho Elixir Lab — fallback theo index concern
-const currentFormulaService = computed(() => {
-  const concernKeys = Object.keys(apothecaryFormulas);
-  const idx = concernKeys.indexOf(activeConcern.value);
-  return findRealService(currentFormula.value.serviceName, idx >= 0 ? idx : 0);
-});
-// ===== END RESOLVE =====
-
+// ===== ACTIONS =====
 const setHeroSlide = (index: number): void => {
   activeHeroSlide.value = index;
 };
@@ -527,84 +225,117 @@ const prevTestimonial = (): void => {
   activeTestimonial.value = (activeTestimonial.value - 1 + testimonials.length) % testimonials.length;
 };
 
+// ===== LIFECYCLE =====
 onMounted(async () => {
   heroIntervalId = window.setInterval(nextHeroSlide, 4200);
 
-  // Fetch real services from API
+  // Fetch API Sale
   try {
-    const res = await axios.get(`${API}/api/DanhSachDichVu/filter`, {
-      params: {
-        page: 1,
-        pageSize: 4
-      }
-    });
-    if (res.data && res.data.data && res.data.data.length > 0) {
-      dataStore.SERVICES = res.data.data.map((s: any) => {
+    const saleRes = await axios.get(`${API}/api/Sale`);
+    const sales = saleRes.data?.data || saleRes.data?.Data || [];
+    const activeSale = sales.find((s: any) => s.trangThai === 1 || s.TrangThai === 1);
+    if (activeSale) {
+      activeFlashSale.value = activeSale;
+      startFlashTimer(activeSale.ngayKetThuc || activeSale.NgayKetThuc);
+      const chiTiet = activeSale.chiTietFlashSales || activeSale.ChiTietFlashSales || [];
+      flashSaleItems.value = chiTiet.map((item: any) => ({
+        id: item.maDV || item.MaDV || item.maCB || item.MaCB,
+        name: item.tenDv || item.TenDv || item.tenCb || item.TenCb,
+        price: item.gia || item.Gia,
+        salePrice: item.giaSauGiam || item.GiaSauGiam,
+        discount: item.phanTramGiam || item.PhanTramGiam
+      }));
+    }
+  } catch (err) {
+    console.error('Lỗi tải FlashSale:', err);
+  }
+
+  // Fetch dịch vụ thật từ API
+  try {
+    const res = await axios.get(`${API}/api/DanhSachDichVu`);
+    const servicesData = res.data?.services || res.data?.data;
+    if (servicesData && servicesData.length > 0) {
+      dataStore.SERVICES = servicesData.map((s: any) => {
         const formatImgUrl = (url: string) => {
           if (!url) return '';
           if (url.startsWith('http')) return url;
           return url.startsWith('/') ? `${API}${url}` : `${API}/${url}`;
         };
-        // HOME2-018: fallback ảnh mặc định khi hinhAnh null/rỗng
-        const DEFAULT_SERVICE_IMG = 'https://images.unsplash.com/photo-1595476108010-b4d1f10d5e43?q=80&w=1000';
-        const mainImg = (s.hinhAnh && s.hinhAnh.trim()) ? formatImgUrl(s.hinhAnh) : DEFAULT_SERVICE_IMG;
-        const rawImgs = s.hinhAnhs || [];
-        const mappedImgs = rawImgs.map((img: string) => formatImgUrl(img));
+        const DEFAULT_IMG = 'https://images.unsplash.com/photo-1595476108010-b4d1f10d5e43?q=80&w=1000';
+        const mainImg = (s.hinhAnh?.trim()) ? formatImgUrl(s.hinhAnh) : DEFAULT_IMG;
         return {
           id: s.maDv,
           name: s.tenDv,
           desc: s.moTa || '',
           price: s.gia,
           duration: `${s.thoiGianLam || 30} PHÚT`,
-          img: mainImg,
-          imgs: mappedImgs.length > 0 ? mappedImgs : [mainImg]
+          img: mainImg
         };
       });
     }
   } catch (err) {
-    console.error("Lỗi khi tải dữ liệu dịch vụ thật:", err);
+    console.error('Lỗi tải dịch vụ:', err);
   }
 
-  // Fetch real products from API
+  // Fetch thợ thật từ API
+  try {
+    const res = await axios.get(`${API}/api/NhanVien`, {
+      params: { trangThai: 1 }
+    });
+    if (res.data && res.data.length > 0) {
+      const getImgUrl = (url: string) => {
+        if (!url) return '';
+        if (url.startsWith('http')) return url;
+        return url.startsWith('/') ? `${API}${url}` : `${API}/${url}`;
+      };
+      const keywords = ['thợ', 'stylist', 'kỹ thuật'];
+      stylists.value = res.data
+        .filter((nv: any) => {
+          if (!nv.tenChucVu) return false;
+          const role = nv.tenChucVu.toLowerCase();
+          return keywords.some(k => role.includes(k));
+        })
+        .map((nv: any) => ({
+          id: nv.maNv,
+          name: nv.hoTenNv,
+          role: nv.tenChucVu,
+          img: nv.hinhAnh ? getImgUrl(nv.hinhAnh) : '',
+          rating: 5
+        }));
+    }
+  } catch (err) {
+    console.error('Lỗi tải thợ:', err);
+  }
+
+  // Fetch sản phẩm thật từ API
   isLoadingProducts.value = true;
   try {
     const resProd = await axios.get(`${API}/api/SanPham/filter`, {
-      params: {
-        page: 1,
-        pageSize: 20  // Lấy đủ sản phẩm để hiển thị
-      }
+      params: { page: 1, pageSize: 20 }
     });
-    if (resProd.data && resProd.data.data && resProd.data.data.length > 0) {
-      // Hàm ghép URL ảnh sản phẩm — đồng bộ với Shop.vue getImageUrl()
-      // HOME2-031: trả về ảnh mặc định khi không có ảnh thay vì chuỗi rỗng
-      const DEFAULT_PRODUCT_IMG = 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?q=80&w=800';
-      const getProductImageUrl = (img?: string): string => {
-        if (!img) return DEFAULT_PRODUCT_IMG;
+    if (resProd.data?.data?.length > 0) {
+      const DEFAULT_PROD_IMG = 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?q=80&w=800';
+      const getImgUrl = (img?: string): string => {
+        if (!img) return DEFAULT_PROD_IMG;
         if (img.startsWith('http')) return img;
         if (img.startsWith('/')) return `${API}${img}`;
         return `${API}/uploads/sanpham/${img}`;
       };
-
       dataStore.PRODUCTS = resProd.data.data.map((p: any) => {
         const rawImg = p.hinhAnhDaiDien || p.hinhAnh || p.anhDaiDien || p.imageUrl || '';
-        const prodImg = getProductImageUrl(rawImg);
-
-        const avgRating = typeof p.diemTrungBinh === 'number'
-          ? p.diemTrungBinh
-          : typeof p.soSao === 'number'
-            ? p.soSao
-            : typeof p.rating === 'number'
-              ? p.rating
-              : 5;
+        const avgRating = typeof p.diemTrungBinh === 'number' ? p.diemTrungBinh
+          : typeof p.soSao === 'number' ? p.soSao
+          : typeof p.rating === 'number' ? p.rating : 5;
         const reviewCount = p.soLuongDanhGia ?? p.soLuotDanhGia ?? p.reviewCount ?? 0;
-
         return {
           id: String(p.maSp),
-          maBienThe: p.maBienThe ?? p.bienThes?.[0]?.maBienThe ?? null, // lưu biến thể mặc định
+          maSp: p.maSp, // required for wishlistStore
+          maBienThe: p.maBienThe ?? p.bienThes?.[0]?.maBienThe ?? null,
           name: p.tenSp,
+          tenSp: p.tenSp, // required for wishlistStore
           desc: p.moTa || '',
           price: p.giaTu ?? p.gia ?? 0,
-          img: prodImg,
+          img: getImgUrl(rawImg),
           category: p.danhMuc?.tenDanhMuc || p.tenDanhMuc || 'Boutique',
           size: p.thuongHieu?.tenThuongHieu || p.tenThuongHieu || 'LGHair',
           avgRating,
@@ -613,7 +344,7 @@ onMounted(async () => {
       });
     }
   } catch (err) {
-    console.error("Lỗi khi tải dữ liệu sản phẩm thật:", err);
+    console.error('Lỗi tải sản phẩm:', err);
   } finally {
     isLoadingProducts.value = false;
   }
@@ -624,14 +355,16 @@ onUnmounted(() => {
     window.clearInterval(heroIntervalId);
     heroIntervalId = null;
   }
+  if (flashTimerInterval !== null) {
+    window.clearInterval(flashTimerInterval);
+    flashTimerInterval = null;
+  }
 });
 
-// === THÊM SẢN PHẨM VÀO GIỎ HÀNG THẬT ===
+// ===== THÊM VÀO GIỎ HÀNG =====
 const addProductToCart = async (prod: any) => {
   try {
     let maBienThe = prod.maBienThe;
-
-    // Nếu chưa có maBienThe, gọi API detail để lấy biến thể đầu tiên
     if (!maBienThe) {
       try {
         const detailRes = await axios.get(`${API}/api/SanPham/${prod.id}`);
@@ -644,10 +377,7 @@ const addProductToCart = async (prod: any) => {
         console.warn('Không lấy được biến thể, dùng maSp làm fallback');
       }
     }
-
-    if (!maBienThe) {
-      maBienThe = prod.id; // fallback cuối
-    }
+    if (!maBienThe) maBienThe = prod.id;
 
     await addToCartDB({
       id: maBienThe,
@@ -665,837 +395,398 @@ const addProductToCart = async (prod: any) => {
     showToast('Lỗi thêm vào giỏ hàng!');
   }
 };
-// === END CART ===
 </script>
-
 <template>
-  <div class="w-full bg-white text-black font-sans antialiased selection:bg-black selection:text-white">
+  <div class="w-full hm-root">
 
-    <!-- Floating Minimalist Toast -->
+    <!-- ===== TOAST ===== -->
     <transition name="toast-slide">
-      <div
-        v-if="toastMessage"
-        class="fixed top-20 right-6 z-50 bg-neutral-950 text-white border border-[#bfa77a]/40 px-6 py-4 flex items-center gap-4 shadow-[0_20px_50px_rgba(0,0,0,0.3)] backdrop-blur-md"
-      >
-        <div class="w-1.5 h-1.5 rounded-full bg-[#bfa77a] animate-ping"></div>
-        <span class="text-xs uppercase tracking-[0.2em] font-light">{{ toastMessage }}</span>
+      <div v-if="toastMessage" class="hm-toast">
+        <div class="hm-toast-dot"></div>
+        <span class="hm-toast-text">{{ toastMessage }}</span>
       </div>
     </transition>
 
-    <!-- Full-screen Hero Section -->
-    <section class="relative w-full h-[450px] sm:h-[500px] lg:h-[580px] bg-black text-white overflow-hidden flex items-center">
-      
-      <!-- Visual Background Slider -->
-      <div class="absolute inset-0 w-full h-full z-0">
+    <!-- ===== BANNER SLIDER ===== -->
+    <section class="hm-hero">
+      <div class="hm-hero-slides">
         <div
           v-for="(slide, index) in heroSlides"
           :key="slide.id"
-          class="absolute inset-0 transition-all duration-[1200ms] ease-in-out"
-          :class="[
-            index === activeHeroSlide ? 'opacity-100 scale-100 z-10' : 'opacity-0 scale-105 z-0'
-          ]"
+          class="hm-hero-slide"
+          :class="index === activeHeroSlide ? 'hm-slide-active' : 'hm-slide-hidden'"
         >
-          <img
-            :src="slide.image"
-            :alt="slide.alt"
-            class="w-full h-full object-cover saturate-110 contrast-105"
-          />
-          <!-- Moderate Overlay for balanced brightness and contrast -->
-          <div class="absolute inset-0 bg-black/40"></div>
+          <img :src="slide.image" :alt="slide.alt" class="hm-hero-img" />
+          <div class="hm-hero-overlay"></div>
         </div>
       </div>
-
-      <!-- Vertical Scroll Indicator -->
-      <div class="absolute bottom-10 left-8 lg:left-12 flex items-center gap-4 text-neutral-400 z-20 pointer-events-none hidden md:flex">
-        <span class="text-[8px] uppercase tracking-[0.3em] font-semibold [writing-mode:vertical-lr] select-none">Cuộn để khám phá</span>
-        <div class="h-12 w-[1px] bg-neutral-800 relative overflow-hidden">
-          <div class="absolute top-0 left-0 w-full h-1/2 bg-[#bfa77a] animate-bounce"></div>
+      <div class="hm-hero-content">
+        <p class="hm-hero-subtitle">{{ heroSlides[activeHeroSlide]?.subtitle }}</p>
+        <h1 class="hm-hero-title">LG HAIR SALON</h1>
+        <p class="hm-hero-desc">{{ heroSlides[activeHeroSlide]?.desc }}</p>
+        <div class="hm-hero-cta">
+          <button class="hm-btn-primary" @click="goToRoute('datdichvu')">Đặt Lịch Ngay</button>
+          <button class="hm-btn-outline" @click="goToRoute('shop')">Mua Sắm Sản Phẩm</button>
         </div>
       </div>
-
-      <!-- Left-aligned Content Overlay -->
-      <div class="relative z-20 max-w-2xl px-8 md:px-16 lg:px-24 py-12 md:py-16 w-full">
-        <div class="animate-in fade-in slide-in-from-bottom-8 duration-1000">
-          <div class="overflow-hidden mb-4">
-            <p class="text-xs md:text-sm font-serif italic text-[#f9e5b5] tracking-wider">
-              "Nơi kỹ nghệ kéo vàng giao thoa cùng cảm hứng thời trang đương đại."
-            </p>
-          </div>
-
-          <p class="text-[11px] tracking-[0.4em] uppercase text-neutral-300 mb-6 font-semibold">
-            {{ heroSlides[activeHeroSlide]?.subtitle }}
-          </p>
-          
-          <h1 class="text-4xl md:text-5xl lg:text-6xl font-sans font-bold tracking-wide uppercase text-white mb-8 leading-tight">
-            LG HAIR SALON
-          </h1>
-
-          <p class="text-sm md:text-base font-light leading-relaxed tracking-wide text-neutral-300 mb-12 max-w-lg">
-            {{ heroSlides[activeHeroSlide]?.desc }}
-          </p>
-
-          <!-- Parallel Dual CTA -->
-          <div class="flex flex-row flex-wrap gap-4">
-            <button
-              @click="goToRoute('datdichvu')"
-              class="group inline-flex items-center justify-center gap-3 bg-[#bfa77a] text-black px-8 py-4 text-[10px] font-semibold uppercase tracking-[0.2em] transition-all duration-300 hover:bg-white hover:text-black cursor-pointer shadow-md"
-            >
-              Đặt Lịch Cắt Tóc
-              <ArrowRight :size="14" class="transition-transform duration-300 group-hover:translate-x-1" />
-            </button>
-            <button
-              @click="goToRoute('shop')"
-              class="group inline-flex items-center justify-center gap-3 bg-transparent text-[#bfa77a] border border-[#bfa77a] px-8 py-4 text-[10px] font-semibold uppercase tracking-[0.2em] transition-all duration-300 hover:bg-[#bfa77a] hover:text-black cursor-pointer"
-            >
-              Mua Sắm Sản Phẩm
-              <ArrowRight :size="14" class="transition-transform duration-300 group-hover:translate-x-1" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Pagination Controls -->
-      <div class="absolute bottom-10 right-8 lg:right-12 z-25 flex items-center gap-3">
+      <div class="hm-hero-dots">
         <button
           v-for="(slide, index) in heroSlides"
           :key="slide.id"
+          class="hm-hero-dot"
+          :class="index === activeHeroSlide ? 'hm-dot-active' : ''"
           @click="setHeroSlide(index)"
-          class="relative h-[2px] transition-all duration-500 overflow-hidden"
-          :class="index === activeHeroSlide ? 'w-16 bg-white' : 'w-8 bg-white/30 hover:bg-white/60'"
-          aria-label="Go to slide"
-        >
-          <div 
-            class="absolute top-0 left-0 h-full bg-[#bfa77a] transition-all ease-linear"
-            :style="{ width: index === activeHeroSlide ? '100%' : '0%', transitionDuration: index === activeHeroSlide ? '4200ms' : '0ms' }"
-          ></div>
-        </button>
+        ></button>
       </div>
     </section>
 
-    <!-- Categories Section -->
-    <section class="w-full bg-white border-b border-neutral-200">
-      <div class="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-neutral-200">
+    <!-- ===== DANH MỤC ===== -->
+    <section class="hm-category-row">
+      <div class="hm-category-inner">
         <div
-          v-for="p in pillars"
+          v-for="(p, idx) in pillars"
           :key="p.id"
-          @click="goToRoute('shop')"
-          class="p-8 lg:p-16 flex flex-col justify-between group hover:bg-neutral-50 transition-colors duration-500 min-h-[300px] cursor-pointer"
+          class="hm-cat-card"
+          @click="router.push({ name: 'shop', query: { tenDanhMuc: p.title } })"
         >
-          <div>
-            <span class="font-serif text-[#bfa77a] text-3xl lg:text-4xl block mb-6 font-light">0{{ p.id }}</span>
-            <div class="font-heading text-lg tracking-normal uppercase text-neutral-900 mb-2 font-medium group-hover:text-[#bfa77a] transition-colors duration-300">
-              {{ p.title }}
-            </div>
-            <p class="text-[10px] tracking-[0.2em] uppercase text-neutral-400 mb-6 font-semibold">{{ p.subtitle }}</p>
-          </div>
-          <p class="text-sm text-neutral-500 font-light leading-relaxed">{{ p.desc }}</p>
+          <div class="hm-cat-num">0{{ p.id }}</div>
+          <div class="hm-cat-title">{{ p.title }}</div>
+          <div class="hm-cat-sub">{{ p.subtitle }}</div>
+        </div>
+        <div class="hm-cat-card" @click="goToRoute('services')">
+          <div class="hm-cat-num">04</div>
+          <div class="hm-cat-title">Dịch Vụ Tóc</div>
+          <div class="hm-cat-sub">Hair Services</div>
+        </div>
+        <div class="hm-cat-card hm-cat-card-img" @click="goToRoute('services')">
+          <img
+            :src="dataStore.SERVICES[0]?.img || 'https://images.unsplash.com/photo-1595476108010-b4d1f10d5e43?q=80&w=400'"
+            alt="Hình ảnh dịch vụ"
+            class="hm-cat-bg-img"
+          />
+          <div class="hm-cat-hover-text">Xem Thêm Dịch Vụ</div>
         </div>
       </div>
     </section>
 
-    <!-- The Salon Experience -->
-    <section class="w-full py-6 md:py-8 px-6 lg:px-16 max-w-[1440px] mx-auto bg-white">
-      <!-- Section Header -->
-      <div class="flex flex-col md:flex-row justify-between items-end mb-6 gap-6">
-        <div class="max-w-xl">
-          <p class="text-[10px] tracking-[0.2em] uppercase text-neutral-400 mb-2 font-semibold">Bản sắc độc bản</p>
-          <h3 class="text-xl md:text-2xl lg:text-3xl font-sans font-semibold tracking-wide text-black uppercase">
-            Trải nghiệm Salon
-          </h3>
+    <!-- ===== FLASH SALE ===== -->
+    <section class="hm-flash-section" v-if="activeFlashSale">
+      <div class="hm-flash-top">
+        <div class="hm-flash-title-wrap">
+          <span class="hm-flash-f">FLASH</span>
+          <span class="hm-flash-s"> SALE</span>
         </div>
-        <button
-          @click="goToRoute('services')"
-          class="group flex items-center text-[10px] uppercase tracking-[0.2em] text-black font-bold hover:text-[#bfa77a] transition-colors cursor-pointer"
-        >
-          Xem tất cả dịch vụ 
-          <span class="ml-4 w-12 h-[1px] bg-black group-hover:w-20 group-hover:bg-[#bfa77a] transition-all duration-500"></span>
-        </button>
+        <div class="hm-flash-timer">
+          <div class="hm-timer-box">{{ flashTimer.h }}</div>
+          <span class="hm-timer-sep">:</span>
+          <div class="hm-timer-box">{{ flashTimer.m }}</div>
+          <span class="hm-timer-sep">:</span>
+          <div class="hm-timer-box">{{ flashTimer.s }}</div>
+        </div>
       </div>
 
-      <!-- Interactive Row List & Collage Image Grid -->
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-        <!-- Interactive Row List (Left Column) -->
-        <div class="lg:col-span-7 divide-y divide-neutral-200">
-          <!-- HOME2-024: nhấn dòng dịch vụ điều hướng đến chi tiết đúng id -->
+      <div class="hm-flash-layout">
+        <div class="hm-flash-left">
+          <img
+            :src="dataStore.SERVICES[0]?.img || flashSaleItems[0]?.img || 'https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=600'"
+            alt="Flash sale"
+            class="hm-flash-left-img"
+          />
+        </div>
+        <div class="hm-flash-vline"></div>
+
+        <div class="hm-flash-cards">
           <div
-            v-for="(svc, index) in dataStore.SERVICES"
+            v-for="(svc, idx) in flashSaleItems.slice(0, 4)"
             :key="svc.id"
-            class="group py-5 flex items-baseline justify-between cursor-pointer transition-all duration-300 hover:translate-x-2"
-            role="button"
-            :aria-label="'Xem chi tiết dịch vụ ' + svc.name"
-            @mouseenter="hoveredServiceImg = svc.img"
-            @mouseleave="hoveredServiceImg = null"
+            class="hm-flash-card"
             @click="router.push({ name: 'serviceDetail', params: { id: svc.id } })"
           >
-            <div class="flex items-start gap-5">
-              <span class="font-serif text-[#bfa77a] text-xs pt-1.5 font-medium select-none">0{{ index + 1 }}</span>
-              <div class="flex flex-col pr-4">
-                <div class="font-serif text-2xl md:text-3xl text-neutral-900 group-hover:text-[#bfa77a] transition-colors duration-300 normal-case tracking-normal font-light">
-                  {{ normalizeVietnamese(svc.name) }}
-                </div>
-                <p class="text-xs text-neutral-400 font-light mt-2 max-w-md leading-relaxed">
-                  {{ svc.desc }}
-                </p>
-              </div>
+            <div class="hm-flash-card-head">
+              <span class="hm-flash-badge" v-if="svc.discount">-{{ svc.discount }}%</span>
+              <button class="hm-flash-heart" @click.stop>♡</button>
             </div>
-            <!-- Dot leader line -->
-            <div class="flex-grow border-b border-dashed border-neutral-300 mx-4 self-center group-hover:border-[#bfa77a]/60 transition-colors duration-300"></div>
-            <div class="font-mono text-lg md:text-xl text-neutral-900 group-hover:text-[#bfa77a] group-hover:scale-105 transition-all duration-300 whitespace-nowrap">
-              {{ formatPriceToVND(svc.price) }}
-            </div>
-          </div>
-        </div>
-
-        <!-- Preview Column (Right Column - Premium Collage Layout) -->
-        <div class="lg:col-span-5 relative py-12 px-6 self-center">
-          <!-- Interactive Collage of Overlapping Images -->
-          <div class="relative w-full aspect-[4/5]">
-            <!-- Background Frame Decoration -->
-            <div class="absolute -inset-2 border-2 border-[#bfa77a]/40 pointer-events-none z-0 translate-x-3 translate-y-3 transition-transform duration-700"></div>
-
-            <!-- Big Image (Main) -->
-            <div class="w-full h-full overflow-hidden bg-neutral-50 relative border-2 border-[#bfa77a]/50 z-10 shadow-2xl rounded-xl">
+            <div class="hm-flash-card-img-wrap">
               <img
-                :key="activeCollage.main"
-                :src="activeCollage.main"
-                class="w-full h-full object-cover transition-all duration-700 ease-out scale-100 animate-in fade-in duration-700"
-                alt="Salon service main"
-              />
-              <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
-              <div class="absolute bottom-8 right-8 text-white z-20 text-right">
-                <p class="text-[10px] tracking-[0.3em] uppercase text-[#bfa77a] mb-2 font-semibold">LG HAIR SALON</p>
-                <p class="font-serif text-xl italic font-light">Kiệt tác sáng tạo riêng bạn</p>
-              </div>
-            </div>
-
-            <!-- Small Image (Detail 1) - bottom-left corner overlapping -->
-            <div class="absolute -bottom-8 -left-8 w-1/2 aspect-square z-20 border-4 border-[#bfa77a]/70 shadow-xl rotate-[-4deg] overflow-hidden rounded-lg hover:rotate-0 hover:scale-105 transition-all duration-500">
-              <img
-                :key="activeCollage.detail1"
-                :src="activeCollage.detail1"
-                class="w-full h-full object-cover animate-in fade-in duration-700"
-                alt="Salon service detail"
+                :src="dataStore.SERVICES.find(s => s.id === svc.id)?.img || dataStore.SERVICES[idx % Math.max(1, dataStore.SERVICES.length)]?.img || 'https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=300'"
+                :alt="svc.name"
+                class="hm-flash-card-img"
               />
             </div>
+            <div class="hm-flash-card-name">{{ svc.name }}</div>
+            <div class="hm-flash-price-row">
+              <span class="hm-price-old">{{ formatPriceToVND(svc.price) }}</span>
+              <span class="hm-price-new">{{ formatPriceToVND(svc.salePrice) }}</span>
+            </div>
+            <div class="hm-flash-underline"></div>
+            <button class="hm-flash-btn" @click.stop="router.push({ name: 'datdichvu' })">ĐẶT NGAY</button>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- The Retail Shop (Boutique Products) -->
-    <section class="w-full py-12 md:py-16 px-6 lg:px-16 max-w-[1440px] mx-auto bg-neutral-50/30 border-t border-neutral-200">
-      <!-- Section Header -->
-      <div class="flex flex-col md:flex-row justify-between items-end mb-8 md:mb-12 gap-8">
-        <div class="max-w-xl">
-          <p class="text-[10px] tracking-[0.2em] uppercase text-neutral-400 mb-4 font-semibold">Mỹ phẩm cao cấp</p>
-          <h3 class="text-3xl md:text-4xl lg:text-5xl font-sans font-semibold tracking-wide text-black uppercase">
-            Sản phẩm Boutique
-          </h3>
+    <!-- ===== CTA SẴN SÀNG CHIA SẺ CÂU CHUYỆN ===== -->
+    <section class="hm-cta-section">
+      <img
+        src="https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=1440"
+        alt="CTA background"
+        class="hm-cta-bg"
+      />
+      <div class="hm-cta-overlay"></div>
+      <div class="hm-cta-content">
+        <h2 class="hm-cta-title">Sẵn Sàng Chia Sẻ Câu Chuyện</h2>
+        <p class="hm-cta-desc">
+          Mỗi đường kéo là một tác phẩm nghệ thuật. Đam mê và sự tỉ mỉ chính là cam kết tuyệt đối của chúng tôi dành cho bạn.
+        </p>
+        <button class="hm-cta-btn" @click="goToRoute('datdichvu')">ĐẶT LỊCH NGAY</button>
+      </div>
+    </section>
+
+    <!-- ===== DỊCH VỤ MỚI ===== -->
+    <section class="hm-services-section">
+      <h2 class="hm-section-title">Dịch Vụ Mới Của Chúng Tôi</h2>
+
+      <div class="hm-svc-row" v-if="dataStore.SERVICES.length >= 1">
+        <div class="hm-svc-big" v-if="dataStore.SERVICES[0]">
+          <img :src="dataStore.SERVICES[0].img" :alt="dataStore.SERVICES[0].name" class="hm-svc-big-img" />
+          <div class="hm-svc-big-overlay">
+            <h3 class="hm-svc-big-name">{{ normalizeVietnamese(dataStore.SERVICES[0].name) }}</h3>
+            <p class="hm-svc-big-price">{{ formatPriceToVND(dataStore.SERVICES[0].price) }}</p>
+            <button class="hm-svc-big-btn" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[0].id } })">Xem chi tiết</button>
+          </div>
         </div>
-        <div class="flex items-center gap-4">
-          <button
-            @click="goToRoute('shop')"
-            class="text-[10px] uppercase tracking-[0.2em] text-black font-bold border-b border-black pb-1 hover:text-[#bfa77a] hover:border-[#bfa77a] transition-colors cursor-pointer"
-          >
-            Khám phá bộ sưu tập
-          </button>
-          
-          <!-- Carousel controls -->
-          <div class="flex gap-2 ml-4">
-            <button
-              @click="scrollCarousel('left')"
-              class="w-10 h-10 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 hover:bg-black hover:text-white hover:border-black transition-all duration-300 cursor-pointer"
-              aria-label="Previous products"
-            >
-              <ChevronLeft :size="16" />
-            </button>
-            <button
-              @click="scrollCarousel('right')"
-              class="w-10 h-10 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 hover:bg-black hover:text-white hover:border-black transition-all duration-300 cursor-pointer"
-              aria-label="Next products"
-            >
-              <ChevronRight :size="16" />
-            </button>
+        
+        <div class="hm-svc-card" v-if="dataStore.SERVICES[1]" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[1].id } })">
+          <img :src="dataStore.SERVICES[1].img" :alt="dataStore.SERVICES[1].name" class="hm-svc-card-img" />
+          <div class="hm-svc-card-body">
+            <span class="hm-svc-label">Dịch vụ mới</span>
+            <h3 class="hm-svc-card-name">{{ normalizeVietnamese(dataStore.SERVICES[1].name) }}</h3>
+            <p class="hm-svc-card-desc">{{ dataStore.SERVICES[1].desc }}</p>
+            <p class="hm-svc-card-price">{{ formatPriceToVND(dataStore.SERVICES[1].price) }}</p>
+          </div>
+        </div>
+        <div class="hm-svc-card" v-if="dataStore.SERVICES[2]" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[2].id } })">
+          <img :src="dataStore.SERVICES[2].img" :alt="dataStore.SERVICES[2].name" class="hm-svc-card-img" />
+          <div class="hm-svc-card-body">
+            <span class="hm-svc-label">Nổi bật</span>
+            <h3 class="hm-svc-card-name">{{ normalizeVietnamese(dataStore.SERVICES[2].name) }}</h3>
+            <p class="hm-svc-card-desc">{{ dataStore.SERVICES[2].desc }}</p>
+            <p class="hm-svc-card-price">{{ formatPriceToVND(dataStore.SERVICES[2].price) }}</p>
           </div>
         </div>
       </div>
 
-      <!-- Horizontal scroll Carousel — 3 trạng thái: loading / có data / rỗng -->
-
-      <!-- Skeleton Loading -->
-      <div
-        v-if="isLoadingProducts"
-        class="flex gap-8 py-4 px-1 overflow-hidden"
-      >
-        <div
-          v-for="n in 4"
-          :key="n"
-          class="flex-shrink-0 w-[280px] sm:w-[320px] border border-neutral-200 p-3 bg-white"
-        >
-          <div class="aspect-[4/5] w-full bg-neutral-100 animate-pulse mb-3 relative overflow-hidden">
-            <div class="absolute inset-0 -translate-x-full animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/60 to-transparent"></div>
+      <div class="hm-svc-row hm-svc-row-rev" v-if="dataStore.SERVICES.length >= 4">
+        
+        <template v-if="dataStore.SERVICES[5]">
+          <div class="hm-svc-big">
+            <img :src="dataStore.SERVICES[5].img" :alt="dataStore.SERVICES[5].name" class="hm-svc-big-img" />
+            <div class="hm-svc-big-overlay">
+              <h3 class="hm-svc-big-name">{{ normalizeVietnamese(dataStore.SERVICES[5].name) }}</h3>
+              <p class="hm-svc-big-price">{{ formatPriceToVND(dataStore.SERVICES[5].price) }}</p>
+              <button class="hm-svc-big-btn" @click.stop="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[5].id } })">Xem chi tiết</button>
+            </div>
           </div>
-          <div class="h-3 bg-neutral-100 animate-pulse rounded mb-2 w-1/2"></div>
-          <div class="h-4 bg-neutral-100 animate-pulse rounded mb-2 w-3/4"></div>
-          <div class="h-3 bg-neutral-100 animate-pulse rounded w-1/3"></div>
+
+          <div class="hm-svc-card" v-if="dataStore.SERVICES[4]" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[4].id } })">
+            <img :src="dataStore.SERVICES[4].img" :alt="dataStore.SERVICES[4].name" class="hm-svc-card-img" />
+            <div class="hm-svc-card-body">
+              <span class="hm-svc-label">Khuyên dùng</span>
+              <h3 class="hm-svc-card-name">{{ normalizeVietnamese(dataStore.SERVICES[4].name) }}</h3>
+              <p class="hm-svc-card-desc">{{ dataStore.SERVICES[4].desc }}</p>
+              <p class="hm-svc-card-price">{{ formatPriceToVND(dataStore.SERVICES[4].price) }}</p>
+            </div>
+          </div>
+
+          <div class="hm-svc-card" v-if="dataStore.SERVICES[3]" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[3].id } })">
+            <img :src="dataStore.SERVICES[3].img" :alt="dataStore.SERVICES[3].name" class="hm-svc-card-img" />
+            <div class="hm-svc-card-body">
+              <span class="hm-svc-label">Yêu thích</span>
+              <h3 class="hm-svc-card-name">{{ normalizeVietnamese(dataStore.SERVICES[3].name) }}</h3>
+              <p class="hm-svc-card-desc">{{ dataStore.SERVICES[3].desc }}</p>
+              <p class="hm-svc-card-price">{{ formatPriceToVND(dataStore.SERVICES[3].price) }}</p>
+            </div>
+          </div>
+        </template>
+
+        <template v-else>
+          <div class="hm-svc-card hm-svc-card-large" v-if="dataStore.SERVICES[3]" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[3].id } })">
+            <img :src="dataStore.SERVICES[3].img" :alt="dataStore.SERVICES[3].name" class="hm-svc-card-img" />
+            <div class="hm-svc-card-body">
+              <span class="hm-svc-label">Yêu thích</span>
+              <h3 class="hm-svc-card-name">{{ normalizeVietnamese(dataStore.SERVICES[3].name) }}</h3>
+              <p class="hm-svc-card-desc">{{ dataStore.SERVICES[3].desc }}</p>
+              <p class="hm-svc-card-price">{{ formatPriceToVND(dataStore.SERVICES[3].price) }}</p>
+            </div>
+          </div>
+          <div class="hm-svc-card hm-svc-card-large" v-if="dataStore.SERVICES[4]" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[4].id } })">
+            <img :src="dataStore.SERVICES[4].img" :alt="dataStore.SERVICES[4].name" class="hm-svc-card-img" />
+            <div class="hm-svc-card-body">
+              <span class="hm-svc-label">Khuyên dùng</span>
+              <h3 class="hm-svc-card-name">{{ normalizeVietnamese(dataStore.SERVICES[4].name) }}</h3>
+              <p class="hm-svc-card-desc">{{ dataStore.SERVICES[4].desc }}</p>
+              <p class="hm-svc-card-price">{{ formatPriceToVND(dataStore.SERVICES[4].price) }}</p>
+            </div>
+          </div>
+        </template>
+
+      </div>
+
+      <div class="hm-center">
+        <button class="hm-view-all" @click="goToRoute('services')">Xem Tất Cả Dịch Vụ →</button>
+      </div>
+    </section>
+
+    <!-- ===== ĐỘI NGŨ STYLIST ===== -->
+    <section class="hm-stylist-section">
+      <div class="hm-stylist-header">
+        <h2 class="hm-section-title">Đội Ngũ Stylist Chuyên Nghiệp</h2>
+        <button class="hm-more-link" @click="goToRoute('employees')">Xem thêm ↗</button>
+      </div>
+      <div class="hm-stylist-divider"></div>
+
+      <div class="hm-stylist-marquee-container">
+        <div class="hm-stylist-marquee-track">
+          <!-- Bản gốc -->
+          <div v-for="(t, idx) in (stylists.length > 0 ? stylists : testimonials)" :key="t.id" class="hm-stylist-card hm-small-card">
+            <div class="hm-stylist-photo-wrap">
+              <img
+                :src="t.img || ['https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?q=80&w=500','https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=500','https://images.unsplash.com/photo-1595476108010-b4d1f10d5e43?q=80&w=500'][idx % 3]"
+                :alt="t.name"
+                class="hm-stylist-photo"
+              />
+            </div>
+            <div class="hm-stylist-info">
+              <h4 class="hm-stylist-name">{{ t.name }}</h4>
+              <div class="hm-stylist-stars">
+                <span v-for="s in (t.rating || 5)" :key="s" class="hm-star">★</span>
+                <span v-for="e in (5 - (t.rating || 5))" :key="'e'+e" class="hm-star-empty">★</span>
+              </div>
+              <p class="hm-stylist-role">{{ t.role }}</p>
+            </div>
+          </div>
+          <!-- Bản sao để lặp liên tục -->
+          <div v-for="(t, idx) in (stylists.length > 0 ? stylists : testimonials)" :key="t.id + '-clone'" class="hm-stylist-card hm-small-card">
+            <div class="hm-stylist-photo-wrap">
+              <img
+                :src="t.img || ['https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?q=80&w=500','https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=500','https://images.unsplash.com/photo-1595476108010-b4d1f10d5e43?q=80&w=500'][idx % 3]"
+                :alt="t.name"
+                class="hm-stylist-photo"
+              />
+            </div>
+            <div class="hm-stylist-info">
+              <h4 class="hm-stylist-name">{{ t.name }}</h4>
+              <div class="hm-stylist-stars">
+                <span v-for="s in (t.rating || 5)" :key="s" class="hm-star">★</span>
+                <span v-for="e in (5 - (t.rating || 5))" :key="'e'+e" class="hm-star-empty">★</span>
+              </div>
+              <p class="hm-stylist-role">{{ t.role }}</p>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Có sản phẩm thật từ API -->
-      <div
-        v-else-if="dataStore.PRODUCTS.length > 0"
-        ref="productCarouselRef"
-        class="flex overflow-x-auto gap-8 scroll-smooth scrollbar-hide py-4 px-1 snap-x snap-mandatory"
-      >
+      <div class="hm-center" style="margin-top: 48px;">
+        <button class="hm-view-all" @click="goToRoute('booking')">Đặt Lịch Ngay →</button>
+      </div>
+    </section>
+
+    <!-- ===== CỬA HÀNG / SẢN PHẨM ===== -->
+    <section class="hm-shop-section">
+      <h2 class="hm-section-title">Cửa Hàng Của Chúng Tôi</h2>
+
+      <div v-if="isLoadingProducts" class="hm-prod-grid">
+        <div v-for="n in 8" :key="n" class="hm-prod-skeleton">
+          <div class="hm-skel-img"></div>
+          <div class="hm-skel-line"></div>
+          <div class="hm-skel-line hm-skel-short"></div>
+        </div>
+      </div>
+
+      <div v-else-if="dataStore.PRODUCTS.length > 0" class="hm-prod-grid">
         <div
-          v-for="(prod, prodIdx) in dataStore.PRODUCTS"
+          v-for="(prod, prodIdx) in dataStore.PRODUCTS.slice(0, 8)"
           :key="prod.id"
-          class="flex-shrink-0 w-[280px] sm:w-[320px] snap-start group cursor-pointer flex flex-col outline-none focus:outline-none border border-neutral-200 hover:border-[#bfa77a]/60 transition-colors duration-300 p-3 bg-white shadow-sm hover:shadow-md"
+          class="hm-prod-card"
           @click="router.push({ name: 'product_detail', params: { id: prod.id } })"
         >
-          <!-- Minimalist product image background container matching Shop page layout -->
-          <div class="aspect-[4/5] w-full bg-neutral-50 overflow-hidden mb-3 relative border border-neutral-100">
-            <!-- Premium product ribbon/tag — hiển thị cho 4 sản phẩm đầu, dùng index thay vì hardcode ID -->
-            <span 
-              v-if="prodIdx < 4"
-              class="absolute top-4 left-4 z-20 bg-neutral-950/80 backdrop-blur-sm text-[#bfa77a] text-[8px] font-semibold uppercase tracking-widest px-3 py-1.5 border border-[#bfa77a]/30"
-            >
+          <div class="hm-prod-img-wrap">
+            <span v-if="prodIdx < 4" class="hm-prod-badge">
               {{ prodIdx === 0 ? 'Signature' : prodIdx === 1 ? 'Bán Chạy' : prodIdx === 2 ? 'Mới Về' : 'Thuần Chay' }}
             </span>
-
-            <!-- Ảnh sản phẩm — fallback bg-neutral-100 khi không có ảnh -->
-            <div v-if="!prod.img" class="w-full h-full bg-neutral-100 flex items-center justify-center">
-              <ShoppingBag :size="32" class="text-neutral-300" />
-            </div>
+            <button class="hm-prod-wish" @click.stop="wishlistStore.toggleProductFavorite(prod)" title="Yêu thích">
+              <span v-if="wishlistStore.isProductFavorite(prod.maSp)" style="color: var(--red);">♥</span>
+              <span v-else>♡</span>
+            </button>
             <img
-              v-else
-              :src="prod.img"
+              :src="prod.img || 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?q=80&w=800'"
               :alt="prod.name"
-              class="w-full h-full object-cover object-center block transition-all duration-700 ease-out group-hover:scale-105"
+              class="hm-prod-img"
             />
-            
-            <!-- Luxury Floating Actions Overlay -->
-            <div class="absolute inset-0 bg-neutral-900/15 opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-center justify-center gap-4 z-25">
-              <button 
-                @click.stop="addProductToCart(prod)"
-                class="w-12 h-12 rounded-full bg-white text-black hover:bg-[#bfa77a] hover:text-black flex items-center justify-center shadow-lg transition-all duration-300 scale-90 group-hover:scale-100 cursor-pointer"
-                title="Thêm vào giỏ"
-              >
-                <ShoppingBag :size="16" />
-              </button>
-              <button 
-                @click.stop="router.push({ name: 'product_detail', params: { id: prod.id } })"
-                class="w-12 h-12 rounded-full bg-white text-black hover:bg-black hover:text-white flex items-center justify-center shadow-lg transition-all duration-300 scale-90 group-hover:scale-100 cursor-pointer"
-                title="Xem chi tiết"
-              >
-                <Eye :size="16" />
-              </button>
-            </div>
           </div>
-
-          <!-- Product description -->
-          <div class="flex justify-between items-start">
-            <div class="flex flex-col pr-4 flex-grow">
-              <p class="text-[9px] text-[#bfa77a] font-bold uppercase tracking-[0.15em] mb-1">
-                {{ prod.category }} &middot; {{ prod.size }}
-              </p>
-              <h4 class="font-heading text-sm tracking-wider uppercase text-neutral-900 group-hover:text-[#bfa77a] transition-colors duration-300">
-                {{ prod.name }}
-              </h4>
-              <!-- HOME2-044: Hiển thị đúng số sao trung bình từ API -->
-              <div class="flex items-center gap-1 mt-1 mb-1">
-                <div class="flex gap-0.5 text-[10px]">
-                  <span v-for="s in 5" :key="s"
-                    :class="s <= Math.round(prod.avgRating ?? 5) ? 'text-[#bfa77a]' : 'text-neutral-300'"
-                  >★</span>
-                </div>
-                <span v-if="prod.reviewCount > 0" class="text-[9px] text-neutral-400 font-light">
-                  ({{ prod.reviewCount }})
-                </span>
-              </div>
-              <span class="text-sm font-mono text-[#bfa77a] font-medium mt-1">
-                {{ formatPriceToVND(prod.price) }}
-              </span>
+          <div class="hm-prod-info">
+            <div class="hm-prod-stars">
+              <span v-for="s in 5" :key="s" :class="s <= Math.round(prod.avgRating ?? 5) ? 'hm-star' : 'hm-star-empty'">★</span>
+              <span v-if="prod.reviewCount > 0" class="hm-prod-review-count">({{ prod.reviewCount }} Đánh giá)</span>
             </div>
-            <!-- HOME2-066/067: Nút giỏ hàng hiển thị thường xuyên trong card, không chỉ khi hover -->
-            <button
-              @click.stop="addProductToCart(prod)"
-              class="w-9 h-9 rounded-full border border-neutral-200 bg-white text-neutral-600 hover:bg-[#bfa77a] hover:text-black hover:border-[#bfa77a] flex items-center justify-center shadow-sm transition-all duration-300 flex-shrink-0 cursor-pointer mt-1"
-              title="Thêm vào giỏ hàng"
-            >
-              <ShoppingBag :size="14" />
-            </button>
+            <h4 class="hm-prod-name">{{ prod.name }}</h4>
+            <div class="hm-prod-price-row">
+              <span class="hm-prod-price">{{ formatPriceToVND(prod.price) }}</span>
+              <button class="hm-prod-add" @click.stop="addProductToCart(prod)">Thêm Vào Giỏ</button>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Empty state — API không trả về sản phẩm hoặc lỗi -->
-      <div
-        v-else
-        class="flex flex-col items-center justify-center py-16 text-center"
-      >
-        <ShoppingBag :size="40" class="text-neutral-300 mb-4" />
-        <p class="text-sm text-neutral-400 font-light">Không tải được sản phẩm. Vui lòng kiểm tra kết nối máy chủ.</p>
-        <button
-          @click="goToRoute('shop')"
-          class="mt-6 text-[10px] uppercase tracking-[0.2em] text-[#bfa77a] border-b border-[#bfa77a] pb-0.5 hover:opacity-70 transition-opacity cursor-pointer"
-        >
-          Xem tất cả sản phẩm
-        </button>
+      <div v-else class="hm-prod-empty">
+        <ShoppingBag :size="40" />
+        <p>Không tải được sản phẩm. Vui lòng kiểm tra kết nối máy chủ.</p>
+        <button @click="goToRoute('shop')">Xem tất cả sản phẩm</button>
+      </div>
+
+      <div class="hm-center">
+        <button class="hm-xem-them" @click="goToRoute('shop')">Xem Thêm</button>
       </div>
     </section>
 
-    <!-- Botanical Ingredients Apothecary Section (Interactive Tab Details) -->
-    <section class="w-full py-12 md:py-16 px-6 lg:px-16 max-w-[1440px] mx-auto bg-white border-t border-neutral-200">
-      <div class="flex flex-col items-center text-center mb-8 md:mb-12">
-        <p class="text-[10px] tracking-[0.2em] uppercase text-neutral-400 mb-4 font-semibold">Dược liệu bản địa</p>
-        <h3 class="text-3xl md:text-4xl font-sans font-semibold tracking-wide text-black uppercase">
-          Thành phần Tinh Túy
-        </h3>
-        <p class="max-w-xl text-sm font-light text-neutral-500 leading-relaxed mt-6">
-          Bí quyết tạo nên sự óng ả chuẩn salon nằm ở nguồn nguyên liệu thuần chay chọn lọc, mang lại sự nuôi dưỡng tự nhiên và an toàn tuyệt đối.
-        </p>
+    <!-- ===== TESTIMONIAL ===== -->
+    <section class="hm-testimonial-section">
+      <div class="hm-testimonial-img-wrap">
+        <img
+          src="https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=800"
+          alt="Testimonial"
+          class="hm-testimonial-img"
+        />
       </div>
-
-      <!-- Interactive Tabs Layout -->
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-stretch">
-        <!-- Ingredient Tabs (Left Column) -->
-        <div class="lg:col-span-5 flex flex-col gap-4 justify-center">
-          <!-- HOME2-047: tab active có nền đen chữ trắng dịch chuyển sang phải -->
-          <button
-            v-for="(ing, idx) in ingredients"
-            :key="ing.id"
-            @click="selectedIngredientIndex = idx"
-            class="w-full text-left p-6 border transition-all duration-500 flex items-center gap-6 cursor-pointer"
-            :class="[
-              selectedIngredientIndex === idx
-                ? 'bg-neutral-950 border-neutral-950 text-white shadow-xl'
-                : 'bg-white border-neutral-200 text-neutral-800 hover:border-neutral-900'
-            ]"
-            :style="selectedIngredientIndex === idx ? { transform: 'translateX(8px)' } : { transform: 'translateX(0)' }"
-          >
-            <span class="font-serif text-xs" :class="selectedIngredientIndex === idx ? 'text-[#bfa77a]' : 'text-neutral-400'">0{{ ing.id }}</span>
-            <div class="flex flex-col">
-              <span class="font-heading text-sm uppercase tracking-wider font-semibold">{{ ing.name }}</span>
-              <span class="text-[9px] font-mono mt-1 opacity-60" :class="selectedIngredientIndex === idx ? 'text-[#bfa77a]' : 'text-neutral-500'">{{ ing.scientificName }}</span>
-            </div>
-          </button>
+      <div class="hm-testimonial-card">
+        <div class="hm-test-stars">
+          <span v-for="s in currentTestimonial.rating" :key="s">★</span>
         </div>
-
-        <!-- Selected Ingredient Detail Dashboard (Right Column) -->
-        <div class="lg:col-span-7 bg-neutral-50 border border-neutral-100 p-8 lg:p-12 flex flex-col justify-between relative overflow-hidden">
-          <div class="animate-in fade-in duration-500" :key="selectedIngredientIndex">
-            <span class="text-[9px] uppercase tracking-widest text-[#bfa77a] font-bold block mb-2">Thông tin dược liệu</span>
-            <h4 class="font-serif text-3xl font-light text-neutral-900 mb-6 border-b border-neutral-200 pb-4">
-              {{ currentIngredient.name }}
-            </h4>
-            <p class="text-sm text-neutral-600 font-light leading-relaxed mb-6">
-              {{ currentIngredient.desc }}
-            </p>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <div>
-                <span class="text-[8px] uppercase tracking-widest text-neutral-400 font-bold block mb-1">Nguồn gốc</span>
-                <span class="text-xs text-neutral-800 font-light">{{ currentIngredient.origin }}</span>
-              </div>
-              <div>
-                <span class="text-[8px] uppercase tracking-widest text-neutral-400 font-bold block mb-2">Lợi ích nổi bật</span>
-                <ul class="text-xs text-neutral-800 font-light list-disc pl-4 space-y-1">
-                  <li v-for="benefit in currentIngredient.benefits" :key="benefit">{{ benefit }}</li>
-                </ul>
-              </div>
-            </div>
+        <p class="hm-test-quote" :key="activeTestimonial">"{{ normalizeVietnamese(currentTestimonial.quote) }}"</p>
+        <div class="hm-test-author-row">
+          <div>
+            <p class="hm-test-name">{{ currentTestimonial.name }}</p>
+            <p class="hm-test-role">{{ currentTestimonial.role }}</p>
           </div>
-
-          <!-- HOME2-049: click banner sản phẩm liên quan điều hướng đúng productId thật -->
-          <div 
-            class="mt-8 p-6 bg-white border border-neutral-200 flex items-center justify-between group cursor-pointer hover:border-[#bfa77a]/60 transition-colors"
-            role="button"
-            :aria-label="'Xem chi tiết sản phẩm ' + (currentIngredientProduct?.name || currentIngredient.productName)"
-            @click="router.push({ name: currentIngredientProduct ? 'product_detail' : 'shop', params: currentIngredientProduct ? { id: currentIngredientProduct.id } : {} })"
-          >
-            <div class="flex items-center gap-4">
-              <div class="w-12 h-16 bg-neutral-50 flex items-center justify-center p-1 border border-neutral-100 flex-shrink-0 overflow-hidden">
-                <img 
-                  :src="currentIngredientProduct?.img || currentIngredient.image"
-                  :alt="currentIngredientProduct?.name || currentIngredient.productName"
-                  class="w-full h-full object-cover"
-                  @error="($event.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?q=80&w=200'"
-                />
-              </div>
-              <div class="flex flex-col">
-                <span class="text-[8px] uppercase tracking-widest text-neutral-400">Có trong sản phẩm</span>
-                <span class="font-heading text-xs uppercase tracking-wider text-neutral-900 font-bold group-hover:text-[#bfa77a] transition-colors">
-                  {{ currentIngredientProduct?.name || currentIngredient.productName }}
-                </span>
-                <span v-if="currentIngredientProduct?.price" class="text-[10px] text-[#bfa77a] font-mono mt-0.5">
-                  {{ formatPriceToVND(currentIngredientProduct.price) }}
-                </span>
-              </div>
-            </div>
-            <div class="w-8 h-8 rounded-full border border-neutral-200 flex items-center justify-center group-hover:bg-black group-hover:text-white transition-all duration-300">
-              <ArrowRight :size="12" />
-            </div>
-          </div>
+          <span class="hm-test-tag">{{ currentTestimonial.service }}</span>
+        </div>
+        <div class="hm-test-nav">
+          <button class="hm-test-nav-btn" @click="prevTestimonial">&#8249;</button>
+          <button class="hm-test-nav-btn" @click="nextTestimonial">&#8250;</button>
         </div>
       </div>
     </section>
 
-    <!-- Lookbook & Synergy -->
-    <section class="w-full py-12 md:py-16 px-6 lg:px-16 max-w-[1440px] mx-auto bg-white border-t border-neutral-200">
-      <!-- Section Header -->
-      <div class="flex flex-col items-center text-center mb-8 md:mb-12">
-        <p class="text-[10px] tracking-[0.2em] uppercase text-neutral-400 mb-4 font-semibold">Cảm hứng sáng tạo</p>
-        <h3 class="text-3xl md:text-4xl font-sans font-semibold tracking-wide text-black uppercase">
-          Lookbook & Phối hợp
-        </h3>
-        <p class="max-w-xl text-sm font-light text-neutral-500 leading-relaxed mt-6">
-          Khám phá các tác phẩm tạo mẫu tóc nghệ thuật từ salon của chúng tôi, đi kèm các sản phẩm gợi ý để bạn có thể tự chăm sóc và duy trì mái tóc hoàn hảo tại nhà.
-        </p>
-      </div>
-
-      <!-- Masonry Grid Layout -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        <div
-          v-for="item in lookbookItems"
-          :key="item.id"
-          class="group relative overflow-hidden bg-neutral-950 flex flex-col justify-end p-8 text-white transition-all duration-500"
-          :class="[item.heightClass]"
-        >
-          <!-- Background Image -->
-          <img
-            :src="item.image"
-            :alt="item.title"
-            class="absolute inset-0 w-full h-full object-cover opacity-80 transition-transform duration-[2000ms] group-hover:scale-105"
-          />
-          <div class="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent"></div>
-
-          <!-- Content Overlay -->
-          <div class="relative z-10 flex flex-col justify-end">
-            <p class="text-[9px] tracking-[0.3em] uppercase text-[#bfa77a] mb-2 font-semibold">LOOKBOOK COLLECTION</p>
-            <h4 class="font-heading text-xl md:text-2xl uppercase font-light tracking-wide mb-3">
-              {{ item.title }}
-            </h4>
-            <p class="text-xs text-neutral-300 font-light leading-relaxed mb-4">
-              {{ item.desc }}
-            </p>
-            <!-- Recommended Product synergy block -->
-            <div class="border-t border-white/20 pt-4 flex flex-col gap-1">
-              <span class="text-[8px] uppercase tracking-widest text-[#bfa77a]/80 font-bold">Sản phẩm khuyên dùng</span>
-              <span class="text-[11px] text-white/95 font-light">{{ item.recommendation }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Bespoke Apothecary Elixir Customizer (Wow-Factor Interactive Lab) -->
-    <section class="w-full py-12 md:py-16 px-6 lg:px-16 bg-neutral-950 text-white relative overflow-hidden border-t border-neutral-900">
-      <!-- Decorative background elements -->
-      <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(191,167,122,0.08)_0%,transparent_60%)] pointer-events-none"></div>
-      <div class="absolute top-1/2 left-1/4 w-[500px] h-[500px] bg-[#bfa77a]/3 rounded-full blur-[120px] pointer-events-none -translate-y-1/2"></div>
-
-      <div class="max-w-[1200px] mx-auto relative z-10">
-        <!-- Section Header -->
-        <div class="text-center mb-10 max-w-2xl mx-auto">
-          <p class="text-[10px] tracking-[0.2em] uppercase text-[#bfa77a] mb-4 font-semibold">Cá nhân hóa liệu trình</p>
-          <h3 class="text-3xl md:text-4xl text-white font-sans font-semibold tracking-wide uppercase">
-            Nghi thức Apothecary Elixir
-          </h3>
-          <p class="text-sm text-neutral-400 font-light leading-relaxed mt-6">
-            Lựa chọn tình trạng tóc của bạn để chuyên gia Apothecary đề xuất tỷ lệ pha trộn thành phần tinh túy cùng sản phẩm đặc trị phù hợp.
-          </p>
-        </div>
-
-        <!-- Dashboard Layout -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-stretch">
-          <!-- Left: Selection Tabs (4 cols) -->
-          <div class="lg:col-span-4 flex flex-col justify-center gap-4">
-            <h4 class="text-xs uppercase tracking-[0.25em] text-neutral-500 font-bold mb-2">Tình trạng tóc của bạn</h4>
-            
-            <button
-              v-for="(formula, key) in apothecaryFormulas"
-              :key="key"
-              @click="activeConcern = key"
-              class="w-full text-left p-6 border transition-all duration-500 flex items-center justify-between cursor-pointer group"
-              :class="[
-                activeConcern === key
-                  ? 'bg-white border-white text-black shadow-2xl translate-x-2'
-                  : 'bg-neutral-900/40 border-neutral-800 text-neutral-300 hover:border-[#bfa77a]/60 hover:text-white'
-              ]"
-            >
-              <div class="flex items-center gap-4">
-                <span 
-                  class="w-2.5 h-2.5 rounded-full transition-all duration-500"
-                  :class="[
-                    activeConcern === key 
-                      ? 'bg-[#bfa77a] scale-125' 
-                      : 'bg-neutral-700 group-hover:bg-[#bfa77a]/60'
-                  ]"
-                ></span>
-                <span class="font-serif text-lg font-light leading-normal">{{ normalizeVietnamese(formula.concernName) }}</span>
-              </div>
-              <ChevronRight :size="16" :class="activeConcern === key ? 'text-black' : 'text-neutral-600 group-hover:text-[#bfa77a]'" />
-            </button>
-          </div>
-
-          <!-- Right: Visual Lab (8 cols) -->
-          <div class="lg:col-span-8 bg-neutral-900/40 border border-neutral-800/80 p-8 md:p-12 shadow-2xl backdrop-blur-sm relative overflow-hidden flex flex-col justify-between">
-            <div class="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
-              
-              <!-- CSS Beaker Visual (5 cols) -->
-              <div class="md:col-span-5 flex flex-col items-center justify-center py-6">
-                <!-- Outer bottle wrapper -->
-                <div class="relative w-40 h-64 border-[3px] border-neutral-700 rounded-b-[40px] rounded-t-[16px] overflow-hidden flex flex-col justify-end bg-neutral-950/80 shadow-[0_0_30px_rgba(0,0,0,0.8),inset_0_0_20px_rgba(255,255,255,0.05)]">
-                  <!-- Bottle Neck -->
-                  <div class="absolute top-0 left-1/2 -translate-x-1/2 w-10 h-8 border-b-[3px] border-neutral-700 z-10 bg-neutral-950"></div>
-                  
-                  <!-- Measurement markings -->
-                  <div class="absolute left-3 top-12 bottom-8 w-2 flex flex-col justify-between text-[7px] font-mono text-neutral-600 select-none z-10">
-                    <span>- 100ml</span>
-                    <span>- 75ml</span>
-                    <span>- 50ml</span>
-                    <span>- 25ml</span>
-                  </div>
-
-                  <!-- Liquid layers filled based on active formulas -->
-                  <div class="w-full h-full flex flex-col justify-end relative">
-                    <!-- Dynamic bubbling effect particles -->
-                    <div class="absolute inset-0 overflow-hidden pointer-events-none z-20">
-                      <div class="bubble bubble-1"></div>
-                      <div class="bubble bubble-2"></div>
-                      <div class="bubble bubble-3"></div>
-                    </div>
-
-                    <!-- Liquid Part 3 -->
-                    <div 
-                      class="w-full transition-all duration-1000 ease-out relative"
-                      :style="{ 
-                        height: (currentFormula.ingredients[2]?.percentage || 0) + '%',
-                        backgroundColor: currentFormula.ingredients[2]?.color === 'bg-rose-400' ? '#f43f5e' : currentFormula.ingredients[2]?.color === 'bg-emerald-600' ? '#059669' : currentFormula.ingredients[2]?.color === 'bg-emerald-200' ? '#a7f3d0' : '#22d3ee'
-                      }"
-                    >
-                      <div class="absolute top-0 left-0 right-0 h-1 bg-white/20 animate-pulse"></div>
-                    </div>
-                    <!-- Liquid Part 2 -->
-                    <div 
-                      class="w-full transition-all duration-1000 ease-out relative"
-                      :style="{ 
-                        height: (currentFormula.ingredients[1]?.percentage || 0) + '%',
-                        backgroundColor: currentFormula.ingredients[1]?.color === 'bg-yellow-200' ? '#fef08a' : currentFormula.ingredients[1]?.color === 'bg-orange-200' ? '#fed7aa' : currentFormula.ingredients[1]?.color === 'bg-teal-600' ? '#0d9488' : '#15803d'
-                      }"
-                    >
-                      <div class="absolute top-0 left-0 right-0 h-1 bg-white/20 animate-pulse"></div>
-                    </div>
-                    <!-- Liquid Part 1 -->
-                    <div 
-                      class="w-full transition-all duration-1000 ease-out relative"
-                      :style="{ 
-                        height: (currentFormula.ingredients[0]?.percentage || 0) + '%',
-                        backgroundColor: currentFormula.ingredients[0]?.color === 'bg-amber-500' ? '#f59e0b' : currentFormula.ingredients[0]?.color === 'bg-yellow-600' ? '#ca8a04' : currentFormula.ingredients[0]?.color === 'bg-sky-400' ? '#38bdf8' : '#10b981'
-                      }"
-                    >
-                      <div class="absolute top-0 left-0 right-0 h-1.5 bg-white/30 animate-pulse"></div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Formula ratio summary text -->
-                <p class="text-[9px] font-mono uppercase tracking-[0.2em] text-[#bfa77a] mt-6 text-center">
-                  Bespoke Formula: {{ activeConcern.toUpperCase() }}
-                </p>
-              </div>
-
-              <!-- Composition & Product Info (7 cols) -->
-              <div class="md:col-span-7 flex flex-col justify-between h-full">
-                <!-- Description -->
-                <div class="animate-in fade-in duration-700" :key="activeConcern">
-                  <span class="text-[8px] uppercase tracking-widest text-neutral-500 font-bold block mb-2">Liệu pháp chẩn đoán</span>
-                  <h4 class="font-serif text-2xl text-white mb-4 leading-snug">{{ normalizeVietnamese(currentFormula.concernName) }}</h4>
-                  <p class="text-xs text-neutral-400 font-light leading-relaxed mb-6">{{ normalizeVietnamese(currentFormula.desc) }}</p>
-
-                  <!-- Ingredients Breakdown -->
-                  <div class="space-y-3 mb-6">
-                    <div 
-                      v-for="(ing, idx) in currentFormula.ingredients" 
-                      :key="idx" 
-                      class="flex items-center justify-between border-b border-neutral-800/80 pb-2"
-                    >
-                      <div class="flex items-center gap-2">
-                        <span class="w-1.5 h-1.5 rounded-full" :class="[ing.color]"></span>
-                        <span class="text-xs font-light text-neutral-300">{{ normalizeVietnamese(ing.name) }}</span>
-                      </div>
-                      <span class="font-mono text-xs text-[#bfa77a] font-medium">{{ ing.percentage }}%</span>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Product Box — hiển thị sản phẩm THẬT từ API -->
-                <div 
-                  class="p-4 bg-neutral-950 border border-neutral-800 flex items-center justify-between group cursor-pointer hover:border-[#bfa77a]/60 transition-colors animate-in fade-in duration-700"
-                  :key="'prod-' + activeConcern"
-                  @click="currentFormulaProduct ? router.push({ name: 'product_detail', params: { id: currentFormulaProduct.id } }) : router.push({ name: 'shop' })"
-                >
-                  <div class="flex items-center gap-3">
-                    <div class="w-10 h-14 bg-neutral-900 flex items-center justify-center border border-neutral-800 flex-shrink-0 overflow-hidden">
-                      <img 
-                        :src="currentFormulaProduct?.img || currentFormula.productImg"
-                        :alt="currentFormulaProduct?.name || currentFormula.productName"
-                        class="w-full h-full object-cover"
-                        @error="($event.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?q=80&w=200'"
-                      />
-                    </div>
-                    <div class="flex flex-col">
-                      <span class="text-[8px] uppercase tracking-widest text-[#bfa77a]">Sản phẩm khuyên dùng</span>
-                      <span class="font-heading text-xs uppercase tracking-wider text-white font-bold group-hover:text-[#bfa77a] transition-colors mt-0.5">
-                        {{ currentFormulaProduct?.name || normalizeVietnamese(currentFormula.productName) }}
-                      </span>
-                      <span v-if="currentFormulaProduct?.price" class="text-[10px] text-[#bfa77a] font-mono mt-0.5">
-                        {{ formatPriceToVND(currentFormulaProduct.price) }}
-                      </span>
-                    </div>
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <button 
-                      @click.stop="showToast('Đã thêm ' + (currentFormulaProduct?.name || currentFormula.productName) + ' vào giỏ hàng!');"
-                      class="w-8 h-8 rounded-full bg-white text-black hover:bg-[#bfa77a] hover:text-black flex items-center justify-center shadow-md transition-all duration-300 scale-90 hover:scale-100 cursor-pointer"
-                      title="Thêm vào giỏ"
-                    >
-                      <ShoppingBag :size="12" />
-                    </button>
-                    <div class="w-8 h-8 rounded-full border border-neutral-800 flex items-center justify-center group-hover:bg-[#bfa77a] group-hover:text-black group-hover:border-[#bfa77a] transition-all duration-300">
-                      <ArrowRight :size="12" />
-                    </div>
-                  </div>
-                </div>
-
-                <!-- HOME2-064/065: CTA buttons dùng ID THẬT từ API -->
-                <div class="flex gap-4 mt-6">
-                  <button
-                    @click="currentFormulaService ? router.push({ name: 'serviceDetail', params: { id: currentFormulaService.id } }) : router.push({ name: 'services' })"
-                    class="flex-1 py-3 bg-[#bfa77a] text-black text-[9px] uppercase tracking-widest font-semibold hover:bg-white transition-all duration-300 text-center cursor-pointer"
-                  >
-                    Đặt Lịch Liệu Trình
-                  </button>
-                  <button
-                    @click="currentFormulaProduct ? router.push({ name: 'product_detail', params: { id: currentFormulaProduct.id } }) : router.push({ name: 'shop' })"
-                    class="flex-1 py-3 bg-transparent border border-neutral-700 text-white text-[9px] uppercase tracking-widest font-semibold hover:border-[#bfa77a] hover:text-[#bfa77a] transition-all duration-300 text-center cursor-pointer"
-                  >
-                    Chi tiết sản phẩm
-                  </button>
-                </div>
-
-              </div>
-
-            </div>
-          </div>
-        </div>
-
-      </div>
-    </section>
-
-    <!-- Testimonials Section -->
-    <section class="w-full py-12 md:py-16 px-6 lg:px-16 max-w-[1440px] mx-auto bg-white border-t border-neutral-200">
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
-        <!-- Left: Branding & Overview -->
-        <div class="lg:col-span-4 flex flex-col">
-          <p class="text-[10px] tracking-[0.2em] uppercase text-neutral-400 mb-4 font-semibold">Đánh giá từ khách hàng</p>
-          <h3 class="text-3xl md:text-4xl font-sans font-semibold tracking-wide text-black uppercase mb-8">
-            Trải nghiệm Thượng Hạng
-          </h3>
-          <div class="flex items-baseline gap-2">
-            <span class="text-5xl font-serif text-[#bfa77a] font-light">4.9</span>
-            <span class="text-neutral-400 text-sm font-light">/ 5.0 điểm tuyệt đối</span>
-          </div>
-          <!-- Star ratings -->
-          <div class="flex gap-1 mt-3 text-[#bfa77a]">
-            <span>★</span><span>★</span><span>★</span><span>★</span><span>★</span>
-          </div>
-        </div>
-
-        <!-- Right: Testimonials Slider -->
-        <div class="lg:col-span-8 bg-neutral-50 border border-neutral-100 p-8 md:p-16 relative overflow-hidden group">
-          <!-- Quote background decoration -->
-          <div class="absolute -top-10 -right-10 text-neutral-200/50 text-[180px] font-serif select-none pointer-events-none">“</div>
-          
-          <div class="relative z-10">
-            <!-- Ratings -->
-            <div class="flex gap-1 text-[#bfa77a] mb-6 text-sm">
-              <span v-for="star in currentTestimonial.rating" :key="star">★</span>
-            </div>
-            
-            <!-- Review Quote -->
-            <p :key="activeTestimonial" class="font-serif text-lg md:text-2xl italic text-neutral-800 leading-relaxed font-light mb-8 animate-in fade-in slide-in-from-bottom-3 duration-500">
-              "{{ normalizeVietnamese(currentTestimonial.quote) }}"
-            </p>
-            
-            <!-- Reviewer Info -->
-            <div class="flex justify-between items-end border-t border-neutral-200/60 pt-6">
-              <div>
-                <h5 class="font-heading text-sm uppercase tracking-widest text-neutral-900 font-medium">
-                  {{ currentTestimonial.name }}
-                </h5>
-                <p class="text-[10px] uppercase tracking-wider text-neutral-400 mt-1">
-                  {{ currentTestimonial.role }}
-                </p>
-              </div>
-              <div class="text-right">
-                <span class="text-[9px] uppercase tracking-widest text-[#bfa77a] font-bold bg-[#bfa77a]/10 px-3 py-1 border border-[#bfa77a]/20">
-                  {{ currentTestimonial.service }}
-                </span>
-              </div>
-            </div>
-          </div>
-          
-          <!-- Testimonial navigation controls -->
-          <div class="flex gap-2 mt-8 justify-end z-10 relative">
-            <button
-              @click="prevTestimonial"
-              class="w-8 h-8 rounded-full border border-neutral-200 bg-white flex items-center justify-center text-neutral-600 hover:bg-black hover:text-white hover:border-black transition-all duration-300 cursor-pointer"
-              aria-label="Previous review"
-            >
-              <ChevronLeft :size="14" />
-            </button>
-            <button
-              @click="nextTestimonial"
-              class="w-8 h-8 rounded-full border border-neutral-200 bg-white flex items-center justify-center text-neutral-600 hover:bg-black hover:text-white hover:border-black transition-all duration-300 cursor-pointer"
-              aria-label="Next review"
-            >
-              <ChevronRight :size="14" />
-            </button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Boutique Club (Newsletter) Section -->
-    <section class="w-full py-12 bg-black text-white relative overflow-hidden border-t border-neutral-900">
-      <div class="absolute inset-0 opacity-10 flex items-center justify-center pointer-events-none">
-        <div class="w-[600px] h-[600px] border border-[#bfa77a] rounded-full animate-pulse"></div>
-      </div>
-      
-      <div class="relative z-10 max-w-4xl mx-auto px-6 text-center">
-        <p class="text-[10px] tracking-[0.2em] uppercase text-[#bfa77a] mb-4 font-semibold">Minh Tâm Club</p>
-        <h3 class="text-2xl md:text-4xl text-white font-sans font-semibold tracking-wide uppercase mb-8">
-          Trở thành Thành Viên Thượng Hạng
-        </h3>
-        <p class="max-w-xl mx-auto text-sm font-light text-neutral-400 leading-relaxed mb-12">
-          Đăng ký nhận bản tin để nhận những cập nhật xu hướng tóc mới nhất, cẩm nang chăm sóc tóc từ chuyên gia và quyền ưu tiên mua các bộ sưu tập giới hạn tại Apothecary.
-        </p>
-        
-        <form @submit.prevent="showToast('Cảm ơn bạn đã gia nhập Minh Tâm Club!')" class="max-w-md mx-auto flex flex-col sm:flex-row gap-4">
-          <input
-            type="email"
-            required
-            placeholder="Địa chỉ Email của bạn..."
-            class="flex-grow bg-neutral-900/60 border border-neutral-800 focus:border-[#bfa77a] px-6 py-4 text-xs tracking-widest text-white outline-none transition-colors duration-300"
-          />
-          <button
-            type="submit"
-            class="bg-[#bfa77a] text-black hover:bg-white px-8 py-4 text-[10px] font-semibold uppercase tracking-[0.2em] transition-all duration-300 cursor-pointer"
-          >
-            Tham Gia
-          </button>
+    <!-- ===== CLUB / NEWSLETTER ===== -->
+    <section class="hm-club-section">
+      <div class="hm-club-deco"></div>
+      <div class="hm-club-inner">
+        <p class="hm-club-label">LG Hair Club</p>
+        <h3 class="hm-club-title">Trở Thành Thành Viên Thượng Hạng</h3>
+        <p class="hm-club-desc">Đăng ký nhận bản tin để nhận những cập nhật xu hướng tóc mới nhất, cẩm nang chăm sóc tóc từ chuyên gia và quyền ưu tiên mua các bộ sưu tập giới hạn.</p>
+        <form @submit.prevent="showToast('Cảm ơn bạn đã gia nhập LG Hair Club!')" class="hm-club-form">
+          <input type="email" required placeholder="Địa chỉ Email của bạn..." class="hm-club-input" />
+          <button type="submit" class="hm-club-submit">Tham Gia</button>
         </form>
       </div>
     </section>
@@ -1504,83 +795,982 @@ const addProductToCart = async (prod: any) => {
 </template>
 
 <style scoped>
-.scrollbar-hide::-webkit-scrollbar {
-  display: none;
-}
-.scrollbar-hide {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+/* ==================== GOOGLE FONTS ==================== */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Inconsolata:wght@300;400;600&family=Jost:wght@400;500&family=K2D:wght@500&display=swap');
+
+:root {
+  --red: #ef3030;
+  --red2: #f64c4c;
+  --gray-bg: #ededed;
+  --border1: #f2f2f2;
+  --border2: #dfdfdf;
+  --gray-fill: #d9d9d9;
+  --gray-text: #8b8a8a;
 }
 
-/* Override all serif and heading styles to standard clean system sans-serif */
-.font-serif,
-.font-heading {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+/* ==================== ROOT ==================== */
+.hm-root {
+  background: #fff;
+  font-family: 'Inter', sans-serif;
+  color: #000;
+  overflow-x: hidden;
 }
 
-/* Toast Transition Animation */
-.toast-slide-enter-active,
-.toast-slide-leave-active {
-  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+/* ==================== TOAST ==================== */
+.hm-toast {
+  position: fixed;
+  top: 80px;
+  right: 24px;
+  z-index: 9999;
+  background: #0a0a0a;
+  color: #fff;
+  border: 1px solid rgba(191,167,122,0.4);
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.3);
 }
-.toast-slide-enter-from {
-  opacity: 0;
-  transform: translateY(20px);
-}
-.toast-slide-leave-to {
-  opacity: 0;
-  transform: translateY(-10px);
-}
-
-/* Bubbling animation inside elixir beaker */
-.bubble {
-  position: absolute;
-  bottom: 0;
-  background-color: rgba(255, 255, 255, 0.15);
-  border-radius: 50%;
-  animation: float-up 4s infinite ease-in;
-}
-.bubble-1 {
+.hm-toast-dot {
   width: 6px;
   height: 6px;
-  left: 25%;
-  animation-duration: 3.5s;
-  animation-delay: 0.5s;
+  border-radius: 50%;
+  background: #bfa77a;
+  animation: ping 1s infinite;
 }
-.bubble-2 {
-  width: 8px;
-  height: 8px;
+.hm-toast-text { font-size: 11px; text-transform: uppercase; letter-spacing: 0.2em; font-weight: 300; }
+@keyframes ping { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.4);opacity:0.6} }
+
+/* Toast Transition */
+.toast-slide-enter-active, .toast-slide-leave-active { transition: all 0.5s cubic-bezier(0.16,1,0.3,1); }
+.toast-slide-enter-from { opacity:0; transform:translateY(20px); }
+.toast-slide-leave-to { opacity:0; transform:translateY(-10px); }
+
+/* ==================== HERO BANNER ==================== */
+.hm-hero {
+  position: relative;
+  width: 100%;
+  height: 426px;
+  background: #000;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+}
+.hm-hero-slides { position: absolute; inset: 0; width: 100%; height: 100%; }
+.hm-hero-slide {
+  position: absolute;
+  inset: 0;
+  transition: opacity 1.2s ease-in-out;
+}
+.hm-slide-active { opacity: 1; z-index: 10; }
+.hm-slide-hidden { opacity: 0; z-index: 0; }
+.hm-hero-img { width: 100%; height: 100%; object-fit: cover; }
+.hm-hero-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.45); }
+
+.hm-hero-content {
+  position: relative;
+  z-index: 20;
+  max-width: 620px;
+  padding: 48px 80px;
+  color: #fff;
+}
+.hm-hero-subtitle {
+  font-size: 11px;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  color: #ccc;
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+.hm-hero-title {
+  font-size: 48px;
+  font-weight: 700;
+  text-transform: uppercase;
+  line-height: 1.1;
+  margin-bottom: 20px;
+  letter-spacing: 0.04em;
+}
+.hm-hero-desc {
+  font-size: 15px;
+  font-weight: 300;
+  color: #ccc;
+  line-height: 1.7;
+  margin-bottom: 32px;
+  max-width: 460px;
+}
+.hm-hero-cta { display: flex; gap: 16px; flex-wrap: wrap; }
+.hm-btn-primary {
+  padding: 14px 32px;
+  background: #000;
+  color: #fff;
+  border: 1px solid #fff;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.hm-btn-primary:hover { background: #fff; color: #000; }
+.hm-btn-outline {
+  padding: 14px 32px;
+  background: transparent;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.6);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.hm-btn-outline:hover { background: rgba(255,255,255,0.15); }
+
+.hm-hero-dots {
+  position: absolute;
+  bottom: 24px;
   left: 50%;
-  animation-duration: 4.5s;
-  animation-delay: 1.5s;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  gap: 8px;
 }
-.bubble-3 {
-  width: 4px;
-  height: 4px;
-  left: 70%;
-  animation-duration: 3.8s;
-  animation-delay: 0s;
+.hm-hero-dot {
+  width: 32px;
+  height: 2px;
+  background: rgba(255,255,255,0.35);
+  border: none;
+  cursor: pointer;
+  transition: all 0.4s;
+  padding: 0;
 }
-
-@keyframes float-up {
-  0% {
-    transform: translateY(0) scale(1);
-    opacity: 0;
-  }
-  10% {
-    opacity: 0.6;
-  }
-  90% {
-    opacity: 0.6;
-  }
-  100% {
-    transform: translateY(-200px) scale(0.6);
-    opacity: 0;
-  }
+.hm-dot-active {
+  width: 64px;
+  background: #fff;
 }
 
-@keyframes shimmer {
-  0%   { transform: translateX(-100%); }
-  100% { transform: translateX(200%); }
+/* ==================== DANH MỤC ==================== */
+.hm-category-row {
+  width: 100%;
+  background: #fff;
+  border-bottom: 1px solid var(--border1);
+  overflow: hidden;
+}
+.hm-category-inner {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  width: 100%;
+}
+.hm-cat-card {
+  padding: 28px 20px 24px;
+  border-bottom: 1px solid var(--border1);
+  min-height: 195px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+.hm-cat-card:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 30%;
+  height: 40%;
+  width: 1px;
+  background-color: #d1d1d1;
+}
+.hm-cat-card:hover { background: #f9f9f9; }
+.hm-cat-num {
+  font-family: 'Inconsolata', monospace;
+  font-size: 28px;
+  color: var(--red);
+  font-weight: 400;
+  margin-bottom: 8px;
+}
+.hm-cat-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+.hm-cat-sub {
+  font-size: 10px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.hm-cat-card-img { padding: 0; }
+.hm-cat-bg-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s;
+}
+.hm-cat-card-img:hover .hm-cat-bg-img { transform: scale(1.08); }
+.hm-cat-hover-text {
+  position: relative;
+  z-index: 2;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  text-transform: uppercase;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  background: rgba(0,0,0,0.35);
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+/* ==================== FLASH SALE ==================== */
+.hm-flash-section {
+  background: #fff;
+  max-width: 1280px;
+  margin: 48px auto;
+  border-radius: 24px;
+  border: 1px solid var(--border2);
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.05);
+}
+.hm-flash-top {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 16px 24px 12px;
+  border-bottom: 1px solid var(--border1);
+}
+.hm-flash-title-wrap { display: flex; align-items: center; }
+.hm-flash-f {
+  font-family: 'IM Fell Double Pica SC', 'Georgia', serif;
+  color: var(--red);
+  font-size: 22px;
+  font-style: italic;
+}
+.hm-flash-s {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  color: var(--red);
+  font-size: 22px;
+}
+.hm-flash-timer { display: flex; align-items: center; gap: 4px; }
+.hm-timer-box {
+  width: 36px;
+  height: 26px;
+  border: 1.5px solid #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: 'Inconsolata', monospace;
+  background: #fff;
+}
+.hm-timer-sep { font-weight: 700; font-size: 16px; color: #000; }
+
+.hm-flash-layout {
+  display: flex;
+  align-items: stretch;
+  min-height: 380px;
+}
+.hm-flash-left {
+  width: 300px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--border2);
+}
+.hm-flash-left-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.hm-flash-vline {
+  width: 1px;
+  background: #000;
+  flex-shrink: 0;
+}
+.hm-flash-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  flex: 1;
+}
+.hm-flash-card {
+  border-left: 1px solid var(--border2);
+  padding: 16px 12px;
+  cursor: pointer;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: background 0.2s;
+}
+.hm-flash-card:hover { background: #fafafa; }
+.hm-flash-card-head { display: flex; justify-content: space-between; align-items: center; }
+.hm-flash-badge {
+  background: var(--red);
+  color: #fff;
+  font-size: 9px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 700;
+  opacity: 0.92;
+}
+.hm-flash-heart {
+  font-size: 18px;
+  color: #ccc;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+.hm-flash-heart:hover { color: var(--red); }
+.hm-flash-card-img-wrap {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  height: auto;
+  overflow: hidden;
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+}
+.hm-flash-card-img { width: 100%; height: 100%; object-fit: cover; }
+.hm-flash-card-name {
+  font-family: 'Inter', sans-serif;
+  font-weight: 300;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.hm-flash-price-row { display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; }
+.hm-price-old {
+  font-family: 'Inconsolata', monospace;
+  font-size: 12px;
+  font-weight: 300;
+  text-decoration: line-through;
+  color: #888;
+}
+.hm-price-new {
+  font-family: 'Inconsolata', monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--red2);
+}
+.hm-flash-underline { height: 1px; background: #000; margin: 0 auto; width: 70%; }
+.hm-flash-btn {
+  display: block;
+  width: 100%;
+  padding: 7px 0;
+  background: #fdfdfd;
+  border: 1px solid #000;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s;
+}
+.hm-flash-btn:hover { background: #000; color: #fff; }
+
+/* ==================== CTA SECTION ==================== */
+.hm-cta-section {
+  position: relative;
+  width: 100%;
+  height: 420px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hm-cta-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.hm-cta-overlay {
+  position: absolute;
+  inset: 0;
+  background: #5e4f4e;
+  mix-blend-mode: multiply;
+  opacity: 0.85;
+}
+.hm-cta-content {
+  position: relative;
+  z-index: 10;
+  text-align: center;
+  color: #fff;
+  max-width: 680px;
+  padding: 0 24px;
+}
+.hm-cta-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 32px;
+  font-weight: 400;
+  margin-bottom: 20px;
+}
+.hm-cta-desc {
+  font-size: 18px;
+  line-height: 1.8;
+  font-weight: 300;
+  margin-bottom: 36px;
+  color: rgba(255,255,255,0.9);
+  text-transform: capitalize;
+}
+.hm-cta-btn {
+  display: inline-block;
+  padding: 12px 40px;
+  border: 1.5px solid #fff;
+  color: #fff;
+  background: transparent;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-family: 'Inter', sans-serif;
+}
+.hm-cta-btn:hover { background: #fff; color: #000; }
+
+/* ==================== DỊCH VỤ MỚI ==================== */
+.hm-services-section {
+  background: #fff;
+  padding: 56px 0 48px;
+}
+.hm-section-title {
+  font-family: 'Inconsolata', monospace;
+  font-size: 34px;
+  text-transform: capitalize;
+  text-align: center;
+  margin-bottom: 48px;
+  font-weight: 400;
+}
+.hm-svc-row {
+  display: flex;
+  gap: 0;
+  align-items: stretch;
+  margin-bottom: 0;
+  max-width: 1280px;
+  margin: 0 auto 32px;
+  padding: 0 32px;
+}
+.hm-svc-row-rev { flex-direction: row-reverse; }
+.hm-svc-big {
+  flex: 3;
+  position: relative;
+  overflow: hidden;
+  min-height: 372px;
+  border-radius: 4px;
+}
+.hm-svc-big-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s;
+  display: block;
+}
+.hm-svc-big:hover .hm-svc-big-img { transform: scale(1.04); }
+.hm-svc-big-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 60%);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 28px 24px;
+  color: #fff;
+}
+.hm-svc-big-name { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
+.hm-svc-big-price { font-family: 'Inconsolata', monospace; font-size: 18px; margin-bottom: 14px; }
+.hm-svc-big-btn {
+  align-self: flex-start;
+  padding: 8px 22px;
+  background: transparent;
+  border: 1px solid #fff;
+  color: #fff;
+  font-size: 12px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.hm-svc-big-btn:hover { background: #fff; color: #000; }
+
+.hm-svc-card {
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow 0.3s;
+  flex: 1;
+  max-width: 360px;
+  margin-left: 24px;
+}
+.hm-svc-row-rev .hm-svc-card { margin-left: 0; margin-right: 24px; }
+.hm-svc-card:hover { box-shadow: 0 8px 30px rgba(0,0,0,0.12); }
+.hm-svc-card-large {
+  max-width: none !important;
+  margin-left: 12px;
+  margin-right: 12px;
+}
+.hm-svc-card-img {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  height: auto;
+  object-fit: cover;
+  display: block;
+  flex-shrink: 0;
+}
+.hm-svc-card-body { padding: 20px 18px; flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.hm-svc-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--red);
+  font-weight: 700;
+}
+.hm-svc-card-name { font-size: 18px; font-weight: 600; }
+.hm-svc-card-desc { font-size: 13px; color: #666; line-height: 1.5; margin-bottom: 12px; }
+.hm-svc-card-price { font-family: 'Inconsolata', monospace; font-size: 16px; font-weight: 600; color: var(--red); }
+
+.hm-center { text-align: center; margin-top: 40px; }
+.hm-view-all {
+  display: inline-block;
+  padding: 14px 40px;
+  background: transparent;
+  border: 1.5px solid #000;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'Inconsolata', monospace;
+}
+.hm-view-all:hover { background: #000; color: #fff; }
+
+/* ==================== STYLIST ==================== */
+.hm-stylist-section {
+  background: #fff;
+  padding: 56px 40px 48px;
+  border-top: 1px solid var(--border1);
+}
+.hm-stylist-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 1280px;
+  margin: 0 auto 12px;
+}
+.hm-more-link {
+  font-family: 'Inconsolata', monospace;
+  font-size: 15px;
+  color: var(--red);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.hm-stylist-divider {
+  height: 1px;
+  background: #000;
+  max-width: 1280px;
+  margin: 0 auto 40px;
+}
+.hm-stylist-marquee-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  overflow: hidden;
+  position: relative;
+  mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+}
+.hm-stylist-marquee-track {
+  display: flex;
+  gap: 32px;
+  width: max-content;
+  animation: hm-marquee 25s linear infinite;
+}
+.hm-stylist-marquee-track:hover {
+  animation-play-state: paused;
+}
+@keyframes hm-marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(calc(-50% - 16px)); }
+}
+.hm-stylist-card {
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: box-shadow 0.3s;
+}
+.hm-small-card {
+  width: 280px;
+  min-height: 340px;
+}
+.hm-stylist-card:hover { box-shadow: 0 12px 40px rgba(0,0,0,0.14); }
+.hm-stylist-photo-wrap {
+  width: 100%;
+  height: 220px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.hm-stylist-photo { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s; }
+.hm-stylist-card:hover .hm-stylist-photo { transform: scale(1.04); }
+.hm-stylist-info { padding: 16px 12px; text-align: center; width: 100%; }
+.hm-stylist-label { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.1em; }
+.hm-stylist-name {
+  font-family: 'Inconsolata', monospace;
+  font-size: 18px;
+  text-transform: capitalize;
+  margin: 6px 0 4px;
+}
+.hm-stylist-stars { font-size: 20px; color: #f59e0b; letter-spacing: 3px; margin: 4px 0; }
+.hm-star { color: #f59e0b; }
+.hm-star-empty { color: #ccc; }
+.hm-stylist-role { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 0.08em; }
+
+/* ==================== SHOP / SẢN PHẨM ==================== */
+.hm-shop-section {
+  background: #fff;
+  padding: 56px 32px 48px;
+  border-top: 1px solid var(--border1);
+}
+.hm-prod-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 32px;
+  max-width: 1320px;
+  margin: 0 auto;
+}
+.hm-prod-card {
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 24px;
+  border: 1px solid #f0f0f0;
+  padding: 12px;
+  transition: box-shadow 0.3s;
+}
+.hm-prod-card:hover { box-shadow: 0 8px 30px rgba(0,0,0,0.1); }
+.hm-prod-img-wrap {
+  position: relative;
+  width: 100%;
+  border-radius: 16px;
+  overflow: hidden;
+  height: 260px;
+  background: #f5f5f5;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+.hm-prod-badge {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 5;
+  background: rgba(10,10,10,0.8);
+  color: #bfa77a;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 4px 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.hm-prod-wish {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 5;
+  background: none;
+  border: none;
+  font-size: 22px;
+  color: #ccc;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+.hm-prod-wish:hover { color: var(--red); }
+.hm-prod-img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.6s; }
+.hm-prod-card:hover .hm-prod-img { transform: scale(1.05); }
+.hm-prod-info { display: flex; flex-direction: column; gap: 8px; padding: 0 4px; }
+.hm-prod-stars { display: flex; align-items: center; gap: 4px; font-size: 13px; margin-bottom: -2px; }
+.hm-prod-review-count { font-size: 11px; color: var(--gray-text); font-family: 'Jost', sans-serif; }
+.hm-prod-name {
+  font-family: 'Jost', sans-serif;
+  font-weight: 500;
+  font-size: 16px;
+  text-align: left;
+  line-height: 1.4;
+  color: #111;
+}
+.hm-prod-price-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+.hm-prod-price {
+  font-family: 'Jost', sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: #000;
+}
+.hm-prod-add {
+  padding: 6px 14px;
+  background: #e63946;
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  font-family: 'Jost', sans-serif;
+  font-weight: 500;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.hm-prod-add:hover { background: #d62828; }
+.hm-prod-empty {
+  text-align: center;
+  padding: 64px 0;
+  color: #999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.hm-prod-empty button {
+  margin-top: 12px;
+  padding: 10px 24px;
+  background: none;
+  border-bottom: 1px solid #000;
+  cursor: pointer;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* Skeleton */
+.hm-prod-skeleton { display: flex; flex-direction: column; gap: 8px; }
+.hm-skel-img { width: 100%; height: 280px; border-radius: 30px; background: var(--gray-fill); animation: hm-shimmer 1.5s infinite linear; }
+.hm-skel-line { height: 14px; background: var(--gray-fill); border-radius: 4px; animation: hm-shimmer 1.5s infinite linear; }
+.hm-skel-short { width: 60%; }
+@keyframes hm-shimmer {
+  0%   { opacity: 1; }
+  50%  { opacity: 0.4; }
+  100% { opacity: 1; }
+}
+
+.hm-xem-them {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 64px;
+  background: #000;
+  color: #fff;
+  font-family: 'Inconsolata', monospace;
+  font-size: 22px;
+  text-transform: capitalize;
+  border: none;
+  border-radius: 40px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.hm-xem-them:hover { opacity: 0.8; }
+
+/* ==================== TESTIMONIAL ==================== */
+.hm-testimonial-section {
+  display: flex;
+  align-items: stretch;
+  min-height: 420px;
+  background: #fff;
+  border-top: 1px solid var(--border1);
+}
+.hm-testimonial-img-wrap {
+  flex: 0 0 460px;
+  overflow: hidden;
+  border-radius: 6px;
+  margin: 40px 24px 40px 40px;
+}
+.hm-testimonial-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.hm-testimonial-card {
+  flex: 1;
+  background: #fafafa;
+  margin: 40px 40px 40px 0;
+  padding: 48px 56px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.hm-test-stars { font-size: 18px; color: #f59e0b; letter-spacing: 4px; }
+.hm-test-quote {
+  font-family: 'Inconsolata', monospace;
+  font-size: 18px;
+  font-weight: 300;
+  line-height: 1.6;
+  color: #222;
+  flex: 1;
+}
+.hm-test-author-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  border-top: 1px solid #ddd;
+  padding-top: 20px;
+}
+.hm-test-name {
+  font-family: 'Inconsolata', monospace;
+  font-weight: 300;
+  font-size: 14px;
+  text-transform: capitalize;
+}
+.hm-test-role { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.1em; margin-top: 2px; }
+.hm-test-tag {
+  display: inline-block;
+  padding: 4px 14px;
+  border: 1px solid #000;
+  font-family: 'Inconsolata', monospace;
+  font-size: 12px;
+  font-weight: 300;
+}
+.hm-test-nav { display: flex; gap: 12px; justify-content: flex-end; }
+.hm-test-nav-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1.5px solid #000;
+  background: #fff;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  line-height: 1;
+  color: #000;
+}
+.hm-test-nav-btn:hover { background: #000; color: #fff; }
+
+/* ==================== CLUB / NEWSLETTER ==================== */
+.hm-club-section {
+  background: #000;
+  color: #fff;
+  padding: 72px 24px;
+  position: relative;
+  overflow: hidden;
+  text-align: center;
+}
+.hm-club-deco {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%,-50%);
+  width: 500px;
+  height: 500px;
+  border: 1px solid rgba(191,167,122,0.2);
+  border-radius: 50%;
+  animation: pulse 3s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes pulse { 0%,100%{transform:translate(-50%,-50%) scale(1);opacity:0.5} 50%{transform:translate(-50%,-50%) scale(1.05);opacity:0.3} }
+.hm-club-inner {
+  position: relative;
+  z-index: 10;
+  max-width: 600px;
+  margin: 0 auto;
+}
+.hm-club-label {
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: #bfa77a;
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+.hm-club-title {
+  font-size: 32px;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+  letter-spacing: 0.04em;
+}
+.hm-club-desc {
+  font-size: 14px;
+  font-weight: 300;
+  color: #aaa;
+  line-height: 1.7;
+  margin-bottom: 40px;
+}
+.hm-club-form { display: flex; gap: 0; max-width: 440px; margin: 0 auto; }
+.hm-club-input {
+  flex: 1;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #fff;
+  padding: 14px 20px;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  outline: none;
+  transition: border-color 0.3s;
+}
+.hm-club-input:focus { border-color: #bfa77a; }
+.hm-club-submit {
+  padding: 14px 28px;
+  background: #bfa77a;
+  color: #000;
+  border: none;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.hm-club-submit:hover { background: #fff; }
+
+/* ==================== RESPONSIVE ==================== */
+@media (max-width: 1024px) {
+  .hm-category-inner { grid-template-columns: repeat(3, 1fr); }
+  .hm-flash-cards { grid-template-columns: repeat(2, 1fr); }
+  .hm-flash-left { display: none; }
+  .hm-flash-vline { display: none; }
+  .hm-prod-grid { grid-template-columns: repeat(2, 1fr); }
+  .hm-stylist-grid { grid-template-columns: repeat(2, 1fr); }
+  .hm-testimonial-img-wrap { flex: 0 0 300px; }
+}
+@media (max-width: 768px) {
+  .hm-hero-content { padding: 32px 28px; }
+  .hm-hero-title { font-size: 32px; }
+  .hm-category-inner { grid-template-columns: repeat(2, 1fr); }
+  .hm-flash-cards { grid-template-columns: repeat(2, 1fr); }
+  .hm-prod-grid { grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .hm-svc-row { flex-direction: column; padding: 0 16px; }
+  .hm-svc-row-rev { flex-direction: column; }
+  .hm-svc-card { max-width: none; margin-left: 0 !important; margin-right: 0 !important; margin-top: 16px; }
+  .hm-stylist-grid { grid-template-columns: 1fr; }
+  .hm-testimonial-section { flex-direction: column; }
+  .hm-testimonial-img-wrap { flex: none; height: 240px; margin: 24px 24px 0; }
+  .hm-testimonial-card { margin: 0 24px 24px; padding: 32px 24px; }
+  .hm-club-form { flex-direction: column; }
 }
 </style>
