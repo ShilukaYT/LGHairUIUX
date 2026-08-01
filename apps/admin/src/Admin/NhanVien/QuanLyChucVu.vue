@@ -317,7 +317,7 @@ onUnmounted(() => {
       <div class="d-flex flex-column flex-lg-row align-lg-center justify-space-between pa-6 px-6 py-5 border-b border-slate-100 dark:border-slate-800 gap-4">
         <div>
           <h2 class="text-h5 font-weight-bold mb-1 text-slate-900 dark:text-white flex items-center gap-2">
-            <Briefcase class="w-6 h-6 text-amber-600 dark:text-amber-500 shrink-0" />
+            <Briefcase class="w-6 h-6 text-sky-600 dark:text-sky-500 shrink-0" />
             <span>Quản Lý Chức Vụ & Lương Cơ Bản</span>
           </h2>
           <div class="text-subtitle-2 text-medium-emphasis dark:text-slate-400">
@@ -332,7 +332,7 @@ onUnmounted(() => {
               v-model="search"
               type="text"
               placeholder="Tìm kiếm chức vụ..."
-              class="w-full h-11 pl-10 pr-4 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-medium text-slate-900 dark:text-white outline-none focus:border-amber-500 dark:focus:border-amber-400 shadow-sm transition-all"
+              class="w-full h-11 pl-10 pr-4 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-medium text-slate-900 dark:text-white outline-none focus:border-sky-500 dark:focus:border-sky-400 shadow-sm transition-all"
             />
           </div>
 
@@ -363,15 +363,15 @@ onUnmounted(() => {
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 pa-6 px-6 py-5 pb-2">
         <!-- Card 1 -->
         <div class="bg-white dark:bg-slate-800/80 pa-5 px-6 py-5 rounded-2xl border border-slate-100 dark:border-slate-700/60 shadow-sm flex items-center justify-between relative overflow-hidden group hover:shadow-md transition-all">
-          <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-amber-50 dark:bg-amber-900/20 rounded-full group-hover:scale-110 transition-transform"></div>
+          <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-sky-50 dark:bg-sky-900/20 rounded-full group-hover:scale-110 transition-transform"></div>
           <div class="relative z-10 pl-1">
             <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-400 mb-1">Tổng Chức Vụ</p>
             <h3 class="text-3xl font-extrabold text-slate-800 dark:text-white">{{ statTotal }}</h3>
-            <p class="text-xs text-amber-600 dark:text-amber-400 font-medium mt-2 flex items-center gap-1">
+            <p class="text-xs text-sky-600 dark:text-sky-400 font-medium mt-2 flex items-center gap-1">
               <Layers class="w-3.5 h-3.5 shrink-0" /> <span>Danh mục chức vụ</span>
             </p>
           </div>
-          <div class="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 flex items-center justify-center relative z-10 shrink-0">
+          <div class="w-12 h-12 rounded-xl bg-sky-100 dark:bg-sky-900/40 text-sky-600 dark:text-sky-400 flex items-center justify-center relative z-10 shrink-0">
             <Briefcase class="w-6 h-6" />
           </div>
         </div>
@@ -441,7 +441,7 @@ onUnmounted(() => {
               <tr v-if="loading">
                 <td colspan="7" class="py-12 pa-8 text-center text-slate-400 dark:text-slate-500">
                   <div class="flex flex-col items-center justify-center gap-2">
-                    <RefreshCw class="w-6 h-6 animate-spin text-amber-600 dark:text-amber-500" />
+                    <RefreshCw class="w-6 h-6 animate-spin text-sky-600 dark:text-sky-500" />
                     <span>Đang tải danh sách chức vụ...</span>
                   </div>
                 </td>
@@ -455,7 +455,7 @@ onUnmounted(() => {
                 v-else
                 v-for="item in pageData"
                 :key="item.maLoaiNv"
-                class="hover:bg-amber-50/30 dark:hover:bg-slate-800/50 transition-colors group"
+                class="hover:bg-sky-50/30 dark:hover:bg-slate-800/50 transition-colors group"
               >
                 <td class="py-4 px-6 pa-4 font-mono text-xs whitespace-nowrap">
                   <span class="bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md font-semibold text-slate-700 dark:text-slate-300">
@@ -469,7 +469,7 @@ onUnmounted(() => {
                   </div>
                 </td>
                 <td class="py-4 px-6 pa-4 whitespace-nowrap">
-                  <div class="font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 inline-flex items-center px-3 py-1 rounded-lg border border-amber-200/50 dark:border-amber-700/50">
+                  <div class="font-bold text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/30 inline-flex items-center px-3 py-1 rounded-lg border border-sky-200/50 dark:border-sky-700/50">
                     {{ formatVND(item.luong) }}
                   </div>
                 </td>
@@ -510,7 +510,7 @@ onUnmounted(() => {
                   <div class="flex items-center justify-end gap-2">
                     <button
                       @click="openEditModal(item)"
-                      class="p-2 text-slate-400 dark:text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                      class="p-2 text-slate-400 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-sky-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
                       title="Chỉnh sửa chức vụ"
                     >
                       <Edit3 class="w-4 h-4" />
@@ -553,7 +553,7 @@ onUnmounted(() => {
               :class="[
                 'w-8 h-8 rounded-lg text-xs font-semibold transition-all flex items-center justify-center',
                 curPage === p
-                  ? 'bg-amber-600 text-white shadow-md shadow-amber-600/20'
+                  ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20'
                   : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
               ]"
             >
@@ -583,7 +583,7 @@ onUnmounted(() => {
     >
       <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-100 dark:border-slate-800 text-slate-800 dark:text-slate-100 transition-colors">
         <!-- Modal Header -->
-        <div class="px-6 py-5 pa-6 bg-gradient-to-r from-amber-600 to-amber-700 text-white flex items-center justify-between">
+        <div class="px-6 py-5 pa-6 bg-gradient-to-r from-sky-600 to-sky-700 text-white flex items-center justify-between">
           <h3 class="text-lg font-bold flex items-center gap-2">
             <Briefcase class="w-5 h-5 shrink-0" />
             <span>{{ modal.title }}</span>
@@ -607,7 +607,7 @@ onUnmounted(() => {
               v-model="form.maLoaiNv"
               :disabled="modal.mode === 'edit'"
               type="text"
-              class="w-full h-12 px-4 bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-600 rounded-xl text-base font-mono font-bold text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:border-amber-500 dark:focus:border-amber-400 shadow-sm disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-800/50 uppercase transition-all"
+              class="w-full h-12 px-4 bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-600 rounded-xl text-base font-mono font-bold text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:border-sky-500 dark:focus:border-sky-400 shadow-sm disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-800/50 uppercase transition-all"
             />
             <p v-if="modal.mode === 'create'" class="text-xs text-slate-500 dark:text-slate-400 mt-1.5 font-medium">
               💡 Để trống nếu muốn hệ thống tự động tạo mã (VD: LNV01, LNV02...)
@@ -625,7 +625,7 @@ onUnmounted(() => {
             <input
               v-model="form.tenLoai"
               type="text"
-              :class="errors.tenLoai ? 'border-rose-500 dark:border-rose-500 ring-2 ring-rose-500/20' : 'border-slate-300 dark:border-slate-600 focus:border-amber-500 dark:focus:border-amber-400'"
+              :class="errors.tenLoai ? 'border-rose-500 dark:border-rose-500 ring-2 ring-rose-500/20' : 'border-slate-300 dark:border-slate-600 focus:border-sky-500 dark:focus:border-sky-400'"
               class="w-full h-12 px-4 bg-white dark:bg-slate-800 border-2 rounded-xl text-base font-bold text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:ring-2 shadow-sm transition-all"
             />
             <p v-if="errors.tenLoai" class="text-xs text-rose-500 mt-1.5 font-bold">{{ errors.tenLoai }}</p>
@@ -642,8 +642,8 @@ onUnmounted(() => {
                 type="number"
                 min="0"
                 step="500000"
-                :class="errors.luong ? 'border-rose-500 dark:border-rose-500 ring-2 ring-rose-500/20' : 'border-slate-300 dark:border-slate-600 focus:border-amber-500 dark:focus:border-amber-400'"
-                class="w-full h-12 pl-4 pr-16 bg-white dark:bg-slate-800 border-2 rounded-xl text-lg font-extrabold text-amber-600 dark:text-amber-400 focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:ring-2 shadow-sm transition-all"
+                :class="errors.luong ? 'border-rose-500 dark:border-rose-500 ring-2 ring-rose-500/20' : 'border-slate-300 dark:border-slate-600 focus:border-sky-500 dark:focus:border-sky-400'"
+                class="w-full h-12 pl-4 pr-16 bg-white dark:bg-slate-800 border-2 rounded-xl text-lg font-extrabold text-sky-600 dark:text-sky-400 focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:ring-2 shadow-sm transition-all"
               />
               <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-extrabold text-slate-400 dark:text-slate-400">VNĐ</span>
             </div>
@@ -661,7 +661,7 @@ onUnmounted(() => {
             <textarea
               v-model="form.moTa"
               rows="3"
-              class="w-full p-4 bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-600 rounded-xl text-base font-medium text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:border-amber-500 dark:focus:border-amber-400 focus:ring-2 focus:ring-amber-500/20 shadow-sm transition-all resize-none"
+              class="w-full p-4 bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-600 rounded-xl text-base font-medium text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:border-sky-500 dark:focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 shadow-sm transition-all resize-none"
             ></textarea>
           </div>
 
@@ -684,7 +684,7 @@ onUnmounted(() => {
               <span class="block text-sm font-bold text-slate-800 dark:text-white mb-2">Trạng Thái</span>
               <select
                 v-model="form.trangThai"
-                class="w-full h-10 px-3 bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-600 rounded-xl text-sm font-bold text-slate-900 dark:text-white focus:outline-none focus:border-amber-500 dark:focus:border-amber-400 shadow-sm transition-all"
+                class="w-full h-10 px-3 bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-600 rounded-xl text-sm font-bold text-slate-900 dark:text-white focus:outline-none focus:border-sky-500 dark:focus:border-sky-400 shadow-sm transition-all"
               >
                 <option :value="1">🟢 Hoạt động</option>
                 <option :value="0">🔴 Khóa / Tạm dừng</option>
@@ -706,7 +706,7 @@ onUnmounted(() => {
             @click="saveChucVu"
             :disabled="saving"
             type="button"
-            class="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white font-bold text-sm rounded-xl shadow-md shadow-amber-600/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            class="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-sky-600 to-sky-700 hover:from-sky-700 hover:to-sky-800 text-white font-bold text-sm rounded-xl shadow-md shadow-sky-600/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
             <RefreshCw v-if="saving" class="w-4 h-4 animate-spin shrink-0" />
             <span>{{ saving ? "Đang lưu..." : "Lưu Chức Vụ" }}</span>
