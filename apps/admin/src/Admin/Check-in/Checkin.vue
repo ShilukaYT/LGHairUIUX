@@ -97,8 +97,8 @@ const filteredServices = computed(() => {
     let list = allServicesFromApi.value; 
 
     if (query) {
-        list = list.filter(s => s.Name.toLowerCase().includes(query));
-    }
+    list = list.filter(s => (s.Name || s.name || '').toLowerCase().includes(query));
+}
 
     if (selectedAppointment.value) {
         const existingIds = new Set(

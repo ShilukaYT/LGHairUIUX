@@ -309,11 +309,11 @@ const totalOriginalPrice = computed(() => {
 });
 
 /** Tổng giảm & tổng sau giảm (API xếp chồng tối đa 2 mã) */
-const stackPreview = ref({ totalDiscount: 0, memberDiscount: 0, finalAmount: 0 });
+const stackPreview = ref({ totalDiscount: 0, memberDiscount: 0, memberRankPercent: 0, finalAmount: 0 });
 
 const refreshStackPreview = async () => {
     if (!customerId.value || customerId.value === 'GUEST') {
-        stackPreview.value = { totalDiscount: 0, memberDiscount: 0, finalAmount: subTotal.value };
+        stackPreview.value = { totalDiscount: 0, memberDiscount: 0, memberRankPercent: 0, finalAmount: subTotal.value };
         return;
     }
     try {
@@ -330,12 +330,13 @@ const refreshStackPreview = async () => {
         stackPreview.value = {
             totalDiscount: Number(res.data.totalDiscount) || 0,
             memberDiscount: Number(res.data.memberDiscount) || 0,
+            memberRankPercent: Number(res.data.memberRankPercent) || 0,
             finalAmount: Number(res.data.finalAmount) ?? Math.max(0, subTotal.value)
         };
         console.log("preview-voucher-stack response:", res.data, stackPreview.value);
     } catch (e) {
         console.error("Lỗi preview voucher:", e);
-        stackPreview.value = { totalDiscount: 0, memberDiscount: 0, finalAmount: subTotal.value };
+        stackPreview.value = { totalDiscount: 0, memberDiscount: 0, memberRankPercent: 0, finalAmount: subTotal.value };
     }
 };
 
@@ -354,6 +355,7 @@ watch(
 
 const discountAmount = computed(() => stackPreview.value.totalDiscount);
 const memberDiscountAmount = computed(() => stackPreview.value.memberDiscount);
+const memberRankPercent = computed(() => stackPreview.value.memberRankPercent);
 const totalBill = computed(() => Math.max(0, stackPreview.value.finalAmount));
 const payNow = computed(() => bookingData.value.paymentMode === '10' ? subTotal.value * 0.1 : totalBill.value);
 
@@ -862,7 +864,7 @@ watch(
                                 </div>
 
                                 <div v-if="memberDiscountAmount > 0" class="summary-line saving text-success">
-                                    <span>Giảm giá thành viên:</span>
+                                    <span>Giảm giá thành viên ({{ memberRankPercent }}%):</span>
                                     <span class="font-bold">-{{ memberDiscountAmount.toLocaleString() }}đ</span>
                                 </div>
 
