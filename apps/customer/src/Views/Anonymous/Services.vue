@@ -5,7 +5,7 @@ import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 import { ref, computed, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import axios from "axios";
-import { useWishlistStore } from "@/stores/useWishlistStore";
+import { useWishlistStore, showToast } from "@/stores/useWishlistStore";
 import { Heart } from "lucide-vue-next";
 
 const route = useRoute();
@@ -212,7 +212,7 @@ const addToCart = async (rawItem: any) => {
   await addToCartDB(formattedItem, customer.maKH);
   await updateCartBadge();
   window.dispatchEvent(new Event("cart-updated"));
-  alert("Đã thêm dịch vụ vào giỏ hàng thành công!");
+  showToast("Đã thêm dịch vụ vào giỏ hàng!", "success");
 };
 // =======================
 // MOUNT

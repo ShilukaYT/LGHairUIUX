@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
+import { showToast } from "@/stores/useWishlistStore";
 import { useRoute, useRouter } from "vue-router";
 import axios from "axios";
 import { addToCartDB } from "@/Views/Anonymous/CSDL/cartDB";
@@ -172,7 +173,7 @@ const addToCart = async (isBuyNow = false) => {
   if (isBuyNow) {
     router.push('/cart');
   } else {
-    alert("Đã thêm sản phẩm vào giỏ hàng thành công!");
+    showToast("Đã thêm sản phẩm vào giỏ hàng!", "success");
   }
 };
 

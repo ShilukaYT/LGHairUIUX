@@ -3,7 +3,7 @@ import axios from "axios";
 const API = import.meta.env.VITE_API_URL;
 import { getCartDB, addToCartDB } from "@/Views/Anonymous/CSDL/cartDB";
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
-import { useWishlistStore } from "@/stores/useWishlistStore";
+import { useWishlistStore, showToast } from "@/stores/useWishlistStore";
 import { Heart } from "lucide-vue-next";
 import ServiceReviews from "./ServiceReviews.vue";
 
@@ -161,7 +161,7 @@ export default {
 
       await addToCartDB(item, this.userMaKH);
       window.dispatchEvent(new Event("cart-updated"));
-      alert(`Đã thêm "${item.tenItem}" vào giỏ hàng thành công!`);
+      showToast(`Đã thêm "${item.tenItem}" vào giỏ hàng!`, "success");
     },
 
     async bookNow() {

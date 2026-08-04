@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import axios from 'axios';
 import { getCustomerInfo } from '@/Views/Anonymous/CSDL/DuLieuNguoiDung';
+import Swal from 'sweetalert2';
 import { Star, Camera, X, Trash2, Search, ChevronLeft, ChevronRight, MessageSquare, ClipboardList, Calendar } from 'lucide-vue-next';
 
 const pendingOrders = ref([]);
@@ -201,14 +202,29 @@ const submitAction = async (order) => {
             }
         });
 
-        if (activeCount === 0) return alert("Vui lòng chọn số sao.");
+        if (activeCount === 0) {
+            Swal.fire({
+                title: 'Opps!',
+                text: 'Vui lòng chọn số sao.',
+                icon: 'warning',
+                confirmButtonText: 'Đã hiểu',
+                confirmButtonColor: '#000'
+            });
+            return;
+        }
 
         const res = await axios.post('https://localhost:7196/api/DanhGia/submit-multiple-reviews-with-image', formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
         });
 
         if (res.status === 200) {
-            alert('✨ Gửi đánh giá thành công!');
+            Swal.fire({
+                title: 'Thành công!',
+                text: 'Gửi đánh giá dịch vụ thành công!',
+                icon: 'success',
+                confirmButtonText: 'Tuyệt vời',
+                confirmButtonColor: '#000'
+            });
             // Reload lại toàn bộ từ Server để đồng bộ hóa 100%
             await loadData();
             await loadRatedData();
@@ -223,7 +239,16 @@ const submitAction = async (order) => {
 // 4. GỬI ĐÁNH GIÁ CHUNG
 const submitOverallAction = async (order) => {
     if (isSubmitting.value) return;
-    if (!order.generalRating) return alert("Vui lòng chọn số sao.");
+    if (!order.generalRating) {
+        Swal.fire({
+            title: 'Opps!',
+            text: 'Vui lòng chọn số sao để đánh giá.',
+            icon: 'warning',
+            confirmButtonText: 'Đã hiểu',
+            confirmButtonColor: '#000'
+        });
+        return;
+    }
 
     try {
         isSubmitting.value = true;
@@ -236,12 +261,24 @@ const submitOverallAction = async (order) => {
         const res = await axios.post('https://localhost:7196/api/DanhGia/submit-order-overall-with-image', formData);
 
         if (res.status === 200) {
-            alert('✨ Cảm ơn bạn đã đánh giá chung đơn hàng!');
+            Swal.fire({
+                title: 'Thành công!',
+                text: 'Cảm ơn bạn đã đánh giá chung đơn hàng!',
+                icon: 'success',
+                confirmButtonText: 'Tuyệt vời',
+                confirmButtonColor: '#000'
+            });
             await loadData();
             await loadRatedData();
         }
     } catch (error) {
-        alert("Lỗi khi gửi đánh giá chung.");
+        Swal.fire({
+            title: 'Lỗi',
+            text: 'Có lỗi xảy ra khi gửi đánh giá chung.',
+            icon: 'error',
+            confirmButtonText: 'Đóng',
+            confirmButtonColor: '#000'
+        });
     } finally {
         isSubmitting.value = false;
     }
@@ -252,7 +289,16 @@ const submitStaffAction = async (order) => {
     if (isSubmitting.value) return;
 
     const ratedStaffs = order.staffs.filter(staff => staff.rating > 0);
-    if (ratedStaffs.length === 0) return alert("Vui lòng chọn số sao cho ít nhất 1 nhân viên.");
+    if (ratedStaffs.length === 0) {
+        Swal.fire({
+            title: 'Opps!',
+            text: 'Vui lòng chọn số sao cho ít nhất 1 nhân viên.',
+            icon: 'warning',
+            confirmButtonText: 'Đã hiểu',
+            confirmButtonColor: '#000'
+        });
+        return;
+    }
 
     try {
         isSubmitting.value = true;
@@ -266,12 +312,24 @@ const submitStaffAction = async (order) => {
         const res = await axios.post('https://localhost:7196/api/DanhGia/submit-staff-reviews', payload);
 
         if (res.status === 200) {
-            alert('✨ Cảm ơn bạn đã đánh giá nhân viên!');
+            Swal.fire({
+                title: 'Thành công!',
+                text: 'Cảm ơn bạn đã đánh giá nhân viên!',
+                icon: 'success',
+                confirmButtonText: 'Tuyệt vời',
+                confirmButtonColor: '#000'
+            });
             await loadData();
             await loadRatedData();
         }
     } catch (error) {
-        alert("Có lỗi xảy ra khi gửi đánh giá.");
+        Swal.fire({
+            title: 'Lỗi',
+            text: 'Có lỗi xảy ra khi gửi đánh giá.',
+            icon: 'error',
+            confirmButtonText: 'Đóng',
+            confirmButtonColor: '#000'
+        });
     } finally {
         isSubmitting.value = false;
     }
@@ -301,44 +359,97 @@ const removeImage = (service) => {
 
 // 6. XÓA ĐÁNH GIÁ LẺ
 const deleteSingleService = async (maHd, serviceId) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa đánh giá này?")) return;
+    const result = await Swal.fire({
+        title: 'Xóa đánh giá?',
+        text: "Bạn có chắc chắn muốn xóa đánh giá này?",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#000',
+        confirmButtonText: 'Xóa',
+        cancelButtonText: 'Hủy'
+    });
+
+    if (!result.isConfirmed) return;
 
     try {
         const res = await axios.delete(`https://localhost:7196/api/DanhGia/delete-service-rating/${maHd}/${serviceId}`);
         if (res.status === 200) {
-            alert("Đã xóa đánh giá!");
+            Swal.fire({
+                title: 'Đã xóa!',
+                text: 'Đã xóa đánh giá thành công.',
+                icon: 'success',
+                confirmButtonText: 'Tuyệt vời',
+                confirmButtonColor: '#000'
+            });
             // Gọi lại API, không tự chỉnh mảng bằng tay nữa
             await loadData();
             await loadRatedData();
         }
     } catch (error) {
-        alert("Lỗi khi xóa.");
+        Swal.fire('Lỗi', 'Có lỗi xảy ra khi xóa.', 'error');
     }
 };
 
 const deleteFullOrder = async (maHd) => {
-    if (!confirm("Xóa toàn bộ đánh giá của hóa đơn này?")) return;
+    const result = await Swal.fire({
+        title: 'Xóa toàn bộ?',
+        text: "Xóa toàn bộ đánh giá của hóa đơn này?",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#000',
+        confirmButtonText: 'Xóa',
+        cancelButtonText: 'Hủy'
+    });
+
+    if (!result.isConfirmed) return;
+
     try {
         await axios.delete(`https://localhost:7196/api/DanhGia/delete-order-rating/${maHd}`);
-        alert("Đã xóa toàn bộ đánh giá!");
+        Swal.fire({
+            title: 'Đã xóa!',
+            text: 'Đã xóa toàn bộ đánh giá!',
+            icon: 'success',
+            confirmButtonText: 'Tuyệt vời',
+            confirmButtonColor: '#000'
+        });
         await loadData();
         await loadRatedData();
     } catch (error) {
-        alert("Lỗi khi xóa.");
+        Swal.fire('Lỗi', 'Có lỗi xảy ra khi xóa.', 'error');
     }
 };
 
 const deleteStaffRating = async (maHd) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa đánh giá nhân viên này?")) return;
+    const result = await Swal.fire({
+        title: 'Xóa đánh giá?',
+        text: "Bạn có chắc chắn muốn xóa đánh giá nhân viên này?",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#000',
+        confirmButtonText: 'Xóa',
+        cancelButtonText: 'Hủy'
+    });
+
+    if (!result.isConfirmed) return;
+
     try {
         const res = await axios.delete(`https://localhost:7196/api/DanhGia/delete-staff-rating/${maHd}`);
         if (res.status === 200) {
-            alert("Đã xóa đánh giá nhân viên!");
+            Swal.fire({
+                title: 'Đã xóa!',
+                text: 'Đã xóa đánh giá nhân viên!',
+                icon: 'success',
+                confirmButtonText: 'Tuyệt vời',
+                confirmButtonColor: '#000'
+            });
             await loadData();
             await loadRatedData();
         }
     } catch (error) {
-        alert("Không thể xóa. Vui lòng kiểm tra lại.");
+        Swal.fire('Lỗi', 'Không thể xóa. Vui lòng kiểm tra lại.', 'error');
     }
 };
 </script>
@@ -454,7 +565,7 @@ const deleteStaffRating = async (maHd) => {
                             </div>
 
                             <!-- Rating each service -->
-                            <div v-if="order.viewMode === 'each'" class="border border-gray-100 p-5 bg-gray-50/30 space-y-6 animate-in fade-in duration-200">
+                            <div v-if="order.viewMode === 'each'" class="border border-gray-100 p-6 bg-white shadow-sm rounded-sm space-y-6 animate-in fade-in duration-200">
                                 <div v-for="(s, idx) in order.services" :key="s.id" class="border-b border-gray-100 pb-5 last:border-0 last:pb-0">
                                     <div v-if="!s.isAlreadyRated" class="space-y-4">
                                         <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2">
@@ -470,7 +581,7 @@ const deleteStaffRating = async (maHd) => {
                                                     class="transition-transform active:scale-95 cursor-pointer"
                                                 >
                                                     <Star 
-                                                        :size="16" 
+                                                        :size="18" 
                                                         :fill="n <= s.rating ? '#f59e0b' : 'none'"
                                                         :stroke="n <= s.rating ? '#f59e0b' : '#d1d5db'"
                                                         :stroke-width="1.5"
@@ -483,26 +594,26 @@ const deleteStaffRating = async (maHd) => {
                                             type="text" 
                                             v-model="s.comment" 
                                             placeholder="Nhận xét cho dịch vụ này..."
-                                            class="w-full bg-white border border-gray-200 focus:border-black outline-none px-4 py-2.5 text-xs transition-all rounded-none text-black" 
+                                            class="w-full bg-gray-50 border border-gray-200 focus:border-black focus:bg-white outline-none px-4 py-2.5 text-xs transition-all rounded-sm text-black" 
                                         />
 
                                         <!-- Image upload -->
                                         <div class="flex items-center gap-4 flex-wrap pt-1">
-                                            <label :for="'file-' + s.id" class="inline-flex items-center gap-2 px-4 py-2 border border-gray-200 hover:border-black rounded-none cursor-pointer transition-all text-[9px] uppercase tracking-widest text-gray-600 hover:text-black">
-                                                <Camera :size="12" />
+                                            <label :for="'file-' + s.id" class="inline-flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 hover:border-black hover:bg-white rounded-sm cursor-pointer transition-all text-[9px] uppercase tracking-widest font-semibold text-gray-700 hover:text-black">
+                                                <Camera :size="14" />
                                                 {{ s.imagePreview ? 'Thay ảnh' : 'Thêm ảnh minh họa' }}
                                             </label>
                                             <input type="file" :id="'file-' + s.id" @change="handleFileChange($event, s)" accept="image/*" class="hidden" />
                                             
                                             <!-- Image Preview -->
-                                            <div v-if="s.imagePreview" class="relative w-12 h-12 border border-gray-200 rounded-none overflow-hidden group">
+                                            <div v-if="s.imagePreview" class="relative w-14 h-14 border border-gray-200 rounded-sm overflow-hidden group">
                                                 <img :src="s.imagePreview" class="w-full h-full object-cover" />
                                                 <button 
                                                     @click="removeImage(s)"
                                                     type="button"
                                                     class="absolute inset-0 bg-black/50 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
                                                 >
-                                                    <X :size="12" />
+                                                    <X :size="14" />
                                                 </button>
                                             </div>
                                         </div>
@@ -512,14 +623,14 @@ const deleteStaffRating = async (maHd) => {
                                 <button 
                                     @click="submitAction(order)"
                                     :disabled="isSubmitting"
-                                    class="w-full bg-black text-white py-3 text-[10px] uppercase tracking-widest font-semibold transition-all hover:bg-gray-900 active:scale-[0.99] disabled:opacity-40 rounded-none cursor-pointer"
+                                    class="w-full bg-black text-white py-3.5 text-[10px] uppercase tracking-widest font-bold transition-all hover:bg-gray-800 active:scale-[0.99] disabled:opacity-40 rounded-sm cursor-pointer shadow-sm"
                                 >
                                     {{ isSubmitting ? 'Đang gửi đánh giá...' : 'Gửi đánh giá chi tiết' }}
                                 </button>
                             </div>
 
                             <!-- Rating overall -->
-                            <div v-if="order.viewMode === 'all'" class="border border-gray-100 p-5 bg-gray-50/30 space-y-4 animate-in fade-in duration-200">
+                            <div v-if="order.viewMode === 'all'" class="border border-gray-100 p-6 bg-white shadow-sm rounded-sm space-y-5 animate-in fade-in duration-200">
                                 <div class="flex items-center gap-4">
                                     <span class="text-xs font-bold uppercase tracking-wider text-black">Hài lòng chung:</span>
                                     <div class="flex gap-1">
@@ -531,7 +642,7 @@ const deleteStaffRating = async (maHd) => {
                                             class="transition-transform active:scale-95 cursor-pointer"
                                         >
                                             <Star 
-                                                :size="18" 
+                                                :size="20" 
                                                 :fill="n <= order.generalRating ? '#f59e0b' : 'none'"
                                                 :stroke="n <= order.generalRating ? '#f59e0b' : '#d1d5db'"
                                                 :stroke-width="1.5"
@@ -543,25 +654,25 @@ const deleteStaffRating = async (maHd) => {
                                 <textarea 
                                     v-model="order.generalComment" 
                                     placeholder="Nhận xét chung cho cả đơn hàng dịch vụ..."
-                                    rows="2"
-                                    class="w-full bg-white border border-gray-200 focus:border-black outline-none px-4 py-3 text-xs transition-all rounded-none text-black"
+                                    rows="3"
+                                    class="w-full bg-gray-50 border border-gray-200 focus:border-black focus:bg-white outline-none px-4 py-3 text-xs transition-all rounded-sm text-black resize-none"
                                 ></textarea>
 
                                 <div class="flex items-center gap-4 flex-wrap pt-1">
-                                    <label :for="'general-file-' + order.id" class="inline-flex items-center gap-2 px-4 py-2 border border-gray-200 hover:border-black rounded-none cursor-pointer transition-all text-[9px] uppercase tracking-widest text-gray-600 hover:text-black">
-                                        <Camera :size="12" />
+                                    <label :for="'general-file-' + order.id" class="inline-flex items-center gap-2 px-4 py-2.5 bg-gray-50 border border-gray-200 hover:border-black hover:bg-white rounded-sm cursor-pointer transition-all text-[10px] uppercase tracking-widest font-semibold text-gray-700 hover:text-black">
+                                        <Camera :size="14" />
                                         {{ order.generalImagePreview ? 'Thay ảnh' : 'Thêm ảnh minh họa' }}
                                     </label>
                                     <input type="file" :id="'general-file-' + order.id" @change="handleGeneralFileChange($event, order)" accept="image/*" class="hidden" />
                                     
-                                    <div v-if="order.generalImagePreview" class="relative w-12 h-12 border border-gray-200 rounded-none overflow-hidden group">
+                                    <div v-if="order.generalImagePreview" class="relative w-14 h-14 border border-gray-200 rounded-sm overflow-hidden group">
                                         <img :src="order.generalImagePreview" class="w-full h-full object-cover" />
                                         <button 
                                             @click="order.generalImagePreview = null; order.generalImageFile = null"
                                             type="button"
                                             class="absolute inset-0 bg-black/50 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
                                         >
-                                            <X :size="12" />
+                                            <X :size="14" />
                                         </button>
                                     </div>
                                 </div>
@@ -569,7 +680,7 @@ const deleteStaffRating = async (maHd) => {
                                 <button 
                                     @click="submitOverallAction(order)"
                                     :disabled="isSubmitting"
-                                    class="w-full bg-black text-white py-3 text-[10px] uppercase tracking-widest font-semibold transition-all hover:bg-gray-900 active:scale-[0.99] disabled:opacity-40 rounded-none cursor-pointer"
+                                    class="w-full bg-black text-white py-3.5 text-[10px] uppercase tracking-widest font-bold transition-all hover:bg-gray-800 active:scale-[0.99] disabled:opacity-40 rounded-sm cursor-pointer shadow-sm"
                                 >
                                     {{ isSubmitting ? 'Đang gửi...' : 'Gửi đánh giá chung' }}
                                 </button>
