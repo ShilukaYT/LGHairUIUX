@@ -130,7 +130,7 @@ const voucherDiscountAmount = computed(() => {
 const serviceCommissionAmount = computed(() => {
     if (!selectedAppointment.value || !selectedAppointment.value.dichVus) return 0;
     return selectedAppointment.value.dichVus.reduce((sum: number, s: any) => {
-        const phanTram = Number(s.phanTramHoaHong || 0);
+        const phanTram = Number(s.phanTramHoaHong || s.PhanTramHoaHong || 10);
         const gia = Number(s.gia || s.Price || 0);
         return sum + Math.round(gia * phanTram / 100);
     }, 0);
@@ -139,7 +139,7 @@ const serviceCommissionAmount = computed(() => {
 const productCommissionAmount = computed(() => {
     if (!selectedAppointment.value || !selectedAppointment.value.sanPhams) return 0;
     return selectedAppointment.value.sanPhams.reduce((sum: number, p: any) => {
-        const phanTram = Number(p.phanTramHoaHong || 0);
+        const phanTram = Number(p.phanTramHoaHong || p.PhanTramHoaHong || 10);
         const gia = Number(p.gia || 0);
         const soLuong = Number(p.soLuong || 1);
         return sum + Math.round(gia * soLuong * phanTram / 100);
@@ -270,7 +270,8 @@ const addService = (service: any) => {
     selectedAppointment.value.dichVus.push({
         id: service.id || service.Id,
         ten: service.name || service.Name,
-        gia: Number(service.price || service.Price || 0)
+        gia: Number(service.price || service.Price || 0),
+        phanTramHoaHong: Number(service.phanTramHoaHong || service.PhanTramHoaHong || 10)
     });
     serviceSearch.value = '';
     showServiceList.value = false;
@@ -313,7 +314,7 @@ const addProduct = (prod: any) => {
             ten: productName,
             gia: Number(prod.price || 0),
             soLuong: 1,
-            phanTramHoaHong: prod.phanTramHoaHong || 0
+            phanTramHoaHong: Number(prod.phanTramHoaHong || prod.PhanTramHoaHong || 10)
         });
         toast.success(`Đã thêm sản phẩm: ${productName}`);
     }
