@@ -52,6 +52,17 @@ const remainingBalance = computed(() => {
     return Math.max(0, total - discount - paid);
 });
 
+const memberDiscountAmount = computed(() => {
+    if (!selectedAppointment.value || !selectedAppointment.value.phanTramGiamVip) return 0;
+    return Math.round((selectedAppointment.value.tongTien || 0) * (selectedAppointment.value.phanTramGiamVip / 100));
+});
+
+const voucherDiscountAmount = computed(() => {
+    if (!selectedAppointment.value) return 0;
+    const totalDiscount = Number(selectedAppointment.value.tienGiam || 0);
+    return Math.max(0, totalDiscount - memberDiscountAmount.value);
+});
+
 const filteredData = computed(() => {
     return appointments.value.filter(a => {
         const q = searchQuery.value.toLowerCase().trim();
@@ -122,11 +133,16 @@ const fetchData = async () => {
         const [resAppt, resData, resStylists] = await Promise.all([
             axios.get(`${API_BASE_URL}/get-appointments`, { params: { date: filterDate.value } }),
             axios.get('https://localhost:7196/api/DatDichVu/data-booking'),
-            axios.get('https://localhost:7196/api/DatDichVu/get-stylists')
+            axios.get('https://localhost:7196/api/NhanVien', { params: { trangThai: 1 } })
         ]);
         appointments.value = resAppt.data;
         allServices.value = [...resData.data.services, ...resData.data.combos];
-        stylists.value = resStylists.data;
+        stylists.value = resStylists.data.map((nv: any) => ({
+            id: nv.maNv,
+            name: nv.hoTenNv,
+            role: nv.tenLoaiNv,
+            img: nv.hinhAnh || "https://i.pravatar.cc/150"
+        }));
     } catch (error) {
         toast.error("Lỗi kết nối hệ thống!");
     } finally {
@@ -636,9 +652,13 @@ watch(filterDate, fetchData);
                         <!-- Tổng kết tính toán -->
                         <div class="border-t pt-4 mt-auto">
                             <!-- Hiển thị Voucher đã áp dụng (nếu có) -->
-                            <div v-if="selectedAppointment.voucher && selectedAppointment.tienGiam > 0" class="d-flex align-center justify-space-between mb-3 px-2">
+                            <div v-if="memberDiscountAmount > 0" class="d-flex align-center justify-space-between mb-3 px-2">
+                                <span class="text-caption font-weight-bold text-error uppercase tracking-wider">Hạng thành viên ({{ selectedAppointment.phanTramGiamVip }}%)</span>
+                                <span class="text-body-2 font-weight-bold text-error">-{{ memberDiscountAmount.toLocaleString() }}đ</span>
+                            </div>
+                            <div v-if="selectedAppointment.voucher && voucherDiscountAmount > 0" class="d-flex align-center justify-space-between mb-3 px-2">
                                 <span class="text-caption font-weight-bold text-error uppercase tracking-wider">Voucher đã dùng ({{ selectedAppointment.voucher }})</span>
-                                <span class="text-body-2 font-weight-bold text-error">-{{ (selectedAppointment.tienGiam || 0).toLocaleString() }}đ</span>
+                                <span class="text-body-2 font-weight-bold text-error">-{{ voucherDiscountAmount.toLocaleString() }}đ</span>
                             </div>
 
                             <!-- Hiển thị Tiền sản phẩm (nếu có) -->

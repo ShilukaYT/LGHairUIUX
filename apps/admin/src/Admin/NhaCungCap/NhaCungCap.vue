@@ -2,36 +2,11 @@
 import { ref, onMounted, watch, computed, onUnmounted } from 'vue'
 import axios from 'axios'
 import Swal from 'sweetalert2'
-import { Search, Plus, Edit3, Trash2, X, Building2, Phone, Mail, MapPin } from 'lucide-vue-next'
+import { Search, Plus, Edit3, Trash2, X, Building2, Phone, Mail, MapPin, RotateCcw } from 'lucide-vue-next'
 import { logActivity } from '@/utils/activityLogger'
-import { useTheme } from 'vuetify'
 
 const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
 const API_BASE_URL = `${API}/api/admin/nha-cung-cap`
-
-// ── Theme State Detection (Light / Dark Mode Sync) ──
-let isDarkMode = computed(() => false)
-try {
-  const vuetifyTheme = useTheme()
-  isDarkMode = computed(() => vuetifyTheme.global.name.value === 'dark')
-} catch (e) {
-  isDarkMode = computed(() => {
-    return localStorage.getItem('theme_selection') === 'dark'
-  })
-}
-
-// Watch theme change and update body background to prevent white bottom area
-watch(isDarkMode, (dark) => {
-  if (dark) {
-    document.body.style.backgroundColor = '#141416'
-  } else {
-    document.body.style.backgroundColor = ''
-  }
-}, { immediate: true })
-
-onUnmounted(() => {
-  document.body.style.backgroundColor = ''
-})
 
 const listNccAll = ref<any[]>([])
 const isLoading = ref(false)
@@ -44,117 +19,126 @@ const isModalOpen = ref(false)
 const isEditMode = ref(false)
 
 const formNcc = ref({
-    maNcc: '',
-    tenNcc: '',
-    soDienThoai: '',
-    diaChi: '',
-    email: '',
-    trangThai: 1
+  maNcc: '',
+  tenNcc: '',
+  soDienThoai: '',
+  diaChi: '',
+  email: '',
+  trangThai: 1
 })
 
 // Đối tượng chứa thông báo lỗi Validation
 const errors = ref({
-    maNcc: '',
-    tenNcc: '',
-    soDienThoai: '',
-    email: '',
-    diaChi: ''
+  maNcc: '',
+  tenNcc: '',
+  soDienThoai: '',
+  email: '',
+  diaChi: ''
 })
+
+// Headers cho v-data-table
+const headers = [
+  { title: 'Mã đối tác', key: 'maNcc', align: 'start', sortable: true },
+  { title: 'Tên nhà cung cấp', key: 'tenNcc', align: 'start', sortable: true },
+  { title: 'Số điện thoại', key: 'soDienThoai', align: 'start', sortable: false },
+  { title: 'Email', key: 'email', align: 'start', sortable: false },
+  { title: 'Địa chỉ', key: 'diaChi', align: 'start', sortable: false },
+  { title: 'Trạng thái', key: 'trangThai', align: 'center', sortable: true },
+  { title: 'Thao tác', key: 'actions', align: 'center', sortable: false }
+]
 
 // Hàm kiểm tra Validation
 const validateForm = (): boolean => {
-    let isValid = true
-    errors.value = { maNcc: '', tenNcc: '', soDienThoai: '', email: '', diaChi: '' }
+  let isValid = true
+  errors.value = { maNcc: '', tenNcc: '', soDienThoai: '', email: '', diaChi: '' }
 
-    // Trim all form inputs to prevent empty space tricks
-    formNcc.value.maNcc = formNcc.value.maNcc.trim()
-    formNcc.value.tenNcc = formNcc.value.tenNcc.trim()
-    formNcc.value.soDienThoai = formNcc.value.soDienThoai.trim()
-    formNcc.value.email = formNcc.value.email.trim()
-    formNcc.value.diaChi = formNcc.value.diaChi.trim()
+  formNcc.value.maNcc = formNcc.value.maNcc.trim()
+  formNcc.value.tenNcc = formNcc.value.tenNcc.trim()
+  formNcc.value.soDienThoai = formNcc.value.soDienThoai.trim()
+  formNcc.value.email = formNcc.value.email.trim()
+  formNcc.value.diaChi = formNcc.value.diaChi.trim()
 
-    // 1. Kiểm tra Mã NCC
-    if (!formNcc.value.maNcc) {
-        errors.value.maNcc = 'Mã nhà cung cấp không được để trống.'
+  // 1. Kiểm tra Mã NCC
+  if (!formNcc.value.maNcc) {
+    errors.value.maNcc = 'Mã nhà cung cấp không được để trống.'
+    isValid = false
+  } else if (formNcc.value.maNcc.length < 3) {
+    errors.value.maNcc = 'Mã nhà cung cấp phải có tối thiểu 3 ký tự.'
+    isValid = false
+  } else if (formNcc.value.maNcc.length > 30) {
+    errors.value.maNcc = 'Mã nhà cung cấp không được vượt quá 30 ký tự.'
+    isValid = false
+  } else {
+    const maNccRegex = /^[a-zA-Z0-9_-]+$/
+    if (!maNccRegex.test(formNcc.value.maNcc)) {
+      errors.value.maNcc = 'Mã nhà cung cấp chỉ được chứa chữ cái không dấu, chữ số, gạch nối (-) hoặc gạch dưới (_).'
+      isValid = false
+    } else if (!isEditMode.value) {
+      const isDuplicate = listNccAll.value.some(
+        ncc => ncc.maNcc.toLowerCase() === formNcc.value.maNcc.toLowerCase()
+      )
+      if (isDuplicate) {
+        errors.value.maNcc = 'Mã nhà cung cấp này đã tồn tại trong hệ thống.'
         isValid = false
-    } else if (formNcc.value.maNcc.length < 3) {
-        errors.value.maNcc = 'Mã nhà cung cấp phải có tối thiểu 3 ký tự.'
-        isValid = false
-    } else if (formNcc.value.maNcc.length > 30) {
-        errors.value.maNcc = 'Mã nhà cung cấp không được vượt quá 30 ký tự.'
-        isValid = false
-    } else {
-        const maNccRegex = /^[a-zA-Z0-9_-]+$/
-        if (!maNccRegex.test(formNcc.value.maNcc)) {
-            errors.value.maNcc = 'Mã nhà cung cấp chỉ được chứa chữ cái không dấu, chữ số, gạch nối (-) hoặc gạch dưới (_).'
-            isValid = false
-        } else if (!isEditMode.value) {
-            // Check for code uniqueness on client side during creation
-            const isDuplicate = listNccAll.value.some(
-                ncc => ncc.maNcc.toLowerCase() === formNcc.value.maNcc.toLowerCase()
-            )
-            if (isDuplicate) {
-                errors.value.maNcc = 'Mã nhà cung cấp này đã tồn tại trong hệ thống.'
-                isValid = false
-            }
-        }
+      }
     }
+  }
 
-    // 2. Kiểm tra Tên NCC
-    if (!formNcc.value.tenNcc) {
-        errors.value.tenNcc = 'Tên nhà cung cấp không được để trống.'
-        isValid = false
-    } else if (formNcc.value.tenNcc.length < 3) {
-        errors.value.tenNcc = 'Tên nhà cung cấp phải có tối thiểu 3 ký tự.'
-        isValid = false
-    } else if (formNcc.value.tenNcc.length > 50) {
-        errors.value.tenNcc = 'Tên nhà cung cấp quá dài (Tối đa 50 ký tự).'
-        isValid = false
-    } else if (!/[a-zA-ZÀ-ỹ]/.test(formNcc.value.tenNcc)) {
-        errors.value.tenNcc = 'Tên nhà cung cấp phải chứa ít nhất một chữ cái.'
-        isValid = false
+  // 2. Kiểm tra Tên NCC
+  if (!formNcc.value.tenNcc) {
+    errors.value.tenNcc = 'Tên nhà cung cấp không được để trống.'
+    isValid = false
+  } else if (formNcc.value.tenNcc.length < 3) {
+    errors.value.tenNcc = 'Tên nhà cung cấp phải có tối thiểu 3 ký tự.'
+    isValid = false
+  } else if (formNcc.value.tenNcc.length > 50) {
+    errors.value.tenNcc = 'Tên nhà cung cấp quá dài (Tối đa 50 ký tự).'
+    isValid = false
+  } else if (!/[a-zA-ZÀ-ỹ]/.test(formNcc.value.tenNcc)) {
+    errors.value.tenNcc = 'Tên nhà cung cấp phải chứa ít nhất một chữ cái.'
+    isValid = false
+  }
+
+  // 3. Kiểm tra Số điện thoại
+  if (!formNcc.value.soDienThoai) {
+    errors.value.soDienThoai = 'Số điện thoại không được để trống.'
+    isValid = false
+  } else {
+    const phoneRegex = /^0\d{8,10}$/
+    if (!phoneRegex.test(formNcc.value.soDienThoai)) {
+      errors.value.soDienThoai = 'Số điện thoại không hợp lệ (Phải bắt đầu bằng số 0, gồm 9 - 11 chữ số).'
+      isValid = false
     }
+  }
 
-    // 3. Kiểm tra Số điện thoại
-    if (!formNcc.value.soDienThoai) {
-        errors.value.soDienThoai = 'Số điện thoại không được để trống.'
-        isValid = false
-    } else {
-        const phoneRegex = /^0\d{8,10}$/
-        if (!phoneRegex.test(formNcc.value.soDienThoai)) {
-            errors.value.soDienThoai = 'Số điện thoại không hợp lệ (Phải bắt đầu bằng số 0, gồm 9 - 11 chữ số).'
-            isValid = false
-        }
+  // 4. Kiểm tra định dạng Email
+  if (!formNcc.value.email) {
+    errors.value.email = 'Email không được để trống.'
+    isValid = false
+  } else {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(formNcc.value.email)) {
+      errors.value.email = 'Định dạng Email không hợp lệ (Ví dụ: abc@gmail.com).'
+      isValid = false
+    } else if (formNcc.value.email.length > 100) {
+      errors.value.email = 'Email không được vượt quá 100 ký tự.'
+      isValid = false
     }
+  }
 
-    // 4. Kiểm tra định dạng Email
-    if (!formNcc.value.email) {
-        errors.value.email = 'Email không được để trống.'
-        isValid = false
-    } else {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-        if (!emailRegex.test(formNcc.value.email)) {
-            errors.value.email = 'Định dạng Email không hợp lệ (Ví dụ: abc@gmail.com).'
-            isValid = false
-        } else if (formNcc.value.email.length > 100) {
-            errors.value.email = 'Email không được vượt quá 100 ký tự.'
-            isValid = false
-        }
-    }
+  // 5. Kiểm tra Địa chỉ
+  if (!formNcc.value.diaChi) {
+    errors.value.diaChi = 'Địa chỉ không được để trống.'
+    isValid = false
+  } else if (formNcc.value.diaChi.length < 5) {
+    errors.value.diaChi = 'Địa chỉ quá ngắn (Tối thiểu 5 ký tự).'
+    isValid = false
+  } else if (formNcc.value.diaChi.length > 255) {
+    errors.value.diaChi = 'Địa chỉ không được vượt quá 255 ký tự.'
+    isValid = false
+  }
 
-    // 5. Kiểm tra Địa chỉ
-    if (!formNcc.value.diaChi) {
-        errors.value.diaChi = 'Địa chỉ không được để trống.'
-        isValid = false
-    } else if (formNcc.value.diaChi.length < 5) {
-        errors.value.diaChi = 'Địa chỉ quá ngắn (Tối thiểu 5 ký tự).'
-        isValid = false
-    } else if (formNcc.value.diaChi.length > 255) {
-        errors.value.diaChi = 'Địa chỉ không được vượt quá 255 ký tự.'
-        isValid = false
-    }
-
-    return isValid
+  return isValid
 }
 
 watch(() => formNcc.value.maNcc, () => { errors.value.maNcc = '' })
@@ -164,730 +148,535 @@ watch(() => formNcc.value.email, () => { errors.value.email = '' })
 watch(() => formNcc.value.diaChi, () => { errors.value.diaChi = '' })
 
 const getAuthHeaders = () => {
-    const token = sessionStorage.getItem('adminToken')
-               || localStorage.getItem('accessToken') 
-               || localStorage.getItem('token') 
-               || sessionStorage.getItem('accessToken') 
-               || sessionStorage.getItem('token');
-    return { 'Authorization': `Bearer ${token}` };
+  const token = sessionStorage.getItem('adminToken')
+             || localStorage.getItem('accessToken') 
+             || localStorage.getItem('token') 
+             || sessionStorage.getItem('accessToken') 
+             || sessionStorage.getItem('token');
+  return { 'Authorization': `Bearer ${token}` };
 }
 
 const fetchNhaCungCaps = async () => {
-    isLoading.value = true
-    errorMessage.value = ''
-    try {
-        const params: any = { search: searchQuery.value }
-        const res = await axios.get(`${API_BASE_URL}/danh-sach`, {
-            params,
-            headers: getAuthHeaders()
-        })
-        if (res.data.success) {
-            listNccAll.value = res.data.data || []
-        }
-    } catch (e: any) {
-        console.error(e);
-        errorMessage.value = e.response?.status === 403 
-            ? "Lỗi 403: Tài khoản hiện tại không có quyền truy cập hoặc Token hết hạn."
-            : e.response?.status === 404 
-            ? "Lỗi 404: Không tìm thấy API nhà cung cấp. Hãy kiểm tra route trên backend."
-            : (e.response?.data?.message || e.message || "Không thể kết nối đến máy chủ hệ thống.");
-    } finally {
-        isLoading.value = false
+  isLoading.value = true
+  errorMessage.value = ''
+  try {
+    const params: any = { search: searchQuery.value }
+    const res = await axios.get(`${API_BASE_URL}/danh-sach`, {
+      params,
+      headers: getAuthHeaders()
+    })
+    if (res.data.success) {
+      listNccAll.value = res.data.data || []
     }
+  } catch (e: any) {
+    console.error(e);
+    errorMessage.value = e.response?.status === 403 
+      ? "Lỗi 403: Tài khoản hiện tại không có quyền truy cập hoặc Token hết hạn."
+      : e.response?.status === 404 
+      ? "Lỗi 404: Không tìm thấy API nhà cung cấp. Hãy kiểm tra route trên backend."
+      : (e.response?.data?.message || e.message || "Không thể kết nối đến máy chủ hệ thống.");
+  } finally {
+    isLoading.value = false
+  }
 }
 
 const openAddModal = () => {
-    isEditMode.value = false
-    errors.value = { maNcc: '', tenNcc: '', soDienThoai: '', email: '', diaChi: '' }
-    formNcc.value = { maNcc: '', tenNcc: '', soDienThoai: '', diaChi: '', email: '', trangThai: 1 }
-    isModalOpen.value = true
+  isEditMode.value = false
+  errors.value = { maNcc: '', tenNcc: '', soDienThoai: '', email: '', diaChi: '' }
+  formNcc.value = { maNcc: '', tenNcc: '', soDienThoai: '', diaChi: '', email: '', trangThai: 1 }
+  isModalOpen.value = true
 }
 
 const openEditModal = (ncc: any) => {
-    isEditMode.value = true
-    errors.value = { maNcc: '', tenNcc: '', soDienThoai: '', email: '', diaChi: '' }
-    formNcc.value = { ...ncc }
-    isModalOpen.value = true
+  isEditMode.value = true
+  errors.value = { maNcc: '', tenNcc: '', soDienThoai: '', email: '', diaChi: '' }
+  formNcc.value = { ...ncc }
+  isModalOpen.value = true
 }
 
 const saveNcc = async () => {
-    if (!validateForm()) return;
+  if (!validateForm()) return;
 
-    try {
-        if (isEditMode.value) {
-            const res = await axios.put(`${API_BASE_URL}/cap-nhat/${formNcc.value.maNcc}`, formNcc.value, { headers: getAuthHeaders() });
-            if (res.data.success) {
-                logActivity("Cập nhật nhà cung cấp", `Đã cập nhật nhà cung cấp ${formNcc.value.tenNcc} (Mã: ${formNcc.value.maNcc})`, "Nhà cung cấp");
-                isModalOpen.value = false;
-                Swal.fire({
-                    title: 'Thành công',
-                    text: 'Cập nhật thông tin đối tác thành công!',
-                    icon: 'success',
-                    confirmButtonColor: '#0284c7'
-                });
-            }
-        } else {
-            const res = await axios.post(`${API_BASE_URL}/them-moi`, formNcc.value, { headers: getAuthHeaders() });
-            if (res.data.success) {
-                logActivity("Thêm nhà cung cấp", `Đã thêm nhà cung cấp mới ${formNcc.value.tenNcc} (Mã: ${formNcc.value.maNcc})`, "Nhà cung cấp");
-                isModalOpen.value = false;
-                Swal.fire({
-                    title: 'Thành công',
-                    text: 'Thêm nhà cung cấp mới thành công!',
-                    icon: 'success',
-                    confirmButtonColor: '#0284c7'
-                });
-            }
-        }
-        await fetchNhaCungCaps();
-    } catch (e: any) {
-        logActivity(
-            isEditMode.value ? "Cập nhật nhà cung cấp" : "Thêm nhà cung cấp",
-            `Thất bại khi ${isEditMode.value ? 'cập nhật' : 'thêm'} nhà cung cấp ${formNcc.value.tenNcc} - Lỗi: ${e.response?.data?.message || e.message || ''}`,
-            "Nhà cung cấp",
-            "Thất bại"
-        );
+  try {
+    if (isEditMode.value) {
+      const res = await axios.put(`${API_BASE_URL}/cap-nhat/${formNcc.value.maNcc}`, formNcc.value, { headers: getAuthHeaders() });
+      if (res.data.success) {
+        logActivity("Cập nhật nhà cung cấp", `Đã cập nhật nhà cung cấp ${formNcc.value.tenNcc} (Mã: ${formNcc.value.maNcc})`, "Nhà cung cấp");
+        isModalOpen.value = false;
         Swal.fire({
-            title: 'Lỗi',
-            text: e.response?.data?.message || "Xảy ra lỗi hệ thống khi lưu dữ liệu.",
-            icon: 'error',
-            confirmButtonColor: '#0284c7'
+          title: 'Thành công',
+          text: 'Cập nhật thông tin đối tác thành công!',
+          icon: 'success',
+          confirmButtonColor: '#0284c7'
         });
+      }
+    } else {
+      const res = await axios.post(`${API_BASE_URL}/them-moi`, formNcc.value, { headers: getAuthHeaders() });
+      if (res.data.success) {
+        logActivity("Thêm nhà cung cấp", `Đã thêm nhà cung cấp mới ${formNcc.value.tenNcc} (Mã: ${formNcc.value.maNcc})`, "Nhà cung cấp");
+        isModalOpen.value = false;
+        Swal.fire({
+          title: 'Thành công',
+          text: 'Thêm nhà cung cấp mới thành công!',
+          icon: 'success',
+          confirmButtonColor: '#0284c7'
+        });
+      }
     }
+    await fetchNhaCungCaps();
+  } catch (e: any) {
+    logActivity(
+      isEditMode.value ? "Cập nhật nhà cung cấp" : "Thêm nhà cung cấp",
+      `Thất bại khi ${isEditMode.value ? 'cập nhật' : 'thêm'} nhà cung cấp ${formNcc.value.tenNcc} - Lỗi: ${e.response?.data?.message || e.message || ''}`,
+      "Nhà cung cấp",
+      "Thất bại"
+    );
+    Swal.fire({
+      title: 'Lỗi',
+      text: e.response?.data?.message || "Xảy ra lỗi hệ thống khi lưu dữ liệu.",
+      icon: 'error',
+      confirmButtonColor: '#0284c7'
+    });
+  }
 }
 
 const deleteNcc = async (maNcc: string) => {
-    const targetNcc = listNccAll.value.find(n => n.maNcc === maNcc);
-    const tenNcc = targetNcc ? targetNcc.tenNcc : maNcc;
-    const result = await Swal.fire({
-        title: 'Xác nhận',
-        text: 'Bạn có chắc chắn muốn ngừng hợp tác với đối tác này?',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Đồng ý',
-        cancelButtonText: 'Hủy',
-        confirmButtonColor: '#ef4444',
-        cancelButtonColor: '#64748b'
-    });
-    if (!result.isConfirmed) return;
+  const targetNcc = listNccAll.value.find(n => n.maNcc === maNcc);
+  const tenNcc = targetNcc ? targetNcc.tenNcc : maNcc;
+  const result = await Swal.fire({
+    title: 'Xác nhận',
+    text: 'Bạn có chắc chắn muốn ngừng hợp tác với đối tác này?',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: 'Đồng ý',
+    cancelButtonText: 'Hủy',
+    confirmButtonColor: '#ef4444',
+    cancelButtonColor: '#64748b'
+  });
+  if (!result.isConfirmed) return;
 
-    try {
-        const res = await axios.delete(`${API_BASE_URL}/xoa/${maNcc}`, { headers: getAuthHeaders() });
-        logActivity("Xóa nhà cung cấp", `Đã xóa nhà cung cấp ${tenNcc} (Mã: ${maNcc})`, "Nhà cung cấp");
-        Swal.fire({
-            title: 'Thành công',
-            text: res.data.message || 'Thao tác xóa thành công.',
-            icon: 'success',
-            confirmButtonColor: '#0284c7'
-        });
-        await fetchNhaCungCaps();
-    } catch (e: any) {
-        logActivity("Xóa nhà cung cấp", `Thất bại khi xóa nhà cung cấp ${tenNcc} (Mã: ${maNcc}) - Lỗi: ${e.response?.data?.message || e.message || ''}`, "Nhà cung cấp", "Thất bại");
-        Swal.fire({
-            title: 'Lỗi',
-            text: e.response?.data?.message || "Không thể thực hiện thao tác xóa.",
-            icon: 'error',
-            confirmButtonColor: '#0284c7'
-        });
-    }
+  try {
+    const res = await axios.delete(`${API_BASE_URL}/xoa/${maNcc}`, { headers: getAuthHeaders() });
+    logActivity("Xóa nhà cung cấp", `Đã xóa nhà cung cấp ${tenNcc} (Mã: ${maNcc})`, "Nhà cung cấp");
+    Swal.fire({
+      title: 'Thành công',
+      text: res.data.message || 'Thao tác xóa thành công.',
+      icon: 'success',
+      confirmButtonColor: '#0284c7'
+    });
+    await fetchNhaCungCaps();
+  } catch (e: any) {
+    logActivity("Xóa nhà cung cấp", `Thất bại khi xóa nhà cung cấp ${tenNcc} (Mã: ${maNcc}) - Lỗi: ${e.response?.data?.message || e.message || ''}`, "Nhà cung cấp", "Thất bại");
+    Swal.fire({
+      title: 'Lỗi',
+      text: e.response?.data?.message || "Không thể thực hiện thao tác xóa.",
+      icon: 'error',
+      confirmButtonColor: '#0284c7'
+    });
+  }
 }
 
 // Thay đổi trạng thái nhanh trực tiếp trên bảng
 const changeNccStatus = async (ncc: any, newStatus: number) => {
-    try {
-        const payload = { ...ncc, trangThai: newStatus };
-        const res = await axios.put(`${API_BASE_URL}/cap-nhat/${ncc.maNcc}`, payload, { headers: getAuthHeaders() });
-        if (res.data.success) {
-            logActivity(
-                "Đổi trạng thái nhà cung cấp",
-                `Đã chuyển trạng thái nhà cung cấp ${ncc.tenNcc} (Mã: ${ncc.maNcc}) sang ${newStatus === 1 ? 'Đang hoạt động' : 'Ngừng hợp tác'}`,
-                "Nhà cung cấp"
-            );
-            Swal.fire({
-                toast: true,
-                position: 'top-end',
-                icon: 'success',
-                title: 'Cập nhật trạng thái thành công',
-                showConfirmButton: false,
-                timer: 1500,
-                timerProgressBar: true
-            });
-            await fetchNhaCungCaps();
-        }
-    } catch (e: any) {
-        logActivity(
-            "Đổi trạng thái nhà cung cấp",
-            `Thất bại khi chuyển trạng thái nhà cung cấp ${ncc.tenNcc} (Mã: ${ncc.maNcc}) sang ${newStatus === 1 ? 'Đang hoạt động' : 'Ngừng hợp tác'} - Lỗi: ${e.message || ''}`,
-            "Nhà cung cấp",
-            "Thất bại"
-        );
-        Swal.fire({
-            title: 'Lỗi',
-            text: 'Không thể cập nhật trạng thái đối tác.',
-            icon: 'error',
-            confirmButtonColor: '#0284c7'
-        });
+  try {
+    const payload = { ...ncc, trangThai: newStatus };
+    const res = await axios.put(`${API_BASE_URL}/cap-nhat/${ncc.maNcc}`, payload, { headers: getAuthHeaders() });
+    if (res.data.success) {
+      logActivity(
+        "Đổi trạng thái nhà cung cấp",
+        `Đã chuyển trạng thái nhà cung cấp ${ncc.tenNcc} (Mã: ${ncc.maNcc}) sang ${newStatus === 1 ? 'Đang hoạt động' : 'Ngừng hợp tác'}`,
+        "Nhà cung cấp"
+      );
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'success',
+        title: 'Cập nhật trạng thái thành công',
+        showConfirmButton: false,
+        timer: 1500,
+        timerProgressBar: true
+      });
+      await fetchNhaCungCaps();
     }
+  } catch (e: any) {
+    logActivity(
+      "Đổi trạng thái nhà cung cấp",
+      `Thất bại khi chuyển trạng thái nhà cung cấp ${ncc.tenNcc} (Mã: ${ncc.maNcc}) sang ${newStatus === 1 ? 'Đang hoạt động' : 'Ngừng hợp tác'} - Lỗi: ${e.message || ''}`,
+      "Nhà cung cấp",
+      "Thất bại"
+    );
+    Swal.fire({
+      title: 'Lỗi',
+      text: 'Không thể cập nhật trạng thái đối tác.',
+      icon: 'error',
+      confirmButtonColor: '#0284c7'
+    });
+  }
 }
 
-// Các danh sách đối tác được lọc động theo Tabs ở Client
+// Danh sách đối tác được lọc động theo Tabs ở Client
 const listNcc = computed(() => {
-    if (statusFilter.value === 'all') return listNccAll.value
-    const statusNum = Number(statusFilter.value)
-    return listNccAll.value.filter(n => n.trangThai === statusNum)
+  if (statusFilter.value === 'all') return listNccAll.value
+  const statusNum = Number(statusFilter.value)
+  return listNccAll.value.filter(n => n.trangThai === statusNum)
 })
 
-// Tính toán các số liệu thống kê cho bộ lọc Tabs
+// Các số liệu thống kê cho bộ lọc Tabs
 const totalPartners = computed(() => listNccAll.value.length)
 const activePartners = computed(() => listNccAll.value.filter(n => n.trangThai === 1).length)
 const inactivePartners = computed(() => listNccAll.value.filter(n => n.trangThai === 0).length)
 
-// Tạo gradient màu sắc cho avatar dựa theo chữ cái đầu
-const getAvatarGradient = (name: string) => {
-    if (!name) return 'from-slate-400 to-slate-500'
-    const charCode = name.charCodeAt(0) + (name.charCodeAt(1) || 0)
-    const gradients = [
-        'from-sky-500 to-blue-600',
-        'from-emerald-500 to-teal-600',
-        'from-violet-500 to-purple-600',
-        'from-rose-500 to-pink-600',
-        'from-amber-500 to-orange-600',
-        'from-cyan-500 to-blue-600',
-        'from-fuchsia-500 to-pink-600',
-    ]
-    return gradients[charCode % gradients.length]
-}
-
 // Lấy chữ cái viết tắt của nhà cung cấp
 const getInitials = (name: string) => {
-    if (!name) return 'NCC'
-    const words = name.trim().split(/\s+/)
-    if (words.length >= 2 && words[0] && words[1]) {
-        const first = words[0][0] || ''
-        const second = words[1][0] || ''
-        return (first + second).toUpperCase()
-    }
-    return name.slice(0, 2).toUpperCase()
+  if (!name) return 'NCC'
+  const words = name.trim().split(/\s+/)
+  if (words.length >= 2 && words[0] && words[1]) {
+    const first = words[0][0] || ''
+    const second = words[1][0] || ''
+    return (first + second).toUpperCase()
+  }
+  return name.slice(0, 2).toUpperCase()
 }
 
-onMounted(fetchNhaCungCaps)
+onMounted(() => {
+  fetchNhaCungCaps();
+  const wrapper = document.querySelector('.page-wrapper');
+  if (wrapper) {
+    wrapper.classList.add('full-width-layout');
+  }
+});
+
+onUnmounted(() => {
+  const wrapper = document.querySelector('.page-wrapper');
+  if (wrapper) {
+    wrapper.classList.remove('full-width-layout');
+  }
+});
 </script>
 
 <template>
-    <div 
-        class="ncc-container min-h-screen w-full flex flex-col p-4 md:p-6 lg:p-8 font-sans antialiased relative transition-colors duration-300"
-        :class="isDarkMode ? 'bg-[#141416] text-slate-100' : 'bg-slate-50 text-slate-800'"
-    >
-        <!-- Header -->
-        <div 
-            class="hd-header flex flex-col sm:flex-row sm:items-center justify-between gap-6 rounded-xl border p-6 mb-6 shadow-xs transition-colors duration-300"
-            :class="isDarkMode ? 'bg-[#1e1e2d] border-slate-700/80' : 'bg-white border-slate-200/90'"
-        >
-            <div class="flex items-center gap-5">
-                <div class="w-14 h-14 md:w-16 md:h-16 rounded-xl bg-gradient-to-br from-sky-500 via-sky-600 to-blue-700 flex items-center justify-center text-white shadow-md shadow-sky-500/25 flex-shrink-0">
-                    <Building2 class="w-7 h-7 md:w-8 md:h-8" />
-                </div>
-                <div>
-                    <h2 class="text-2xl md:text-3xl font-extrabold tracking-tight" :class="isDarkMode ? 'text-white' : 'text-slate-900'">
-                        Quản Lý Nhà Cung Cấp
-                    </h2>
-                    <p class="text-xs md:text-sm mt-1 font-medium" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">
-                        Kiểm soát thông tin và trạng thái hợp tác của các đối tác cung ứng Salon
-                    </p>
-                </div>
-            </div>
-
-            <button 
-                @click="openAddModal" 
-                class="hd-btn-export h-11 px-5 text-xs font-bold rounded-lg transition-all cursor-pointer shadow-xs flex items-center justify-center gap-2"
-            >
-                <Plus class="w-4 h-4" />
-                <span>Thêm Đối Tác</span>
-            </button>
+  <v-container fluid class="pa-6 fill-height align-start" style="min-height: 100vh;">
+    <v-card width="100%" elevation="2" rounded="xl">
+      <v-card-title class="d-flex flex-column flex-md-row align-md-center justify-space-between pa-6">
+        <div>
+          <h2 class="text-h5 font-weight-bold mb-1">Quản Lý Nhà Cung Cấp</h2>
+          <div class="text-subtitle-2 text-medium-emphasis">
+            {{ listNccAll.length }} nhà cung cấp · {{ activePartners }} đang hoạt động
+          </div>
         </div>
 
-        <!-- Filters Grid -->
-        <div 
-            class="hd-filters-grid rounded-xl border p-6 mb-6 shadow-xs transition-colors duration-300"
-            :class="isDarkMode ? 'bg-[#1e1e2d] border-slate-700/80' : 'bg-white border-slate-200/90'"
-        >
-            <div class="flex flex-col gap-2">
-                <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Tìm kiếm đối tác</label>
-                <div class="relative flex items-center">
-                    <Search class="absolute left-4 w-4 h-4 pointer-events-none z-10 text-slate-400" />
-                    <input 
-                        v-model="searchQuery" 
-                        @keyup.enter="fetchNhaCungCaps" 
-                        placeholder="Nhập tên, số điện thoại hoặc mã đối tác..." 
-                        class="hd-input hd-search-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
-                        :class="isDarkMode ? 'dark-mode-input' : 'light-mode-input'"
-                    >
-                </div>
-            </div>
-        </div>
+        <div class="d-flex align-center gap-3 mt-4 mt-md-0 flex-wrap">
+          <v-btn
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            class="text-none font-weight-bold"
+            @click="openAddModal"
+          >
+            <template v-slot:prepend><Plus class="w-4 h-4 mr-1" /></template>
+            Thêm đối tác
+          </v-btn>
 
-        <!-- Tabs -->
-        <div class="flex border-b mb-6 gap-2" :class="isDarkMode ? 'border-slate-700/80' : 'border-slate-200'">
-            <button 
-                @click="statusFilter = 'all'" 
-                class="flex items-center gap-2 px-6 py-3.5 text-xs md:text-sm font-extrabold rounded-t-xl transition-all cursor-pointer border-b-2 -mb-[1px]"
-                :class="statusFilter === 'all' 
-                    ? (isDarkMode ? 'bg-sky-950/60 text-sky-300 border-sky-500' : 'bg-sky-50 text-sky-700 border-sky-600') 
-                    : (isDarkMode ? 'text-slate-400 hover:text-slate-200 hover:bg-[#222233] border-transparent' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border-transparent')"
-            >
-                Tất cả đối tác ({{ totalPartners }})
-            </button>
-            <button 
-                @click="statusFilter = '1'" 
-                class="flex items-center gap-2 px-6 py-3.5 text-xs md:text-sm font-extrabold rounded-t-xl transition-all cursor-pointer border-b-2 -mb-[1px]"
-                :class="statusFilter === '1' 
-                    ? (isDarkMode ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500' : 'bg-emerald-50 text-emerald-700 border-emerald-600') 
-                    : (isDarkMode ? 'text-slate-400 hover:text-slate-200 hover:bg-[#222233] border-transparent' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border-transparent')"
-            >
+          <v-btn variant="outlined" color="grey-darken-1" size="40" rounded="lg" @click="fetchNhaCungCaps" title="Tải lại">
+            <RotateCcw class="w-5 h-5" />
+          </v-btn>
+        </div>
+      </v-card-title>
+
+      <v-divider></v-divider>
+
+      <!-- ── TOOLBAR ── -->
+      <v-card-text class="pb-0">
+        <v-row dense align="center">
+          <v-col cols="12" md="7">
+            <div class="d-inline-flex pa-1 bg-grey-lighten-4 rounded-lg border gap-1">
+              <v-btn
+                :color="statusFilter === 'all' ? 'primary' : undefined"
+                :variant="statusFilter === 'all' ? 'flat' : 'text'"
+                size="small"
+                rounded="lg"
+                class="text-none font-weight-bold"
+                @click="statusFilter = 'all'"
+              >
+                Tất cả ({{ totalPartners }})
+              </v-btn>
+              <v-btn
+                :color="statusFilter === '1' ? 'success' : undefined"
+                :variant="statusFilter === '1' ? 'flat' : 'text'"
+                size="small"
+                rounded="lg"
+                class="text-none font-weight-bold"
+                @click="statusFilter = '1'"
+              >
                 Đang hoạt động ({{ activePartners }})
-            </button>
-            <button 
-                @click="statusFilter = '0'" 
-                class="flex items-center gap-2 px-6 py-3.5 text-xs md:text-sm font-extrabold rounded-t-xl transition-all cursor-pointer border-b-2 -mb-[1px]"
-                :class="statusFilter === '0' 
-                    ? (isDarkMode ? 'bg-rose-950/60 text-rose-300 border-rose-500' : 'bg-rose-50 text-rose-700 border-rose-600') 
-                    : (isDarkMode ? 'text-slate-400 hover:text-slate-200 hover:bg-[#222233] border-transparent' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 border-transparent')"
-            >
+              </v-btn>
+              <v-btn
+                :color="statusFilter === '0' ? 'error' : undefined"
+                :variant="statusFilter === '0' ? 'flat' : 'text'"
+                size="small"
+                rounded="lg"
+                class="text-none font-weight-bold"
+                @click="statusFilter = '0'"
+              >
                 Ngừng hợp tác ({{ inactivePartners }})
-            </button>
-        </div>
-
-        <!-- Table Section -->
-        <div 
-            class="hd-table-wrapper flex-1 w-full rounded-xl border shadow-xs relative overflow-hidden flex flex-col z-10 min-h-[400px] transition-colors duration-300"
-            :class="isDarkMode ? 'bg-[#1e1e2d] border-slate-700/80' : 'bg-white border-slate-200/90'"
-        >
-            <div v-if="isLoading" class="p-12 text-center text-xs font-extrabold text-sky-600 tracking-wider uppercase">
-                <div class="w-8 h-8 border-3 border-slate-200 border-t-sky-600 rounded-full animate-spin mx-auto mb-3"></div>
-                Đang nạp danh sách đối tác hệ thống...
+              </v-btn>
             </div>
-            
-            <div v-else-if="errorMessage" class="p-6 text-center text-xs font-bold text-rose-500 bg-rose-950/40 border-b border-rose-800">
-                {{ errorMessage }}
-            </div>
-            
-            <div v-else class="flex-grow overflow-x-auto custom-scrollbar">
-                <table class="w-full text-left text-xs md:text-sm border-collapse min-w-[1000px]">
-                    <thead>
-                        <tr :class="isDarkMode ? 'bg-[#252536] text-slate-200 border-b border-slate-700/80' : 'bg-slate-900 text-white'">
-                            <th class="py-4 px-6 font-extrabold uppercase tracking-wider w-36 whitespace-nowrap">Mã Đối Tác</th>
-                            <th class="py-4 px-6 font-extrabold uppercase tracking-wider min-w-[280px] whitespace-nowrap">Tên Nhà Cung Cấp</th>
-                            <th class="py-4 px-6 font-extrabold uppercase tracking-wider w-44 whitespace-nowrap">Số Điện Thoại</th>
-                            <th class="py-4 px-6 font-extrabold uppercase tracking-wider w-52 whitespace-nowrap">Email</th>
-                            <th class="py-4 px-6 font-extrabold uppercase tracking-wider w-60 whitespace-nowrap">Địa Chỉ</th>
-                            <th class="py-4 px-6 font-extrabold uppercase tracking-wider w-44 text-center whitespace-nowrap">Trạng Thái</th>
-                            <th class="py-4 px-4 font-extrabold uppercase tracking-wider w-28 text-center whitespace-nowrap">Thao Tác</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y" :class="isDarkMode ? 'divide-slate-800/80' : 'divide-slate-100'">
-                        <tr 
-                            v-for="ncc in listNcc" 
-                            :key="ncc.maNcc"
-                            class="transition-colors duration-150"
-                            :class="isDarkMode ? 'hover:bg-slate-800/60 text-slate-200' : 'hover:bg-sky-50/60 text-slate-700'"
-                        >
-                            <td class="py-4 px-6 font-extrabold font-mono text-xs text-sky-500 whitespace-nowrap">
-                                {{ ncc.maNcc }}
-                            </td>
-                            
-                            <td class="py-4 px-6 font-bold min-w-[280px]" :class="isDarkMode ? 'text-white' : 'text-slate-900'">
-                                <div class="flex items-center gap-3">
-                                    <div :class="`avatar-circle bg-gradient-to-tr ${getAvatarGradient(ncc.tenNcc)}`" class="w-9 h-9 rounded-full flex items-center justify-center font-black text-white text-xs flex-shrink-0 shadow-xs">
-                                        {{ getInitials(ncc.tenNcc) }}
-                                    </div>
-                                    <span class="leading-snug">{{ ncc.tenNcc }}</span>
-                                </div>
-                            </td>
-                            
-                            <td class="py-4 px-6 font-medium text-xs font-mono whitespace-nowrap">
-                                <span v-if="ncc.soDienThoai" class="inline-flex items-center gap-1.5" :class="isDarkMode ? 'text-slate-300' : 'text-slate-700'">
-                                    <Phone class="w-3.5 h-3.5 text-sky-500" />
-                                    {{ ncc.soDienThoai }}
-                                </span>
-                                <span v-else class="italic opacity-50" :class="isDarkMode ? 'text-slate-500' : 'text-slate-400'">Chưa cập nhật</span>
-                            </td>
-                            
-                            <td class="py-4 px-6 text-xs whitespace-nowrap">
-                                <span v-if="ncc.email" class="inline-flex items-center gap-1.5" :class="isDarkMode ? 'text-slate-300' : 'text-slate-700'">
-                                    <Mail class="w-3.5 h-3.5 text-sky-500" />
-                                    {{ ncc.email }}
-                                </span>
-                                <span v-else class="italic opacity-50" :class="isDarkMode ? 'text-slate-500' : 'text-slate-400'">Chưa cập nhật</span>
-                            </td>
-                            
-                            <td class="py-4 px-6 text-xs max-w-[240px] truncate">
-                                <span v-if="ncc.diaChi" class="inline-flex items-center gap-1.5 truncate" :title="ncc.diaChi" :class="isDarkMode ? 'text-slate-300' : 'text-slate-700'">
-                                    <MapPin class="w-3.5 h-3.5 text-sky-500 shrink-0" />
-                                    <span class="truncate">{{ ncc.diaChi }}</span>
-                                </span>
-                                <span v-else class="italic opacity-50" :class="isDarkMode ? 'text-slate-500' : 'text-slate-400'">Chưa cập nhật</span>
-                            </td>
-                            
-                            <td class="py-4 px-6 text-center whitespace-nowrap">
-                                <div class="relative flex items-center justify-center">
-                                    <select 
-                                        :value="ncc.trangThai" 
-                                        @change="changeNccStatus(ncc, Number(($event.target as HTMLSelectElement).value))" 
-                                        class="hd-status-select text-xs font-extrabold rounded-lg px-3 py-1.5 outline-none cursor-pointer transition-all box-border border"
-                                        :class="[
-                                            ncc.trangThai === 1 ? (isDarkMode ? 'dark-status-completed' : 'light-status-completed') : (isDarkMode ? 'dark-status-canceled' : 'light-status-canceled'),
-                                            isDarkMode ? 'dark-status-dropdown' : 'light-status-dropdown'
-                                        ]"
-                                    >
-                                        <option :value="1" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'bg-white text-slate-800'">Đang hoạt động</option>
-                                        <option :value="0" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'bg-white text-slate-800'">Ngừng hợp tác</option>
-                                    </select>
-                                </div>
-                            </td>
-                            
-                            <td class="py-4 px-4 text-center whitespace-nowrap">
-                                <div class="flex items-center justify-center gap-2">
-                                    <button 
-                                        @click="openEditModal(ncc)" 
-                                        title="Chỉnh sửa thông tin đối tác"
-                                        class="w-8 h-8 rounded-lg border flex items-center justify-center transition-all cursor-pointer shadow-2xs"
-                                        :class="isDarkMode ? 'bg-[#2b2b36] border-slate-700 hover:border-sky-500 text-sky-400' : 'bg-white border-slate-200 hover:border-sky-400 text-sky-600 hover:bg-sky-50'"
-                                    >
-                                        <Edit3 class="w-4 h-4" />
-                                    </button>
-                                    <button 
-                                        @click="deleteNcc(ncc.maNcc)" 
-                                        title="Xóa nhà cung cấp"
-                                        class="w-8 h-8 rounded-lg border flex items-center justify-center transition-all cursor-pointer shadow-2xs"
-                                        :class="isDarkMode ? 'bg-[#2b2b36] border-slate-700 hover:border-rose-500 text-rose-400' : 'bg-white border-slate-200 hover:border-rose-400 text-rose-600 hover:bg-rose-50'"
-                                    >
-                                        <Trash2 class="w-4 h-4" />
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
+          </v-col>
 
-                        <!-- Empty State -->
-                        <tr v-if="listNcc.length === 0">
-                            <td colspan="7" class="p-12 text-center text-slate-500">
-                                <div class="flex flex-col items-center gap-2 max-w-sm mx-auto">
-                                    <Building2 class="w-8 h-8 text-slate-400 stroke-[1.5px]" />
-                                    <span class="font-extrabold text-sm" :class="isDarkMode ? 'text-slate-300' : 'text-slate-700'">Không có dữ liệu đối tác nào</span>
-                                    <span class="text-xs" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">Không tìm thấy nhà cung cấp nào trùng khớp với bộ lọc tìm kiếm.</span>
-                                </div>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- Detail/Edit Modal (Thiết kế lại rộng rãi max-w-2xl, lề lùi px-8 md:px-10 thông thoáng) -->
-    <Teleport to="body">
-        <div 
-            v-if="isModalOpen" 
-            class="fixed inset-0 z-[2500] flex items-center justify-center p-4 md:p-6 bg-slate-950/80 backdrop-blur-md transition-all"
-            @click="isModalOpen = false"
-        >
-            <div 
-                class="act-modal-container relative w-full max-w-2xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col transition-all duration-300"
-                :class="isDarkMode ? 'bg-[#1b1b28] border-slate-700/80 text-slate-100' : 'bg-white border-slate-200 text-slate-800'"
-                @click.stop
+          <v-col cols="12" md="5">
+            <v-text-field
+              v-model="searchQuery"
+              label="Tìm theo tên, SĐT hoặc mã..."
+              variant="outlined"
+              density="compact"
+              hide-details
+              clearable
+              rounded="lg"
+              @keyup.enter="fetchNhaCungCaps"
+              @click:clear="fetchNhaCungCaps"
             >
-                <!-- Modal Header (Lề lùi px-8 md:px-10) -->
-                <div 
-                    class="px-8 md:px-10 py-5 border-b flex items-center justify-between relative overflow-hidden transition-colors"
-                    :class="isDarkMode ? 'bg-[#242436] border-slate-700/80' : 'bg-slate-50 border-slate-200'"
-                >
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-sky-500/20 text-sky-500 flex items-center justify-center font-bold flex-shrink-0">
-                            <Building2 class="w-5 h-5" />
-                        </div>
-                        <div>
-                            <h3 class="font-extrabold text-base md:text-lg tracking-wide" :class="isDarkMode ? 'text-white' : 'text-slate-900'">
-                                {{ isEditMode ? 'Cập Nhật Thông Tin Đối Tác' : 'Thêm Nhà Cung Cấp Mới' }}
-                            </h3>
-                            <p class="text-xs mt-0.5" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">
-                                {{ isEditMode ? 'Điền các trường thông tin bên dưới để sửa hồ sơ đối tác' : 'Tạo mới hồ sơ nhà cung cấp dịch vụ sản phẩm Salon' }}
-                            </p>
-                        </div>
-                    </div>
-                    <button 
-                        @click="isModalOpen = false" 
-                        class="w-9 h-9 rounded-lg flex items-center justify-center transition-all cursor-pointer"
-                        :class="isDarkMode ? 'text-slate-400 hover:text-white hover:bg-slate-800' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200'"
-                    >
-                        <X class="w-5 h-5" />
-                    </button>
+              <template v-slot:prepend-inner>
+                <Search class="w-5 h-5 text-grey-darken-1 mr-2" />
+              </template>
+            </v-text-field>
+          </v-col>
+        </v-row>
+      </v-card-text>
+
+      <v-alert v-if="errorMessage" type="error" variant="tonal" class="ma-6 mb-0" border="start">
+        {{ errorMessage }}
+      </v-alert>
+
+      <!-- ── TABLE ── -->
+      <v-data-table
+        :items="listNcc"
+        :loading="isLoading"
+        items-per-page="10"
+        item-value="maNcc"
+        hover
+        class="mt-2"
+        items-per-page-text="Số mục mỗi trang:"
+        page-text="{0} - {1} trên tổng số {2} đối tác"
+      >
+        <template v-slot:item.maNcc="{ item }">
+          <span class="text-caption font-weight-bold code-chip">{{ item.maNcc }}</span>
+        </template>
+
+        <template v-slot:item.tenNcc="{ item }">
+          <div class="d-flex align-center gap-2.5 py-1">
+            <v-avatar size="32" color="primary" class="font-weight-bold text-white text-caption">
+              {{ getInitials(item.tenNcc) }}
+            </v-avatar>
+            <span class="font-weight-bold">{{ item.tenNcc }}</span>
+          </div>
+        </template>
+
+        <template v-slot:item.soDienThoai="{ item }">
+          <span v-if="item.soDienThoai" class="d-inline-flex align-center gap-1.5 font-mono text-caption">
+            <Phone class="w-3.5 h-3.5 text-primary" />
+            {{ item.soDienThoai }}
+          </span>
+          <span v-else class="text-medium-emphasis font-italic text-caption">Chưa cập nhật</span>
+        </template>
+
+        <template v-slot:item.email="{ item }">
+          <span v-if="item.email" class="d-inline-flex align-center gap-1.5 text-caption">
+            <Mail class="w-3.5 h-3.5 text-primary" />
+            {{ item.email }}
+          </span>
+          <span v-else class="text-medium-emphasis font-italic text-caption">Chưa cập nhật</span>
+        </template>
+
+        <template v-slot:item.diaChi="{ item }">
+          <span v-if="item.diaChi" class="d-inline-flex align-center gap-1.5 text-caption truncate max-w-[240px]" :title="item.diaChi">
+            <MapPin class="w-3.5 h-3.5 text-primary shrink-0" />
+            <span class="truncate">{{ item.diaChi }}</span>
+          </span>
+          <span v-else class="text-medium-emphasis font-italic text-caption">Chưa cập nhật</span>
+        </template>
+
+        <template v-slot:item.trangThai="{ item }">
+          <v-chip
+            :color="item.trangThai === 1 ? 'success' : 'error'"
+            size="small"
+            variant="tonal"
+            class="font-weight-bold cursor-pointer status-badge px-3"
+            @click="changeNccStatus(item, item.trangThai === 1 ? 0 : 1)"
+          >
+            <span class="status-pulse-dot mr-1.5" :class="item.trangThai === 1 ? 'bg-success' : 'bg-error'"></span>
+            {{ item.trangThai === 1 ? "Đang hoạt động" : "Ngừng hợp tác" }}
+          </v-chip>
+        </template>
+
+        <template v-slot:item.actions="{ item }">
+          <div class="d-flex align-center justify-center gap-1">
+            <v-btn icon variant="text" size="small" color="primary" title="Chỉnh sửa thông tin đối tác" @click="openEditModal(item)">
+              <Edit3 class="w-4 h-4" />
+            </v-btn>
+            <v-btn icon variant="text" size="small" color="error" title="Xóa nhà cung cấp" @click="deleteNcc(item.maNcc)">
+              <Trash2 class="w-4 h-4" />
+            </v-btn>
+          </div>
+        </template>
+      </v-data-table>
+    </v-card>
+
+    <!-- ══ MODAL SỬA/THÊM NHÀ CUNG CẤP ══════════════════════════════ -->
+    <v-dialog v-model="isModalOpen" max-width="600" scrollable>
+      <v-card rounded="xl">
+        <v-card-title class="pa-6 border-b d-flex align-center justify-space-between">
+          <div class="text-h6 font-weight-bold">
+            {{ isEditMode ? 'Cập Nhật Thông Tin Đối Tác' : 'Thêm Nhà Cung Cấp Mới' }}
+          </div>
+          <v-btn icon variant="text" size="small" @click="isModalOpen = false">
+            <X class="w-5 h-5" />
+          </v-btn>
+        </v-card-title>
+
+        <v-card-text class="pa-6">
+          <v-form @submit.prevent="saveNcc">
+            <v-row>
+              <v-col cols="12" sm="6">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Mã nhà cung cấp *</div>
+                <v-text-field
+                  v-model="formNcc.maNcc"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                  :disabled="isEditMode"
+                  placeholder="VD: LOREAL_VN"
+                  maxlength="30"
+                  :error-messages="errors.maNcc"
+                  @update:model-value="errors.maNcc = ''"
+                ></v-text-field>
+              </v-col>
+
+              <v-col cols="12" sm="6">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Trạng thái hợp tác</div>
+                <div class="d-flex ga-1 pa-1 bg-grey-lighten-4 rounded-lg border">
+                  <v-btn
+                    :color="formNcc.trangThai === 1 ? 'success' : undefined"
+                    :variant="formNcc.trangThai === 1 ? 'flat' : 'text'"
+                    size="small"
+                    rounded="lg"
+                    class="flex-1 text-none font-weight-bold"
+                    @click="formNcc.trangThai = 1"
+                  >
+                    <span class="d-inline-block rounded-circle bg-white mr-1" style="width: 6px; height: 6px;"></span>
+                    Đang hoạt động
+                  </v-btn>
+                  <v-btn
+                    :color="formNcc.trangThai === 0 ? 'error' : undefined"
+                    :variant="formNcc.trangThai === 0 ? 'flat' : 'text'"
+                    size="small"
+                    rounded="lg"
+                    class="flex-1 text-none font-weight-bold"
+                    @click="formNcc.trangThai = 0"
+                  >
+                    <span class="d-inline-block rounded-circle bg-white mr-1" style="width: 6px; height: 6px;"></span>
+                    Ngừng hợp tác
+                  </v-btn>
                 </div>
+              </v-col>
 
-                <!-- Modal Body (Bố cục rộng rãi 2 cột cân đối, cách xa viền 2 bên px-8 md:px-10) -->
-                <div class="p-8 md:px-10 md:py-8 flex flex-col gap-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
-                    
-                    <!-- Hàng 1: Mã NCC & Trạng Thái Hợp Tác -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <div class="flex flex-col gap-2">
-                            <div class="flex justify-between items-center">
-                                <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
-                                    Mã Nhà Cung Cấp <span class="text-rose-500">*</span>
-                                </label>
-                                <span v-if="!isEditMode" class="text-[10px] font-bold font-mono opacity-60" :class="formNcc.maNcc.length >= 25 ? 'text-rose-500' : (isDarkMode ? 'text-slate-400' : 'text-slate-500')">
-                                    {{ formNcc.maNcc.length }}/30
-                                </span>
-                            </div>
-                            <input 
-                                type="text" 
-                                v-model="formNcc.maNcc" 
-                                :disabled="isEditMode" 
-                                maxlength="30"
-                                placeholder="Ví dụ: LOREAL_VN" 
-                                class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border disabled:opacity-60 disabled:cursor-not-allowed"
-                                :class="[
-                                    isDarkMode ? 'dark-mode-input' : 'light-mode-input',
-                                    errors.maNcc ? 'border-rose-500!' : ''
-                                ]"
-                            >
-                            <p v-if="errors.maNcc" class="text-xs font-semibold text-rose-500 mt-0.5">{{ errors.maNcc }}</p>
-                        </div>
+              <v-col cols="12">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Tên nhà cung cấp *</div>
+                <v-text-field
+                  v-model="formNcc.tenNcc"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                  placeholder="Nhập tên công ty hoặc thương hiệu..."
+                  maxlength="50"
+                  :error-messages="errors.tenNcc"
+                  @update:model-value="errors.tenNcc = ''"
+                ></v-text-field>
+              </v-col>
 
-                        <div class="flex flex-col gap-2">
-                            <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Trạng Thái Hợp Tác</label>
-                            <div class="relative flex items-center">
-                                <select 
-                                    v-model="formNcc.trangThai" 
-                                    class="hd-status-select text-xs md:text-sm font-extrabold rounded-lg px-4 py-2.5 outline-none cursor-pointer transition-all box-border border w-full"
-                                    :class="[
-                                        formNcc.trangThai === 1 ? (isDarkMode ? 'dark-status-completed' : 'light-status-completed') : (isDarkMode ? 'dark-status-canceled' : 'light-status-canceled'),
-                                        isDarkMode ? 'dark-status-dropdown' : 'light-status-dropdown'
-                                    ]"
-                                >
-                                    <option :value="1" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'bg-white text-slate-800'">Đang hoạt động</option>
-                                    <option :value="0" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'bg-white text-slate-800'">Ngừng hợp tác</option>
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Hàng 2: Tên Nhà Cung Cấp -->
-                    <div class="flex flex-col gap-2">
-                        <div class="flex justify-between items-center">
-                            <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
-                                Tên Nhà Cung Cấp <span class="text-rose-500">*</span>
-                            </label>
-                            <span class="text-[10px] font-bold font-mono opacity-60" :class="formNcc.tenNcc.length >= 45 ? 'text-rose-500' : (isDarkMode ? 'text-slate-400' : 'text-slate-500')">
-                                {{ formNcc.tenNcc.length }}/50
-                            </span>
-                        </div>
-                        <input 
-                            type="text" 
-                            v-model="formNcc.tenNcc" 
-                            maxlength="50"
-                            placeholder="Nhập tên công ty hoặc thương hiệu..." 
-                            class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
-                            :class="[
-                                isDarkMode ? 'dark-mode-input' : 'light-mode-input',
-                                errors.tenNcc ? 'border-rose-500!' : ''
-                            ]"
-                        >
-                        <p v-if="errors.tenNcc" class="text-xs font-semibold text-rose-500 mt-0.5">{{ errors.tenNcc }}</p>
-                    </div>
+              <v-col cols="12" sm="6">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Số điện thoại *</div>
+                <v-text-field
+                  v-model="formNcc.soDienThoai"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                  placeholder="Nhập số điện thoại..."
+                  maxlength="11"
+                  :error-messages="errors.soDienThoai"
+                  @update:model-value="errors.soDienThoai = ''"
+                ></v-text-field>
+              </v-col>
 
-                    <!-- Hàng 3: Số điện thoại & Email -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <div class="flex flex-col gap-2">
-                            <div class="flex justify-between items-center">
-                                <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
-                                    Số Điện Thoại <span class="text-rose-500">*</span>
-                                </label>
-                                <span class="text-[10px] font-bold font-mono opacity-60" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">
-                                    {{ formNcc.soDienThoai.length }}/11
-                                </span>
-                            </div>
-                            <input 
-                                type="text" 
-                                v-model="formNcc.soDienThoai" 
-                                @input="formNcc.soDienThoai = formNcc.soDienThoai.replace(/\D/g, '')"
-                                maxlength="11"
-                                placeholder="Nhập số điện thoại..." 
-                                class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
-                                :class="[
-                                    isDarkMode ? 'dark-mode-input' : 'light-mode-input',
-                                    errors.soDienThoai ? 'border-rose-500!' : ''
-                                ]"
-                            >
-                            <p v-if="errors.soDienThoai" class="text-xs font-semibold text-rose-500 mt-0.5">{{ errors.soDienThoai }}</p>
-                        </div>
+              <v-col cols="12" sm="6">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Email đại diện *</div>
+                <v-text-field
+                  v-model="formNcc.email"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                  placeholder="partner@domain.com"
+                  maxlength="100"
+                  :error-messages="errors.email"
+                  @update:model-value="errors.email = ''"
+                ></v-text-field>
+              </v-col>
 
-                        <div class="flex flex-col gap-2">
-                            <div class="flex justify-between items-center">
-                                <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
-                                    Email Đại Diện <span class="text-rose-500">*</span>
-                                </label>
-                                <span class="text-[10px] font-bold font-mono opacity-60" :class="formNcc.email.length >= 90 ? 'text-rose-500' : (isDarkMode ? 'text-slate-400' : 'text-slate-500')">
-                                    {{ formNcc.email.length }}/100
-                                </span>
-                            </div>
-                            <input 
-                                type="text" 
-                                v-model="formNcc.email" 
-                                maxlength="100"
-                                placeholder="partner@domain.com" 
-                                class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
-                                :class="[
-                                    isDarkMode ? 'dark-mode-input' : 'light-mode-input',
-                                    errors.email ? 'border-rose-500!' : ''
-                                ]"
-                            >
-                            <p v-if="errors.email" class="text-xs font-semibold text-rose-500 mt-0.5">{{ errors.email }}</p>
-                        </div>
-                    </div>
+              <v-col cols="12">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Địa chỉ văn phòng *</div>
+                <v-text-field
+                  v-model="formNcc.diaChi"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                  placeholder="Số nhà, tên đường, thành phố..."
+                  maxlength="255"
+                  :error-messages="errors.diaChi"
+                  @update:model-value="errors.diaChi = ''"
+                ></v-text-field>
+              </v-col>
+            </v-row>
+          </v-form>
+        </v-card-text>
 
-                    <!-- Hàng 4: Địa chỉ -->
-                    <div class="flex flex-col gap-2">
-                        <div class="flex justify-between items-center">
-                            <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
-                                Địa Chỉ Văn Phòng <span class="text-rose-500">*</span>
-                            </label>
-                            <span class="text-[10px] font-bold font-mono opacity-60" :class="formNcc.diaChi.length >= 240 ? 'text-rose-500' : (isDarkMode ? 'text-slate-400' : 'text-slate-500')">
-                                {{ formNcc.diaChi.length }}/255
-                            </span>
-                        </div>
-                        <input 
-                            type="text" 
-                            v-model="formNcc.diaChi" 
-                            maxlength="255"
-                            placeholder="Số nhà, tên đường, thành phố..." 
-                            class="hd-input w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
-                            :class="[
-                                isDarkMode ? 'dark-mode-input' : 'light-mode-input',
-                                errors.diaChi ? 'border-rose-500!' : ''
-                            ]"
-                        >
-                        <p v-if="errors.diaChi" class="text-xs font-semibold text-rose-500 mt-0.5">{{ errors.diaChi }}</p>
-                    </div>
-
-                </div>
-
-                <!-- Modal Footer (Nút lưu & hủy lề rộng px-8 md:px-10) -->
-                <div 
-                    class="px-8 md:px-10 py-5 border-t flex items-center justify-end gap-3 transition-colors"
-                    :class="isDarkMode ? 'bg-[#242436] border-slate-700/80' : 'bg-slate-50 border-slate-200'"
-                >
-                    <button 
-                        @click="isModalOpen = false" 
-                        class="h-11 px-8 text-xs font-extrabold rounded-lg transition-all cursor-pointer border"
-                        :class="isDarkMode ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'"
-                    >
-                        Hủy
-                    </button>
-                    <button 
-                        @click="saveNcc" 
-                        class="hd-btn-export h-11 px-8 text-xs font-extrabold rounded-lg transition-all cursor-pointer shadow-md"
-                    >
-                        Lưu Dữ Liệu
-                    </button>
-                </div>
-
-            </div>
-        </div>
-    </Teleport>
+        <v-card-actions class="pa-4 px-6 d-flex justify-end border-t">
+          <v-btn variant="outlined" rounded="lg" class="text-none font-weight-bold mr-2" color="grey-darken-2" @click="isModalOpen = false">
+            Hủy
+          </v-btn>
+          <v-btn variant="flat" rounded="lg" class="text-none font-weight-bold" color="primary" @click="saveNcc">
+            Lưu dữ liệu
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+  </v-container>
 </template>
 
 <style scoped>
-/* Enforce dark background on parent containers */
-:global(body.v-theme--dark), 
-:global(.v-theme--dark .v-main),
-:global(.v-theme--dark .v-application) {
-  background-color: #141416 !important;
-}
+.gap-1 { gap: 4px; }
+.gap-2 { gap: 8px; }
+.gap-2\.5 { gap: 10px; }
+.gap-3 { gap: 12px; }
 
-/* Light Mode Input Styling */
-.light-mode-input {
-  background-color: #f8fafc !important;
-  border: 1px solid #cbd5e1 !important;
-  color: #0f172a !important;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03) !important;
-}
-.light-mode-input:focus {
-  background-color: #ffffff !important;
-  border-color: #0284c7 !important;
-  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15) !important;
-}
-
-/* Dark Mode Input Styling */
-.dark-mode-input {
-  background-color: #2b2b36 !important;
-  border: 1px solid #475569 !important;
-  color: #ffffff !important;
-}
-.dark-mode-input:focus {
-  border-color: #38bdf8 !important;
-  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2) !important;
-}
-
-/* Input Dimensions */
-.hd-input {
-  height: 44px !important;
-  border-radius: 8px !important;
-  box-sizing: border-box !important;
-  padding-left: 1rem !important;
-  padding-right: 1rem !important;
-}
-
-.hd-search-input {
-  padding-left: 2.75rem !important;
-}
-
-/* Export / Add Button Styling */
-.hd-btn-export {
-  background-color: #0284c7 !important;
-  color: #ffffff !important;
-  border: 1px solid #0284c7 !important;
-  font-weight: 700 !important;
-}
-.hd-btn-export:hover {
-  background-color: #0369a1 !important;
-  border-color: #0369a1 !important;
-}
-
-/* Status Badge Classes - Light Mode */
-.light-status-completed {
-  background-color: #f0fdf4 !important;
-  color: #16a34a !important;
-  border-color: #bbf7d0 !important;
-}
-.light-status-canceled {
-  background-color: #fef2f2 !important;
-  color: #ef4444 !important;
-  border-color: #fecaca !important;
-}
-
-/* Status Badge Classes - Dark Mode */
-.dark-status-completed {
-  background-color: #052e16 !important;
-  color: #86efac !important;
-  border-color: #166534 !important;
-}
-.dark-status-canceled {
-  background-color: #450a0a !important;
-  color: #fca5a5 !important;
-  border-color: #991b1b !important;
-}
-
-/* Custom styled scrollbars */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #0284c7;
+.cursor-pointer { cursor: pointer; }
+.code-chip {
+  font-family: "Courier New", monospace;
+  background: rgba(0,0,0,0.06);
+  padding: 2px 7px;
   border-radius: 4px;
 }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #0369a1;
+
+.status-badge {
+  transition: all 0.2s ease-in-out;
+}
+.status-badge:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+.status-pulse-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
 }
 </style>

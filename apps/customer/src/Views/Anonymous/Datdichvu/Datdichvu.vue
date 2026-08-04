@@ -309,11 +309,11 @@ const totalOriginalPrice = computed(() => {
 });
 
 /** Tổng giảm & tổng sau giảm (API xếp chồng tối đa 2 mã) */
-const stackPreview = ref({ totalDiscount: 0, finalAmount: 0 });
+const stackPreview = ref({ totalDiscount: 0, memberDiscount: 0, finalAmount: 0 });
 
 const refreshStackPreview = async () => {
-    if (!customerId.value || customerId.value === 'GUEST' || bookingData.value.voucherIds.length === 0) {
-        stackPreview.value = { totalDiscount: 0, finalAmount: subTotal.value };
+    if (!customerId.value || customerId.value === 'GUEST') {
+        stackPreview.value = { totalDiscount: 0, memberDiscount: 0, finalAmount: subTotal.value };
         return;
     }
     try {
@@ -329,10 +329,13 @@ const refreshStackPreview = async () => {
         });
         stackPreview.value = {
             totalDiscount: Number(res.data.totalDiscount) || 0,
+            memberDiscount: Number(res.data.memberDiscount) || 0,
             finalAmount: Number(res.data.finalAmount) ?? Math.max(0, subTotal.value)
         };
-    } catch {
-        stackPreview.value = { totalDiscount: 0, finalAmount: subTotal.value };
+        console.log("preview-voucher-stack response:", res.data, stackPreview.value);
+    } catch (e) {
+        console.error("Lỗi preview voucher:", e);
+        stackPreview.value = { totalDiscount: 0, memberDiscount: 0, finalAmount: subTotal.value };
     }
 };
 
@@ -350,8 +353,9 @@ watch(
 );
 
 const discountAmount = computed(() => stackPreview.value.totalDiscount);
+const memberDiscountAmount = computed(() => stackPreview.value.memberDiscount);
 const totalBill = computed(() => Math.max(0, stackPreview.value.finalAmount));
-const payNow = computed(() => bookingData.value.paymentMode === '10' ? totalBill.value * 0.1 : totalBill.value);
+const payNow = computed(() => bookingData.value.paymentMode === '10' ? subTotal.value * 0.1 : totalBill.value);
 
 function toggleVoucher(id: string) {
     const ids = bookingData.value.voucherIds;
@@ -512,6 +516,7 @@ watch(
 
 watch(
     [
+        () => customerId.value,
         () => bookingData.value.voucherIds.slice(),
         () => subTotal.value,
         () => bookingData.value.bookingDate,
@@ -712,7 +717,7 @@ watch(
                             <div class="heading-line"></div>
                         </div>
 
-                        <div class="voucher-list-modern">
+                        <div v-if="myVouchers.length > 0" class="voucher-list-modern">
                             <div v-for="v in myVouchers" :key="v.id" class="voucher-ticket-item"
                                 :class="{ active: bookingData.voucherIds.includes(v.id) }" @click="toggleVoucher(v.id)">
 
@@ -738,6 +743,9 @@ watch(
                                     <i class="fas fa-check-circle"></i>
                                 </div>
                             </div>
+                        </div>
+                        <div v-else class="text-gray-500 italic mt-3 text-sm font-bold">
+                            Không có voucher nào khả dụng cho đơn hàng của bạn lúc này.
                         </div>
                     </div>
                 </div>
@@ -853,6 +861,11 @@ watch(
                                     <span>{{ subTotal.toLocaleString() }}đ</span>
                                 </div>
 
+                                <div v-if="memberDiscountAmount > 0" class="summary-line saving text-success">
+                                    <span>Giảm giá thành viên:</span>
+                                    <span class="font-bold">-{{ memberDiscountAmount.toLocaleString() }}đ</span>
+                                </div>
+
                                 <div v-if="bookingData.voucherIds.length" class="summary-line saving text-success">
                                     <span>Voucher giảm giá:</span>
                                     <span class="font-bold">-{{ discountAmount.toLocaleString() }}đ</span>
@@ -878,7 +891,7 @@ watch(
                                     <div class="mt-2 text-xs text-gray-500" v-if="bookingData.paymentMode === '10'">
                                         <div class="flex justify-between py-0.5">
                                             <span>+ Tiền cọc dịch vụ (10%):</span>
-                                            <span>{{ (totalBill * 0.1).toLocaleString() }}đ</span>
+                                            <span>{{ (subTotal * 0.1).toLocaleString() }}đ</span>
                                         </div>
                                     </div>
 

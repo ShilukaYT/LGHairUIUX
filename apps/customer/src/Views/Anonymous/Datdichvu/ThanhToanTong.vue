@@ -229,15 +229,18 @@ watch(() => productData.value.address, (newAddress) => {
     }, 1000);
 });
 
-const stackPreview = ref({ totalDiscount: 0, finalAmount: 0 });
+const stackPreview = ref({ totalDiscount: 0, finalAmount: 0, memberDiscount: 0, voucherAmount: 0, memberRankPercent: 0 });
 const discountAmount = computed(() => Number(stackPreview.value.totalDiscount || 0));
+const memberDiscount = computed(() => Number(stackPreview.value.memberDiscount || 0));
+const voucherAmount = computed(() => Number(stackPreview.value.voucherAmount || 0));
+const memberRankPercent = computed(() => Number(stackPreview.value.memberRankPercent || 0));
 const serviceAfterVoucher = computed(() => Math.max(0, serviceSubTotal.value - discountAmount.value));
 const grandTotal = computed(() => Math.max(0, stackPreview.value.finalAmount) + shippingFee.value);
 
 const payNow = computed(() => {
     let servicePayment = serviceAfterVoucher.value;
     if (bookingData.value.paymentMode === '10') {
-        servicePayment = serviceAfterVoucher.value * 0.1;
+        servicePayment = serviceSubTotal.value * 0.1;
     }
     
     const remainingDiscount = Math.max(0, discountAmount.value - serviceSubTotal.value);
@@ -254,9 +257,9 @@ const payNow = computed(() => {
 const remainAtStore = computed(() => {
     let total = 0;
 
-    // Dịch vụ: còn lại 90% khi cọc 10%
+    // Dịch vụ: còn lại sau khi cọc
     if (bookingData.value.selectedServices.length > 0 && bookingData.value.paymentMode === '10') {
-        total += serviceAfterVoucher.value * 0.9;
+        total += Math.max(0, serviceAfterVoucher.value - (serviceSubTotal.value * 0.1));
     }
 
     // Sản phẩm: nhận tại tiệm → trả tại tiệm
@@ -404,8 +407,8 @@ const loadVouchers = async () => {
 };
 
 const refreshStackPreview = async () => {
-    if (!customerId.value || customerId.value === 'GUEST' || bookingData.value.voucherIds.length === 0) {
-        stackPreview.value = { totalDiscount: 0, finalAmount: combinedSubTotal.value };
+    if (!customerId.value || customerId.value === 'GUEST') {
+        stackPreview.value = { totalDiscount: 0, finalAmount: combinedSubTotal.value, memberDiscount: 0, voucherAmount: 0, memberRankPercent: 0 };
         return;
     }
     try {
@@ -422,10 +425,13 @@ const refreshStackPreview = async () => {
         });
         stackPreview.value = {
             totalDiscount: Number(res.data.totalDiscount) || 0,
-            finalAmount: Number(res.data.finalAmount) || combinedSubTotal.value
+            finalAmount: Number(res.data.finalAmount) || combinedSubTotal.value,
+            memberDiscount: Number(res.data.memberDiscount) || 0,
+            voucherAmount: Number(res.data.voucherAmount) || 0,
+            memberRankPercent: Number(res.data.memberRankPercent) || 0
         };
     } catch {
-        stackPreview.value = { totalDiscount: 0, finalAmount: combinedSubTotal.value };
+        stackPreview.value = { totalDiscount: 0, finalAmount: combinedSubTotal.value, memberDiscount: 0, voucherAmount: 0, memberRankPercent: 0 };
     }
 };
 
@@ -513,7 +519,8 @@ const loadAvailableStylists = async () => {
 watch(
     () => [
         bookingData.value.voucherIds.slice(),
-        serviceSubTotal.value,
+        combinedSubTotal.value,
+        customerId.value,
         bookingData.value.bookingDate,
         bookingData.value.selectedServices.map(s => s.id).join(',')
     ],
@@ -1061,7 +1068,7 @@ onMounted(async () => {
                         </div>
 
                         <!-- ƯU ĐÃI: VOUCHER -->
-                        <div v-if="myVouchers.length > 0" class="mt-10">
+                        <div class="mt-10">
                             <div class="section-heading-wrapper">
                                 <h3 class="font-playfair section-heading-title font-bold gold-metallic-text">
                                     <i class="fas fa-ticket-alt me-2"></i> KHO VOUCHER CỦA BẠN
@@ -1069,7 +1076,7 @@ onMounted(async () => {
                                 <div class="heading-line"></div>
                             </div>
 
-                            <div class="voucher-list-modern">
+                            <div v-if="myVouchers.length > 0" class="voucher-list-modern">
                                 <div v-for="v in myVouchers" :key="v.id" class="voucher-ticket-item"
                                     :class="{ active: bookingData.voucherIds.includes(v.id) }" @click="toggleVoucher(v.id)">
                                     
@@ -1094,6 +1101,9 @@ onMounted(async () => {
                                         <i class="fas fa-check-circle"></i>
                                     </div>
                                 </div>
+                            </div>
+                            <div v-else class="text-gray-500 italic mt-3 text-sm font-bold">
+                                Không có voucher nào khả dụng cho đơn hàng của bạn lúc này.
                             </div>
                         </div>
                     </div>
@@ -1349,9 +1359,13 @@ onMounted(async () => {
                                     <span>Phí giao hàng:</span>
                                     <span>{{ formatMoney(shippingFee) }}</span>
                                 </div>
-                                <div class="summary-line saving text-success" v-if="discountAmount > 0">
+                                <div class="summary-line saving text-success" v-if="memberDiscount > 0">
+                                    <span>Giảm giá thành viên ({{ memberRankPercent }}%):</span>
+                                    <span class="font-bold">-{{ formatMoney(memberDiscount) }}</span>
+                                </div>
+                                <div class="summary-line saving text-success" v-if="voucherAmount > 0">
                                     <span>Voucher giảm giá:</span>
-                                    <span class="font-bold">-{{ formatMoney(discountAmount) }}</span>
+                                    <span class="font-bold">-{{ formatMoney(voucherAmount) }}</span>
                                 </div>
                                 <div class="summary-line small text-black font-bold" v-if="bookingData.voucherIds.length">
                                     <span>Mã đã chọn:</span>
@@ -1367,7 +1381,7 @@ onMounted(async () => {
                                     <div class="mt-2 text-xs text-gray-500" v-if="bookingData.selectedServices.length > 0 && bookingData.paymentMode === '10'">
                                         <div class="flex justify-between py-0.5">
                                             <span>+ Tiền cọc dịch vụ (10%):</span>
-                                            <span>{{ formatMoney(serviceAfterVoucher * 0.1) }}</span>
+                                            <span>{{ formatMoney(serviceSubTotal * 0.1) }}</span>
                                         </div>
                                         <div class="flex justify-between py-0.5" v-if="productItems.length > 0 && productData.paymentMethod !== 'cod'">
                                             <span>+ Tiền sản phẩm & ship (100%):</span>

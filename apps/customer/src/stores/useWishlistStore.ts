@@ -3,7 +3,7 @@ import { defineStore } from 'pinia';
 import Swal from 'sweetalert2';
 import { getCustomerInfo } from '@/Views/Anonymous/CSDL/DuLieuNguoiDung';
 
-const showToast = (title: string, icon: 'success' | 'info' | 'error' | 'warning' = 'success') => {
+export const showToast = (title: string, icon: 'success' | 'info' | 'error' | 'warning' = 'success') => {
   Swal.fire({
     toast: true,
     position: 'top-end',

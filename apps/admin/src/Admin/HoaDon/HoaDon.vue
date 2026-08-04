@@ -157,8 +157,8 @@ const statusLabel = (status: number, maHd: string = "") => {
 const changeInvoiceStatus = async (maHd: string, newStatus: number) => {
     const allData = [...hoaDonSanPham.value, ...hoaDonDichVu.value];
     const currentHd = allData.find(h => h.maHd === maHd) || (selectedHd.value && selectedHd.value.maHd === maHd ? selectedHd.value : null);
-    if (currentHd && currentHd.trangThai === 3) {
-        alert("Đơn hàng đã hoàn thành hoặc đã giao hàng. Không thể thay đổi trạng thái khác.");
+    if (currentHd && (currentHd.trangThai === 3 || currentHd.trangThai === 0)) {
+        alert("Đơn hàng đã hoàn thành hoặc đã hủy. Không thể thay đổi trạng thái.");
         return;
     }
 
@@ -485,7 +485,7 @@ const changePage = (p: number) => {
                                 <div class="relative flex items-center justify-center">
                                     <select 
                                         :value="hd.trangThai" 
-                                        :disabled="hd.trangThai === 3" 
+                                        :disabled="hd.trangThai === 3 || hd.trangThai === 0" 
                                         @change="changeInvoiceStatus(hd.maHd, Number(($event.target as HTMLSelectElement).value))" 
                                         class="hd-status-select text-xs font-extrabold rounded-lg px-3 py-1.5 outline-none cursor-pointer transition-all box-border border"
                                         :class="[
@@ -542,7 +542,7 @@ const changePage = (p: number) => {
                         @click="changePage(currentPage - 1)" 
                         :disabled="currentPage === 1" 
                         class="h-8 px-3 text-xs font-bold rounded-lg border disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-2xs flex items-center gap-1 cursor-pointer"
-                        :class="isDarkMode ? 'bg-[#2b2b36] border-slate-700 text-slate-200 hover:border-slate-600' : 'bg-white border-slate-300 text-slate-700 hover:border-slate-400'"
+                        :class="isDarkMode ? '!bg-[#2b2b36] !border-slate-700 !text-slate-200 hover:!border-slate-600' : '!bg-white !border-slate-300 !text-slate-700 hover:!border-slate-400'"
                     >
                         <ChevronLeft class="w-3.5 h-3.5" />
                         <span class="hidden sm:inline">Trước</span>
@@ -553,8 +553,8 @@ const changePage = (p: number) => {
                             v-for="p in visiblePages" 
                             :key="p" 
                             @click="changePage(p)" 
-                            class="w-8 h-8 text-xs font-bold rounded-lg transition-all shadow-2xs flex items-center justify-center cursor-pointer"
-                            :class="currentPage === p ? 'bg-sky-600 text-white font-extrabold shadow-sm' : (isDarkMode ? 'bg-[#2b2b36] text-slate-200 border border-slate-700 hover:border-slate-600' : 'bg-white text-slate-700 border border-slate-300 hover:border-slate-400')"
+                            class="w-8 h-8 text-xs font-bold rounded-lg transition-all shadow-2xs flex items-center justify-center cursor-pointer border"
+                            :class="currentPage === p ? '!bg-sky-600 !text-white font-extrabold shadow-sm !border-sky-600' : (isDarkMode ? '!bg-[#2b2b36] !text-slate-200 !border-slate-700 hover:!border-slate-600' : '!bg-white !text-slate-700 !border-slate-300 hover:!border-slate-400')"
                         >
                             {{ p }}
                         </button>
@@ -564,7 +564,7 @@ const changePage = (p: number) => {
                         @click="changePage(currentPage + 1)" 
                         :disabled="currentPage === totalPages" 
                         class="h-8 px-3 text-xs font-bold rounded-lg border disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-2xs flex items-center gap-1 cursor-pointer"
-                        :class="isDarkMode ? 'bg-[#2b2b36] border-slate-700 text-slate-200 hover:border-slate-600' : 'bg-white border-slate-300 text-slate-700 hover:border-slate-400'"
+                        :class="isDarkMode ? '!bg-[#2b2b36] !border-slate-700 !text-slate-200 hover:!border-slate-600' : '!bg-white !border-slate-300 !text-slate-700 hover:!border-slate-400'"
                     >
                         <span class="hidden sm:inline">Sau</span>
                         <ChevronRight class="w-3.5 h-3.5" />
@@ -710,7 +710,7 @@ const changePage = (p: number) => {
                             <div class="relative flex items-center">
                                 <select 
                                     :value="selectedHd.trangThai" 
-                                    :disabled="selectedHd.trangThai === 3" 
+                                    :disabled="selectedHd.trangThai === 3 || selectedHd.trangThai === 0" 
                                     @change="changeInvoiceStatus(selectedHd.maHd, Number(($event.target as HTMLSelectElement).value))" 
                                     class="hd-status-select text-xs font-extrabold rounded-lg px-4 py-2 outline-none cursor-pointer transition-all box-border border"
                                     :class="[

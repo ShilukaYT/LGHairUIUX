@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import axios from 'axios';
 import { getCustomerInfo } from '@/Views/Anonymous/CSDL/DuLieuNguoiDung';
+import Swal from 'sweetalert2';
 import { Star, Trash2, Camera, X, Search, ChevronLeft, ChevronRight, MessageSquare, ShoppingBag } from 'lucide-vue-next';
 
 // ------------------------------------------
@@ -212,7 +213,13 @@ watch(subTab, async (newTab) => {
 const submitAction = async (order: any) => {
     const ratedProducts = order.products.filter((p: any) => p.rating > 0);
     if (ratedProducts.length === 0) {
-        alert("Vui lòng chọn số sao cho ít nhất một sản phẩm.");
+        Swal.fire({
+            title: 'Opps!',
+            text: 'Vui lòng chọn số sao cho ít nhất một sản phẩm.',
+            icon: 'warning',
+            confirmButtonText: 'Đã hiểu',
+            confirmButtonColor: '#000'
+        });
         return;
     }
 
@@ -241,12 +248,24 @@ const submitAction = async (order: any) => {
         });
 
         if (res.status === 200) {
-            alert('✨ Gửi đánh giá sản phẩm thành công!');
+            Swal.fire({
+                title: 'Thành công!',
+                text: 'Gửi đánh giá sản phẩm thành công!',
+                icon: 'success',
+                confirmButtonText: 'Tuyệt vời',
+                confirmButtonColor: '#000'
+            });
             await loadData();
         }
     } catch (error) {
         console.error("Lỗi khi gửi đánh giá:", error);
-        alert("Có lỗi xảy ra khi gửi đánh giá.");
+        Swal.fire({
+            title: 'Lỗi',
+            text: 'Có lỗi xảy ra khi gửi đánh giá.',
+            icon: 'error',
+            confirmButtonText: 'Đóng',
+            confirmButtonColor: '#000'
+        });
     } finally {
         isSubmitting.value = false;
     }
@@ -254,33 +273,67 @@ const submitAction = async (order: any) => {
 
 // Delete single product review
 const deleteSingleProductReview = async (orderId: string, productId: string) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa đánh giá của sản phẩm này?")) return;
+    const result = await Swal.fire({
+        title: 'Xóa đánh giá?',
+        text: "Bạn có chắc chắn muốn xóa đánh giá của sản phẩm này?",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#000',
+        confirmButtonText: 'Xóa',
+        cancelButtonText: 'Hủy'
+    });
+
+    if (!result.isConfirmed) return;
 
     try {
         const res = await axios.delete(`${API_BASE_URL}/api/DanhGia/delete-product-rating/${orderId}/${productId}`);
         if (res.status === 200) {
-            alert("Đã xóa đánh giá sản phẩm thành công!");
+            Swal.fire({
+                title: 'Đã xóa!',
+                text: 'Đã xóa đánh giá sản phẩm thành công!',
+                icon: 'success',
+                confirmButtonText: 'Tuyệt vời',
+                confirmButtonColor: '#000'
+            });
             await loadData();
         }
     } catch (error) {
         console.error("Lỗi khi xóa đánh giá:", error);
-        alert("Không thể xóa đánh giá.");
+        Swal.fire('Lỗi', 'Không thể xóa đánh giá.', 'error');
     }
 };
 
 // Delete full order product review
 const deleteFullOrderProductReview = async (orderId: string) => {
-    if (!confirm("Xóa toàn bộ đánh giá sản phẩm của đơn hàng này?")) return;
+    const result = await Swal.fire({
+        title: 'Xóa toàn bộ?',
+        text: "Xóa toàn bộ đánh giá sản phẩm của đơn hàng này?",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#000',
+        confirmButtonText: 'Xóa',
+        cancelButtonText: 'Hủy'
+    });
+
+    if (!result.isConfirmed) return;
 
     try {
         const res = await axios.delete(`${API_BASE_URL}/api/DanhGia/delete-order-product-rating/${orderId}`);
         if (res.status === 200) {
-            alert("Đã xóa toàn bộ đánh giá sản phẩm!");
+            Swal.fire({
+                title: 'Đã xóa!',
+                text: 'Đã xóa toàn bộ đánh giá sản phẩm!',
+                icon: 'success',
+                confirmButtonText: 'Tuyệt vời',
+                confirmButtonColor: '#000'
+            });
             await loadData();
         }
     } catch (error) {
         console.error("Lỗi khi xóa đánh giá đơn hàng:", error);
-        alert("Không thể xóa đánh giá đơn hàng.");
+        Swal.fire('Lỗi', 'Không thể xóa đánh giá đơn hàng.', 'error');
     }
 };
 
@@ -387,13 +440,13 @@ const openLightbox = (img: string) => {
                                 <!-- Input comment -->
                                 <div>
                                     <textarea v-model="p.comment" placeholder="Để lại nhận xét về sản phẩm..." rows="2"
-                                        class="w-full bg-white border border-gray-200 focus:border-black outline-none px-4 py-3 text-xs transition-all rounded-none text-black"></textarea>
+                                        class="w-full bg-gray-50 border border-gray-200 focus:border-black focus:bg-white outline-none px-4 py-3 text-xs transition-all rounded-sm text-black resize-none"></textarea>
                                 </div>
 
                                 <!-- Image attachment -->
                                 <div class="flex items-center gap-4 flex-wrap">
                                     <label :for="'prod-file-' + order.id + '-' + p.id"
-                                        class="inline-flex items-center gap-2 px-4 py-2 border border-gray-200 hover:border-black rounded-none cursor-pointer transition-all text-[10px] uppercase tracking-widest text-gray-600 hover:text-black">
+                                        class="inline-flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200 hover:border-black hover:bg-white rounded-sm cursor-pointer transition-all text-[10px] uppercase tracking-widest font-semibold text-gray-700 hover:text-black">
                                         <Camera :size="14" />
                                         {{ p.imagePreview ? 'Thay ảnh' : 'Thêm ảnh' }}
                                     </label>
@@ -402,7 +455,7 @@ const openLightbox = (img: string) => {
 
                                     <!-- Image Preview Thumbnail -->
                                     <div v-if="p.imagePreview"
-                                        class="relative w-12 h-12 border border-gray-200 rounded-none overflow-hidden group">
+                                        class="relative w-14 h-14 border border-gray-200 rounded-sm overflow-hidden group">
                                         <img :src="p.imagePreview" class="w-full h-full object-cover" />
                                         <button @click="removeImage(p)" type="button"
                                             class="absolute inset-0 bg-black/50 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
@@ -417,7 +470,7 @@ const openLightbox = (img: string) => {
                     <!-- Submit action -->
                     <div class="mt-6 pt-5 border-t border-gray-100 flex justify-end">
                         <button @click="submitAction(order)" :disabled="isSubmitting"
-                            class="bg-black text-white px-6 py-2.5 text-[10px] uppercase tracking-widest font-semibold transition-all hover:bg-gray-900 active:scale-[0.98] disabled:opacity-40 rounded-none cursor-pointer">
+                            class="bg-black text-white px-8 py-3 text-[10px] uppercase tracking-widest font-bold transition-all hover:bg-gray-800 active:scale-[0.98] disabled:opacity-40 rounded-sm cursor-pointer shadow-sm">
                             {{ isSubmitting ? 'Đang gửi...' : 'Gửi đánh giá' }}
                         </button>
                     </div>

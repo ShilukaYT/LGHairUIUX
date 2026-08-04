@@ -4,7 +4,7 @@ import {
     Search, UserCheck, X, Clock, Users,
     Plus, Trash2, ChevronLeft, ChevronRight,
     Calendar as CalendarIcon, CheckCircle2, Phone,
-    Camera, Mail, Package, Minus, ShoppingCart, RefreshCw, CreditCard
+    Camera, Mail, Package, Minus, ShoppingCart, RefreshCw, CreditCard, Info
 } from 'lucide-vue-next'
 import axios from 'axios'
 import { toast } from 'vue-sonner'
@@ -22,6 +22,7 @@ const stylists = ref<any[]>([])
 const isLoading = ref(false)
 const selectedAppointment = ref<any>(null)
 const selectedStylistId = ref<string | null>(null)
+const selectedConsultantId = ref<string | null>(null)
 
 // MẶC ĐỊNH LUÔN CHỌN TIỀN MẶT
 const selectedPaymentMethod = ref<string>('tienmat') 
@@ -76,7 +77,8 @@ const productSuggestions = computed(() => {
             fullName: p.tenSanPham || 'Sản phẩm không tên',
             price: Number(p.gia || 0),
             image: p.hinhAnh,
-            soLuongTon: p.soLuongTon || 0
+            soLuongTon: p.soLuongTon || 0,
+            phanTramHoaHong: p.phanTramHoaHong || 0
         });
     });
     
@@ -114,6 +116,53 @@ const amountToPay = computed(() => {
     return Math.max(0, total - discount - prePaid);
 });
 
+const memberDiscountAmount = computed(() => {
+    if (!selectedAppointment.value || !selectedAppointment.value.phanTramGiamVip) return 0;
+    return Math.round(selectedAppointment.value.tongTien * (selectedAppointment.value.phanTramGiamVip / 100));
+});
+
+const voucherDiscountAmount = computed(() => {
+    if (!selectedAppointment.value) return 0;
+    const totalDiscount = Number(selectedAppointment.value.tienGiam || 0);
+    return Math.max(0, totalDiscount - memberDiscountAmount.value);
+});
+
+const serviceCommissionAmount = computed(() => {
+    if (!selectedAppointment.value || !selectedAppointment.value.dichVus) return 0;
+    return selectedAppointment.value.dichVus.reduce((sum: number, s: any) => {
+        const phanTram = Number(s.phanTramHoaHong || 0);
+        const gia = Number(s.gia || s.Price || 0);
+        return sum + Math.round(gia * phanTram / 100);
+    }, 0);
+});
+
+const productCommissionAmount = computed(() => {
+    if (!selectedAppointment.value || !selectedAppointment.value.sanPhams) return 0;
+    return selectedAppointment.value.sanPhams.reduce((sum: number, p: any) => {
+        const phanTram = Number(p.phanTramHoaHong || 0);
+        const gia = Number(p.gia || 0);
+        const soLuong = Number(p.soLuong || 1);
+        return sum + Math.round(gia * soLuong * phanTram / 100);
+    }, 0);
+});
+
+const commissionNotice = computed(() => {
+    if (!selectedStylistId.value) return '';
+    const stylist = stylists.value.find(s => s.id === selectedStylistId.value);
+    const stylistName = stylist ? stylist.name : 'Stylist';
+    
+    const svcAmount = serviceCommissionAmount.value.toLocaleString() + 'đ';
+    const prodAmount = productCommissionAmount.value.toLocaleString() + 'đ';
+    const totalAmount = (serviceCommissionAmount.value + productCommissionAmount.value).toLocaleString() + 'đ';
+    
+    if (selectedConsultantId.value) {
+        const consultant = stylists.value.find(s => s.id === selectedConsultantId.value);
+        const consultantName = consultant ? consultant.name : 'Nhân viên';
+        return `Hoa hồng: ${stylistName} nhận ${svcAmount} (Dịch vụ) - ${consultantName} nhận ${prodAmount} (Sản phẩm)`;
+    }
+    return `Hoa hồng: ${stylistName} nhận ${totalAmount} (Dịch vụ & Sản phẩm)`;
+});
+
 // --- Lọc dữ liệu ---
 const filteredData = computed(() => {
     return appointments.value.filter(a => {
@@ -135,13 +184,18 @@ const fetchData = async () => {
     try {
         const [resList, resStylists, resServices, resProducts] = await Promise.all([
             axios.get(`${API_BASE_URL}/get-checkout-list`, { params: { date: filterDate.value } }),
-            axios.get(`${API}/api/DatDichVu/get-stylists`),
+            axios.get(`${API}/api/NhanVien`, { params: { trangThai: 1 } }),
             axios.get(`${API}/api/CheckIn/all-services-combos`),
             // THÊM API TẢI SẢN PHẨM VÀO ĐÂY
             axios.get(`${API_BASE_URL}/get-all-products`) 
         ]);
         appointments.value = resList.data;
-        stylists.value = resStylists.data;
+        stylists.value = resStylists.data.map((nv: any) => ({
+            id: nv.maNv,
+            name: nv.hoTenNv,
+            role: nv.tenLoaiNv,
+            img: nv.hinhAnh || "https://i.pravatar.cc/150"
+        }));
         allServicesFromApi.value = resServices.data;
         allProductsFromApi.value = resProducts.data; // Lưu lại danh sách sản phẩm
     } catch (error) {
@@ -162,6 +216,7 @@ const setSelectedAppointment = async (appt: any) => {
             selectedAppointment.value = res.data;
             selectedStylistId.value = res.data.maNv ? String(res.data.maNv) : null;
             originalStylistId.value = res.data.maNv ? String(res.data.maNv) : null;
+            selectedConsultantId.value = null;
             originalServices.value = JSON.parse(JSON.stringify(res.data.dichVus ?? []));
             originalProducts.value = JSON.parse(JSON.stringify(res.data.sanPhams ?? []));
         }
@@ -181,6 +236,7 @@ const handleScanData = async (qrData: string) => {
             selectedAppointment.value = res.data;
             selectedStylistId.value = res.data.maNv ? String(res.data.maNv) : null;
             originalStylistId.value = res.data.maNv ? String(res.data.maNv) : null;
+            selectedConsultantId.value = null;
             originalServices.value = JSON.parse(JSON.stringify(res.data.dichVus ?? []));
             originalProducts.value = JSON.parse(JSON.stringify(res.data.sanPhams ?? []));
             toast.success("Đã tìm thấy hóa đơn từ QR Code!");
@@ -255,8 +311,9 @@ const addProduct = (prod: any) => {
         selectedAppointment.value.sanPhams.push({
             id: prod.id,
             ten: productName,
+            gia: Number(prod.price || 0),
             soLuong: 1,
-            gia: Number(prod.price || 0)
+            phanTramHoaHong: prod.phanTramHoaHong || 0
         });
         toast.success(`Đã thêm sản phẩm: ${productName}`);
     }
@@ -553,10 +610,20 @@ watch(filterDate, fetchData);
                             </div>
                         </div>
 
-                        <!-- Stylist -->
-                        <div>
-                            <label class="text-[10px] font-weight-bold text-medium-emphasis uppercase d-block mb-1.5">Stylist phục vụ</label>
-                            <v-select v-model="selectedStylistId" :items="stylists" item-title="name" item-value="id" variant="outlined" density="compact" hide-details color="primary" />
+                        <!-- Stylist & Consultant -->
+                        <div class="d-flex gap-2">
+                            <div class="flex-1">
+                                <label class="text-[10px] font-weight-bold text-medium-emphasis uppercase d-block mb-1.5">NV hưởng HH Dịch vụ</label>
+                                <v-select v-model="selectedStylistId" :items="stylists" item-title="name" item-value="id" variant="outlined" density="compact" hide-details color="primary" />
+                            </div>
+                            <div class="flex-1">
+                                <label class="text-[10px] font-weight-bold text-medium-emphasis uppercase d-block mb-1.5">NV hưởng HH Sản phẩm</label>
+                                <v-select v-model="selectedConsultantId" :items="stylists" item-title="name" item-value="id" variant="outlined" density="compact" hide-details color="secondary" clearable placeholder="Không có (NV Dịch vụ hưởng hết)" />
+                            </div>
+                        </div>
+                        <div v-if="commissionNotice" class="mt-2 pa-2 rounded text-caption font-weight-medium border d-flex align-center" style="background-color: #eef2ff; color: #4338ca; border-color: #e0e7ff;">
+                            <Info class="w-4 h-4 mr-1 flex-shrink-0" />
+                            <span style="line-height: 1.2;">{{ commissionNotice }}</span>
                         </div>
 
                         <v-divider class="my-2" />
@@ -668,9 +735,13 @@ watch(filterDate, fetchData);
                                 <span class="text-medium-emphasis font-weight-bold">Tiền sản phẩm:</span>
                                 <span class="font-weight-bold summary-price-text">{{ productTotal.toLocaleString() }}đ</span>
                             </div>
-                            <div v-if="selectedAppointment.voucher && selectedAppointment.tienGiam > 0" class="d-flex align-center justify-space-between text-body-2 text-error mb-1">
+                            <div v-if="memberDiscountAmount > 0" class="d-flex align-center justify-space-between text-body-2 text-error mb-1">
+                                <span class="font-weight-bold">Hạng thành viên ({{ selectedAppointment.phanTramGiamVip }}%):</span>
+                                <span class="font-weight-bold summary-price-text">-{{ memberDiscountAmount.toLocaleString() }}đ</span>
+                            </div>
+                            <div v-if="selectedAppointment.voucher && voucherDiscountAmount > 0" class="d-flex align-center justify-space-between text-body-2 text-error mb-1">
                                 <span class="font-weight-bold">Voucher ({{ selectedAppointment.voucher }}):</span>
-                                <span class="font-weight-bold">-{{ selectedAppointment.tienGiam.toLocaleString() }}đ</span>
+                                <span class="font-weight-bold summary-price-text">-{{ voucherDiscountAmount.toLocaleString() }}đ</span>
                             </div>
                             <div v-if="selectedAppointment.daThanhToan > 0" class="d-flex align-center justify-space-between text-body-2 text-success mb-3">
                                 <span class="font-weight-bold">Đã thanh toán (Cọc):</span>

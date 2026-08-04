@@ -162,7 +162,7 @@ const filteredProducts = computed(() => {
 // LOGIC VOUCHER 
 // ==========================================
 const myVouchers = ref<any[]>([]);
-const stackPreview = ref({ totalDiscount: 0, finalAmount: 0 });
+const stackPreview = ref({ totalDiscount: 0, finalAmount: 0, memberDiscount: 0, voucherAmount: 0, memberRankPercent: 0 });
 
 
 
@@ -210,8 +210,8 @@ const loadVouchers = async () => {
     if (!customer.maKH || customer.maKH === 'GUEST') return;
     try {
         const productIds = productItems.value.map(p => p.id).join(',');
-        const res = await axios.get(`${API}/api/DatDichVu/get-my-vouchers/${customer.maKH}`, {
-            params: { subTotal: subTotal.value, serviceIds: productIds }
+        const res = await axios.get(`${API}/api/ThanhToanSanPham/get-my-vouchers/${customer.maKH}`, {
+            params: { subTotal: subTotal.value, productIds: productIds }
         });
         myVouchers.value = res.data;
         orderData.value.voucherIds = orderData.value.voucherIds.filter(id => myVouchers.value.some(v => v.id === id));
@@ -221,26 +221,29 @@ const loadVouchers = async () => {
 };
 
 const refreshStackPreview = async () => {
-    if (!customer.maKH || customer.maKH === 'GUEST' || orderData.value.voucherIds.length === 0) {
-        stackPreview.value = { totalDiscount: 0, finalAmount: subTotal.value + shippingFee.value };
+    if (!customer.maKH || customer.maKH === 'GUEST') {
+        stackPreview.value = { totalDiscount: 0, finalAmount: subTotal.value + shippingFee.value, memberDiscount: 0, voucherAmount: 0, memberRankPercent: 0 };
         return;
     }
     try {
         const codes = orderData.value.voucherIds.join(',');
-        const res = await axios.get(`${API}/api/DatDichVu/preview-voucher-stack`, {
+        const res = await axios.get(`${API}/api/ThanhToanSanPham/preview-voucher-stack`, {
             params: {
                 maKH: customer.maKH,
                 codes,
                 subTotal: subTotal.value,
-                serviceIds: productItems.value.map(p => p.id).join(',')
+                productIds: productItems.value.map(p => p.id).join(',')
             }
         });
         stackPreview.value = {
             totalDiscount: Number(res.data.totalDiscount) || 0,
-            finalAmount: (Number(res.data.finalAmount) || subTotal.value) + shippingFee.value
+            finalAmount: (Number(res.data.finalAmount) || subTotal.value) + shippingFee.value,
+            memberDiscount: Number(res.data.memberDiscount) || 0,
+            voucherAmount: Number(res.data.voucherAmount) || 0,
+            memberRankPercent: Number(res.data.memberRankPercent) || 0
         };
     } catch {
-        stackPreview.value = { totalDiscount: 0, finalAmount: subTotal.value + shippingFee.value };
+        stackPreview.value = { totalDiscount: 0, finalAmount: subTotal.value + shippingFee.value, memberDiscount: 0, voucherAmount: 0, memberRankPercent: 0 };
     }
 };
 
@@ -260,6 +263,9 @@ function toggleVoucher(id: string) {
 }
 
 const discountAmount = computed(() => stackPreview.value.totalDiscount);
+const memberDiscount = computed(() => stackPreview.value.memberDiscount);
+const voucherAmount = computed(() => stackPreview.value.voucherAmount);
+const memberRankPercent = computed(() => stackPreview.value.memberRankPercent);
 const finalTotal = computed(() => stackPreview.value.finalAmount);
 
 const payNow = computed(() => {
@@ -540,32 +546,37 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
                             </div>
                         </transition>
 
-                        <div class="section-heading-wrapper mt-5">
-                            <h3 class="font-heading section-heading-title font-bold text-black text-sm uppercase tracking-wider">
-                                <i class="fas fa-ticket-alt me-2 text-black"></i> KHO VOUCHER CỦA BẠN
-                            </h3>
-                            <div class="heading-line"></div>
-                        </div>
-
-                        <div class="voucher-list-modern">
-                            <div v-for="v in myVouchers" :key="v.id" class="voucher-ticket-item"
-                                :class="{ active: orderData.voucherIds.includes(v.id) }" @click="toggleVoucher(v.id)">
-                                <div class="ticket-left">
-                                    <span class="ticket-brand-text">LGHAIR</span>
-                                    <span class="notch top"></span><span class="notch bottom"></span>
-                                </div>
-                                <div class="v-divider"></div>
-                                <div class="ticket-right">
-                                    <div class="d-flex justify-content-between align-items-start mb-2">
-                                        <span class="v-code-badge">{{ v.code }}</span>
-                                        <span class="v-expiry-tag"><i class="far fa-calendar-alt me-1.5"></i>HSD: {{ v.expiry }}</span>
+                        <!-- KHO VOUCHER -->
+                        <div class="mt-8">
+                            <div class="section-heading-wrapper">
+                                <h3 class="font-playfair section-heading-title font-bold gold-metallic-text">
+                                    <i class="fas fa-ticket-alt me-2"></i> KHO VOUCHER CỦA BẠN
+                                </h3>
+                                <div class="heading-line"></div>
+                            </div>
+                            <div v-if="myVouchers.length > 0" class="voucher-list-modern">
+                                <div v-for="v in myVouchers" :key="v.id" class="voucher-ticket-item"
+                                    :class="{ active: orderData.voucherIds.includes(v.id) }" @click="toggleVoucher(v.id)">
+                                    <div class="ticket-left">
+                                        <span class="ticket-brand-text">LGHAIR</span>
+                                        <span class="notch top"></span><span class="notch bottom"></span>
                                     </div>
-                                    <div class="v-price-gold font-bold">Giảm: {{ v.discount.toLocaleString() }}đ</div>
-                                    <div class="v-desc text-black mt-1">{{ v.desc }}</div>
+                                    <div class="v-divider"></div>
+                                    <div class="ticket-right">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <span class="v-code-badge">{{ v.code }}</span>
+                                            <span class="v-expiry-tag"><i class="far fa-calendar-alt me-1.5"></i>HSD: {{ v.expiry }}</span>
+                                        </div>
+                                        <div class="v-price-gold font-bold">Giảm: {{ v.discount.toLocaleString() }}đ</div>
+                                        <div class="v-desc text-black mt-1">{{ v.desc }}</div>
+                                    </div>
+                                    <div class="v-check-icon" v-if="orderData.voucherIds.includes(v.id)">
+                                        <i class="fas fa-check-circle"></i>
+                                    </div>
                                 </div>
-                                <div class="v-check-icon" v-if="orderData.voucherIds.includes(v.id)">
-                                    <i class="fas fa-check-circle"></i>
-                                </div>
+                            </div>
+                            <div v-else class="text-gray-500 italic mt-3 text-sm font-bold">
+                                Không có voucher nào khả dụng cho đơn hàng của bạn lúc này.
                             </div>
                         </div>
                     </div>
@@ -660,9 +671,13 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
                                     <span>Phí giao hàng</span>
                                     <b>{{ formatMoney(shippingFee) }}</b>
                                 </div>
-                                <div class="total-line saving" v-if="discountAmount > 0">
+                                <div class="total-line saving" v-if="memberDiscount > 0">
+                                    <span>Giảm giá thành viên ({{ memberRankPercent }}%)</span>
+                                    <b>-{{ formatMoney(memberDiscount) }}</b>
+                                </div>
+                                <div class="total-line saving" v-if="voucherAmount > 0">
                                     <span>Giảm voucher</span>
-                                    <b>-{{ formatMoney(discountAmount) }}</b>
+                                    <b>-{{ formatMoney(voucherAmount) }}</b>
                                 </div>
 
                                 <div class="grand-line">
