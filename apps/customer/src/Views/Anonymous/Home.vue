@@ -469,6 +469,9 @@ const addProductToCart = async (prod: any) => {
       </div>
     </section>
 
+    <!-- ===== ĐƯỜNG KẺ NGANG MỜ ===== -->
+    <div class="hm-divider"></div>
+
     <!-- ===== FLASH SALE ===== -->
     <section class="hm-flash-section" v-if="activeFlashSale">
       <div class="hm-flash-top">
@@ -488,12 +491,11 @@ const addProductToCart = async (prod: any) => {
       <div class="hm-flash-layout">
         <div class="hm-flash-left">
           <img
-            :src="dataStore.SERVICES[0]?.img || flashSaleItems[0]?.img || 'https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=600'"
-            alt="Flash sale"
+            src="/f70a4105-d5a1-41cb-b0cf-d92f6301aa36.jpg"
+            alt="Flash sale LG Hair"
             class="hm-flash-left-img"
           />
         </div>
-        <div class="hm-flash-vline"></div>
 
         <div class="hm-flash-cards">
           <div
@@ -544,95 +546,60 @@ const addProductToCart = async (prod: any) => {
 
     <!-- ===== DỊCH VỤ MỚI ===== -->
     <section class="hm-services-section">
-      <h2 class="hm-section-title">Dịch Vụ Mới Của Chúng Tôi</h2>
+      <h2 class="hm-section-title" data-aos="fade-up">Dịch Vụ Mới Của Chúng Tôi</h2>
 
       <div class="hm-svc-row" v-if="dataStore.SERVICES.length >= 1">
-        <div class="hm-svc-big" v-if="dataStore.SERVICES[0]">
+        <div class="hm-svc-big" v-if="dataStore.SERVICES[0]" data-aos="fade-right">
           <img :src="dataStore.SERVICES[0].img" :alt="dataStore.SERVICES[0].name" class="hm-svc-big-img" />
           <div class="hm-svc-big-overlay">
-            <h3 class="hm-svc-big-name">{{ normalizeVietnamese(dataStore.SERVICES[0].name) }}</h3>
+            <h3 class="hm-svc-big-name" style="text-transform: uppercase;">{{ normalizeVietnamese(dataStore.SERVICES[0].name) }}</h3>
             <p class="hm-svc-big-price">{{ formatPriceToVND(dataStore.SERVICES[0].price) }}</p>
             <button class="hm-svc-big-btn" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[0].id } })">Xem chi tiết</button>
           </div>
         </div>
         
-        <div class="hm-svc-card" v-if="dataStore.SERVICES[1]" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[1].id } })">
+        <div class="hm-svc-card" v-if="dataStore.SERVICES[1]" data-aos="fade-up" data-aos-delay="100" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[1].id } })">
           <img :src="dataStore.SERVICES[1].img" :alt="dataStore.SERVICES[1].name" class="hm-svc-card-img" />
           <div class="hm-svc-card-body">
             <span class="hm-svc-label">Dịch vụ mới</span>
-            <h3 class="hm-svc-card-name">{{ normalizeVietnamese(dataStore.SERVICES[1].name) }}</h3>
+            <h3 class="hm-svc-card-name" style="text-transform: uppercase;">{{ normalizeVietnamese(dataStore.SERVICES[1].name) }}</h3>
             <p class="hm-svc-card-desc">{{ dataStore.SERVICES[1].desc }}</p>
             <p class="hm-svc-card-price">{{ formatPriceToVND(dataStore.SERVICES[1].price) }}</p>
           </div>
         </div>
-        <div class="hm-svc-card" v-if="dataStore.SERVICES[2]" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[2].id } })">
+        <div class="hm-svc-card" v-if="dataStore.SERVICES[2]" data-aos="fade-up" data-aos-delay="200" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[2].id } })">
           <img :src="dataStore.SERVICES[2].img" :alt="dataStore.SERVICES[2].name" class="hm-svc-card-img" />
           <div class="hm-svc-card-body">
             <span class="hm-svc-label">Nổi bật</span>
-            <h3 class="hm-svc-card-name">{{ normalizeVietnamese(dataStore.SERVICES[2].name) }}</h3>
+            <h3 class="hm-svc-card-name" style="text-transform: uppercase;">{{ normalizeVietnamese(dataStore.SERVICES[2].name) }}</h3>
             <p class="hm-svc-card-desc">{{ dataStore.SERVICES[2].desc }}</p>
             <p class="hm-svc-card-price">{{ formatPriceToVND(dataStore.SERVICES[2].price) }}</p>
           </div>
         </div>
       </div>
 
-      <div class="hm-svc-row hm-svc-row-rev" v-if="dataStore.SERVICES.length >= 4">
-        
-        <template v-if="dataStore.SERVICES[5]">
-          <div class="hm-svc-big">
-            <img :src="dataStore.SERVICES[5].img" :alt="dataStore.SERVICES[5].name" class="hm-svc-big-img" />
-            <div class="hm-svc-big-overlay">
-              <h3 class="hm-svc-big-name">{{ normalizeVietnamese(dataStore.SERVICES[5].name) }}</h3>
-              <p class="hm-svc-big-price">{{ formatPriceToVND(dataStore.SERVICES[5].price) }}</p>
-              <button class="hm-svc-big-btn" @click.stop="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[5].id } })">Xem chi tiết</button>
-            </div>
+      <div class="hm-svc-row" style="margin-top: 32px;" v-if="dataStore.SERVICES.length >= 4">
+        <div class="hm-svc-card hm-svc-card-large" v-if="dataStore.SERVICES[3]" data-aos="fade-up" data-aos-delay="100" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[3].id } })">
+          <img :src="dataStore.SERVICES[3].img" :alt="dataStore.SERVICES[3].name" class="hm-svc-card-img" />
+          <div class="hm-svc-card-body">
+            <span class="hm-svc-label">Khuyên dùng</span>
+            <h3 class="hm-svc-card-name" style="text-transform: uppercase;">{{ normalizeVietnamese(dataStore.SERVICES[3].name) }}</h3>
+            <p class="hm-svc-card-desc">{{ dataStore.SERVICES[3].desc }}</p>
+            <p class="hm-svc-card-price">{{ formatPriceToVND(dataStore.SERVICES[3].price) }}</p>
           </div>
-
-          <div class="hm-svc-card" v-if="dataStore.SERVICES[4]" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[4].id } })">
-            <img :src="dataStore.SERVICES[4].img" :alt="dataStore.SERVICES[4].name" class="hm-svc-card-img" />
-            <div class="hm-svc-card-body">
-              <span class="hm-svc-label">Khuyên dùng</span>
-              <h3 class="hm-svc-card-name">{{ normalizeVietnamese(dataStore.SERVICES[4].name) }}</h3>
-              <p class="hm-svc-card-desc">{{ dataStore.SERVICES[4].desc }}</p>
-              <p class="hm-svc-card-price">{{ formatPriceToVND(dataStore.SERVICES[4].price) }}</p>
-            </div>
+        </div>
+        <div class="hm-svc-card hm-svc-card-large" v-if="dataStore.SERVICES[4]" data-aos="fade-up" data-aos-delay="200" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[4].id } })">
+          <img :src="dataStore.SERVICES[4].img" :alt="dataStore.SERVICES[4].name" class="hm-svc-card-img" />
+          <div class="hm-svc-card-body">
+            <span class="hm-svc-label">Yêu thích</span>
+            <h3 class="hm-svc-card-name" style="text-transform: uppercase;">{{ normalizeVietnamese(dataStore.SERVICES[4].name) }}</h3>
+            <p class="hm-svc-card-desc">{{ dataStore.SERVICES[4].desc }}</p>
+            <p class="hm-svc-card-price">{{ formatPriceToVND(dataStore.SERVICES[4].price) }}</p>
           </div>
-
-          <div class="hm-svc-card" v-if="dataStore.SERVICES[3]" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[3].id } })">
-            <img :src="dataStore.SERVICES[3].img" :alt="dataStore.SERVICES[3].name" class="hm-svc-card-img" />
-            <div class="hm-svc-card-body">
-              <span class="hm-svc-label">Yêu thích</span>
-              <h3 class="hm-svc-card-name">{{ normalizeVietnamese(dataStore.SERVICES[3].name) }}</h3>
-              <p class="hm-svc-card-desc">{{ dataStore.SERVICES[3].desc }}</p>
-              <p class="hm-svc-card-price">{{ formatPriceToVND(dataStore.SERVICES[3].price) }}</p>
-            </div>
-          </div>
-        </template>
-
-        <template v-else>
-          <div class="hm-svc-card hm-svc-card-large" v-if="dataStore.SERVICES[3]" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[3].id } })">
-            <img :src="dataStore.SERVICES[3].img" :alt="dataStore.SERVICES[3].name" class="hm-svc-card-img" />
-            <div class="hm-svc-card-body">
-              <span class="hm-svc-label">Yêu thích</span>
-              <h3 class="hm-svc-card-name">{{ normalizeVietnamese(dataStore.SERVICES[3].name) }}</h3>
-              <p class="hm-svc-card-desc">{{ dataStore.SERVICES[3].desc }}</p>
-              <p class="hm-svc-card-price">{{ formatPriceToVND(dataStore.SERVICES[3].price) }}</p>
-            </div>
-          </div>
-          <div class="hm-svc-card hm-svc-card-large" v-if="dataStore.SERVICES[4]" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[4].id } })">
-            <img :src="dataStore.SERVICES[4].img" :alt="dataStore.SERVICES[4].name" class="hm-svc-card-img" />
-            <div class="hm-svc-card-body">
-              <span class="hm-svc-label">Khuyên dùng</span>
-              <h3 class="hm-svc-card-name">{{ normalizeVietnamese(dataStore.SERVICES[4].name) }}</h3>
-              <p class="hm-svc-card-desc">{{ dataStore.SERVICES[4].desc }}</p>
-              <p class="hm-svc-card-price">{{ formatPriceToVND(dataStore.SERVICES[4].price) }}</p>
-            </div>
-          </div>
-        </template>
-
+        </div>
       </div>
 
-      <div class="hm-center">
+      <div class="hm-center" data-aos="fade-up">
         <button class="hm-view-all" @click="goToRoute('services')">Xem Tất Cả Dịch Vụ →</button>
       </div>
     </section>
@@ -688,6 +655,19 @@ const addProductToCart = async (prod: any) => {
 
       <div class="hm-center" style="margin-top: 48px;">
         <button class="hm-view-all" @click="goToRoute('booking')">Đặt Lịch Ngay →</button>
+      </div>
+    </section>
+
+    <!-- ===== BANNER SẢN PHẨM ===== -->
+    <section class="hm-banner-shop">
+      <div class="hm-banner-shop-inner">
+        <img src="/0de1691b-ac4c-46a4-89b7-f395a7c243ef.jpg" alt="Banner Sản Phẩm" class="hm-banner-shop-img" />
+        <div class="hm-banner-shop-content">
+          <h2 class="hm-banner-shop-title">Chăm Sóc - Nhuộm Tóc</h2>
+          <p class="hm-banner-shop-desc">
+            Tóc đẹp chuẩn Salon với các sản phẩm bán<br/>chạy nhất
+          </p>
+        </div>
       </div>
     </section>
 
@@ -811,7 +791,7 @@ const addProductToCart = async (prod: any) => {
 /* ==================== ROOT ==================== */
 .hm-root {
   background: #fff;
-  font-family: 'Inter', sans-serif;
+  font-family: inherit;
   color: #000;
   overflow-x: hidden;
 }
@@ -986,7 +966,7 @@ const addProductToCart = async (prod: any) => {
 }
 .hm-cat-card:hover { background: #f9f9f9; }
 .hm-cat-num {
-  font-family: 'Inconsolata', monospace;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 28px;
   color: var(--red);
   font-weight: 400;
@@ -1031,13 +1011,19 @@ const addProductToCart = async (prod: any) => {
   align-items: center;
   justify-content: center;
   padding: 16px;
+}.hm-divider {
+  width: 100%;
+  max-width: 1280px;
+  margin: 32px auto;
+  height: 1px;
+  background: #e0e0e0;
 }
 
 /* ==================== FLASH SALE ==================== */
 .hm-flash-section {
   background: #fff;
   max-width: 1280px;
-  margin: 48px auto;
+  margin: 16px auto 48px;
   border-radius: 24px;
   border: 1px solid var(--border2);
   overflow: hidden;
@@ -1047,20 +1033,20 @@ const addProductToCart = async (prod: any) => {
   display: flex;
   align-items: center;
   gap: 24px;
-  padding: 16px 24px 12px;
+  padding: 12px 0;
   border-bottom: 1px solid var(--border1);
 }
 .hm-flash-title-wrap { display: flex; align-items: center; }
 .hm-flash-f {
-  font-family: 'IM Fell Double Pica SC', 'Georgia', serif;
-  color: var(--red);
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  color: #dc2626;
   font-size: 22px;
   font-style: italic;
 }
 .hm-flash-s {
-  font-family: 'Inter', sans-serif;
+  font-family: inherit;
   font-weight: 700;
-  color: var(--red);
+  color: #dc2626;
   font-size: 22px;
 }
 .hm-flash-timer { display: flex; align-items: center; gap: 4px; }
@@ -1073,7 +1059,7 @@ const addProductToCart = async (prod: any) => {
   justify-content: center;
   font-size: 13px;
   font-weight: 700;
-  font-family: 'Inconsolata', monospace;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   background: #fff;
 }
 .hm-timer-sep { font-weight: 700; font-size: 16px; color: #000; }
@@ -1081,19 +1067,22 @@ const addProductToCart = async (prod: any) => {
 .hm-flash-layout {
   display: flex;
   align-items: stretch;
-  min-height: 380px;
 }
 .hm-flash-left {
   width: 300px;
   flex-shrink: 0;
   overflow: hidden;
-  border-right: 1px solid var(--border2);
+  position: relative;
 }
 .hm-flash-left-img {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
-  height: 100%;
+  height: calc(100% - 16px);
   object-fit: cover;
   display: block;
+  border-radius: 4px;
 }
 .hm-flash-vline {
   width: 1px;
@@ -1113,6 +1102,7 @@ const addProductToCart = async (prod: any) => {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  height: 100%;
   transition: background 0.2s;
 }
 .hm-flash-card:hover { background: #fafafa; }
@@ -1138,14 +1128,18 @@ const addProductToCart = async (prod: any) => {
 .hm-flash-card-img-wrap {
   width: 100%;
   aspect-ratio: 1 / 1;
-  height: auto;
+  flex-shrink: 0;
   overflow: hidden;
   border: 1px solid var(--border2);
   border-radius: 4px;
 }
-.hm-flash-card-img { width: 100%; height: 100%; object-fit: cover; }
+.hm-flash-card-img { 
+  width: 100%; 
+  height: 100%; 
+  object-fit: cover; 
+}
 .hm-flash-card-name {
-  font-family: 'Inter', sans-serif;
+  font-family: inherit;
   font-weight: 300;
   font-size: 13px;
   line-height: 1.4;
@@ -1154,17 +1148,18 @@ const addProductToCart = async (prod: any) => {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  min-height: calc(13px * 1.4 * 2);
 }
 .hm-flash-price-row { display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; }
 .hm-price-old {
-  font-family: 'Inconsolata', monospace;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 12px;
   font-weight: 300;
   text-decoration: line-through;
   color: #888;
 }
 .hm-price-new {
-  font-family: 'Inconsolata', monospace;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 14px;
   font-weight: 600;
   color: var(--red2);
@@ -1173,6 +1168,7 @@ const addProductToCart = async (prod: any) => {
 .hm-flash-btn {
   display: block;
   width: 100%;
+  margin-top: auto;
   padding: 7px 0;
   background: #fdfdfd;
   border: 1px solid #000;
@@ -1219,7 +1215,7 @@ const addProductToCart = async (prod: any) => {
   padding: 0 24px;
 }
 .hm-cta-title {
-  font-family: 'Inter', sans-serif;
+  font-family: inherit;
   font-size: 32px;
   font-weight: 400;
   margin-bottom: 20px;
@@ -1243,7 +1239,7 @@ const addProductToCart = async (prod: any) => {
   letter-spacing: 0.1em;
   cursor: pointer;
   transition: all 0.3s;
-  font-family: 'Inter', sans-serif;
+  font-family: inherit;
 }
 .hm-cta-btn:hover { background: #fff; color: #000; }
 
@@ -1253,7 +1249,7 @@ const addProductToCart = async (prod: any) => {
   padding: 56px 0 48px;
 }
 .hm-section-title {
-  font-family: 'Inconsolata', monospace;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 34px;
   text-transform: capitalize;
   text-align: center;
@@ -1296,7 +1292,7 @@ const addProductToCart = async (prod: any) => {
   color: #fff;
 }
 .hm-svc-big-name { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
-.hm-svc-big-price { font-family: 'Inconsolata', monospace; font-size: 18px; margin-bottom: 14px; }
+.hm-svc-big-price { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 18px; margin-bottom: 14px; }
 .hm-svc-big-btn {
   align-self: flex-start;
   padding: 8px 22px;
@@ -1311,19 +1307,19 @@ const addProductToCart = async (prod: any) => {
 .hm-svc-big-btn:hover { background: #fff; color: #000; }
 
 .hm-svc-card {
-  border: 1px solid var(--border2);
-  border-radius: 12px;
+  border: none;
+  border-radius: 0;
   overflow: hidden;
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  transition: box-shadow 0.3s;
+  transition: opacity 0.3s;
   flex: 1;
   max-width: 360px;
   margin-left: 24px;
 }
 .hm-svc-row-rev .hm-svc-card { margin-left: 0; margin-right: 24px; }
-.hm-svc-card:hover { box-shadow: 0 8px 30px rgba(0,0,0,0.12); }
+.hm-svc-card:hover { opacity: 0.85; }
 .hm-svc-card-large {
   max-width: none !important;
   margin-left: 12px;
@@ -1331,13 +1327,15 @@ const addProductToCart = async (prod: any) => {
 }
 .hm-svc-card-img {
   width: 100%;
-  aspect-ratio: 3 / 2;
+  aspect-ratio: 4 / 3;
   height: auto;
   object-fit: cover;
+  object-position: center 80%;
   display: block;
   flex-shrink: 0;
+  border-radius: 8px;
 }
-.hm-svc-card-body { padding: 20px 18px; flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.hm-svc-card-body { padding: 16px 0 0; flex: 1; display: flex; flex-direction: column; gap: 8px; }
 .hm-svc-label {
   font-size: 10px;
   text-transform: uppercase;
@@ -1347,7 +1345,7 @@ const addProductToCart = async (prod: any) => {
 }
 .hm-svc-card-name { font-size: 18px; font-weight: 600; }
 .hm-svc-card-desc { font-size: 13px; color: #666; line-height: 1.5; margin-bottom: 12px; }
-.hm-svc-card-price { font-family: 'Inconsolata', monospace; font-size: 16px; font-weight: 600; color: var(--red); }
+.hm-svc-card-price { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 600; color: var(--red); }
 
 .hm-center { text-align: center; margin-top: 40px; }
 .hm-view-all {
@@ -1360,7 +1358,7 @@ const addProductToCart = async (prod: any) => {
   letter-spacing: 0.1em;
   cursor: pointer;
   transition: all 0.2s;
-  font-family: 'Inconsolata', monospace;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 .hm-view-all:hover { background: #000; color: #fff; }
 
@@ -1378,7 +1376,7 @@ const addProductToCart = async (prod: any) => {
   margin: 0 auto 12px;
 }
 .hm-more-link {
-  font-family: 'Inconsolata', monospace;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 15px;
   color: var(--red);
   background: none;
@@ -1439,7 +1437,7 @@ const addProductToCart = async (prod: any) => {
 .hm-stylist-info { padding: 16px 12px; text-align: center; width: 100%; }
 .hm-stylist-label { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 0.1em; }
 .hm-stylist-name {
-  font-family: 'Inconsolata', monospace;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 18px;
   text-transform: capitalize;
   margin: 6px 0 4px;
@@ -1450,10 +1448,50 @@ const addProductToCart = async (prod: any) => {
 .hm-stylist-role { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 0.08em; }
 
 /* ==================== SHOP / SẢN PHẨM ==================== */
+/* ==================== BANNER SHOP ==================== */
+.hm-banner-shop {
+  width: 100%;
+  margin: 0 auto;
+}
+.hm-banner-shop-inner {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+}
+.hm-banner-shop-img {
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  display: block;
+}
+.hm-banner-shop-content {
+  position: absolute;
+  top: 50%;
+  right: 10%;
+  transform: translateY(-50%);
+  max-width: 500px;
+  text-align: left;
+  color: #222;
+}
+.hm-banner-shop-title {
+  font-size: 36px;
+  font-weight: 400;
+  margin-bottom: 16px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.hm-banner-shop-desc {
+  font-size: 16px;
+  font-weight: 400;
+  color: #555;
+  line-height: 1.6;
+}
+
+/* ==================== CỬA HÀNG ==================== */
 .hm-shop-section {
   background: #fff;
-  padding: 56px 32px 48px;
-  border-top: 1px solid var(--border1);
+  padding: 32px 32px 48px;
 }
 .hm-prod-grid {
   display: grid;
@@ -1514,9 +1552,9 @@ const addProductToCart = async (prod: any) => {
 .hm-prod-card:hover .hm-prod-img { transform: scale(1.05); }
 .hm-prod-info { display: flex; flex-direction: column; gap: 8px; padding: 0 4px; }
 .hm-prod-stars { display: flex; align-items: center; gap: 4px; font-size: 13px; margin-bottom: -2px; }
-.hm-prod-review-count { font-size: 11px; color: var(--gray-text); font-family: 'Jost', sans-serif; }
+.hm-prod-review-count { font-size: 11px; color: var(--gray-text); font-family: inherit; }
 .hm-prod-name {
-  font-family: 'Jost', sans-serif;
+  font-family: inherit;
   font-weight: 500;
   font-size: 16px;
   text-align: left;
@@ -1530,24 +1568,24 @@ const addProductToCart = async (prod: any) => {
   margin-top: 4px;
 }
 .hm-prod-price {
-  font-family: 'Jost', sans-serif;
+  font-family: inherit;
   font-size: 20px;
   font-weight: 600;
   color: #000;
 }
 .hm-prod-add {
   padding: 6px 14px;
-  background: #e63946;
+  background: #000;
   color: #fff;
   border: none;
   border-radius: 20px;
-  font-family: 'Jost', sans-serif;
+  font-family: inherit;
   font-weight: 500;
   font-size: 12px;
   cursor: pointer;
   transition: all 0.2s;
 }
-.hm-prod-add:hover { background: #d62828; }
+.hm-prod-add:hover { background: #333; }
 .hm-prod-empty {
   text-align: center;
   padding: 64px 0;
@@ -1586,7 +1624,7 @@ const addProductToCart = async (prod: any) => {
   padding: 20px 64px;
   background: #000;
   color: #fff;
-  font-family: 'Inconsolata', monospace;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 22px;
   text-transform: capitalize;
   border: none;
@@ -1623,7 +1661,7 @@ const addProductToCart = async (prod: any) => {
 }
 .hm-test-stars { font-size: 18px; color: #f59e0b; letter-spacing: 4px; }
 .hm-test-quote {
-  font-family: 'Inconsolata', monospace;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 18px;
   font-weight: 300;
   line-height: 1.6;
@@ -1638,7 +1676,7 @@ const addProductToCart = async (prod: any) => {
   padding-top: 20px;
 }
 .hm-test-name {
-  font-family: 'Inconsolata', monospace;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-weight: 300;
   font-size: 14px;
   text-transform: capitalize;
@@ -1648,7 +1686,7 @@ const addProductToCart = async (prod: any) => {
   display: inline-block;
   padding: 4px 14px;
   border: 1px solid #000;
-  font-family: 'Inconsolata', monospace;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 12px;
   font-weight: 300;
 }
