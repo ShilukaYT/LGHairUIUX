@@ -224,7 +224,7 @@ onMounted(async () => {
   }, 1000);
 
   // =======================
-  // ĐỌC QUERY PARAM ?category=... TỪ Dmdichvu
+  // ĐỌC QUERY PARAM ?category=... TỪ Home / Dmdichvu
   // =======================
   if (route.query.category && typeof route.query.category === "string") {
     selectedCategory.value = route.query.category;
@@ -235,6 +235,24 @@ onMounted(async () => {
   await updateCartBadge(); // 🔥 cập nhật số lượng badge khi vào trang dịch vụ
   await fetchRatings(); // 🔥 lấy đánh giá trung bình cho tất cả dịch vụ
 });
+
+// =======================
+// WATCH ROUTE QUERY — để bắt navigate từ trang khác (Home, Dmdichvu)
+// ngay cả khi component đã được cache/mount rồi
+// =======================
+watch(
+  () => route.query.category,
+  (newCat) => {
+    if (newCat && typeof newCat === "string") {
+      selectedCategory.value = newCat;
+    } else {
+      selectedCategory.value = "all";
+    }
+    currentPage.value = 1;
+    fetchFiltered();
+  }
+);
+
 
 // =======================
 // FORMAT (OPTIONAL)
