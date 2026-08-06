@@ -31,9 +31,11 @@ type Testimonial = {
 
 type Pillar = {
   id: number;
+  maDM: string;
   title: string;
   subtitle: string;
   desc: string;
+  hinhAnh: string;
 };
 
 // ===== SETUP =====
@@ -137,27 +139,83 @@ const formatPriceToVND = (priceVal: string | number): string => {
 
 const normalizeVietnamese = (str: string): string => str.normalize('NFC');
 
-// Danh mục (pillars)
-const pillars: Pillar[] = [
+// Danh mục (lấy động từ API DanhMucDV)
+const pillars = ref<Pillar[]>([
   {
     id: 1,
+    maDM: '',
     title: 'Làm Sạch & Dưỡng Ẩm',
     subtitle: 'Cleansing & Conditioning',
-    desc: 'Dầu gội và dầu xả chứa dưỡng chất tự nhiên giúp cân bằng bã nhờn, nuôi dưỡng nang tóc khỏe mạnh.'
+    desc: '',
+    hinhAnh: ''
   },
   {
     id: 2,
+    maDM: '',
     title: 'Phục Hồi Chuyên Sâu',
     subtitle: 'Intensive Restoration',
-    desc: 'Mặt nạ phục hồi chuyên sâu tái cấu trúc sợi tóc hư tổn do uốn nhuộm hóa chất.'
+    desc: '',
+    hinhAnh: ''
   },
   {
     id: 3,
+    maDM: '',
     title: 'Tạo Kiểu Chuyên Nghiệp',
     subtitle: 'Professional Styling',
-    desc: 'Các dòng huyết thanh lụa, xịt tạo phồng muối biển giúp giữ nếp sóng lơi bồng bềnh.'
+    desc: '',
+    hinhAnh: ''
   }
-];
+]);
+
+// Map tên danh mục sang subtitle tiếng Anh
+const subtitleMap: Record<string, string> = {
+  'làm sạch': 'Cleansing & Conditioning',
+  'dưỡng ẩm': 'Cleansing & Conditioning',
+  'phục hồi': 'Intensive Restoration',
+  'tạo kiểu': 'Professional Styling',
+  'nhuộm': 'Hair Coloring',
+  'thời trang': 'Fashion Coloring',
+  'tạo màu': 'Hair Coloring',
+  'uốn': 'Hair Perming',
+  'cắt': 'Haircut Services',
+  'gội': 'Head Spa & Massage',
+  'massage': 'Head Spa & Massage',
+  'chăm sóc': 'Hair Treatment',
+  'kỹ thuật': 'Technical Services',
+  'dịch vụ': 'Hair Services',
+  'combo': 'Combo Services',
+};
+
+const getSubtitle = (tenDanhMuc: string): string => {
+  const lower = (tenDanhMuc || '').toLowerCase();
+  for (const [key, val] of Object.entries(subtitleMap)) {
+    if (lower.includes(key)) return val;
+  }
+  return 'Hair Services';
+};
+
+// Fallback ảnh theo loại danh mục — dùng ảnh local trong /public
+const imgFallbackMap: Record<string, string> = {
+  'cắt':        '/cat-tao-kieu.png',
+  'tạo kiểu':   '/cat-tao-kieu.png',
+  'nhuộm':      '/nhuom-thoi-trang.png',
+  'thời trang': '/nhuom-thoi-trang.png',
+  'uốn':        '/nhuom-thoi-trang.png',
+  'gội':        '/goi-dau-massage.png',
+  'massage':    '/goi-dau-massage.png',
+  'phục hồi':   '/dich-vu-toc.png',
+  'chăm sóc':   '/dich-vu-toc.png',
+  'combo':      '/dich-vu-toc.png',
+};
+
+const getFallbackImg = (tenDanhMuc: string): string => {
+  const lower = (tenDanhMuc || '').toLowerCase();
+  for (const [key, url] of Object.entries(imgFallbackMap)) {
+    if (lower.includes(key)) return url;
+  }
+  return '/goi-dau-massage.png';
+};
+
 
 // Testimonials
 const activeTestimonial = ref<number>(0);
@@ -228,6 +286,43 @@ const prevTestimonial = (): void => {
 // ===== LIFECYCLE =====
 onMounted(async () => {
   heroIntervalId = window.setInterval(nextHeroSlide, 4200);
+
+  // Fetch danh mục dịch vụ từ API
+  try {
+    const dmRes = await axios.get(`${API}/api/DanhMucDV/danh-sach`);
+    const dmList: any[] = dmRes.data || [];
+    if (dmList.length > 0) {
+      pillars.value = dmList
+        .filter((d: any) => (d.trangThai ?? 1) !== 0)
+        .map((d: any, idx: number) => {
+          const rawImg = d.hinhAnh || '';
+          let imgUrl = '';
+          if (rawImg) {
+            if (rawImg.startsWith('http')) {
+              imgUrl = rawImg;
+            } else if (rawImg.startsWith('/UserUploads') || rawImg.startsWith('UserUploads')) {
+              imgUrl = `${API}/${rawImg.replace(/^\//, '')}`;
+            } else {
+              imgUrl = `${API}/UserUploads/${rawImg.replace(/^\//, '')}`;
+            }
+          }
+          // Nếu DB không có ảnh thì dùng fallback theo loại danh mục
+          const tenDanhMuc = d.tenDanhMuc || '';
+          if (!imgUrl) imgUrl = getFallbackImg(tenDanhMuc);
+          return {
+            id: idx + 1,
+            maDM: d.maDM || d.maDm || '',
+            title: d.tenDanhMuc || `Danh mục ${idx + 1}`,
+            subtitle: getSubtitle(d.tenDanhMuc || ''),
+            desc: '',
+            hinhAnh: imgUrl
+          };
+        });
+    }
+  } catch (err) {
+    console.error('Lỗi tải danh mục dịch vụ:', err);
+    // Giữ nguyên fallback data tĩnh
+  }
 
   // Fetch API Sale
   try {
@@ -440,23 +535,43 @@ const addProductToCart = async (prod: any) => {
       </div>
     </section>
 
-    <!-- ===== DANH MỤC ===== -->
+    <!-- ===== DANH MỤC (Lấy từ API) ===== -->
     <section class="hm-category-row">
       <div class="hm-category-inner">
         <div
           v-for="(p, idx) in pillars"
           :key="p.id"
           class="hm-cat-card"
-          @click="router.push({ name: 'shop', query: { tenDanhMuc: p.title } })"
+          @click="p.maDM ? router.push({ name: 'services', query: { category: p.maDM } }) : goToRoute('services')"
         >
-          <div class="hm-cat-num">0{{ p.id }}</div>
-          <div class="hm-cat-title">{{ p.title }}</div>
-          <div class="hm-cat-sub">{{ p.subtitle }}</div>
+          <!-- Ảnh danh mục: luôn có, hiện khi hover -->
+          <img
+            :src="p.hinhAnh || getFallbackImg(p.title)"
+            :alt="p.title"
+            class="hm-cat-hover-img"
+            @error="(e: Event) => { (e.target as HTMLImageElement).src = getFallbackImg(p.title) }"
+          />
+          <div class="hm-cat-hover-overlay"></div>
+          <!-- Nội dung chữ -->
+          <div class="hm-cat-content">
+            <div class="hm-cat-num">0{{ p.id }}</div>
+            <div class="hm-cat-title">{{ p.title }}</div>
+            <div class="hm-cat-sub">{{ p.subtitle }}</div>
+          </div>
         </div>
         <div class="hm-cat-card" @click="goToRoute('services')">
-          <div class="hm-cat-num">04</div>
-          <div class="hm-cat-title">Dịch Vụ Tóc</div>
-          <div class="hm-cat-sub">Hair Services</div>
+          <!-- Ảnh cho card Dịch Vụ Tóc -->
+          <img
+            src="/dich-vu-toc.png"
+            alt="Dịch vụ tóc"
+            class="hm-cat-hover-img"
+          />
+          <div class="hm-cat-hover-overlay"></div>
+          <div class="hm-cat-content">
+            <div class="hm-cat-num">04</div>
+            <div class="hm-cat-title">Dịch Vụ Tóc</div>
+            <div class="hm-cat-sub">Hair Services</div>
+          </div>
         </div>
         <div class="hm-cat-card hm-cat-card-img" @click="goToRoute('services')">
           <img
@@ -965,6 +1080,48 @@ const addProductToCart = async (prod: any) => {
   background-color: #d1d1d1;
 }
 .hm-cat-card:hover { background: #f9f9f9; }
+
+/* Ảnh hiện khi hover card danh mục */
+.hm-cat-hover-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transform: scale(1.06);
+  transition: opacity 0.4s ease, transform 0.5s ease;
+  z-index: 1;
+}
+.hm-cat-hover-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.42);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  z-index: 2;
+}
+.hm-cat-content {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: color 0.3s;
+}
+.hm-cat-card:hover .hm-cat-hover-img {
+  opacity: 1;
+  transform: scale(1);
+}
+.hm-cat-card:hover .hm-cat-hover-overlay {
+  opacity: 1;
+}
+.hm-cat-card:hover .hm-cat-content .hm-cat-num,
+.hm-cat-card:hover .hm-cat-content .hm-cat-title,
+.hm-cat-card:hover .hm-cat-content .hm-cat-sub {
+  color: #fff;
+  text-shadow: 0 1px 6px rgba(0,0,0,0.6);
+}
 .hm-cat-num {
   font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 28px;
