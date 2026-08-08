@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import axios from 'axios';
+import Swal from 'sweetalert2';
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 import { KHO_ORIGIN, calculateShippingFee } from './shippingCalculator';
 import { clearCartDB, removeFromCartDB } from '@/Views/Anonymous/CSDL/cartDB';
@@ -214,7 +215,10 @@ const loadVouchers = async () => {
             params: { subTotal: subTotal.value, productIds: productIds }
         });
         myVouchers.value = res.data;
-        orderData.value.voucherIds = orderData.value.voucherIds.filter(id => myVouchers.value.some(v => v.id === id));
+        orderData.value.voucherIds = orderData.value.voucherIds.filter(id => {
+            const v = myVouchers.value.find((x: any) => x.id === id);
+            return v && !isVoucherDisabled(v);
+        });
     } catch (error) {
         console.error("Lỗi load voucher:", error);
     }
@@ -242,9 +246,26 @@ const refreshStackPreview = async () => {
             voucherAmount: Number(res.data.voucherAmount) || 0,
             memberRankPercent: Number(res.data.memberRankPercent) || 0
         };
-    } catch {
+    } catch (e: any) {
         stackPreview.value = { totalDiscount: 0, finalAmount: subTotal.value + shippingFee.value, memberDiscount: 0, voucherAmount: 0, memberRankPercent: 0 };
+        const msg = e.response?.data?.message || 'Voucher không đủ điều kiện áp dụng!';
+        Swal.fire({ title: 'Opps!', text: msg, icon: 'warning', confirmButtonText: 'Đã hiểu', confirmButtonColor: '#d4af37' });
+        if (orderData.value.voucherIds.length > 0) {
+            orderData.value.voucherIds.pop();
+        }
     }
+};
+
+const isVoucherDisabled = (v: any) => {
+    if (v.isAvailable === false) return true;
+    if (v.desc && v.desc.includes('Đơn tối thiểu')) {
+        const match = v.desc.match(/Đơn tối thiểu ([\d,]+)đ/);
+        if (match) {
+            const minVal = parseInt(match[1].replace(/,/g, ''));
+            if (subTotal.value < minVal) return true;
+        }
+    }
+    return false;
 };
 
 watch([() => orderData.value.voucherIds.slice(), subTotal, shippingFee, () => productItems.value.length], () => {
@@ -253,10 +274,15 @@ watch([() => orderData.value.voucherIds.slice(), subTotal, shippingFee, () => pr
 
 function toggleVoucher(id: string) {
     const ids = orderData.value.voucherIds;
+    const v = myVouchers.value.find(x => x.id === id);
+    if (v && isVoucherDisabled(v)) {
+        Swal.fire({ title: 'Không hợp lệ', text: 'Không thể áp dụng voucher: ' + (v.errorMessage || 'Chưa đủ điều kiện.'), icon: 'warning', confirmButtonText: 'Đã hiểu', confirmButtonColor: '#d4af37' });
+        return;
+    }
     const i = ids.indexOf(id);
     if (i >= 0) { ids.splice(i, 1); return; }
-    if (ids.length >= 1) {
-        ids.splice(0, ids.length, id);
+    if (ids.length >= 2) {
+        Swal.fire({ title: 'Giới hạn voucher', text: 'Chỉ chọn tối đa 2 voucher.', icon: 'info', confirmButtonText: 'Đã hiểu', confirmButtonColor: '#d4af37' });
         return;
     }
     ids.push(id);
@@ -319,18 +345,18 @@ onMounted(async () => {
 const handleCheckout = async () => {
     // 1. Validate dữ liệu cơ bản
     if (!orderData.value.customerName || !orderData.value.phone || !orderData.value.address) {
-        alert("Vui lòng điền đầy đủ Họ tên, Số điện thoại và Địa chỉ giao hàng chi tiết!");
+        Swal.fire({ title: 'Thiếu thông tin', text: 'Vui lòng điền đầy đủ Họ tên, Số điện thoại và Địa chỉ giao hàng chi tiết!', icon: 'warning', confirmButtonColor: '#d4af37' });
         return;
     }
 
     if (productItems.value.length === 0) {
-        alert("Giỏ hàng của bạn đang trống! Vui lòng chọn sản phẩm.");
+        Swal.fire({ title: 'Giỏ hàng trống', text: 'Giỏ hàng của bạn đang trống! Vui lòng chọn sản phẩm.', icon: 'warning', confirmButtonColor: '#d4af37' });
         return;
     }
 
     const invoiceErr = validateInvoiceInfo();
     if (invoiceErr) {
-        alert(invoiceErr);
+        Swal.fire({ title: 'Lỗi hoá đơn', text: invoiceErr, icon: 'warning', confirmButtonColor: '#d4af37' });
         return;
     }
 
@@ -399,8 +425,9 @@ const handleCheckout = async () => {
             }
         }
     } catch (error: any) {
-        console.error("Lỗi đặt hàng:", error);
-        alert(error.response?.data?.message || "Có lỗi xảy ra khi lưu đơn hàng! Vui lòng thử lại.");
+        console.error("Error creating order:", error);
+        Swal.fire({ title: 'Lỗi', text: error.response?.data?.message || "Có lỗi xảy ra khi lưu đơn hàng! Vui lòng thử lại.", icon: 'error', confirmButtonColor: '#d4af37' });
+    } finally {
     }
 };
 
@@ -556,7 +583,7 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
                             </div>
                             <div v-if="myVouchers.length > 0" class="voucher-list-modern">
                                 <div v-for="v in myVouchers" :key="v.id" class="voucher-ticket-item"
-                                    :class="{ active: orderData.voucherIds.includes(v.id) }" @click="toggleVoucher(v.id)">
+                                    :class="{ active: orderData.voucherIds.includes(v.id), disabled: isVoucherDisabled(v) }" @click="toggleVoucher(v.id)">
                                     <div class="ticket-left">
                                         <span class="ticket-brand-text">LGHAIR</span>
                                         <span class="notch top"></span><span class="notch bottom"></span>
