@@ -17,6 +17,9 @@ const isLoading = ref(false);
 const googleBtnWidth = ref(372);
 const formWidthRef = ref<HTMLElement | null>(null);
 
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
+
+
 const updateGoogleBtnWidth = () => {
   if (formWidthRef.value) {
     googleBtnWidth.value = Math.min(formWidthRef.value.clientWidth, 400);
@@ -104,7 +107,7 @@ const handleLogin = async () => {
   isLoading.value = true;
 
   try {
-    const response = await axios.post('https://localhost:7196/api/account/login', {
+    const response = await axios.post(API + '/api/account/login', {
       username: username.value,
       password: password.value,
       rememberMe: true
@@ -144,7 +147,7 @@ const handleLogin = async () => {
 const submitRegistration = async (otpCode: string) => {
   isLoading.value = true;
   try {
-    const response = await axios.post('https://localhost:7196/api/account/register', {
+    const response = await axios.post(API + '/api/account/register', {
       hoTen: registerForm.hoTen,
       sdt: registerForm.sdt,
       email: registerForm.email,
@@ -214,7 +217,7 @@ const handleRegister = async () => {
   if (registerForm.email) {
     isLoading.value = true;
     try {
-      const response = await axios.post('https://localhost:7196/api/account/send-register-otp', `"${registerForm.email}"`, {
+      const response = await axios.post(API + '/api/account/send-register-otp', `"${registerForm.email}"`, {
         headers: { 'Content-Type': 'application/json' }
       });
       if (response.data.success) {
@@ -233,7 +236,7 @@ const handleRegister = async () => {
 
 const handleGoogleLogin = async (response: any) => {
   try {
-    const res = await axios.post('https://localhost:7196/api/account/google-login', {
+    const res = await axios.post(API + '/api/account/google-login', {
       credential: response.credential
     });
 
@@ -264,7 +267,7 @@ const handleSendOTP = async () => {
 
   isLoading.value = true;
   try {
-    const response = await axios.post('https://localhost:7196/api/account/send-otp', `"${forgotForm.email}"`, {
+    const response = await axios.post(API + '/api/account/send-otp', `"${forgotForm.email}"`, {
       headers: { 'Content-Type': 'application/json' }
     });
     if (response.data.success) {
@@ -296,7 +299,7 @@ const handleResetPassword = async () => {
 
   isLoading.value = true;
   try {
-    const response = await axios.post('https://localhost:7196/api/account/reset-password', {
+    const response = await axios.post(API + '/api/account/reset-password', {
       email: forgotForm.email,
       otp: forgotForm.isGoogleVerified ? "" : forgotForm.otp,
       newPassword: forgotForm.newPassword
@@ -317,7 +320,7 @@ const handleResetPassword = async () => {
 const handleGoogleVerify = async (response: any) => {
   isLoading.value = true;
   try {
-    const res = await axios.post('https://localhost:7196/api/account/forgot-password-google', {
+    const res = await axios.post(API + '/api/account/forgot-password-google', {
       credential: response.credential
     });
     if (res.data.success) {

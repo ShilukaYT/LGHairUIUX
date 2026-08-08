@@ -8,8 +8,10 @@ import axios from 'axios'
 import { useAuthStore } from '@/stores/useAuthStore'
 
 // ── Config ──────────────────────────────────────────────
-const API_BASE = 'https://localhost:7196/api/chat' // API cho live chat nhân viên
-const API_AI_BOT = 'https://localhost:7196/api/Chatbot' // API cho AI bot
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
+
+const API_BASE = API + '/api/chat' // API cho live chat nhân viên
+const API_AI_BOT = API + '/api/Chatbot' // API cho AI bot
 const GEMINI_API_KEY: string = 'AIzaSyDBxuIvcyEWKXnmj0UXtgHNqGK5q3LuJv0' // Cấu hình API Key Gemini của bạn tại đây để tự động phản hồi
 const router = useRouter()
 const route = useRoute()
@@ -144,8 +146,7 @@ const formatMessage = (text: string): string => {
     (match, alt, url) => {
       let cleanUrl = url.trim();
       if (!cleanUrl.startsWith('http') && !cleanUrl.startsWith('data:image')) {
-        const backendBaseUrl = 'https://localhost:7196';
-        cleanUrl = cleanUrl.startsWith('/') ? `${backendBaseUrl}${cleanUrl}` : `${backendBaseUrl}/${cleanUrl}`;
+        cleanUrl = cleanUrl.startsWith('/') ? `${API}${cleanUrl}` : `${API}/${cleanUrl}`;
       }
       return `<img src="${cleanUrl}" alt="${alt.trim()}" style="max-width: 100%; border-radius: 8px; margin-top: 10px; margin-bottom: 5px; display: block; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" onerror="this.onerror=null; this.src='https://placehold.co/300x200/eeeeee/999999?text=Lỗi+Hiển+Thị+Ảnh';" />`;
     }

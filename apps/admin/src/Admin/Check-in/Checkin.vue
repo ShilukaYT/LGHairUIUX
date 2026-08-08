@@ -13,7 +13,8 @@ import Swal from 'sweetalert2'
 import QrScannerModal from './QrScannerModal.vue'
 import WalkInModal from './WalkInModal.vue'
 
-const API_BASE_URL = 'https://localhost:7196/api/CheckIn'
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
+const API_BASE_URL = API + '/api/CheckIn'
 
 // --- State ---
 const appointments = ref<any[]>([])
@@ -132,8 +133,8 @@ const fetchData = async () => {
     try {
         const [resAppt, resData, resStylists] = await Promise.all([
             axios.get(`${API_BASE_URL}/get-appointments`, { params: { date: filterDate.value } }),
-            axios.get('https://localhost:7196/api/DatDichVu/data-booking'),
-            axios.get('https://localhost:7196/api/NhanVien', { params: { trangThai: 1 } })
+            axios.get(API + '/api/DatDichVu/data-booking'),
+            axios.get(API + '/api/NhanVien', { params: { trangThai: 1 } })
         ]);
         appointments.value = resAppt.data;
         allServices.value = [...resData.data.services, ...resData.data.combos];

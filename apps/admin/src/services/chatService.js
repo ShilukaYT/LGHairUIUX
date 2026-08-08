@@ -2,7 +2,9 @@
 import axios from 'axios'
 
 // Base URL của Backend C# (khớp với cổng server đang chạy)
-const API_BASE = 'https://localhost:7196/api/chat'
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
+
+const API_BASE = API + '/api/chat'
 
 /**
  * Tạo phòng chat mới (Khách hàng gọi khi bắt đầu chat lần đầu)

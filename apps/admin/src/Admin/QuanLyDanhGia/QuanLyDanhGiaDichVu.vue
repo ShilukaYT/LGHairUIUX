@@ -16,7 +16,9 @@ import { Label } from '@/components/ui/label'
 import ThongKeDichVuModal from './ThongKeDichVuModal.vue'
 
 // URL API Backend
-const API_BASE_URL = 'https://localhost:7196/api/QuanLyDanhGiaDichVu'
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
+
+const API_BASE_URL = API + '/api/QuanLyDanhGiaDichVu'
 
 // --- State ---
 const reviews = ref<any[]>([])
@@ -474,7 +476,7 @@ watch([searchQuery, filterStar, filterStatus, filterDate], () => {
                                 <ImageIcon class="w-3.5 h-3.5 text-slate-450" /> Hình ảnh đính kèm
                             </Label>
                             <div class="border border-solid border-slate-300 p-2.5 bg-white !rounded-lg shadow-sm inline-block hover:shadow-md transition-shadow duration-200">
-                                <img :src="'https://localhost:7196' + selectedReview.hinhAnh"
+                                <img :src="API + selectedReview.hinhAnh"
                                     @error="isImageBroken = true"
                                     class="max-w-[220px] h-auto object-contain cursor-zoom-in rounded-md hover:opacity-95 transition-opacity"
                                     alt="Review Image" />
