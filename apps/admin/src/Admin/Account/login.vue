@@ -22,7 +22,8 @@ const errorMessage = ref('')
 const showPassword = ref(false)
 
 // Đổi port URL dưới đây cho khớp với Backend của bạn nếu cần
-const API_URL = 'https://localhost:7196/api/admin/auth/login'
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
+const API_URL = API + '/api/admin/auth/login'
 
 const handleLogin = async () => {
   if (!email.value || !password.value) {

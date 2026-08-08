@@ -110,13 +110,16 @@ const toggleMode = (order, mode) => {
     }
 };
 
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
+
+
 // 1. TẢI DỮ LIỆU CHƯA ĐÁNH GIÁ (Pending)
 const loadData = async () => {
     try {
         const user = getCustomerInfo();
         if (!user?.maKH || user.maKH === 'GUEST') return;
 
-        const res = await axios.get(`https://localhost:7196/api/DanhGia/pending-to-rate/${user.maKH}`);
+        const res = await axios.get(API + `/api/DanhGia/pending-to-rate/${user.maKH}`);
 
         // Lọc Tab Dịch vụ: CHỈ LẤY CÁC DỊCH VỤ THỰC SỰ CHƯA ĐÁNH GIÁ
         const ordersForService = res.data
@@ -159,10 +162,10 @@ const loadRatedData = async () => {
         if (!user?.maKH || user.maKH === 'GUEST') return;
 
         // Bỏ logic Push/Filter thủ công gây rác dữ liệu. Gán thẳng từ Backend!
-        const res = await axios.get(`https://localhost:7196/api/DanhGia/rated-history/${user.maKH}`);
+        const res = await axios.get(API + `/api/DanhGia/rated-history/${user.maKH}`);
         ratedOrders.value = res.data;
 
-        const resStaff = await axios.get(`https://localhost:7196/api/DanhGia/staff-rated-history/${user.maKH}`);
+        const resStaff = await axios.get(API + `/api/DanhGia/staff-rated-history/${user.maKH}`);
         ratedStaffOrders.value = resStaff.data;
     } catch (error) {
         console.error("Lỗi tải lịch sử đánh giá:", error);
@@ -213,7 +216,7 @@ const submitAction = async (order) => {
             return;
         }
 
-        const res = await axios.post('https://localhost:7196/api/DanhGia/submit-multiple-reviews-with-image', formData, {
+        const res = await axios.post(API + `/api/DanhGia/submit-multiple-reviews-with-image`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
         });
 
@@ -258,7 +261,7 @@ const submitOverallAction = async (order) => {
         formData.append('generalComment', order.generalComment || 'Đánh giá chung cho đơn hàng');
         if (order.generalImageFile) formData.append('hinhAnhFile', order.generalImageFile);
 
-        const res = await axios.post('https://localhost:7196/api/DanhGia/submit-order-overall-with-image', formData);
+        const res = await axios.post(  API + '/api/DanhGia/submit-order-overall-with-image', formData);
 
         if (res.status === 200) {
             Swal.fire({
@@ -309,7 +312,7 @@ const submitStaffAction = async (order) => {
             noiDung: staff.comment || ''
         }));
 
-        const res = await axios.post('https://localhost:7196/api/DanhGia/submit-staff-reviews', payload);
+        const res = await axios.post(API + '/api/DanhGia/submit-staff-reviews', payload);
 
         if (res.status === 200) {
             Swal.fire({
@@ -373,7 +376,7 @@ const deleteSingleService = async (maHd, serviceId) => {
     if (!result.isConfirmed) return;
 
     try {
-        const res = await axios.delete(`https://localhost:7196/api/DanhGia/delete-service-rating/${maHd}/${serviceId}`);
+        const res = await axios.delete(API + `/api/DanhGia/delete-service-rating/${maHd}/${serviceId}`);
         if (res.status === 200) {
             Swal.fire({
                 title: 'Đã xóa!',
@@ -406,7 +409,7 @@ const deleteFullOrder = async (maHd) => {
     if (!result.isConfirmed) return;
 
     try {
-        await axios.delete(`https://localhost:7196/api/DanhGia/delete-order-rating/${maHd}`);
+        await axios.delete(API + `/api/DanhGia/delete-order-rating/${maHd}`);
         Swal.fire({
             title: 'Đã xóa!',
             text: 'Đã xóa toàn bộ đánh giá!',
@@ -436,7 +439,7 @@ const deleteStaffRating = async (maHd) => {
     if (!result.isConfirmed) return;
 
     try {
-        const res = await axios.delete(`https://localhost:7196/api/DanhGia/delete-staff-rating/${maHd}`);
+        const res = await axios.delete(API + `/api/DanhGia/delete-staff-rating/${maHd}`);
         if (res.status === 200) {
             Swal.fire({
                 title: 'Đã xóa!',
@@ -768,7 +771,7 @@ const deleteStaffRating = async (maHd) => {
 
                                 <div v-if="s.image" class="mt-3">
                                     <div class="relative w-24 h-16 border border-gray-100 rounded-none overflow-hidden hover:brightness-95 transition-all">
-                                        <img :src="'https://localhost:7196' + s.image" class="w-full h-full object-cover" />
+                                        <img :src="API + s.image" class="w-full h-full object-cover" />
                                     </div>
                                 </div>
 
@@ -832,7 +835,7 @@ const deleteStaffRating = async (maHd) => {
                         <div v-if="order.show" class="space-y-6 animate-in fade-in duration-200">
                             <div v-for="staff in order.staffs" :key="staff.id" class="border border-gray-50 p-4 bg-gray-50/20 space-y-4">
                                 <div class="flex items-center gap-3">
-                                    <img v-if="staff.avatar" :src="'https://localhost:7196/' + staff.avatar" class="w-10 h-10 object-cover border border-gray-200 rounded-none" />
+                                    <img v-if="staff.avatar" :src="API + staff.avatar" class="w-10 h-10 object-cover border border-gray-200 rounded-none" />
                                     <div v-else class="w-10 h-10 bg-gray-900 flex items-center justify-center text-white text-xs font-semibold rounded-none">👤</div>
                                     
                                     <div class="flex-1 min-w-0">
@@ -928,7 +931,7 @@ const deleteStaffRating = async (maHd) => {
                             <div v-for="staff in order.staffs" :key="staff.id" class="border-b border-gray-50 pb-5 last:border-0 last:pb-0">
                                 <div class="flex justify-between items-start gap-4">
                                     <div class="flex items-center gap-3">
-                                        <img v-if="staff.avatar" :src="'https://localhost:7196' + staff.avatar" class="w-10 h-10 object-cover border border-gray-100 rounded-none" />
+                                        <img v-if="staff.avatar" :src="API + staff.avatar" class="w-10 h-10 object-cover border border-gray-100 rounded-none" />
                                         <div v-else class="w-10 h-10 bg-gray-900 flex items-center justify-center text-white text-xs font-semibold rounded-none">👤</div>
                                         <div>
                                             <h5 class="text-xs font-semibold text-black uppercase tracking-wider">{{ staff.name }}</h5>

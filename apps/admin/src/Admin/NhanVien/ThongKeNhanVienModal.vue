@@ -31,8 +31,10 @@ const isDarkMode = computed(() => {
       || document.body.classList.contains('v-theme--dark')
 })
 
-const API_STATS = 'https://localhost:7196/api/QuanLyDanhGiaDichVu/thong-ke-nhan-vien'
-const API_STAFF = 'https://localhost:7196/api/NhanVien'
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
+
+const API_STATS = API + '/api/QuanLyDanhGiaDichVu/thong-ke-nhan-vien'
+const API_STAFF = API + '/api/NhanVien'
 
 const loadData = async () => {
     isLoading.value = true
@@ -152,7 +154,7 @@ const getInitials = (name: string) => {
     if (!name) return 'NV'
     const words = name.trim().split(/\s+/)
     if (words.length >= 2 && words[0] && words[1]) {
-        return (words[0][0] + words[1][0]).toUpperCase()
+        return ((words[0][0] || '') + (words[1][0] || '')).toUpperCase()
     }
     return name.slice(0, 2).toUpperCase()
 }

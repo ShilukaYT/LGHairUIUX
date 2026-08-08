@@ -7,7 +7,8 @@ import { Check, X, Search, CalendarDays, Plus, Edit, RotateCcw, AlertTriangle } 
 import { logActivity } from '@/utils/activityLogger'
 
 // --- CẤU HÌNH API ---
-const API_BASE_URL = 'https://localhost:7196/api/admin/lich-lam-viec'
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
+const API_BASE_URL = API + '/api/admin/lich-lam-viec'
 axios.defaults.withCredentials = true
 
 // --- STATE QUẢN LÝ DỮ LIỆU ---

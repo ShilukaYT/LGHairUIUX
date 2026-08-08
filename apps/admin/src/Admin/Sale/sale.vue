@@ -22,10 +22,10 @@ watch(
 )
 
 // ── CONFIG ──
-const baseUrl = import.meta.env.VITE_API_URL
-const API_URL = `${baseUrl}/api/Sale`
-const API_DICH_VU = 'https://localhost:7196/api/DanhSachDichVu'
-const API_COMBO = 'https://localhost:7196/api/Combo'
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
+const API_URL = API + '/api/Sale'
+const API_DICH_VU = API + '/api/DanhSachDichVu'
+const API_COMBO = API + '/api/Combo'
 
 // ── STATE ──
 const dataList = ref<any[]>([])

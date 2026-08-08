@@ -116,7 +116,7 @@ const fetchFiltered = async () => {
   try {
     console.log("🔍 Đang gọi API filter...");
     const res = await axios.get(
-      "https://localhost:7196/api/DanhSachDichVu/filter",
+      API + "/api/DanhSachDichVu/filter",
       {
         params: {
           search: searchQuery.value,

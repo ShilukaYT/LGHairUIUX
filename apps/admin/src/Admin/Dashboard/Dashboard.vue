@@ -35,6 +35,8 @@ import {
 
 ChartJS.register(Title, Tooltip, Legend, LineElement, PointElement, CategoryScale, LinearScale, Filler);
 
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
+
 const customizer = useCustomizerStore();
 const isDarkMode = computed(() => {
   if (customizer?.actTheme === 'dark') return true;
@@ -207,7 +209,7 @@ const fetchAdminData = async () => {
     }
     const qs = new URLSearchParams(params).toString();
 
-    const res = await fetch(`https://localhost:7196/api/ThongKe/admin-dashboard?${qs}`, {
+    const res = await fetch(API + `/api/ThongKe/admin-dashboard?${qs}`, {
       method : 'GET',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' }
@@ -225,7 +227,7 @@ const fetchAdminData = async () => {
 const fetchTopYeuThich = async () => {
   try {
     loadingYeuThich.value = true;
-    const res = await fetch('https://localhost:7196/api/QuanLyDanhGiaDichVu/thong-ke-nhan-vien', {
+    const res = await fetch(API + '/api/QuanLyDanhGiaDichVu/thong-ke-nhan-vien', {
       method: 'GET',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' }
@@ -297,7 +299,7 @@ const viewDetail = async (maHd) => {
     // Thử gọi API chi tiết trước
     try {
       const tokenHeaders = getAuthHeaders();
-      const res = await fetch(`https://localhost:7196/api/admin/hoa-don/chi-tiet/${maHd}`, {
+      const res = await fetch( API + `/api/admin/hoa-don/chi-tiet/${maHd}`, {
         method: 'GET',
         credentials: 'include',
         headers: {

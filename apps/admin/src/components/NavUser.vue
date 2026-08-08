@@ -71,12 +71,14 @@ onMounted(() => {
     handleLogout()
   }
 })
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
+
 
 // Xử lý link ảnh Avatar
 const displayAvatar = computed(() => {
   if (adminUser.value.hinhAnh) {
     if (adminUser.value.hinhAnh.startsWith('/')) {
-      return `https://localhost:7196${adminUser.value.hinhAnh}`
+      return API + adminUser.value.hinhAnh
     }
     return adminUser.value.hinhAnh
   }
@@ -88,7 +90,7 @@ const handleLogout = async () => {
   try {
     // Gọi API xóa Cookie ở Backend 
     // (Đảm bảo đường dẫn này đúng với Controller của bạn là /api/admin/auth/logout)
-    await axios.post('https://localhost:7196/api/admin/auth/logout', {}, { withCredentials: true })
+    await axios.post(API + '/api/admin/auth/logout', {}, { withCredentials: true })
   } catch (error) {
     console.error("Lỗi khi đăng xuất server:", error)
   } finally {

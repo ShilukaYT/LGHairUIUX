@@ -118,14 +118,14 @@ const logDetailParsed = computed(() => {
   // Case A: Multiline text with bullets (•) or newline changes
   if (rawText.includes('\n')) {
     const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean)
-    const title = lines[0].replace(/^•\s*/, '').replace(/:\s*$/, '')
+    const title = (lines[0] || '').replace(/^•\s*/, '').replace(/:\s*$/, '')
 
     for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].replace(/^•\s*/, '')
+      const line = (lines[i] || '').replace(/^•\s*/, '')
       if (line.includes('➔')) {
         const parts = line.split('➔')
-        const left = parts[0].trim()
-        const right = parts[1].trim()
+        const left = (parts[0] || '').trim()
+        const right = (parts[1] || '').trim()
         const colonIdx = left.indexOf(':')
         if (colonIdx !== -1) {
           items.push({
@@ -155,7 +155,7 @@ const logDetailParsed = computed(() => {
   // Case B: Single line string with hyphen (-) separators
   if (rawText.includes(' - ')) {
     const parts = rawText.split(' - ')
-    const title = parts[0].trim()
+    const title = (parts[0] || '').trim()
     const rest = parts.slice(1).join(' - ')
     const pairs = rest.split(',')
 
@@ -167,7 +167,7 @@ const logDetailParsed = computed(() => {
         const val = pTrim.substring(cIdx + 1).trim()
         if (val.includes('từ') && val.includes('lên')) {
           const match = val.match(/từ\s+(.*?)\s+lên\s+(.*)/i)
-          if (match) {
+          if (match && match[1] !== undefined && match[2] !== undefined) {
             items.push({ field: key, oldVal: match[1], newVal: match[2], isDiff: true })
             return
           }

@@ -4,7 +4,6 @@ import { useWishlistStore, showToast } from '@/stores/useWishlistStore';
 import { useRouter } from 'vue-router';
 import axios from 'axios';
 import Swal from 'sweetalert2';
-import { useWishlistStore } from '@/stores/useWishlistStore';
 import { addToCartDB } from "@/Views/Anonymous/CSDL/cartDB";
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 import { Heart, X, Clock, ShoppingBag, Star, Calendar } from 'lucide-vue-next';

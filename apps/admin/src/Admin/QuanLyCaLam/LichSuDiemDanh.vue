@@ -4,7 +4,8 @@ import axios from 'axios'
 import { Check, X, LogOut, CalendarDays, AlertTriangle, Clock, MessageSquare } from 'lucide-vue-next'
 
 const filterType = ref('all') // 'all', 'issues'
-const API_BASE_URL = 'https://localhost:7196/api/admin/lich-lam-viec'
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
+const API_BASE_URL = API + '/api/admin/lich-lam-viec'
 
 const nhanViens = ref<any[]>([])
 const selectedNhanVien = ref<string>('')

@@ -52,7 +52,7 @@ watch(() => props.isOpen, (newVal) => {
 // Lấy danh sách dịch vụ từ API
 const fetchServices = async () => {
     try {
-        const res = await axios.get('https://localhost:7196/api/CheckIn/all-services-combos');
+        const res = await axios.get(API + '/api/CheckIn/all-services-combos');
         allServices.value = res.data;
     } catch (error) {
         console.error("Lỗi tải dịch vụ:", error);
@@ -97,7 +97,7 @@ const submitWalkIn = async () => {
 
     isSubmitting.value = true;
     try {
-        const url = "https://localhost:7196/api/CheckIn/create-walkin";
+        const url = API + "/api/CheckIn/create-walkin";
         const res = await axios.post(url, form.value);
 
         Swal.fire({

@@ -3,7 +3,9 @@ import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { CalendarDays, Briefcase, PlayCircle, LogOut, RefreshCcw, Clock, Sun, XCircle, AlertCircle, CheckCircle } from 'lucide-vue-next'
 import { Html5Qrcode } from 'html5-qrcode'
-const API_BASE_URL = 'https://localhost:7196/api/nhan-vien/ca-lam'
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
+
+const API_BASE_URL = API + '/api/nhan-vien/ca-lam'
 axios.defaults.withCredentials = true; // Bắt buộc để gửi kèm Cookie/Token
 
 const formatDateDDMMYYYY = (dateInput?: any) => {
@@ -16,13 +18,13 @@ const formatDateDDMMYYYY = (dateInput?: any) => {
     }
     if (typeof dateInput === 'string' && dateInput.includes('-')) {
         const parts = dateInput.substring(0, 10).split('-');
-        if (parts.length === 3 && parts[0].length === 4) {
+        if (parts.length === 3 && parts[0] && parts[0].length === 4 && parts[1] && parts[2]) {
             return `${parts[2]}/${parts[1]}/${parts[0]}`;
         }
     }
     if (typeof dateInput === 'string' && dateInput.includes('/')) {
         const parts = dateInput.split('/');
-        if (parts.length === 3) {
+        if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
             const day = parts[0].padStart(2, '0');
             const month = parts[1].padStart(2, '0');
             return `${day}/${month}/${parts[2]}`;
