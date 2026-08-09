@@ -5,6 +5,7 @@ import { logActivity } from "@/utils/activityLogger";
 import { useTheme } from "vuetify";
 import {
   Plus, Pencil, Trash2, Eye, Search, ImageOff, X, Check, RotateCcw, Upload,
+  ChevronDown, ImagePlus, Images,
 } from "lucide-vue-next";
 
 const API = import.meta.env.VITE_API_URL;
@@ -175,6 +176,7 @@ const headers = [
   { title: "Tên danh mục", key: "tenDanhMuc", align: "start", sortable: true },
   { title: "Số SP", key: "soSanPham", align: "center", sortable: true },
   { title: "Trạng thái", key: "trangThai", align: "center", sortable: true },
+  { title: "Banner", key: "banner", align: "center", sortable: false, width: 90 },
   { title: "Thao tác", key: "actions", align: "center", sortable: false },
 ];
 
@@ -303,6 +305,128 @@ async function toggleStatus(dm) {
   }
 }
 
+// ══ BANNER DANH MỤC ═══════════════════════════════════════════════
+// menu.open: mã danh mục đang mở dropdown banner (null = đóng tất cả)
+const bannerMenu = reactive({ openFor: null });
+const bannerCache = reactive({}); // { [maDMSP]: [{ maBanner, tieuDe, hinhAnh }] }
+const bannerLoading = reactive({}); // { [maDMSP]: boolean }
+const bannerUploading = reactive({}); // { [maDMSP]: boolean }
+const bannerFileInputs = reactive({}); // refs cho input file ẩn theo maDMSP
+
+async function loadBanners(maDMSP) {
+  bannerLoading[maDMSP] = true;
+  try {
+    const res = await axios.get(`${API}/api/QuanLyDanhMucSP/banner/danh-sach/${maDMSP}`);
+    bannerCache[maDMSP] = res.data.map(b => ({
+      maBanner: b.maBanner,
+      tieuDe: b.tieuDe,
+      hinhAnh: toAbsUrl(b.hinhAnh),
+    }));
+  } catch {
+    showToast("Lỗi tải banner của danh mục!", "error");
+    bannerCache[maDMSP] = bannerCache[maDMSP] ?? [];
+  } finally {
+    bannerLoading[maDMSP] = false;
+  }
+}
+
+function toggleBannerMenu(dm) {
+  const isOpening = bannerMenu.openFor !== dm.maDMSP;
+  bannerMenu.openFor = isOpening ? dm.maDMSP : null;
+  if (isOpening && !bannerCache[dm.maDMSP]) {
+    loadBanners(dm.maDMSP);
+  }
+}
+
+function setBannerFileInputRef(maDMSP, el) {
+  if (el) bannerFileInputs[maDMSP] = el;
+}
+
+function triggerBannerUpload(maDMSP) {
+  bannerFileInputs[maDMSP]?.click();
+}
+
+async function onBannerFileChange(e, maDMSP) {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+
+  if (!file.type.startsWith("image/")) {
+    showToast("File không phải ảnh!", "error");
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    showToast("File vượt quá 5MB!", "error");
+    return;
+  }
+
+  bannerUploading[maDMSP] = true;
+  try {
+    const fd = new FormData();
+    fd.append("MaDanhMucCha", maDMSP);
+    fd.append("File", file);
+    await axios.post(`${API}/api/QuanLyDanhMucSP/banner`, fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    logActivity("Thêm banner danh mục", `Đã thêm banner cho danh mục (Mã: ${maDMSP})`, "Sản phẩm");
+    showToast("Thêm banner thành công!");
+    await loadBanners(maDMSP);
+  } catch (err) {
+    const msg = err.response?.data?.message ?? "Lỗi khi thêm banner!";
+    logActivity("Thêm banner danh mục", `Thất bại khi thêm banner cho danh mục (Mã: ${maDMSP}) - Lỗi: ${msg}`, "Sản phẩm", "Thất bại");
+    showToast(msg, "error");
+  } finally {
+    bannerUploading[maDMSP] = false;
+  }
+}
+
+async function replaceBannerImg(e, banner, maDMSP) {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+
+  if (!file.type.startsWith("image/")) {
+    showToast("File không phải ảnh!", "error");
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    showToast("File vượt quá 5MB!", "error");
+    return;
+  }
+
+  bannerUploading[maDMSP] = true;
+  try {
+    const fd = new FormData();
+    fd.append("File", file);
+    await axios.put(`${API}/api/QuanLyDanhMucSP/banner/${banner.maBanner}`, fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    logActivity("Cập nhật banner danh mục", `Đã cập nhật banner ${banner.maBanner}`, "Sản phẩm");
+    showToast("Cập nhật banner thành công!");
+    await loadBanners(maDMSP);
+  } catch (err) {
+    const msg = err.response?.data?.message ?? "Lỗi khi cập nhật banner!";
+    logActivity("Cập nhật banner danh mục", `Thất bại khi cập nhật banner ${banner.maBanner} - Lỗi: ${msg}`, "Sản phẩm", "Thất bại");
+    showToast(msg, "error");
+  } finally {
+    bannerUploading[maDMSP] = false;
+  }
+}
+
+async function deleteBanner(banner, maDMSP) {
+  if (!confirm(`Xóa banner "${banner.maBanner}"?`)) return;
+  try {
+    await axios.delete(`${API}/api/QuanLyDanhMucSP/banner/${banner.maBanner}`);
+    logActivity("Xóa banner danh mục", `Đã xóa banner ${banner.maBanner}`, "Sản phẩm");
+    showToast("Đã xóa banner!");
+    await loadBanners(maDMSP);
+  } catch (err) {
+    const msg = err.response?.data?.message ?? "Lỗi khi xóa banner!";
+    logActivity("Xóa banner danh mục", `Thất bại khi xóa banner ${banner.maBanner} - Lỗi: ${msg}`, "Sản phẩm", "Thất bại");
+    showToast(msg, "error");
+  }
+}
+
 // ══ INIT ══════════════════════════════════════════════════════════
 onMounted(loadData);
 </script>
@@ -423,6 +547,102 @@ onMounted(loadData);
           >
             {{ item.trangThai === 1 ? "Đang hiện" : "Tạm ẩn" }}
           </v-chip>
+        </template>
+
+        <template v-slot:item.banner="{ item }">
+          <div class="d-flex justify-center">
+            <v-menu
+              :model-value="bannerMenu.openFor === item.maDMSP"
+              @update:model-value="(val) => { if (!val) bannerMenu.openFor = null; }"
+              :close-on-content-click="false"
+              location="bottom"
+              min-width="320"
+            >
+              <template v-slot:activator="{ props: menuProps }">
+                <v-btn
+                  v-bind="menuProps"
+                  variant="tonal"
+                  size="small"
+                  rounded="lg"
+                  color="deep-purple"
+                  class="text-none"
+                  @click="toggleBannerMenu(item)"
+                >
+                  <Images class="w-4 h-4 mr-1" />
+                  Banner
+                  <ChevronDown class="w-3 h-3 ml-1" :class="{ 'rotate-180': bannerMenu.openFor === item.maDMSP }" style="transition: transform .15s;" />
+                </v-btn>
+              </template>
+
+              <v-card rounded="lg" class="pa-3" min-width="320" max-width="360">
+                <div class="d-flex align-center justify-space-between mb-2">
+                  <span class="text-subtitle-2 font-weight-bold">
+                    Banner của "{{ item.tenDanhMuc }}"
+                  </span>
+                  <v-chip size="x-small" variant="tonal" color="deep-purple">
+                    {{ bannerCache[item.maDMSP]?.length ?? 0 }}
+                  </v-chip>
+                </div>
+
+                <div v-if="bannerLoading[item.maDMSP]" class="d-flex justify-center py-4">
+                  <v-progress-circular indeterminate color="deep-purple" size="24"></v-progress-circular>
+                </div>
+
+                <div v-else>
+                  <div v-if="!bannerCache[item.maDMSP]?.length" class="text-caption text-medium-emphasis text-center py-3">
+                    Chưa có banner nào cho danh mục này.
+                  </div>
+
+                  <div v-else class="banner-list mb-2">
+                    <div v-for="b in bannerCache[item.maDMSP]" :key="b.maBanner" class="banner-row">
+                      <v-avatar rounded="lg" size="48" class="cursor-pointer" @click="openLightbox(b.hinhAnh)">
+                        <v-img v-if="b.hinhAnh" :src="b.hinhAnh" cover></v-img>
+                        <ImageOff v-else class="w-4 h-4 text-grey" />
+                      </v-avatar>
+                      <div class="banner-info">
+                        <span class="text-caption font-weight-medium code-chip">{{ b.maBanner }}</span>
+                        <span class="text-caption text-truncate d-block" style="max-width: 140px;">{{ b.tieuDe }}</span>
+                      </div>
+                      <div class="d-flex align-center gap-1">
+                        <input
+                          type="file" accept="image/*" style="display:none"
+                          :ref="el => setBannerFileInputRef(item.maDMSP + '_' + b.maBanner, el)"
+                          @change="(e) => replaceBannerImg(e, b, item.maDMSP)"
+                        />
+                        <v-btn
+                          icon variant="text" size="x-small" color="warning" title="Đổi ảnh"
+                          :loading="bannerUploading[item.maDMSP]"
+                          @click="bannerFileInputs[item.maDMSP + '_' + b.maBanner]?.click()"
+                        >
+                          <Pencil class="w-3 h-3" />
+                        </v-btn>
+                        <v-btn icon variant="text" size="x-small" color="error" title="Xóa banner" @click="deleteBanner(b, item.maDMSP)">
+                          <Trash2 class="w-3 h-3" />
+                        </v-btn>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <v-divider class="my-2"></v-divider>
+
+                <input
+                  type="file" accept="image/*" style="display:none"
+                  :ref="el => setBannerFileInputRef(item.maDMSP, el)"
+                  @change="(e) => onBannerFileChange(e, item.maDMSP)"
+                />
+                <v-btn
+                  block variant="outlined" rounded="lg" size="small"
+                  color="deep-purple" class="text-none font-weight-bold"
+                  :loading="bannerUploading[item.maDMSP]"
+                  @click="triggerBannerUpload(item.maDMSP)"
+                >
+                  <ImagePlus class="w-4 h-4 mr-1" />
+                  Thêm banner
+                </v-btn>
+              </v-card>
+            </v-menu>
+          </div>
         </template>
 
         <template v-slot:item.actions="{ item }">
@@ -631,6 +851,13 @@ onMounted(loadData);
 .upload-placeholder { display: flex; flex-direction: column; align-items: center; gap: 6px; color: #9ca3af; font-size: 12px; }
 .upload-preview-single { position: relative; display: inline-block; }
 .remove-single-img { position: absolute; top: -8px; right: -8px; }
+
+/* Banner dropdown */
+.banner-list { max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.banner-row { display: flex; align-items: center; gap: 10px; padding: 4px; border-radius: 8px; }
+.banner-row:hover { background: rgba(0,0,0,0.04); }
+.banner-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.rotate-180 { transform: rotate(180deg); }
 
 /* Lightbox */
 .lb-overlay-content { position: relative; display: flex; align-items: center; justify-content: center; min-height: 50vh; }

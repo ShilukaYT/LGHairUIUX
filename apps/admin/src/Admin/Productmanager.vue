@@ -42,6 +42,12 @@ const expandedProducts = ref({});
 const expandedRows = ref([]);
 const isLoading = ref(false);
 
+// Phân trang server-side: đổi trang -> chỉ gọi API cho đúng trang đó
+const page = ref(1);
+const itemsPerPage = ref(10);
+const totalItems = ref(0);
+const totalPages = ref(1);
+
 // Gallery state
 const spGallery = reactive({}); // maSP -> [{ maHa, duongDan }]
 const btGallery = reactive({}); // maBienThe -> [{ maHa, duongDan }]
@@ -218,13 +224,18 @@ async function loadSanPham() {
         maDanhMuc: filterCat.value || null,
         maTH: filterBrand.value || null,
         trangThai: filterStatus.value === "" ? null : filterStatus.value,
+        page: page.value,
+        pageSize: itemsPerPage.value,
       },
     });
-    sanPhams.value = res.data.map(sp => ({
+    const rows = res.data.data ?? [];
+    sanPhams.value = rows.map(sp => ({
       maSP: sp.maSp, tenSP: sp.tenSp, maDanhMuc: sp.maDanhMuc,
       maTH: sp.maTh, hinhAnhDaiDien: toAbsUrl(sp.hinhAnhDaiDien),
       trangThai: sp.trangThai, soLuongBienThe: sp.soLuongBienThe ?? 0,
     }));
+    totalItems.value = res.data.total ?? rows.length;
+    totalPages.value = res.data.totalPages ?? 1;
   } catch { showToast("Lỗi tải danh sách sản phẩm!", "error"); }
   finally { isLoading.value = false; }
 }
@@ -276,16 +287,8 @@ function lbNext() { lightbox.idx = (lightbox.idx + 1) % lightbox.imgs.length; }
 const totalActive = computed(() => sanPhams.value.filter(s => s.trangThai).length);
 const totalBT = computed(() => bienThes.value.length);
 
-const filteredData = computed(() => {
-  const q = search.value.toLowerCase().trim();
-  return sanPhams.value.filter(sp => {
-    const mq = !q || sp.tenSP.toLowerCase().includes(q) || sp.maSP.toLowerCase().includes(q);
-    const mc = !filterCat.value || sp.maDanhMuc === filterCat.value;
-    const mb = !filterBrand.value || sp.maTH === filterBrand.value;
-    const ms = filterStatus.value === "" || String(sp.trangThai) === filterStatus.value;
-    return mq && mc && mb && ms;
-  });
-});
+// Dữ liệu đã được BE lọc + phân trang sẵn (đúng trang đang xem), FE chỉ hiển thị nguyên trạng
+const filteredData = computed(() => sanPhams.value);
 
 // ══ HEADERS cho v-data-table ═══════════════════════════════════════
 const headers = [
@@ -317,7 +320,7 @@ function getCatColor(maDanhMuc) {
   return catColors[idx % catColors.length] ?? "blue";
 }
 
-function onFilterChange() { loadSanPham(); }
+function onFilterChange() { page.value = 1; loadSanPham(); }
 
 // ══ SP MODAL ══════════════════════════════════════════════════════
 function resetSpForm() {
@@ -522,9 +525,10 @@ watch(expandedRows, (rows) => {
 });
 
 // ══ INIT ═══════════════════════════════════════════════════════════
+// Lưu ý: KHÔNG gọi loadSanPham() ở đây — v-data-table-server tự bắn
+// @update:options khi mount, và sẽ tự gọi loadSanPham() đúng 1 lần.
 async function loadAll() {
   await Promise.all([loadDanhMuc(), loadThuongHieu()]);
-  await loadSanPham();
 }
 
 onMounted(async () => {
@@ -617,21 +621,25 @@ onMounted(async () => {
             ></v-select>
           </v-col>
           <v-col cols="6" md="2" class="d-flex align-center">
-            <span class="text-caption text-medium-emphasis">{{ filteredData.length }} kết quả</span>
+            <span class="text-caption text-medium-emphasis">{{ totalItems }} kết quả</span>
           </v-col>
         </v-row>
       </v-card-text>
 
-      <v-data-table
+      <v-data-table-server
         :headers="headers"
         :items="filteredData"
+        :items-length="totalItems"
         :loading="isLoading"
-        items-per-page="10"
+        v-model:page="page"
+        v-model:items-per-page="itemsPerPage"
+        :items-per-page-options="[10, 20, 50]"
         item-value="maSP"
         show-expand
         v-model:expanded="expandedRows"
         hover
         class="mt-2"
+        @update:options="loadSanPham"
       >
         <template v-slot:item.hinhAnhDaiDien="{ item }">
           <div class="d-flex justify-center py-2">
@@ -781,7 +789,7 @@ onMounted(async () => {
             </td>
           </tr>
         </template>
-      </v-data-table>
+      </v-data-table-server>
     </v-card>
 
     <!-- ══ MODAL SẢN PHẨM ══════════════════════════════════════════ -->

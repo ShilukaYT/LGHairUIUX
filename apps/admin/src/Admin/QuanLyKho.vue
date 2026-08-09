@@ -19,8 +19,9 @@ function toAbsUrl(path) {
 const activeTab = ref("tonkho"); // tonkho | phieunhap | nhacc | lichsu | canhbao
 
 // ══ SNACKBAR / LIGHTBOX ════════════════════════════════════════════
-const snackbar = reactive({ show: false, text: "", color: "success" });
-function showToast(msg, type = "success") {
+const snackbar = reactive({ show: false, title: "", text: "", color: "success" });
+function showToast(msg, type = "success", title = "") {
+  snackbar.title = title || (type === "error" ? "Đã xảy ra lỗi" : "Thành công");
   snackbar.text = msg;
   snackbar.color = type === "error" ? "error" : "success";
   snackbar.show = true;
@@ -383,7 +384,11 @@ async function duyetPN(p) {
   try {
     await axios.post(`${API}/api/QuanLyKho/phieunhap/${p.maPn}/duyet`);
     logActivity("Duyệt phiếu nhập kho", `Đã duyệt phiếu nhập kho ${p.maPn}, cập nhật tồn kho`, "Quản lý kho");
-    showToast("Duyệt phiếu nhập thành công!");
+    showToast(
+      `Phiếu "${p.maPn}" đã được duyệt, tồn kho cập nhật · ${fmt(p.tongTien)}`,
+      "success",
+      "Duyệt phiếu nhập thành công"
+    );
     await loadPhieuNhap();
     if (activeTab.value === "tonkho") loadTonKho();
     if (activeTab.value === "canhbao") loadCanhBao();
@@ -1587,12 +1592,42 @@ onMounted(async () => {
     </v-dialog>
 
     <!-- ══ SNACKBAR ══════════════════════════════════════════════════ -->
-    <v-snackbar v-model="snackbar.show" :color="snackbar.color" location="top right" timeout="3000" rounded="lg">
-      <div class="font-weight-bold d-flex align-center">
-        <Check v-if="snackbar.color === 'success'" class="w-5 h-5 mr-2" />
-        <X v-else class="w-5 h-5 mr-2" />
-        {{ snackbar.text }}
+    <v-snackbar
+      v-model="snackbar.show"
+      location="top right"
+      timeout="3500"
+      rounded="lg"
+      variant="elevated"
+      elevation="8"
+      color="white"
+      class="app-snackbar"
+      :class="snackbar.color === 'success' ? 'app-snackbar--success' : 'app-snackbar--error'"
+    >
+      <div class="d-flex align-start gap-3">
+        <v-avatar
+          :color="snackbar.color === 'success' ? 'success' : 'error'"
+          size="34"
+          class="flex-shrink-0"
+        >
+          <Check v-if="snackbar.color === 'success'" class="w-5 h-5" style="color:#fff" />
+          <X v-else class="w-5 h-5" style="color:#fff" />
+        </v-avatar>
+        <div class="flex-grow-1" style="min-width:0">
+          <div
+            class="font-weight-bold text-body-2"
+            :class="snackbar.color === 'success' ? 'text-success-darken-2' : 'text-error-darken-2'"
+          >
+            {{ snackbar.title }}
+          </div>
+          <div class="text-caption text-medium-emphasis" style="white-space:normal">{{ snackbar.text }}</div>
+        </div>
       </div>
+
+      <template v-slot:actions>
+        <v-btn icon size="x-small" variant="text" color="grey-darken-1" @click="snackbar.show = false">
+          <X class="w-4 h-4" />
+        </v-btn>
+      </template>
     </v-snackbar>
   </v-container>
 </template>
@@ -1608,4 +1643,17 @@ onMounted(async () => {
 .thongke-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; }
 .thongke-bar-wrap { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
 .thongke-bar { width: 60%; min-height: 2px; background: rgb(var(--v-theme-primary)); border-radius: 4px 4px 0 0; transition: height 0.3s ease; }
+
+/* ── SNACKBAR ─────────────────────────────────────────────────── */
+:deep(.app-snackbar .v-snackbar__wrapper) {
+  min-width: 340px;
+  max-width: 420px;
+  border-left: 4px solid rgb(var(--v-theme-success));
+}
+:deep(.app-snackbar--error .v-snackbar__wrapper) {
+  border-left-color: rgb(var(--v-theme-error));
+}
+:deep(.app-snackbar .v-snackbar__content) {
+  padding: 14px 4px;
+}
 </style>
