@@ -20,6 +20,7 @@ export default {
       timer: null,
       cartItems: [],
       userMaKH: null,
+      isLoading: true,
     };
   },
 
@@ -54,6 +55,7 @@ export default {
 
     async fetchCombo(id) {
       try {
+        this.isLoading = true;
         this.combo = {};
         this.dichVuTrongCombo = [];
         this.relatedCombos = [];
@@ -89,6 +91,8 @@ export default {
         }
       } catch (err) {
         console.error(err);
+      } finally {
+        this.isLoading = false;
       }
     },
 
@@ -175,6 +179,27 @@ export default {
   <div class="service-detail-page">
     <div class="container py-5">
       <!-- ===================================================
+           SKELETON LOADING (hiện trong lúc gọi API)
+      =================================================== -->
+      <div v-if="isLoading" class="svc-skeleton" aria-busy="true">
+        <div class="skel-line skel-breadcrumb"></div>
+        <div class="skel-line skel-title"></div>
+        <div class="skel-line skel-underline"></div>
+        <div class="skel-line skel-price"></div>
+        <div class="skel-meta-row">
+          <div class="skel-line skel-duration"></div>
+          <div class="skel-line skel-duration"></div>
+          <div class="skel-line skel-duration"></div>
+        </div>
+
+        <div class="skel-banner"></div>
+
+        <div class="skel-line skel-desc"></div>
+        <div class="skel-line skel-desc short"></div>
+      </div>
+
+      <div v-else>
+      <!-- ===================================================
            PHẦN 1: COMBO HEADER
       =================================================== -->
       <div class="svc-header mb-4" data-aos="fade-down">
@@ -187,7 +212,7 @@ export default {
           </ol>
         </nav>
 
-        <h1 class="font-playfair service-title-lg">{{ combo.tenCombo }}</h1>
+        <h1 class="category-grid-heading">{{ combo.tenCombo }}</h1>
         <div class="title-underline mb-3"></div>
 
         <!-- Flash sale countdown -->
@@ -199,13 +224,15 @@ export default {
 
         <!-- Giá -->
         <div class="price-container-luxury mb-3">
-          <span class="new-price-lg">{{ formatPrice(combo.gia) }}</span>
-
           <span
             v-if="combo.giaGoc && combo.giaGoc > combo.gia"
             class="old-price-inline"
           >
             {{ formatPrice(combo.giaGoc) }}
+          </span>
+
+          <span class="new-price-lg">
+            <template v-if="combo.giaGoc && combo.giaGoc > combo.gia">Chỉ từ </template>{{ formatPrice(combo.gia) }}
           </span>
 
           <span v-if="combo.phanTramGiam" class="discount-tag-premium">
@@ -268,7 +295,7 @@ export default {
       >
         <div class="tieude-header-info text-center mb-4">
           <p class="section-eyebrow">Bao gồm</p>
-          <h3 class="font-playfair service-tieude-title">
+          <h3 class="editorial-title-heading">
             DỊCH VỤ TRONG COMBO
           </h3>
           <!-- <div class="heading-gold-line mx-auto"></div> -->
@@ -350,7 +377,7 @@ export default {
           style="margin-top: 50px"
         >
           <p class="section-eyebrow">Có thể bạn thích</p>
-          <h3 class="font-playfair section-heading-main">COMBO LIÊN QUAN</h3>
+          <h3 class="editorial-title-heading">COMBO LIÊN QUAN</h3>
           <div class="heading-gold-line"></div>
         </div>
         <div class="row g-4 justify-content-center">
@@ -392,12 +419,12 @@ export default {
                   </div>
                   <div class="combo-footer mt-auto pt-3">
                     <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
-                      <span class="combo-price mb-0">{{
-                        formatPrice(c.gia)
-                      }}</span>
                       <span v-if="c.giaGoc" class="combo-price-old">{{
                         formatPrice(c.giaGoc)
                       }}</span>
+                      <span class="combo-price mb-0">
+                        <template v-if="c.giaGoc">Chỉ từ </template>{{ formatPrice(c.gia) }}
+                      </span>
                       <span
                         v-if="c.phanTramGiam"
                         class="combo-discount-badge-gold"
@@ -425,7 +452,7 @@ export default {
         <hr class="gold-line my-5"/>
         <div class="section-heading-wrapper text-center mb-5">
           <p class="section-eyebrow">Khám phá thêm</p>
-          <h3 class="font-playfair section-heading-main">DỊCH VỤ GỢI Ý</h3>
+          <h3 class="editorial-title-heading">DỊCH VỤ GỢI Ý</h3>
           <div class="heading-gold-line"></div>
         </div>
         <div class="row g-4">
@@ -444,7 +471,7 @@ export default {
                 <div v-if="s.phanTramGiam" class="discount-ribbon">
                   <span>-{{ s.phanTramGiam }}%</span>
                 </div>
-                <div class="duration-tag-overlay">{{ s.thoiGianLam }} Phút</div>
+                <!-- <div class="duration-tag-overlay">{{ s.thoiGianLam }} Phút</div> -->
               </div>
               <div
                 class="card-body p-4 text-center d-flex flex-column flex-grow-1"
@@ -458,7 +485,9 @@ export default {
                     <span v-if="s.phanTramGiam" class="old-price-sm">{{
                       formatPrice(s.giaGoc)
                     }}</span>
-                    <span class="new-price-sm">{{ formatPrice(s.gia) }}</span>
+                    <span class="new-price-sm">
+                      <template v-if="s.phanTramGiam">Chỉ từ </template>{{ formatPrice(s.gia) }}
+                    </span>
                   </div>
                   <router-link
                     :to="{ name: 'serviceDetail', params: { id: s.id } }"
@@ -477,6 +506,7 @@ export default {
            ĐÁNH GIÁ
       =================================================== -->
       <!-- <ReviewList v-if="$route.params.id" :serviceId="$route.params.id" /> -->
+      </div>
     </div>
 
 
@@ -485,7 +515,87 @@ export default {
 
 <style scoped>
 /* =========================================================
-   FONT — Cormorant Garamond (heading) + Jost (body)
+   SKELETON LOADING
+   ========================================================= */
+.svc-skeleton {
+  padding-bottom: 20px;
+}
+
+.skel-line,
+.skel-banner {
+  background: linear-gradient(90deg, #ececec 25%, #f5f5f5 37%, #ececec 63%);
+  background-size: 400% 100%;
+  animation: skel-shimmer 1.4s ease infinite;
+  border-radius: 2px;
+}
+
+@keyframes skel-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+.skel-breadcrumb {
+  width: 140px;
+  height: 14px;
+  margin-bottom: 14px;
+}
+
+.skel-title {
+  width: 50%;
+  max-width: 420px;
+  height: 34px;
+  margin-bottom: 14px;
+}
+
+.skel-underline {
+  width: 60px;
+  height: 3px;
+  margin-bottom: 20px;
+}
+
+.skel-price {
+  width: 180px;
+  height: 26px;
+  margin-bottom: 16px;
+}
+
+.skel-meta-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 30px;
+}
+
+.skel-duration {
+  width: 110px;
+  height: 30px;
+  border-radius: 20px;
+  margin-bottom: 0;
+}
+
+.skel-banner {
+  width: 100%;
+  height: 320px;
+  margin-bottom: 24px;
+}
+
+.skel-desc {
+  width: 100%;
+  height: 14px;
+  margin-bottom: 10px;
+}
+
+.skel-desc.short {
+  width: 70%;
+}
+
+@media (max-width: 768px) {
+  .skel-banner {
+    height: 200px;
+  }
+}
+
+/* =========================================================
+   FONT — "Helvetica Neue", Helvetica, Arial, sans-serif (heading + body)
    ========================================================= */
 
 /* =========================================================
@@ -597,7 +707,7 @@ export default {
   --bg: #ffffff;
   --bg-soft: #fafafa;
 
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   background: var(--bg);
   color: var(--ink);
 }
@@ -606,7 +716,7 @@ export default {
    FONT HELPERS
    ========================================================= */
 .font-playfair {
-  font-family: "Cormorant Garamond", serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
 /* =========================================================
@@ -619,7 +729,7 @@ export default {
 }
 
 .section-eyebrow {
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 4px;
@@ -629,12 +739,24 @@ export default {
 }
 
 .section-heading-main {
-  font-family: "Cormorant Garamond", serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 1.9rem;
   font-weight: 600;
   letter-spacing: 4px;
   text-transform: uppercase;
   color: var(--ink);
+  margin-bottom: 16px;
+}
+
+/* Tiêu đề section — đồng bộ kiểu chữ với tên dịch vụ (editorial-title) ở Dmdichvu.vue */
+.editorial-title-heading {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 1.8rem;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  font-weight: 400;
+  color: var(--ink);
+  line-height: 1.3;
   margin-bottom: 16px;
 }
 
@@ -655,7 +777,7 @@ export default {
 
 /* Breadcrumb */
 .breadcrumb-item a {
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 0.72rem;
   letter-spacing: 2px;
   text-transform: uppercase;
@@ -669,7 +791,7 @@ export default {
 }
 
 .breadcrumb-item.active {
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 0.72rem;
   letter-spacing: 2px;
   text-transform: uppercase;
@@ -678,7 +800,7 @@ export default {
 }
 
 .service-title-lg {
-  font-family: "Cormorant Garamond", serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 2.6rem;
   font-weight: 600;
   letter-spacing: 4px;
@@ -686,6 +808,17 @@ export default {
   color: var(--ink);
   line-height: 1.2;
   margin-bottom: 8px;
+}
+
+/* Tiêu đề tên combo đang xem — đồng bộ kiểu chữ với "Tất cả Dịch Vụ" ở Dmdichvu.vue */
+.category-grid-heading {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 2rem;
+  font-weight: 400;
+  color: var(--ink);
+  margin: 0 0 28px;
+  max-width: 1334px;
+  line-height: 40px;
 }
 
 .title-underline {
@@ -698,7 +831,7 @@ export default {
 }
 
 .combo-mota-header {
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 0.88rem;
   font-weight: 300;
   color: var(--muted);
@@ -717,7 +850,7 @@ export default {
   color: #fff;
   padding: 8px 20px;
   border-radius: 0;
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 0.72rem;
   font-weight: 500;
   letter-spacing: 2px;
@@ -728,7 +861,7 @@ export default {
 }
 
 .flash-countdown {
-  font-family: "Jost", monospace;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   color: #fff;
   font-size: 0.82rem;
 }
@@ -744,27 +877,28 @@ export default {
 }
 
 .new-price-lg {
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 1.7rem;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--ink);
   letter-spacing: 0.5px;
 }
 
 .old-price-inline {
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 1.0rem;
-  color: var(--muted-light);
+  color: var(--ink);
   text-decoration: line-through !important;
+  text-decoration-color: var(--red);
   font-weight: 300;
   display: inline-block;
   margin-left: 4px;
 }
 
 .discount-tag-premium {
-  background: var(--ink);
+  background: #d92d20;
   color: #fff;
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 0.68rem;
   font-weight: 500;
   letter-spacing: 1.5px;
@@ -784,7 +918,7 @@ export default {
   border: 1px solid var(--line);
   color: var(--muted);
   border-radius: 0;
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 400;
   font-size: 0.72rem;
   letter-spacing: 2px;
@@ -799,7 +933,7 @@ export default {
   border: 1px solid var(--line);
   color: var(--muted);
   border-radius: 0;
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 400;
   font-size: 0.72rem;
   letter-spacing: 2px;
@@ -846,7 +980,7 @@ export default {
   left: 12px;
   background: var(--ink);
   color: #fff;
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 0.65rem;
   font-weight: 500;
   letter-spacing: 2px;
@@ -929,7 +1063,7 @@ export default {
 
 .kieu-label {
   margin-top: 8px;
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 0.72rem;
   font-weight: 500;
   text-transform: uppercase;
@@ -951,7 +1085,7 @@ export default {
 }
 
 .dichvu-time {
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 0.65rem;
   font-weight: 400;
   color: var(--muted);
@@ -960,15 +1094,16 @@ export default {
 }
 
 .dichvu-price-tag {
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 0.72rem;
   font-weight: 300;
-  color: var(--muted-light);
+  color: var(--ink);
   text-decoration: line-through;
+  text-decoration-color: var(--red);
 }
 
 .dichvu-mota {
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 0.72rem;
   font-weight: 300;
   color: var(--muted);
@@ -1003,7 +1138,7 @@ export default {
 }
 
 .saving-label {
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 0.65rem;
   color: var(--muted);
   text-transform: uppercase;
@@ -1012,10 +1147,11 @@ export default {
 }
 
 .saving-giaGoc {
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 1.0rem;
-  color: var(--muted-light);
+  color: var(--ink);
   text-decoration: line-through;
+  text-decoration-color: var(--red);
   font-weight: 300;
 }
 
@@ -1024,7 +1160,7 @@ export default {
 }
 
 .saving-giaCombo {
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 1.2rem;
   font-weight: 500;
   color: var(--ink);
@@ -1034,7 +1170,7 @@ export default {
 .saving-chip {
   background: var(--ink);
   color: #fff;
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 0.65rem;
   font-weight: 500;
   letter-spacing: 1.5px;
@@ -1053,7 +1189,7 @@ export default {
   padding: 14px 46px;
   border-radius: 0;
   border: none;
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 2px;
@@ -1122,9 +1258,9 @@ export default {
   display: block;
   width: 112px;
   padding: 6px 0;
-  background: var(--ink);
+  background: #d92d20;
   color: #fff;
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 500;
   font-size: 0.6rem;
   letter-spacing: 1.5px;
@@ -1142,7 +1278,7 @@ export default {
 }
 
 .combo-name {
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 600;
   font-size: 0.82rem;
   letter-spacing: 1.5px;
@@ -1156,7 +1292,7 @@ export default {
 }
 
 .combo-save-text {
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 0.78rem;
   font-weight: 300;
   color: var(--muted);
@@ -1179,7 +1315,7 @@ export default {
 
 .combo-items-list li {
   margin-bottom: 4px;
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 0.78rem;
   font-weight: 300;
   color: var(--ink-soft);
@@ -1206,25 +1342,26 @@ export default {
 }
 
 .combo-price {
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 1.15rem;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--ink);
   letter-spacing: 0.5px;
 }
 
 .combo-price-old {
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 0.82rem;
   font-weight: 300;
-  color: var(--muted-light);
+  color: var(--ink);
   text-decoration: line-through;
+  text-decoration-color: var(--red);
 }
 
 .combo-discount-badge-gold {
-  background: var(--ink);
+  background: #d92d20;
   color: #fff;
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 0.65rem;
   font-weight: 500;
   letter-spacing: 1px;
@@ -1239,7 +1376,7 @@ export default {
   border: 1px solid var(--ink);
   color: var(--ink);
   padding: 8px;
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 0.72rem;
   font-weight: 500;
   text-transform: uppercase;
@@ -1305,7 +1442,7 @@ export default {
   background: rgba(255, 255, 255, 0.95);
   padding: 4px 12px;
   border-radius: 0;
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 0.65rem;
   font-weight: 500;
   letter-spacing: 2px;
@@ -1329,9 +1466,9 @@ export default {
   display: block;
   width: 112px;
   padding: 6px 0;
-  background: var(--ink);
+  background: #d92d20;
   color: #fff;
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 500;
   font-size: 0.6rem;
   letter-spacing: 1.5px;
@@ -1344,7 +1481,7 @@ export default {
 }
 
 .service-name-sm {
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 600;
   font-size: 0.88rem;
   letter-spacing: 1.5px;
@@ -1358,7 +1495,7 @@ export default {
 }
 
 .service-desc-sm {
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 0.82rem;
   font-weight: 300;
   color: var(--muted);
@@ -1380,17 +1517,18 @@ export default {
 }
 
 .old-price-sm {
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 0.82rem;
   font-weight: 300;
-  color: var(--muted-light);
+  color: var(--ink);
   text-decoration: line-through;
+  text-decoration-color: var(--red);
 }
 
 .new-price-sm {
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 1.0rem;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--ink);
   letter-spacing: 0.5px;
 }
@@ -1403,7 +1541,7 @@ export default {
   padding: 10px;
   border-radius: 0;
   text-decoration: none;
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 500;
   font-size: 0.72rem;
   letter-spacing: 2px;
@@ -1438,7 +1576,7 @@ export default {
 }
 
 .service-tieude-title {
-  font-family: "Cormorant Garamond", serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 1.9rem;
   font-weight: 600;
   letter-spacing: 3px;
@@ -1476,7 +1614,7 @@ export default {
   min-width: 180px;
   padding: 0 28px;
   border-radius: 0;
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 500;
   font-size: 11px;
   text-transform: uppercase;

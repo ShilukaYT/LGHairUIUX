@@ -3,7 +3,7 @@ import { ref, computed, reactive, onMounted } from "vue";
 import axios from "axios";
 import { logActivity } from "@/utils/activityLogger";
 import { useTheme } from "vuetify";
-import { Plus, Pencil, Trash2, Eye, Search, Check, X, RotateCcw } from "lucide-vue-next";
+import { Plus, Pencil, Trash2, Eye, Search, Check, X, RotateCcw, ImagePlus, ImageOff, ImageIcon } from "lucide-vue-next";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -28,6 +28,7 @@ async function loadData() {
     danhMucs.value = res.data.map((d) => ({
       maDM: d.maDM,
       tenDanhMuc: d.tenDanhMuc,
+      hinhAnh: d.hinhAnh ?? null,
       ngayTao: d.ngayTao,
       trangThai: d.trangThai,
       soDichVu: d.soDichVu ?? 0,
@@ -49,12 +50,69 @@ const form = reactive({
   maDM: "",
   tenDanhMuc: "",
   trangThai: 1,
+  hinhAnh: null, // URL ảnh hiện có (khi sửa)
 });
 const errors = reactive({ maDM: "", tenDanhMuc: "" });
 const confirmModal = reactive({ open: false, item: null });
 
+// ── ẢNH DANH MỤC ──────────────────────────────────────────────────
+const fileInput = ref(null);
+const imageFile = ref(null); // File mới người dùng vừa chọn
+const imagePreview = ref(null); // blob URL để xem trước ảnh mới
+const removeImage = ref(false); // cờ: người dùng bấm "Xóa ảnh" (sửa danh mục)
+const MAX_IMAGE_MB = 5;
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+
+function resetImageState() {
+  if (imagePreview.value) URL.revokeObjectURL(imagePreview.value);
+  imageFile.value = null;
+  imagePreview.value = null;
+  removeImage.value = false;
+  if (fileInput.value) fileInput.value.value = "";
+}
+
+function triggerFilePicker() {
+  fileInput.value?.click();
+}
+
+function onImageSelected(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+    showToast("Chỉ chấp nhận ảnh JPG, PNG, WEBP, GIF.", "error");
+    e.target.value = "";
+    return;
+  }
+  if (file.size > MAX_IMAGE_MB * 1024 * 1024) {
+    showToast(`Dung lượng ảnh tối đa ${MAX_IMAGE_MB}MB.`, "error");
+    e.target.value = "";
+    return;
+  }
+
+  if (imagePreview.value) URL.revokeObjectURL(imagePreview.value);
+  imageFile.value = file;
+  imagePreview.value = URL.createObjectURL(file);
+  removeImage.value = false;
+}
+
+function clearNewImage() {
+  if (imagePreview.value) URL.revokeObjectURL(imagePreview.value);
+  imageFile.value = null;
+  imagePreview.value = null;
+  if (fileInput.value) fileInput.value.value = "";
+}
+
+// Bấm "Xóa ảnh hiện tại" trong lúc sửa
+function markRemoveExistingImage() {
+  clearNewImage();
+  removeImage.value = true;
+  form.hinhAnh = null;
+}
+
 // ── HEADERS cho v-data-table ═══════════════════════════════════════
 const headers = [
+  { title: "Ảnh", key: "hinhAnh", align: "center", sortable: false },
   { title: "Mã DM", key: "maDM", align: "start", sortable: true },
   { title: "Tên danh mục", key: "tenDanhMuc", align: "start", sortable: true },
   { title: "Số dịch vụ", key: "soDichVu", align: "center", sortable: true },
@@ -140,10 +198,12 @@ function validate() {
 function openAdd() {
   editingId.value = null;
   clearErrors();
+  resetImageState();
   Object.assign(form, {
     maDM: "",
     tenDanhMuc: "",
     trangThai: 1,
+    hinhAnh: null,
   });
   modal.mode = "form";
   modal.title = "Thêm danh mục mới";
@@ -153,10 +213,12 @@ function openAdd() {
 function openEdit(d) {
   editingId.value = d.maDM;
   clearErrors();
+  resetImageState();
   Object.assign(form, {
     maDM: d.maDM,
     tenDanhMuc: d.tenDanhMuc,
     trangThai: d.trangThai,
+    hinhAnh: d.hinhAnh ?? null,
   });
   modal.mode = "form";
   modal.title = "Chỉnh sửa danh mục";
@@ -173,6 +235,7 @@ function openView(d) {
 function closeModal() {
   modal.open = false;
   editingId.value = null;
+  resetImageState();
 }
 
 // ── SAVE ───────────────────────────────────────────────────────────
@@ -184,6 +247,13 @@ async function saveItem() {
     if (!editingId.value) fd.append("MaDM", form.maDM.trim().toUpperCase());
     fd.append("TenDanhMuc", form.tenDanhMuc.trim());
     fd.append("TrangThai", String(form.trangThai));
+
+    // ── Ảnh: có file mới -> gửi file; đang sửa & bấm xóa ảnh -> gửi cờ XoaHinh ──
+    if (imageFile.value) {
+      fd.append("HinhAnh", imageFile.value);
+    } else if (editingId.value && removeImage.value) {
+      fd.append("XoaHinh", "true");
+    }
 
     if (editingId.value) {
       await axios.put(`${API}/api/DanhMuc/${editingId.value}`, fd);
@@ -378,6 +448,24 @@ onMounted(loadData);
         hover
         class="mt-2"
       >
+        <template v-slot:item.hinhAnh="{ item }">
+          <v-avatar rounded="lg" size="44" class="my-1" :class="{ 'avatar-placeholder': !item.hinhAnh }">
+            <v-img v-if="item.hinhAnh" :src="item.hinhAnh" cover alt="Ảnh danh mục">
+              <template v-slot:placeholder>
+                <div class="d-flex align-center justify-center fill-height">
+                  <v-progress-circular indeterminate size="18" width="2" color="grey" />
+                </div>
+              </template>
+              <template v-slot:error>
+                <div class="d-flex align-center justify-center fill-height">
+                  <ImageIcon class="w-4 h-4 text-grey" />
+                </div>
+              </template>
+            </v-img>
+            <ImageIcon v-else class="w-5 h-5 text-grey" />
+          </v-avatar>
+        </template>
+
         <template v-slot:item.maDM="{ item }">
           <span class="text-caption font-weight-medium code-chip">{{ item.maDM }}</span>
         </template>
@@ -439,6 +527,18 @@ onMounted(loadData);
           <!-- VIEW -->
           <template v-if="modal.mode === 'view'">
             <v-row>
+              <v-col cols="12" class="d-flex justify-center">
+                <v-avatar rounded="lg" size="120" class="mb-2" :class="{ 'avatar-placeholder': !form.hinhAnh }">
+                  <v-img v-if="form.hinhAnh" :src="form.hinhAnh" cover alt="Ảnh danh mục">
+                    <template v-slot:error>
+                      <div class="d-flex align-center justify-center fill-height">
+                        <ImageIcon class="w-8 h-8 text-grey" />
+                      </div>
+                    </template>
+                  </v-img>
+                  <ImageIcon v-else class="w-10 h-10 text-grey" />
+                </v-avatar>
+              </v-col>
               <v-col cols="6">
                 <div class="detail-item">
                   <div class="detail-label">Mã danh mục</div>
@@ -477,6 +577,50 @@ onMounted(loadData);
           <!-- FORM -->
           <v-form v-else @submit.prevent="saveItem">
             <v-row>
+              <!-- ── Ảnh danh mục ── -->
+              <v-col cols="12">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Hình ảnh danh mục</div>
+                <input
+                  ref="fileInput"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  class="d-none"
+                  @change="onImageSelected"
+                />
+                <div class="d-flex align-center gap-3">
+                  <div class="image-preview-box" :class="{ 'is-empty': !imagePreview && !form.hinhAnh }" @click="triggerFilePicker">
+                    <img v-if="imagePreview" :src="imagePreview" alt="Ảnh mới" />
+                    <img v-else-if="form.hinhAnh" :src="form.hinhAnh" alt="Ảnh hiện tại" />
+                    <ImageIcon v-else class="w-7 h-7 text-grey" />
+                  </div>
+                  <div class="d-flex flex-column gap-2">
+                    <v-btn
+                      variant="outlined" size="small" rounded="lg" color="primary"
+                      class="text-none font-weight-bold" @click="triggerFilePicker"
+                    >
+                      <template v-slot:prepend><ImagePlus class="w-4 h-4 mr-1" /></template>
+                      {{ imagePreview || form.hinhAnh ? "Đổi ảnh" : "Tải ảnh lên" }}
+                    </v-btn>
+                    <v-btn
+                      v-if="imagePreview"
+                      variant="text" size="small" rounded="lg" color="grey-darken-1"
+                      class="text-none" @click="clearNewImage"
+                    >
+                      Hủy chọn ảnh mới
+                    </v-btn>
+                    <v-btn
+                      v-else-if="editingId && form.hinhAnh"
+                      variant="text" size="small" rounded="lg" color="error"
+                      class="text-none" @click="markRemoveExistingImage"
+                    >
+                      <template v-slot:prepend><ImageOff class="w-4 h-4 mr-1" /></template>
+                      Xóa ảnh
+                    </v-btn>
+                    <span class="text-caption text-medium-emphasis">JPG, PNG, WEBP, GIF · tối đa 5MB</span>
+                  </div>
+                </div>
+              </v-col>
+
               <v-col cols="12" sm="6">
                 <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Mã danh mục *</div>
                 <v-text-field
@@ -517,7 +661,7 @@ onMounted(loadData);
             </v-btn>
             <v-btn
               variant="flat" rounded="lg" class="text-none font-weight-bold" color="primary"
-              @click="openEdit({ maDM: form.maDM, tenDanhMuc: form.tenDanhMuc, trangThai: form.trangThai, ngayTao: form.ngayTao, soDichVu: form.soDichVu })"
+              @click="openEdit({ maDM: form.maDM, tenDanhMuc: form.tenDanhMuc, trangThai: form.trangThai, ngayTao: form.ngayTao, soDichVu: form.soDichVu, hinhAnh: form.hinhAnh })"
             >
               Chỉnh sửa
             </v-btn>
@@ -597,4 +741,25 @@ onMounted(loadData);
 /* Detail view */
 .detail-item { background: rgba(0,0,0,0.03); border-radius: 8px; padding: 10px 12px; }
 .detail-label { font-size: 11px; color: rgba(255,255,255,0.65); margin-bottom: 4px; }
+
+/* Ảnh danh mục */
+.avatar-placeholder { background: rgba(0,0,0,0.06); }
+
+.image-preview-box {
+  width: 88px;
+  height: 88px;
+  border-radius: 12px;
+  border: 1.5px dashed rgba(0,0,0,0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: pointer;
+  flex-shrink: 0;
+  background: rgba(0,0,0,0.03);
+  transition: border-color 0.15s ease;
+}
+.image-preview-box:hover { border-color: rgba(25,118,210,0.5); }
+.image-preview-box img { width: 100%; height: 100%; object-fit: cover; }
+.image-preview-box.is-empty { border-color: rgba(0,0,0,0.18); }
 </style>

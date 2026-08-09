@@ -1,6 +1,4 @@
 <script setup lang="ts">
-// import CartSidebar from "@/Khanhhang/views/CartSidebar.vue";
-// import { getCartDB } from "./CSDL/cartDB";
 import { ref, computed, onMounted, watch, nextTick } from "vue";
 import { getCartDB, addToCartDB } from "@/Views/Anonymous/CSDL/cartDB";
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
@@ -21,7 +19,6 @@ const scrollToServicesTop = (smooth = true) => {
   });
 };
 const cartItems = ref<any[]>([]);
-const cartRef = ref<any>(null);
 const userMaKH = ref<string | null>(null);
 
 const ratingsMap = ref<Record<string, { avg: number; count: number }>>({});
@@ -39,6 +36,23 @@ const getCategoryImageUrl = (img?: string) => {
 // AOS
 declare const AOS: any;
 
+// 🔥 Gọi lại AOS sau mỗi lần danh sách dịch vụ/combo được Vue re-render do
+// filter/đổi trang (v-for thay phần tử mới bên trong <section data-aos="...">).
+// Nếu không gọi lại, AOS không biết các phần tử MỚI này để hoàn tất animation
+// → chúng bị kẹt ở trạng thái CSS ban đầu (mờ/nhỏ hơn bình thường) thay vì hiển
+// thị đúng kích thước/độ mờ như lúc mới vào trang.
+const refreshAos = () => {
+  nextTick(() => {
+    if (typeof AOS !== "undefined" && AOS) {
+      if (typeof AOS.refreshHard === "function") {
+        AOS.refreshHard();
+      } else if (typeof AOS.refresh === "function") {
+        AOS.refresh();
+      }
+    }
+  });
+};
+
 // =======================
 // STATE
 // =======================
@@ -55,25 +69,6 @@ const categoryGridRef = ref<HTMLElement | null>(null);
 const searchQuery = ref("");
 const selectedCategory = ref("all");
 const selectedPriceRange = ref("all");
-
-// Sidebar danh mục dịch vụ kiểu Shop.vue
-const sidebarOpen = ref(true);
-const expandedCats = ref<string[]>([]);
-
-const toggleExpand = (maDM: string) => {
-  const index = expandedCats.value.indexOf(maDM);
-  if (index === -1) expandedCats.value.push(maDM);
-  else expandedCats.value.splice(index, 1);
-};
-// Hover vào 1 danh mục có danh mục con → tự xổ ra (cho desktop, không cần bấm)
-const openExpand = (maDM: string) => {
-  if (!expandedCats.value.includes(maDM)) expandedCats.value.push(maDM);
-};
-// Rời chuột ra khỏi danh mục đó → tự đóng lại
-const closeExpand = (maDM: string) => {
-  const index = expandedCats.value.indexOf(maDM);
-  if (index !== -1) expandedCats.value.splice(index, 1);
-};
 
 // ⚠️ Đổi lại đúng tên route (name) của trang danh sách SẢN PHẨM (Shop.vue) trong
 // router/index.ts nếu tên route ở dự án của bạn khác "product" — dùng để điều hướng
@@ -93,13 +88,48 @@ const syncRouteQuery = () => {
 };
 
 // =======================
+// COMBO — hiển thị tối đa 9 combo/lượt, có nút "Xem thêm" (load more, giống Shop.vue)
+// thay vì phân trang số trang: mỗi lần bấm sẽ tải thêm 9 combo tiếp theo và nối
+// vào danh sách hiện có (không thay thế).
+// Khai báo trước fetchAll() vì fetchAll() cần đọc comboPage/comboPageSize.
+// =======================
+const comboPage = ref(1);
+const comboPageSize = ref(9);
+const comboTotalPages = ref(1);
+const comboLoadingMore = ref(false);
+const comboListRef = ref<HTMLElement | null>(null);
+
+// =======================
+// BỘ LỌC DỊCH VỤ (panel nổi, xổ ra bên phải — nút "Bộ Lọc" luôn hiện
+// cố định ở góc dưới màn hình, xuyên suốt toàn trang dịch vụ).
+// Dùng chung searchQuery/selectedPriceRange với fetchFiltered() ở dưới,
+// panel này chỉ là UI để nhập — logic gọi API đã có sẵn trong watch
+// [searchQuery, selectedCategory, selectedPriceRange].
+// =======================
+const comboFilterOpen = ref(false);
+const comboFilterActive = computed(
+  () =>
+    searchQuery.value.trim() !== "" ||
+    selectedCategory.value !== "all" ||
+    selectedPriceRange.value !== "all",
+);
+
+// =======================
 // LOAD DATA BAN ĐẦU
 // =======================
 const fetchAll = async () => {
-  const res = await axios.get(`${API}/api/DanhSachDichVu`);
+  const res = await axios.get(`${API}/api/DanhSachDichVu`, {
+    params: {
+      // servicePage cố định 1 ở đây vì dịch vụ trang chủ dùng /filter riêng (fetchFiltered);
+      // GetAll chỉ dùng để lấy categories + combo phân trang.
+      comboPage: comboPage.value,
+      comboPageSize: comboPageSize.value,
+    },
+  });
 
   categories.value = res.data.categories;
   combos.value = res.data.combos;
+  comboTotalPages.value = res.data.combosTotalPages;
 };
 
 // Lấy danh sách danh mục để hiển thị lưới (gộp từ Dmdichvu.vue)
@@ -118,9 +148,10 @@ const fetchCategoryGrid = async () => {
 };
 
 // Bấm vào 1 danh mục trong lưới → lọc luôn dịch vụ bên dưới (không cần chuyển trang nữa
-// vì giờ 2 khu vực đã ở chung 1 trang)
+// vì giờ 2 khu vực đã ở chung 1 trang). Bấm lại đúng danh mục đang chọn → huỷ lọc,
+// quay về trạng thái "tất cả".
 const goToCategory = (maDM: string) => {
-  selectedCategory.value = maDM;
+  selectedCategory.value = selectedCategory.value === maDM ? "all" : maDM;
   scrollToServicesTop();
 };
 
@@ -148,6 +179,38 @@ const changePage = async (page: number) => {
   currentPage.value = page;
   await fetchFiltered(); // 🔥 thiếu cái này
   scrollToServicesTop(); // 🔥 auto scroll lên dịch vụ đầu tiên khi đổi trang
+  // 🔥 KHÔNG gọi refreshAos() ở đây: thẻ dịch vụ (v-for services) không có data-aos,
+  // nên AOS.refreshHard() ở đây không giúp gì cho danh sách dịch vụ cả — nó chỉ tính
+  // lại offset của MỌI phần tử data-aos trên trang (kể cả .category-grid-section,
+  // .services-hero ở phía trên), khiến các khối đó bị reset về trạng thái opacity:0
+  // ban đầu và không tự hiện lại → "biến mất" khỏi giao diện. Đây chính là nguyên
+  // nhân UI bị nát sau khi đổi trang/lọc dịch vụ.
+};
+
+// Combo không còn tìm kiếm/lọc — "Xem thêm" chỉ cần gọi lại API với comboPage kế
+// tiếp rồi NỐI kết quả mới vào combos hiện có (khác fetchAll() ban đầu là ghi đè).
+const loadMoreCombos = async () => {
+  if (comboLoadingMore.value) return;
+  if (comboPage.value >= comboTotalPages.value) return;
+
+  comboLoadingMore.value = true;
+  try {
+    const nextPage = comboPage.value + 1;
+    const res = await axios.get(`${API}/api/DanhSachDichVu`, {
+      params: {
+        comboPage: nextPage,
+        comboPageSize: comboPageSize.value,
+      },
+    });
+    combos.value.push(...(res.data.combos || []));
+    comboPage.value = nextPage;
+    comboTotalPages.value = res.data.combosTotalPages;
+    refreshAos();
+  } catch (err) {
+    console.error("loadMoreCombos error:", err);
+  } finally {
+    comboLoadingMore.value = false;
+  }
 };
 const visiblePages = computed(() => {
   const pages: (number | string)[] = [];
@@ -191,10 +254,17 @@ const getRemainingTime = (endDate: string) => {
 // =======================
 // FILTER (CALL API)
 // =======================
-// Sửa URL (bỏ dấu // thừa)
+// 🔥 Chống race condition: mỗi lần gọi fetchFiltered() sẽ có 1 "vé số" (requestId)
+// riêng. Nếu người dùng gõ/lọc liên tục, nhiều request bay đi cùng lúc và có thể
+// trả về KHÔNG đúng thứ tự đã gửi (request cũ trả về sau request mới). Trước đây
+// cứ response nào về sau là ghi đè `services.value`, kể cả khi nó là dữ liệu của
+// 1 lần filter đã cũ → danh sách dịch vụ hiển thị sai (lẫn dữ liệu cũ/mới), khiến
+// layout xen kẽ trái/phải (idx % 2) không khớp với đúng dữ liệu → thẻ dịch vụ bị "nát".
+// Cách sửa: chỉ áp dụng kết quả của request MỚI NHẤT, bỏ qua mọi response đến trễ.
+let fetchFilteredRequestId = 0;
 const fetchFiltered = async () => {
+  const requestId = ++fetchFilteredRequestId;
   try {
-    console.log("🔍 Đang gọi API filter...");
     const res = await axios.get(`${API}/api/DanhSachDichVu/filter`, {
       params: {
         search: searchQuery.value,
@@ -205,13 +275,14 @@ const fetchFiltered = async () => {
       },
     });
 
-    console.log("✅ Response:", res.data); // xem data trả về
-    console.log("📦 services:", res.data.data); // xem mảng services
-    console.log("📄 totalPages:", res.data.totalPages);
+    // Nếu trong lúc chờ API đã có 1 lần gọi fetchFiltered() khác mới hơn được kích
+    // hoạt (do người dùng tiếp tục gõ/đổi filter) thì bỏ qua kết quả của lần gọi này.
+    if (requestId !== fetchFilteredRequestId) return;
 
     services.value = res.data.data;
     totalPages.value = res.data.totalPages;
   } catch (err) {
+    if (requestId !== fetchFilteredRequestId) return;
     console.error("❌ Lỗi lấy dịch vụ:", err);
   }
 };
@@ -219,22 +290,22 @@ const fetchFiltered = async () => {
 // =======================
 // WATCH FILTER
 // =======================
-watch([searchQuery, selectedCategory, selectedPriceRange], async () => {
-  currentPage.value = 1;
-  syncRouteQuery();
-  await fetchFiltered();
-});
-
-// Tên danh mục dịch vụ đang filter (dùng cho breadcrumb)
-const activeCategoryName = computed(() => {
-  if (selectedCategory.value === "all") return null;
-  return (
-    categoryList.value.find((c) => c.maDM === selectedCategory.value)
-      ?.tenDanhMuc ??
-    categories.value.find((c) => c.maDm === selectedCategory.value)
-      ?.tenDanhMuc ??
-    null
-  );
+// 🔥 Debounce 350ms: trước đây watch bắn API ngay mỗi khi searchQuery đổi (tức mỗi
+// ký tự gõ), tạo ra rất nhiều request dồn dập. Kết hợp với requestId guard ở trên,
+// việc debounce giúp giảm hẳn số request bay đi cùng lúc → giao diện đỡ giật/nát
+// khi gõ nhanh, đồng thời đỡ tải cho server. selectedCategory/selectedPriceRange
+// là lựa chọn rời rạc (bấm 1 lần) nên debounce ngắn không ảnh hưởng cảm giác dùng.
+let filterDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+watch([searchQuery, selectedCategory, selectedPriceRange], () => {
+  if (filterDebounceTimer) clearTimeout(filterDebounceTimer);
+  filterDebounceTimer = setTimeout(async () => {
+    currentPage.value = 1;
+    syncRouteQuery();
+    await fetchFiltered();
+    // 🔥 KHÔNG gọi refreshAos() ở đây (xem giải thích chi tiết trong changePage()
+    // phía trên) — đây là nguyên nhân khiến .category-grid-section và nút "Bộ Lọc"
+    // biến mất khỏi giao diện mỗi khi gõ tìm kiếm/lọc dịch vụ.
+  }, 350);
 });
 
 // Hàm cập nhật số lượng badge
@@ -303,12 +374,17 @@ onMounted(async () => {
     selectedCategory.value = route.query.category;
   }
 
-  await fetchAll(); // 🔥 lấy combo + categories
-  await fetchCategoryGrid(); // 🔥 lấy danh mục dịch vụ để hiển thị lưới
-  await fetchFiltered();
-
-  await updateCartBadge(); // 🔥 cập nhật số lượng badge khi vào trang
-  await fetchRatings(); // 🔥 lấy đánh giá trung bình cho tất cả dịch vụ
+  // 🔥 5 lệnh gọi API này độc lập với nhau (không cái nào cần dữ liệu của cái kia),
+  // trước đây await tuần tự nên tổng thời gian chờ = cộng dồn round-trip của cả 5 API.
+  // Chạy song song bằng Promise.all giúp tổng thời gian chờ ≈ thời gian của API chậm
+  // nhất thay vì tổng của cả 5 → cải thiện rõ rệt thời gian load cảm nhận của trang.
+  await Promise.all([
+    fetchAll(), // lấy combo + categories
+    fetchCategoryGrid(), // lấy danh mục dịch vụ để hiển thị lưới
+    fetchFiltered(),
+    updateCartBadge(), // cập nhật số lượng badge khi vào trang
+    fetchRatings(), // lấy đánh giá trung bình cho tất cả dịch vụ
+  ]);
 
   // 🔥 mỗi lần vào lại trang (mount) thì auto scroll lên đầu danh sách dịch vụ
   scrollToServicesTop(false);
@@ -321,15 +397,7 @@ onMounted(async () => {
   // data-aos="fade-up"). AOS.init() thường chỉ chạy 1 lần lúc app khởi động nên không
   // biết tới các phần tử data-aos MỚI này → chúng bị kẹt ở opacity:0 (như "bay màu").
   // → Phải chủ động gọi lại AOS để nó quét + đánh dấu lại DOM mỗi lần trang này mount.
-  nextTick(() => {
-    if (typeof AOS !== "undefined" && AOS) {
-      if (typeof AOS.refreshHard === "function") {
-        AOS.refreshHard();
-      } else if (typeof AOS.refresh === "function") {
-        AOS.refresh();
-      }
-    }
-  });
+  refreshAos();
 });
 
 // =======================
@@ -339,250 +407,95 @@ const formatPrice = (price: number) => {
   return price.toLocaleString() + "đ";
 };
 </script>
-
 <template>
   <div class="services-page-container">
-    <section class="services-hero text-center" data-aos="fade-down">
-      <div class="container">
-        <!-- <h1 class="font-playfair main-title-premium fw-900">
-          DANH MỤC DỊCH VỤ
-        </h1>
-        <div class="gold-divider-thick"></div> -->
-        <h3 class="fw-900">
-          Nâng tầm vẻ đẹp Việt với quy trình chuyên nghiệp tại Minh Tâm Hair
-        </h3>
+    <!-- ======================= -->
+    <!-- LƯỚI DANH MỤC DỊCH VỤ -->
+    <!-- ======================= -->
+    <section class="category-grid-section" data-aos="fade-up" data-aos-once="true">
+      <div class="category-grid-container">
+        <!-- <div class="section-kicker"> -->
+          <!-- <span class="section-kicker-line"></span>
+          <span class="section-kicker-text">Menu</span>
+          <span class="section-kicker-line"></span>
+        </div> -->
+        <!-- <h2 class="category-grid-heading">Tất cả Dịch Vụ</h2> -->
+
+        <div v-if="categoriesLoading" class="category-grid-loading">
+          <div class="dm-spinner"></div>
+        </div>
+
+        <div v-else-if="categoriesError" class="category-grid-error">
+          Không thể tải danh mục dịch vụ.
+        </div>
+
+        <div v-else class="category-grid" ref="categoryGridRef">
+          <div
+            v-for="(cat, i) in categoryList"
+            :key="cat.maDM"
+            class="category-grid-item"
+            :class="{ 'is-active': selectedCategory === cat.maDM }"
+            @click="goToCategory(cat.maDM)"
+          >
+            <!-- <span class="category-grid-tag">{{ String(i + 1).padStart(2, '0') }}</span> -->
+            <div class="category-grid-image-wrap">
+              <img
+                :src="getCategoryImageUrl(cat.hinhAnh)"
+                :alt="cat.tenDanhMuc"
+                class="category-grid-img"
+              />
+            </div>
+            <h3 class="category-grid-name font-heading">
+              {{ cat.tenDanhMuc }}
+            </h3>
+          </div>
+        </div>
       </div>
     </section>
+
+    <!-- <section class="services-hero text-center" data-aos="fade-down" data-aos-once="true">
+      <div class="container">
+        <div class="hero-rule-row">
+          <span class="hero-rule"></span>
+          <span class="hero-dot"></span>
+          <span class="hero-rule"></span>
+        </div>
+        <h3 class="fw-900 services-hero-heading">
+          Các dịch vụ Mới của LGHair
+        </h3>
+      </div>
+    </section> -->
 
     <!-- ======================= -->
     <!-- MENU DANH MỤC ĐƯỢC MỞ/ĐÓNG (giống Shop.vue) -->
     <!-- ======================= -->
-    <section
-      class="w-full animate-in fade-in duration-500 mb-10"
-    >
+    <section class="w-full mb-10">
       <div class="max-w-[1440px] mx-auto px-6 lg:px-12">
         <div class="flex flex-col lg:flex-row gap-8">
-          <aside class="w-full lg:w-64 shrink-0">
-            <div class="border border-gray-100 lg:sticky lg:top-24">
-              <button
-                type="button"
-                class="w-full flex items-center justify-between gap-2 px-4 py-3.5 border-b border-gray-100 bg-gray-50"
-                @click="sidebarOpen = !sidebarOpen"
-              >
-                <span
-                  class="dv-filter-font flex items-center gap-2 text-xs uppercase tracking-widest font-semibold text-black"
-                >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <line x1="4" y1="6" x2="20" y2="6" />
-                    <line x1="4" y1="12" x2="20" y2="12" />
-                    <line x1="4" y1="18" x2="20" y2="18" />
-                  </svg>
-                  Danh Mục Dịch Vụ
-                </span>
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  class="transition-transform duration-300"
-                  :class="sidebarOpen ? 'rotate-180' : ''"
-                >
-                  <path d="M6 9l6 6 6-6" />
-                </svg>
-              </button>
-
-              <nav
-                v-show="sidebarOpen"
-                class="max-h-[70vh] lg:max-h-[calc(100vh-10rem)] overflow-y-auto"
-              >
-                <div class="py-1">
-                  <button
-                    type="button"
-                    class="dv-filter-font w-full text-left px-4 py-2.5 text-xs uppercase tracking-widest transition-colors border-l-2"
-                    :class="
-                      selectedCategory === 'all'
-                        ? 'text-black font-semibold bg-gray-50 border-black'
-                        : 'text-gray-500 hover:text-black hover:bg-gray-50 border-transparent'
-                    "
-                    @click="goToCategory('all')"
-                  >
-                    Tất cả dịch vụ
-                  </button>
-
-                  <div
-                    v-for="cat in categoryList"
-                    :key="cat.maDM"
-                    @mouseenter="cat.children?.length && openExpand(cat.maDM)"
-                    @mouseleave="cat.children?.length && closeExpand(cat.maDM)"
-                  >
-                    <div
-                      class="flex items-center border-l-2 transition-colors"
-                      :class="
-                        selectedCategory === cat.maDM
-                          ? 'text-black font-semibold bg-gray-50 border-black'
-                          : 'text-gray-500 border-transparent hover:bg-gray-50'
-                      "
-                    >
-                      <button
-                        type="button"
-                        class="dv-filter-font flex-1 text-left px-4 py-2.5 text-xs uppercase tracking-widest transition-colors hover:text-black truncate"
-                        @click="goToCategory(cat.maDM)"
-                      >
-                        {{ cat.tenDanhMuc }}
-                      </button>
-
-                      <button
-                        v-if="cat.children && cat.children.length"
-                        type="button"
-                        class="px-3 py-2.5 text-gray-400 hover:text-black shrink-0"
-                        :aria-label="`Xổ danh mục con của ${cat.tenDanhMuc}`"
-                        @click.stop="toggleExpand(cat.maDM)"
-                      >
-                        <svg
-                          width="10"
-                          height="10"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2.5"
-                          class="transition-transform duration-300"
-                          :class="
-                            expandedCats.includes(cat.maDM)
-                              ? 'rotate-180'
-                              : ''
-                          "
-                        >
-                          <path d="M6 9l6 6 6-6" />
-                        </svg>
-                      </button>
-                    </div>
-
-                    <div
-                      v-if="
-                        cat.children &&
-                        cat.children.length &&
-                        expandedCats.includes(cat.maDM)
-                      "
-                      class="bg-gray-50/60"
-                    >
-                      <button
-                        v-for="sub in cat.children"
-                        :key="sub.maDM"
-                        type="button"
-                        class="dv-filter-font w-full text-left pl-9 pr-4 py-2 text-[11px] uppercase tracking-widest transition-colors truncate"
-                        :class="
-                          selectedCategory === sub.maDM
-                            ? 'text-black font-medium'
-                            : 'text-gray-400 hover:text-black'
-                        "
-                        @click="goToCategory(sub.maDM)"
-                      >
-                        {{ sub.tenDanhMuc }}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </nav>
-            </div>
-          </aside>
-
           <div class="flex-1 min-w-0">
             <div class="flex flex-col gap-6">
-              <div
-                class="flex items-center justify-between pb-4 border-b border-gray-100"
-              >
-                <div>
-                  <p
-                    class="text-[10px] uppercase tracking-[0.3em] text-gray-400 mb-2"
-                  >
-                    Danh sách dịch vụ
-                  </p>
-                  <h2
-                    class="font-heading text-xl lg:text-2xl tracking-widest uppercase"
-                  >
-                    Dịch vụ nổi bật
-                  </h2>
-                </div>
-                <!-- Nút chuyển sang trang SẢN PHẨM (thay cho việc gộp chung nội dung như trước) -->
-                <button
+              <!-- <div class="ticket-toolbar"> -->
+                <!-- <div></div> -->
+                <!-- Nút chuyển sang trang SẢN PHẨM -->
+                <!-- <button
                   type="button"
-                  class="text-[11px] uppercase tracking-widest text-gray-500 hover:text-black transition-colors flex items-center gap-2 shrink-0"
+                  class="ticket-link-btn"
                   @click="goToProductsPage"
                 >
                   Xem Sản Phẩm
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M9 6l6 6-6 6"/>
                   </svg>
-                </button>
-              </div>
+                </button> -->
+              <!-- </div> -->
 
-              <div
-                class="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-2 pb-4 border-b border-gray-100"
-              >
-                <span class="dv-filter-font text-xs text-gray-400 uppercase tracking-widest">
+              <!-- <div class="ticket-count-row">
+                <span class="dv-filter-font ticket-count">
                   {{ services.length }} Dịch vụ
                 </span>
-
-                <div class="flex flex-wrap gap-4 items-center">
-                  <div class="relative">
-                    <svg
-                      class="absolute left-0 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" />
-                      <path d="M20 20L16.65 16.65" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-                    </svg>
-                    <input
-                      v-model="searchQuery"
-                      type="text"
-                      placeholder="Tìm kiếm tên dịch vụ..."
-                      class="dv-filter-font text-xs uppercase tracking-widest bg-transparent border-b border-gray-200 focus:outline-none focus:border-black pl-5 py-1 w-44 md:w-56"
-                    />
-                  </div>
-
-                  <select
-                    v-model="selectedPriceRange"
-                    class="dv-filter-font text-xs uppercase tracking-widest bg-transparent focus:outline-none cursor-pointer"
-                  >
-                    <option value="all">Tất cả mức giá</option>
-                    <option value="low">Dưới 300.000đ</option>
-                    <option value="mid">300k – 700k</option>
-                    <option value="high">Trên 700.000đ</option>
-                  </select>
-                </div>
-              </div>
-
-              <!-- <div
-                v-if="activeCategoryName"
-                class="container active-category-bar"
-              >
-                <span class="active-category-label">
-                  Đang xem: <strong>{{ activeCategoryName }}</strong>
-                </span>
-                <button
-                  class="clear-category-btn"
-                  @click="selectedCategory = 'all'"
-                >
-                  Xem tất cả
-                </button>
               </div> -->
 
-              <section
-                ref="servicesListRef"
-                class="services-editorial-section"
-                data-aos="fade-up"
-              >
+              <section ref="servicesListRef" class="services-editorial-section">
                 <div v-if="services.length > 0" class="services-editorial-list">
                   <div
                     v-for="(s, idx) in services"
@@ -616,88 +529,33 @@ const formatPrice = (price: number) => {
                     </div>
 
                     <div class="editorial-content">
-                      <span class="editorial-duration">
-                        <i class="fas fa-clock"></i> {{ s.thoiGianLam }} Phút
-                      </span>
                       <h2 class="font-playfair editorial-title">
                         {{ s.tenDv }}
                       </h2>
 
+                      <p class="editorial-desc">{{ s.moTa }}</p>
+
                       <div class="editorial-price-row">
                         <template v-if="s.flashSale">
-                          <span class="editorial-price-old">{{
-                            formatPrice(s.gia)
-                          }}</span>
+                          <span class="editorial-price-old">{{ formatPrice(s.gia) }}</span>
                           <span class="editorial-price-new">
-                            {{
-                              formatPrice(
-                                getDiscountPrice(
-                                  s.gia,
-                                  s.flashSale.phanTramGiam,
-                                ),
-                              )
-                            }}
+                            Chỉ từ {{ formatPrice(getDiscountPrice(s.gia, s.flashSale.phanTramGiam)) }}
                           </span>
                         </template>
                         <template v-else>
-                          <span class="editorial-price-main">{{
-                            formatPrice(s.gia)
-                          }}</span>
+                          <span class="editorial-price-main">{{ formatPrice(s.gia) }}</span>
                         </template>
                       </div>
 
-                      <div class="rating-mini-box" v-if="ratingsMap[s.maDv]">
-                        <svg
-                          class="gold-star"
-                          width="13"
-                          height="13"
-                          viewBox="0 0 24 24"
-                          fill="currentColor"
-                        >
-                          <path
-                            d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.9-6.3 3.9 1.7-7L2 9.2l7.1-.6L12 2z"
-                          />
-                        </svg>
-                        <span class="r-number">{{
-                          ratingsMap[s.maDv]?.avg
-                        }}</span>
-                        <span class="r-count"
-                          >({{ ratingsMap[s.maDv]?.count }} đánh giá)</span
-                        >
-                      </div>
-                      <div class="rating-mini-box no-rating" v-else>
-                        Chưa có đánh giá
-                      </div>
-
-                      <p class="editorial-desc">{{ s.moTa }}</p>
-
                       <div class="editorial-actions">
-                        <button
-                          class="btn-outline-editorial"
-                          @click="
-                            routerInstance.push({
-                              name: 'serviceDetail',
-                              params: { id: s.maDv },
-                            })
-                          "
-                        >
-                          Xem Chi Tiết
-                        </button>
-                        <button
-                          class="btn-solid-editorial"
-                          @click="addToCart(s)"
-                        >
-                          Đặt Lịch Ngay
-                        </button>
+                        <a href="#" class="combo-grid-link" @click.prevent="addToCart(s)">
+                          Đặt lịch hẹn
+                        </a>
                       </div>
                     </div>
                   </div>
                 </div>
-                <div
-                  v-else
-                  class="text-center py-5 no-result-box"
-                  data-aos="fade-in"
-                >
+                <div v-else class="text-center py-5 no-result-box">
                   <img
                     src="https://cdn-icons-png.flaticon.com/512/6134/6134065.png"
                     width="80"
@@ -709,11 +567,7 @@ const formatPrice = (price: number) => {
                 </div>
               </section>
 
-              <div
-                v-if="totalPages > 1"
-                class="pagination-minimal"
-                data-aos="fade-up"
-              >
+              <div v-if="totalPages > 1" class="pagination-minimal">
                 <button
                   type="button"
                   class="pagination-nav"
@@ -758,32 +612,24 @@ const formatPrice = (price: number) => {
       </div>
     </section>
 
-    <section
-      class="services-editorial-section combo-editorial-section"
-      style="margin-top: 100px; margin-bottom: 100px"
-    >
+    <!-- ======================= -->
+    <!-- COMBO -->
+    <!-- ======================= -->
+    <section class="combo-editorial-section">
       <div class="text-center mb-5" data-aos="fade-up">
-        <h2 class="font-playfair combo-title-premium fw-900 display-5">
-          GÓI COMBO ĐẶC BIỆT
-        </h2>
-        <div class="gold-divider-thick"></div>
-        <p class="text-muted section-subtitle">
-          Tiết kiệm hơn, đẹp toàn diện hơn
-        </p>
+        <h3 class="editorial-title-heading">GÓI COMBO ĐẶC BIỆT</h3>
+        <div class="heading-gold-line"></div>
       </div>
 
-      <div class="services-editorial-list">
+      <div class="combo-grid-list" ref="comboListRef">
         <div
           v-for="(c, idx) in combos"
           :key="c.maCb || idx"
-          :class="[
-            'editorial-row',
-            (services.length + idx) % 2 !== 0 ? 'reverse' : '',
-          ]"
+          class="combo-grid-card"
           data-aos="fade-up"
         >
           <div
-            class="editorial-image-wrap"
+            class="combo-grid-image-wrap"
             @click="
               routerInstance.push({
                 name: 'detailCombo',
@@ -791,406 +637,518 @@ const formatPrice = (price: number) => {
               })
             "
           >
-            <div class="hot-badge combo-tag">ƯU ĐÃI</div>
+            <div v-if="c.flashSale" class="sale-ribbon-wrapper">
+              <div class="sale-ribbon">
+                <span class="sale-ribbon-text">-{{ c.flashSale.phanTramGiam }}%</span>
+              </div>
+            </div>
             <img
               :src="getImageUrl(c.hinhAnh)"
               :alt="c.tenCombo"
-              class="editorial-img"
+              class="combo-grid-img"
             />
           </div>
 
-          <div class="editorial-content">
-            <h2 class="font-playfair editorial-title">{{ c.tenCombo }}</h2>
+          <div class="combo-grid-body">
+            <h3
+              class="combo-grid-title"
+              @click="
+                routerInstance.push({
+                  name: 'detailCombo',
+                  params: { id: c.maCb },
+                })
+              "
+            >
+              {{ c.tenCombo }}
+            </h3>
+            <p class="combo-grid-desc">{{ c.moTa }}</p>
 
-            <div class="editorial-price-row">
-              <span class="editorial-price-main">{{ formatPrice(c.gia) }}</span>
+            <div class="combo-grid-price-row">
+              <template v-if="c.flashSale">
+                <span class="combo-grid-price-old">{{ formatPrice(c.gia) }}</span>
+                <span class="combo-grid-price-new">
+                  Chỉ từ {{ formatPrice(getDiscountPrice(c.gia, c.flashSale.phanTramGiam)) }}
+                </span>
+              </template>
+              <template v-else>
+                <span class="combo-grid-price-main">{{ formatPrice(c.gia) }}</span>
+              </template>
             </div>
 
-            <div class="rating-mini-box" v-if="ratingsMap[c.maCb]">
-              <svg
-                class="gold-star"
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <path
-                  d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.9-6.3 3.9 1.7-7L2 9.2l7.1-.6L12 2z"
-                />
-              </svg>
-              <span class="r-number">{{ ratingsMap[c.maCb]?.avg }}</span>
-              <span class="r-count"
-                >({{ ratingsMap[c.maCb]?.count }} đánh giá)</span
-              >
-            </div>
-            <div class="rating-mini-box no-rating" v-else>Chưa có đánh giá</div>
-
-            <p class="editorial-desc">{{ c.moTa }}</p>
-
-            <ul class="combo-list-items editorial-combo-list">
-              <li v-for="item in c.items" :key="item">
-                <i class="fas fa-gem"></i> {{ item }}
-              </li>
-            </ul>
-
-            <div class="editorial-actions">
-              <button
-                class="btn-outline-editorial"
-                @click="
-                  routerInstance.push({
-                    name: 'detailCombo',
-                    params: { id: c.maCb },
-                  })
-                "
-              >
-                Xem Chi Tiết
-              </button>
-              <button class="btn-solid-editorial" @click="addToCart(c)">
-                Đặt Lịch Ngay
-              </button>
-            </div>
+            <a href="#" class="combo-grid-link" @click.prevent="addToCart(c)">
+              Đặt lịch hẹn
+            </a>
           </div>
         </div>
       </div>
+
+      <!-- NÚT XEM THÊM COMBO -->
+      <div v-if="comboPage < comboTotalPages" class="feed-block-more">
+        <button
+          type="button"
+          class="feed-more-btn"
+          :disabled="comboLoadingMore"
+          @click="loadMoreCombos"
+        >
+          {{ comboLoadingMore ? "Đang tải..." : "Xem thêm" }}
+        </button>
+      </div>
     </section>
 
-    <!-- <CartSidebar ref="cartRef" /> -->
+    <!-- ======================= -->
+    <!-- BỘ LỌC — nút nổi cố định + panel trượt từ phải -->
+    <!-- ======================= -->
+    <Teleport to="body">
+      <button
+        type="button"
+        class="combo-filter-fab"
+        :class="{ 'has-active-filter': comboFilterActive }"
+        @click="comboFilterOpen = true"
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="4" y1="6" x2="20" y2="6" />
+          <circle cx="9" cy="6" r="2" fill="currentColor" stroke="none" />
+          <line x1="4" y1="12" x2="20" y2="12" />
+          <circle cx="15" cy="12" r="2" fill="currentColor" stroke="none" />
+          <line x1="4" y1="18" x2="20" y2="18" />
+          <circle cx="11" cy="18" r="2" fill="currentColor" stroke="none" />
+        </svg>
+        Bộ Lọc
+        <span v-if="comboFilterActive" class="combo-filter-fab-dot"></span>
+      </button>
+    </Teleport>
+
+    <Teleport to="body">
+      <transition name="combo-filter-fade">
+        <div
+          v-if="comboFilterOpen"
+          class="combo-filter-overlay"
+          @click.self="comboFilterOpen = false"
+        >
+          <transition name="combo-filter-slide">
+            <aside v-if="comboFilterOpen" class="combo-filter-panel">
+              <div class="combo-filter-panel-header">
+                <h3 class="dv-filter-font">Tìm Kiếm &amp; Lọc Dịch Vụ</h3>
+                <button
+                  type="button"
+                  class="combo-filter-close"
+                  @click="comboFilterOpen = false"
+                  aria-label="Đóng bộ lọc"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                    <line x1="6" y1="18" x2="18" y2="6" />
+                  </svg>
+                </button>
+              </div>
+
+              <div class="combo-filter-panel-body">
+                <label class="dv-filter-font combo-filter-label">Tên dịch vụ</label>
+                <div class="relative combo-filter-search-wrap">
+                  <svg
+                    class="combo-filter-search-icon"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" />
+                    <path d="M20 20L16.65 16.65" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                  </svg>
+                  <input
+                    v-model="searchQuery"
+                    type="text"
+                    placeholder="Tìm kiếm tên dịch vụ..."
+                    class="dv-filter-font combo-filter-search-input"
+                  />
+                </div>
+
+                <label class="dv-filter-font combo-filter-label">Danh mục</label>
+                <select v-model="selectedCategory" class="dv-filter-font combo-filter-select">
+                  <option value="all">Tất cả danh mục</option>
+                  <option
+                    v-for="cat in categoryList"
+                    :key="cat.maDM"
+                    :value="cat.maDM"
+                  >
+                    {{ cat.tenDanhMuc }}
+                  </option>
+                </select>
+
+                <label class="dv-filter-font combo-filter-label">Mức giá</label>
+                <select v-model="selectedPriceRange" class="dv-filter-font combo-filter-select">
+                  <option value="all">Tất cả mức giá</option>
+                  <option value="low">Dưới 300.000đ</option>
+                  <option value="mid">300k – 700k</option>
+                  <option value="high">Trên 700.000đ</option>
+                </select>
+
+                <button
+                  v-if="comboFilterActive"
+                  type="button"
+                  class="dv-filter-font combo-filter-reset"
+                  @click="
+                    searchQuery = '';
+                    selectedCategory = 'all';
+                    selectedPriceRange = 'all';
+                  "
+                >
+                  Xoá bộ lọc
+                </button>
+              </div>
+            </aside>
+          </transition>
+        </div>
+      </transition>
+    </Teleport>
   </div>
 </template>
-
 <style scoped>
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@300;400;500;600&display=swap");
+
 /* =========================================================
-   ACTIVE CATEGORY BREADCRUMB BAR
+   DESIGN TOKENS — bảng màu lấy cảm hứng từ "vé cắt tóc"
+   (ticket giấy, mực đen, đỏ tiệm cắt tóc, đồng thau)
    ========================================================= */
+.services-page-container {
+  --ink: #1c1815;
+  --ink-soft: #55504a;
+  --muted: #8d8577;
+  --muted-light: #b9b2a3;
+  --paper: #efece4;
+  --paper-deep: #e3ddcd;
+  --line: #c9c0ac;
+  --red: #8c2f22;
+  --red-soft: #a8493a;
+  --bg: #ffffff;
+  --danger: #8c2f22;
 
-.active-category-bar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  margin-bottom: 32px;
-  font-family: "Jost", sans-serif;
-  font-size: 11px;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: var(--muted, #9ca3af);
-}
-
-.active-category-label strong {
-  font-weight: 500;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  overflow-x: clip;
+  width: 100%;
+  margin: 0 auto;
   color: var(--ink);
 }
 
-.clear-category-btn {
-  background: none;
-  border: none;
-  color: inherit;
-  font-size: 11px;
-  font-family: "Jost", sans-serif;
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  text-decoration: underline;
-  padding: 0;
-  cursor: pointer;
-  transition: color 0.2s ease;
-}
-
-.clear-category-btn:hover {
-  color: var(--ink);
-}
-
-/* =========================================================
-   FONT — Cormorant Garamond (heading) + Jost (body)
-   ========================================================= */
-.pagination-btn.prev-next i {
-  color: inherit !important;
-  pointer-events: none;
-}
-.font-playfair {
-  font-family: "Cormorant Garamond", serif;
-}
-
+.font-playfair,
 .font-poppins {
-  font-family: "Jost", sans-serif;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
 .fw-900 {
   font-weight: 600 !important;
 }
 
-/* =========================================================
-   DESIGN TOKENS
-   ========================================================= */
-.services-page-container {
-  --ink: #1a1a1a;
-  --ink-soft: #4a4a4a;
-  --muted: #999999;
-  --muted-light: #bdbdbd;
-  --line: #e7e5e2;
-  --bg: #ffffff;
-  --bg-soft: #fafafa;
-  --danger: #d92d20;
+.dv-filter-font {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
 
-  font-family: "Jost", sans-serif;
-  background: var(--bg);
-  overflow-x: clip; /* chỉ ẩn scroll ngang, không cắt content dọc — dùng clip thay vì hidden
-                        vì hidden sẽ vô tình biến div này thành 1 "hộp cuộn" khiến
-                        sidebar bên trong dùng position: sticky KHÔNG dính lại được
-                        khi cuộn trang (sticky context bị đổi từ viewport sang div này) */
-  width: 100%;
+/* =========================================================
+   EYEBROW / KICKER — hairline + chữ nhỏ, dùng lại cho các
+   section heading để tạo nhịp lặp xuyên suốt trang
+   ========================================================= */
+.section-kicker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.section-kicker-line {
+  width: 34px;
+  height: 1px;
+  background: var(--line);
+}
+
+.section-kicker-text {
+  font-size: 11px;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: var(--red);
+  font-weight: 500;
+}
+
+.hero-rule-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.hero-rule {
+  width: 60px;
+  height: 1px;
+  background: var(--line);
+}
+
+.hero-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--red);
+}
+
+/* =========================================================
+   LƯỚI DANH MỤC DỊCH VỤ
+   ========================================================= */
+.category-grid-section {
+  padding: 90px 24px 20px;
+}
+
+.category-grid-container {
+  max-width: 1320px;
   margin: 0 auto;
+  text-align: center;
+}
+
+.category-grid-heading {
+  font-family: "Fraunces", Georgia, serif;
+  font-style: italic;
+  font-weight: 500;
+  font-size: clamp(2rem, 4vw, 2.9rem);
+  letter-spacing: 0.01em;
   color: var(--ink);
+  margin: 0 0 56px;
+}
+
+.category-grid-loading,
+.category-grid-error {
+  padding: 40px 0;
+  display: flex;
+  justify-content: center;
+  color: var(--muted);
+}
+
+.category-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 28px;
+}
+
+.category-grid-item {
+  position: relative;
+  width: 175px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.category-grid-tag {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(28, 24, 21, 0.25);
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+.category-grid-item:hover .category-grid-tag,
+.category-grid-item.is-active .category-grid-tag {
+  background: var(--red);
+  color: #fff;
+}
+
+.category-grid-image-wrap {
+  width: 175px;
+  height: 175px;
+  background: var(--paper-deep);
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+
+.category-grid-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  filter: grayscale(0.15);
+  transition: transform 0.5s ease, filter 0.5s ease;
+}
+
+.category-grid-item:hover .category-grid-img {
+  transform: scale(1.05);
+  filter: grayscale(0);
+}
+
+.category-grid-name {
+  margin: 14px 0 0;
+  text-align: left;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+}
+
+.is-active .category-grid-name {
+  color: var(--red);
+}
+
+.font-heading {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+@media (max-width: 576px) {
+  .category-grid {
+    gap: 16px;
+    justify-content: space-between;
+  }
+  .category-grid-item {
+    width: calc(50% - 8px);
+  }
+  .category-grid-image-wrap {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1 / 1;
+  }
+  .category-grid-heading {
+    font-size: 1.7rem;
+  }
 }
 
 /* =========================================================
    HERO
    ========================================================= */
 .services-hero {
-  padding: 100px 0 50px;
+  padding: 70px 0 40px;
 }
 
-.main-title-premium {
-  font-family: "Cormorant Garamond", serif;
-  font-size: 3.4rem;
-  font-weight: 600;
-  letter-spacing: 6px;
-  line-height: 1.2;
-  margin-bottom: 5px;
-  color: var(--ink);
-  text-transform: uppercase;
-  background: none;
-  -webkit-background-clip: unset;
-  background-clip: unset;
-  -webkit-text-fill-color: var(--ink);
-  filter: none;
-}
-
-.combo-title-premium {
-  font-family: "Cormorant Garamond", serif;
-  font-size: 2.8rem;
-  font-weight: 600;
-  letter-spacing: 4px;
-  color: var(--ink);
-  text-transform: uppercase;
-  background: none;
-  -webkit-background-clip: unset;
-  background-clip: unset;
-  -webkit-text-fill-color: var(--ink);
-  filter: none;
+.services-hero-heading {
+  font-family: "Fraunces", Georgia, serif;
+  font-style: italic;
+  font-weight: 500;
+  font-size: clamp(1.5rem, 3vw, 2.1rem);
+  max-width: 900px;
+  line-height: 1.35;
+  margin: 0 auto;
 }
 
 .section-subtitle {
-  font-family: "Jost", sans-serif;
-  font-size: 0.75rem;
-  font-weight: 300;
-  letter-spacing: 3px;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0.28em;
   text-transform: uppercase;
   color: var(--muted);
 }
 
-.gold-divider-thick {
-  width: 50px;
-  height: 1px;
-  background: var(--ink);
-  margin: 28px auto;
-  border-radius: 0;
-}
-
 /* =========================================================
-   FILTER BAR
+   TOOLBAR / COUNT
    ========================================================= */
-.filter-section {
-  margin-bottom: 25px;
-}
-/* Fix container căn giữa */
-:deep(.row) {
-  display: flex !important;
-  flex-wrap: wrap !important;
-}
-
-:deep(.col-lg-4) {
-  width: 33.333% !important;
-  padding-left: 12px !important;
-  padding-right: 12px !important;
-}
-
-:deep(.col-md-6) {
-  width: 33.333% !important; /* ← đổi từ 50% thành 33.333% */
-}
-:deep(.container) {
-  margin-left: auto !important;
-  margin-right: auto !important;
-}
-.service-card-item {
-  max-width: 100% !important; /* ← đổi từ 380px thành 100% */
-}
-:deep(.row) {
-  display: flex !important;
-  flex-wrap: wrap !important;
-  justify-content: center !important; /* ← thêm dòng này */
-  margin-left: 0 !important;
-  margin-right: 0 !important;
-}
-.filter-bar-custom {
-  background: var(--bg);
-  padding: 12px;
-  border-radius: 0;
-  border: 1px solid var(--line);
-  box-shadow: none;
+.ticket-toolbar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
   align-items: center;
-  overflow: hidden;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
 }
 
-.filter-control {
-  width: 100%;
-  height: 50px;
-  border: 1px solid var(--line);
-  border-radius: 0;
-  padding: 0 18px;
-  font-size: 13px;
-  font-family: "Jost", sans-serif;
-  letter-spacing: 0.5px;
-  outline: none;
-  background: var(--bg);
-  transition: 0.3s ease-in-out;
-  color: var(--ink);
-  font-weight: 300;
-}
-
-.filter-control::placeholder {
-  color: var(--muted-light);
-}
-
-.filter-control:focus {
-  border-color: var(--ink);
-  box-shadow: none;
-}
-
-.search-box-wrapper {
-  flex: 2;
-  position: relative;
-  min-width: 0; /* ← đổi thành 0 */
-  width: 100%;
-}
-
-.search-icon {
-  position: absolute;
-  left: 18px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--muted-light);
-  z-index: 2;
-  font-size: 13px;
-}
-
-.search-box-wrapper .filter-control {
-  padding-left: 50px;
-}
-
-.filter-group-select {
-  flex: 1.5;
-  display: flex;
-  gap: 12px;
-  min-width: 0; /* ← đổi thành 0 */
-  width: 100%;
-}
-
-.custom-select-wrapper {
-  flex: 1;
-  position: relative;
-}
-
-.select-input {
-  appearance: none;
+.ticket-link-btn {
+  background: none;
+  border: none;
   cursor: pointer;
-  padding-right: 38px;
-  text-transform: uppercase;
   font-size: 11px;
-  letter-spacing: 1px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--ink-soft);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: color 0.2s ease;
 }
 
-.arrow-icon {
-  position: absolute;
-  right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--muted-light);
-  pointer-events: none;
+.ticket-link-btn:hover {
+  color: var(--red);
+}
+
+.ticket-count-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.ticket-count {
   font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
 }
 
 /* =========================================================
-   SERVICE GRID / CARD
+   DANH SÁCH DỊCH VỤ — "VÉ CẮT TÓC" (signature element)
    ========================================================= */
-.services-grid-layout {
-  padding-bottom: 10px !important;
-}
-
-.service-card-item {
-  position: relative;
-  overflow: hidden;
-  background: var(--bg);
-  border-radius: 0;
-  border: 1px solid var(--line);
-  padding: 18px;
-  width: 100%;
-  max-width: 380px;
+.services-editorial-list {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  box-shadow: none;
-  transition: all 0.4s ease;
+  gap: 0;
+  padding: 40px 0;
 }
 
-.service-card-item:hover {
-  transform: translateY(-6px);
-  border-color: var(--ink);
-  box-shadow: none;
+.editorial-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: stretch;
+  background: #fff;
+  border: none;
+  min-height: 320px;
 }
 
-/* Sale ribbon */
-.sale-ribbon-wrapper {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 80px;
-  height: 80px;
+.editorial-row.reverse {
+  grid-template-columns: 1fr 1fr;
+}
+
+.editorial-row.reverse .editorial-image-wrap {
+  order: 2;
+}
+
+.editorial-row.reverse .editorial-content {
+  order: 1;
+}
+
+.editorial-image-wrap {
+  position: relative;
   overflow: hidden;
-  z-index: 10;
+  cursor: pointer;
+  min-height: 260px;
 }
 
-.sale-ribbon {
-  background: var(--ink);
-  color: #fff;
-  text-align: center;
-  font-family: "Jost", sans-serif;
-  font-weight: 600;
-  font-size: 10px;
-  text-transform: uppercase;
-  padding: 6px 0;
-  width: 112px;
-  position: absolute;
-  top: 19px;
-  right: -26px;
-  transform: rotate(45deg);
-  box-shadow: none;
-  letter-spacing: 1.5px;
+.editorial-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.6s ease;
 }
 
-/* HOT badge — chuẩn theo style dịch vụ: góc trái-trên, vuông góc, màu đỏ --danger,
-   không bo tròn, không nhấp nháy/đổ bóng — áp dụng đồng nhất cho cả dịch vụ & sản phẩm */
+.editorial-image-wrap:hover .editorial-img {
+  transform: scale(1.04);
+}
+
 .hot-badge {
   position: absolute;
   top: 14px;
   left: 14px;
   z-index: 10;
-  background: var(--danger);
+  background: #d92d20;
   color: #fff;
   padding: 7px 14px;
-  font-family: "Jost", sans-serif;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 2px;
@@ -1207,998 +1165,391 @@ const formatPrice = (price: number) => {
   font-size: 10px;
 }
 
-@keyframes hot-pulse {
-  0% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.85;
-    transform: scale(1.05);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-/* Countdown timer (kept for future use) */
-.sale-time-premium {
+.sale-ribbon-wrapper {
   position: absolute;
-  top: 12px;
-  left: 12px;
-  z-index: 10;
-  background: rgba(26, 26, 26, 0.85);
-  backdrop-filter: blur(4px);
-  color: #fff;
-  padding: 5px 12px;
-  border-radius: 0;
-  font-size: 11px;
-  font-weight: 400;
-  letter-spacing: 1px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: none;
-}
-
-.sale-time-premium i {
-  font-size: 10px;
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.5;
-  }
-
-  100% {
-    opacity: 1;
-  }
-}
-
-/* Image */
-.image-single-container {
-  width: 100%;
-  margin-bottom: 14px;
+  top: 0;
+  right: 0;
+  width: 80px;
+  height: 80px;
   overflow: hidden;
-  border-radius: 0;
-  aspect-ratio: 4 / 5;
-  background: var(--bg-soft);
-  position: relative; /* ← cho phép badge absolute bên trong */
-}
-
-.main-image-only {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-  display: block;
-  transition: transform 1s ease;
-}
-
-.service-card-item:hover .main-image-only {
-  transform: scale(1.04);
-}
-
-/* Title / description */
-.service-title {
-  font-family: "Jost", sans-serif;
-  font-size: 0.95rem;
-  font-weight: 600;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--ink);
-  min-height: 40px;
-  margin-bottom: 6px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.service-desc-group {
-  flex-grow: 1;
-}
-
-.service-desc {
-  font-family: "Jost", sans-serif;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 300;
-  line-height: 1.6;
-  min-height: 34px;
-  margin: 0 0 10px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-/* Rating */
-.rating-mini-box {
-  display: flex;
-  align-items: center;
-  margin-bottom: 8px;
-  font-family: "Jost", sans-serif;
-  min-height: 24px; /* ← rating luôn chiếm 1 dòng */
-}
-
-.gold-star {
-  color: var(--ink);
-  font-size: 12px;
-  margin-right: 5px;
-}
-
-.r-number {
-  font-weight: 600;
-  color: var(--ink);
-  font-size: 13px;
-}
-
-.r-count {
-  color: var(--muted);
-  font-size: 11px;
-  margin-left: 5px;
-  font-weight: 300;
-}
-
-.no-rating {
-  font-size: 11px;
-  color: var(--muted-light);
-  font-style: italic;
-  font-weight: 300;
-}
-
-/* Duration badge */
-.duration-badge {
-  width: auto;
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--line);
-  color: var(--muted);
-  padding: 4px 14px;
-  border-radius: 0;
-  font-size: 10px;
-  font-family: "Jost", sans-serif;
-  font-weight: 400;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  background-color: transparent;
-  margin-top: auto;
-  margin-bottom: 12px;
-  transition: all 0.3s ease;
-}
-
-.service-card-item:hover .duration-badge {
-  border-color: var(--ink);
-  color: var(--ink);
-  background-color: transparent;
-}
-
-/* Price / order button */
-.price-button {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: var(--bg);
-  color: var(--ink);
-  border: 1px solid var(--ink);
-  text-align: center;
-  padding: 12px 15px;
-  border-radius: 0;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.price-button:hover {
-  background: var(--ink);
-  border-color: var(--ink);
-  transform: none;
-  box-shadow: none;
-}
-
-.price-button:hover .main-price,
-.price-button:hover .old-price,
-.price-button:hover .new-price {
-  color: #fff;
-}
-
-.price-values {
-  display: flex;
-  flex-direction: column;
-  text-align: left;
-}
-
-.main-price {
-  font-family: "Jost", sans-serif;
-  font-weight: 500;
-  font-size: 1.05rem;
-  letter-spacing: 0.5px;
-  color: var(--ink);
-  transition: color 0.3s ease;
-}
-
-.old-price {
-  font-size: 11px;
-  text-decoration: line-through;
-  color: var(--muted-light);
-  margin-right: 10px;
-  transition: color 0.3s ease;
-}
-
-.new-price {
-  font-weight: 500;
-  color: var(--ink);
-  font-size: 1.05rem;
-  letter-spacing: 0.5px;
-  transition: color 0.3s ease;
-}
-
-.btn-order-now {
-  background: var(--ink);
-  color: #fff;
-  border: 1px solid var(--ink);
-  padding: 8px 16px;
-  border-radius: 0;
-  font-size: 10px;
-  font-family: "Jost", sans-serif;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  transition: all 0.3s ease;
-  white-space: nowrap;
-}
-
-.btn-order-now:hover {
-  background: var(--bg);
-  color: var(--ink);
-}
-
-.price-button:hover .btn-order-now {
-  background: #fff;
-  color: var(--ink);
-  border-color: #fff;
-}
-
-/* No result */
-.no-result-box {
-  background: var(--bg-soft);
-  border-radius: 0;
-  border: 1px solid var(--line);
-  padding: 60px 0;
-  margin-top: 30px;
-}
-
-.no-result-box p {
-  font-family: "Jost", sans-serif;
-  font-weight: 300;
-  letter-spacing: 1px;
-}
-
-/* =========================================================
-   PAGINATION
-   ========================================================= */
-.pagination-wrapper {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 16px;
-  margin-top: 16px;
-  margin-bottom: 30px;
-  font-family: "Jost", sans-serif;
-}
-
-.page-numbers {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.page-num-btn {
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid transparent;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 400;
-  letter-spacing: 1px;
-  width: 36px;
-  height: 36px;
-  border-radius: 0;
-  transition: all 0.3s ease;
-  position: relative;
-  cursor: pointer;
-}
-
-.page-num-btn.active {
-  color: var(--ink);
-  font-weight: 600;
-  border-bottom-color: var(--ink);
-}
-
-.page-num-btn.active::after {
-  content: none;
-}
-
-.page-num-btn:hover:not(.active) {
-  color: var(--ink);
-  background: transparent;
-}
-
-.pagination-btn.prev-next {
-  background: #ffffff !important;
-  border: 1px solid #e7e5e2 !important;
-  color: #1a1a1a !important;
-  width: 42px;
-  height: 42px;
-  border-radius: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-size: 12px;
-  transition: all 0.3s ease;
-  cursor: pointer;
-}
-
-.pagination-btn.prev-next:hover:not(:disabled) {
-  background: #1a1a1a !important;
-  border-color: #1a1a1a !important;
-  color: #ffffff !important;
-}
-
-.pagination-btn.prev-next:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-
-/* =========================================================
-   COMBO SECTION
-   ========================================================= */
-.combo-white-section {
-  padding: 70px 0;
-  background-color: var(--bg);
-  border-top: 1px solid var(--line);
-}
-
-.luxury-combo-card {
-  background: var(--bg);
-  padding: 40px 30px;
-  border-radius: 0;
-  border: 1px solid var(--line);
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  max-width: 360px;
-  margin: 0 auto;
-  position: relative;
-  text-align: center;
-  transition: all 0.5s ease;
-  box-shadow: none;
-}
-
-.luxury-combo-card:hover {
-  transform: translateY(-8px);
-  border-color: var(--ink);
-  box-shadow: none;
   z-index: 10;
 }
 
-.combo-image-container {
-  width: 100%;
-  aspect-ratio: 4 / 5;
-  margin-bottom: 18px;
-  border-radius: 0;
-  overflow: hidden;
-  background: var(--bg-soft);
-}
-
-.combo-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 1s ease;
-}
-
-.luxury-combo-card:hover .combo-img {
-  transform: scale(1.04);
-}
-
-.combo-name-title {
-  font-family: "Jost", sans-serif;
-  font-size: 1rem;
-  letter-spacing: 2px;
-  margin-bottom: 14px;
-  text-transform: uppercase;
-  font-weight: 600;
-  color: var(--ink);
-  min-height: 60px; /* ← cố định chiều cao tên */
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.combo-description {
-  font-family: "Jost", sans-serif;
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--muted);
-  margin-bottom: 16px;
-  min-height: 42px; /* ← cố định 2 dòng mô tả */
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.combo-price-val {
-  font-family: "Jost", sans-serif;
-  font-size: 1.6rem;
-  font-weight: 500;
-  letter-spacing: 0.5px;
-  color: var(--ink);
-  margin-bottom: 24px;
-  min-height: 44px; /* ← giá luôn cùng hàng */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.gold-gradient-darker,
-.gold-text-darker {
-  background: none;
-  -webkit-background-clip: unset;
-  background-clip: unset;
-  -webkit-text-fill-color: var(--ink);
-  color: var(--ink);
-  filter: none;
-}
-
-.combo-list-items {
-  list-style: none;
-  padding: 0;
-  margin-bottom: 28px;
-  text-align: left;
-  max-width: 280px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.combo-list-items li {
-  margin-bottom: 12px;
-  font-family: "Jost", sans-serif;
-  font-size: 13px;
-  font-weight: 300;
-  color: var(--ink-soft);
-  display: flex;
-  align-items: center;
-  line-height: 1.4;
-}
-
-.combo-list-items i {
-  margin-right: 12px;
-  font-size: 12px;
-  flex-shrink: 0;
-  color: var(--ink);
-}
-
-.btn-booking-luxury {
-  margin-top: auto;
-  display: block;
-  border: 1px solid var(--ink);
-  color: var(--ink);
-  padding: 12px;
-  border-radius: 0;
-  font-size: 10px;
-  font-weight: 500;
-  font-family: "Jost", sans-serif;
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  text-decoration: none;
-  transition: all 0.3s ease;
-  background: transparent;
-  cursor: pointer;
-  width: 100%;
-}
-
-.btn-booking-luxury:hover {
-  background: var(--ink);
-  color: #fff;
-  border-color: var(--ink);
-  box-shadow: none;
-}
-
-.hover-tag {
+.sale-ribbon {
   position: absolute;
-  top: 14px;
-  right: 14px;
-  background: var(--ink);
+  top: 16px;
+  right: -30px;
+  width: 120px;
+  transform: rotate(45deg);
+  background: #d92d20;
   color: #fff;
-  padding: 4px 12px;
-  border-radius: 0;
-  font-size: 9px;
-  font-weight: 500;
-  font-family: "Jost", sans-serif;
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  z-index: 10;
-}
-.combo-white-section .row {
-  align-items: stretch !important;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  padding: 5px 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
-.combo-white-section .col-lg-4,
-.combo-white-section .col-md-6 {
-  display: flex !important;
-  flex-direction: column !important;
-}
-
-/* =========================================================
-   EDITORIAL SERVICES LAYOUT (ảnh - chữ xen kẽ)
-   ========================================================= */
-.services-editorial-section {
-  max-width: 1440px;
-  margin: 0 auto;
-  padding: 60px 24px 0;
-}
-
-.services-editorial-list {
-  display: flex;
-  flex-direction: column;
-  gap: 96px;
-}
-
-.editorial-row {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 48px;
-}
-
-@media (min-width: 768px) {
-  .editorial-row {
-    flex-direction: row;
-    gap: 80px;
-  }
-  .editorial-row.reverse {
-    flex-direction: row-reverse;
-  }
-}
-
-.editorial-image-wrap {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 4 / 5;
-  background: var(--bg-soft);
-  overflow: hidden;
-  cursor: pointer;
-}
-
-@media (min-width: 768px) {
-  .editorial-image-wrap,
-  .editorial-content {
-    width: 50%;
-  }
-}
-
-.editorial-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 1s ease;
-}
-
-.editorial-image-wrap:hover .editorial-img {
-  transform: scale(1.05);
-}
-
+/* --- Nội dung dịch vụ: đơn giản, giống bản gốc --- */
 .editorial-content {
+  padding: 40px 44px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-}
-
-.editorial-duration {
-  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  color: var(--ink);
-  background: var(--bg-soft);
-  border: 1px solid var(--line);
-  padding: 7px 14px;
-  margin-bottom: 18px;
-  width: fit-content;
-}
-
-.editorial-duration i {
-  font-size: 11px;
-  color: var(--danger);
+  justify-content: center;
+  text-align: center;
 }
 
 .editorial-title {
-  font-size: 1.8rem;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 400;
+  font-size: 1.4rem;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  letter-spacing: 3px;
-  font-weight: 600;
   color: var(--ink);
-  margin-bottom: 16px;
+  margin: 0 0 10px;
+  line-height: 1.3;
 }
 
-@media (min-width: 1024px) {
-  .editorial-title {
-    font-size: 2.2rem;
-  }
+.editorial-desc {
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 22px;
+  max-width: 420px;
 }
 
 .editorial-price-row {
   display: flex;
-  align-items: baseline;
-  gap: 14px;
-  margin-bottom: 16px;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.editorial-price-main,
+.editorial-price-new {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 400;
+  font-size: 1rem;
+  color: var(--ink);
 }
 
 .editorial-price-old {
-  font-size: 1rem;
-  color: var(--muted-light);
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: var(--ink);
   text-decoration: line-through;
-  font-family: "Jost", sans-serif;
+  text-decoration-color: var(--red);
 }
 
 .editorial-price-new {
-  font-size: 1.3rem;
-  font-weight: 500;
-  color: var(--danger);
-  font-family: "Jost", sans-serif;
-}
-
-.editorial-price-main {
-  font-size: 1.3rem;
-  font-weight: 400;
+  font-weight: 600;
+  font-size: 1.05rem;
   color: var(--ink);
-  font-family: "Jost", sans-serif;
-}
-
-/* Đồng bộ font khu vực bộ lọc dịch vụ (Danh mục, đếm số dịch vụ, ô tìm kiếm, lọc mức giá)
-   theo đúng font "Jost" dùng xuyên suốt trang, thay vì font mặc định của trình duyệt/Tailwind. */
-.dv-filter-font,
-.dv-filter-font::placeholder {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-}
-
-.editorial-desc {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  font-size: 0.95rem;
-  color: var(--muted);
-  font-weight: 300;
-  line-height: 1.7;
-  letter-spacing: 0.2px;
-  margin: 16px 0 40px;
-  max-width: 480px;
 }
 
 .editorial-actions {
   display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
 }
 
-.btn-outline-editorial {
-  border: 1px solid var(--ink);
-  color: var(--ink);
-  padding: 16px 32px;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
-  background: transparent;
-  cursor: pointer;
-  font-family: "Jost", sans-serif;
-  transition: all 0.3s ease;
-}
-
-.btn-outline-editorial:hover {
-  background: var(--ink);
-  color: #fff;
-}
-
-.btn-solid-editorial {
-  background: var(--ink);
-  color: #fff;
-  border: 1px solid var(--ink);
-  padding: 16px 32px;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
-  cursor: pointer;
-  font-family: "Jost", sans-serif;
-  transition: all 0.3s ease;
-}
-
-.btn-solid-editorial:hover {
-  background: var(--ink-soft);
-  border-color: var(--ink-soft);
-}
-
-/* Pagination — đồng bộ với Product.vue */
-.pagination-minimal {
-  display: flex;
+.combo-grid-link {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 48px;
-  max-width: 1440px;
-  margin: 96px auto 0;
-  padding: 32px 24px 0;
-  border-top: 1px solid var(--line);
-  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink);
+  text-decoration: none;
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--ink);
+  transition: color 0.2s ease, border-color 0.2s ease, gap 0.2s ease;
+  width: fit-content;
 }
 
-@media (max-width: 1023px) {
-  .pagination-minimal {
-    gap: 24px;
+.combo-grid-link:hover {
+  color: var(--ink);
+  border-color: var(--ink);
+  gap: 12px;
+}
+
+.link-arrow {
+  font-size: 13px;
+}
+
+.no-result-box {
+  padding: 60px 0;
+}
+
+@media (max-width: 900px) {
+  .editorial-row,
+  .editorial-row.reverse {
+    grid-template-columns: 1fr;
+  }
+  .editorial-row.reverse .editorial-image-wrap,
+  .editorial-row.reverse .editorial-content {
+    order: initial;
+  }
+  .editorial-content {
+    padding: 32px 28px;
   }
 }
 
-.pagination-nav {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
-  color: var(--muted);
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: "Jost", sans-serif;
-  transition: color 0.2s ease;
+/* =========================================================
+   PHÂN TRANG
+   ========================================================= */
+.pagination-minimal {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 28px;
+  margin: 48px 0 20px;
+  padding-top: 32px;
+  flex-wrap: wrap;
 }
 
-.pagination-nav:hover:not(:disabled) {
-  color: var(--ink);
+/* Thanh kẻ phía trên kéo dài hết chiều ngang khối cha (không chỉ bằng
+   độ rộng của nhóm nút phân trang, vì justify-content: center làm
+   .pagination-minimal co lại theo nội dung) */
+.pagination-minimal::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--ink);
+}
+
+.pagination-nav {
+  background: none !important;
+  border: none;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink) !important;
+  cursor: pointer;
+  padding: 8px 4px;
+  opacity: 1;
+  transition: opacity 0.2s ease;
 }
 
 .pagination-nav:disabled {
-  opacity: 0.3;
+  opacity: 0.35;
   cursor: not-allowed;
+}
+
+.pagination-nav:hover:not(:disabled) {
+  opacity: 0.6;
 }
 
 .pagination-numbers {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: "Jost", sans-serif;
-  font-size: 12px;
-  font-weight: 300;
-}
-
-@media (min-width: 1024px) {
-  .pagination-numbers {
-    gap: 16px;
-  }
+  gap: 18px;
 }
 
 .pagination-page {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
+  width: auto;
+  height: auto;
+  min-width: 24px;
   border: none;
-  color: var(--muted);
+  border-bottom: 1px solid transparent;
+  background: none !important;
+  color: var(--ink) !important;
+  font-size: 14px;
+  font-weight: 400;
+  padding: 4px 2px;
   cursor: pointer;
-  font-family: "Jost", sans-serif;
-  font-size: 12px;
-  font-weight: 300;
-  transition: color 0.2s ease;
+  transition: all 0.2s ease;
 }
 
-.pagination-page:hover:not(:disabled):not(.active):not(.ellipsis) {
-  color: var(--ink);
+.pagination-page:hover:not(:disabled):not(.active) {
+  opacity: 0.6;
 }
 
 .pagination-page.active {
-  border-bottom: 1px solid var(--ink);
-  color: var(--ink);
+  background: none !important;
+  color: var(--ink) !important;
+  font-weight: 600;
+  border-bottom: 2px solid var(--ink);
 }
 
 .pagination-page.ellipsis {
-  color: var(--muted-light);
+  border: none;
+  background: none !important;
+  color: var(--ink) !important;
   cursor: default;
 }
 
-/* Tag "ƯU ĐÃI" cho combo — màu đen để phân biệt với badge đỏ (HOT/giảm giá) */
-.editorial-image-wrap .hot-badge.combo-tag {
-  background: var(--ink);
-}
-
-/* List tính năng combo trong layout editorial — căn trái, theo chiều rộng nội dung */
-.editorial-combo-list {
-  max-width: 480px;
-  margin: 0 0 32px;
-}
-
-/* Badge trong ảnh editorial (dịch vụ/combo) — sale-ribbon vẫn cần position riêng */
-.editorial-image-wrap .sale-ribbon-wrapper {
-  position: absolute;
-  z-index: 5;
-}
-
-.editorial-image-wrap .hot-badge {
-  z-index: 5;
-}
-
-.editorial-image-wrap .sale-ribbon-wrapper {
-  top: 14px;
-  right: 14px;
-  left: auto;
-  width: auto;
-  height: auto;
-  overflow: visible;
-}
-
-.editorial-image-wrap .sale-ribbon {
-  position: static;
-  top: auto;
-  right: auto;
-  transform: none;
-  width: auto;
-  background: var(--danger);
-  padding: 7px 14px;
-  font-size: 10px;
-  letter-spacing: 2px;
-}
-
 /* =========================================================
-   FLOATING CART
+   COMBO — nền sáng, đơn giản
    ========================================================= */
-.floating-cart-btn {
-  position: fixed;
-  bottom: 160px;
-  right: 20px;
-  width: 56px;
-  height: 56px;
+.combo-editorial-section {
+  padding: 0 24px;
+  margin-top: 100px;
+  margin-bottom: 100px;
+}
+
+.editorial-title-heading {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 1.8rem;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  font-weight: 400;
+  color: var(--ink);
+  line-height: 1.3;
+  margin-bottom: 16px;
+}
+
+.heading-gold-line {
+  width: 40px;
+  height: 1px;
   background: var(--ink);
   border-radius: 0;
+  margin: 0 auto;
+}
+
+/* Nút "Xem thêm" combo — tải thêm 9 combo/lượt, đồng bộ style với feed-more-btn bên Shop.vue */
+.feed-block-more {
   display: flex;
   justify-content: center;
-  align-items: center;
-  color: #fff;
-  font-size: 22px;
+  margin-top: 2.5rem;
+}
+
+.feed-more-btn {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink);
+  background: none;
+  border: 1px solid var(--ink);
+  padding: 12px 32px;
   cursor: pointer;
-  box-shadow: none;
-  z-index: 9999999;
-  transition: 0.3s;
+  transition: background 0.2s, color 0.2s;
+}
+.feed-more-btn:hover:not(:disabled) {
+  background: var(--ink);
+  color: #fff;
+}
+.feed-more-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
-/* Misc legacy helpers (kept for compatibility) */
-.card-head {
+.combo-grid-list {
+  max-width: 1320px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+}
+
+.combo-grid-card {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 30px;
+  flex-direction: column;
+  height: 100%;
 }
 
-.icon-box {
-  width: 55px;
-  height: 55px;
-  background: var(--bg-soft);
+.combo-grid-image-wrap {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--paper-deep);
+}
+
+.combo-grid-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.5s ease;
+}
+
+.combo-grid-card:hover .combo-grid-img {
+  transform: scale(1.05);
+}
+
+.combo-grid-body {
+  padding: 22px 0 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.combo-grid-title {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 0.85rem;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   color: var(--ink);
+  cursor: pointer;
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+
+.combo-grid-title:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.combo-grid-desc {
+  flex: 1 0 auto;
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 18px;
+}
+
+.combo-grid-price-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  border-radius: 0;
-  font-size: 24px;
-  border: 1px solid var(--line);
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
-.price-text {
-  font-weight: 500;
-  font-size: 1.25rem;
+.combo-grid-price-main,
+.combo-grid-price-new {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 400;
+  font-size: 1rem;
   color: var(--ink);
-  font-family: "Jost", sans-serif;
+}
+
+.combo-grid-price-new {
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+
+.combo-grid-price-old {
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: var(--ink);
+  text-decoration: line-through;
+  text-decoration-color: var(--red);
+}
+
+@media (max-width: 900px) {
+  .combo-grid-list {
+    grid-template-columns: 1fr;
+    gap: 48px;
+  }
 }
 
 /* =========================================================
-   RESPONSIVE
-   ========================================================= */
-@media (max-width: 991px) {
-  :deep(.col-lg-4) {
-    width: 50% !important; /* tablet: 2 cột */
-  }
-
-  .main-title-premium {
-    font-size: 2.6rem;
-    letter-spacing: 3px;
-  }
-  .combo-title-premium {
-    font-size: 2.2rem;
-    letter-spacing: 2px;
-  }
-  .filter-group-select {
-    width: 100%;
-    flex-direction: column;
-  }
-  .luxury-combo-card:hover {
-    transform: translateY(-4px);
-  }
-  .combo-name-title {
-    font-size: 1.1rem;
-  }
-  .combo-price-val {
-    font-size: 1.5rem;
-  }
-}
-
-@media (max-width: 576px) {
-  .select-input {
-    font-size: 9px; /* ← nhỏ hơn trên mobile */
-    letter-spacing: 0.5px;
-    padding-right: 28px;
-  }
-
-  .filter-control {
-    height: 44px; /* ← input thấp hơn tí cho gọn */
-    padding: 0 12px;
-    font-size: 11px;
-  }
-
-  .search-box-wrapper .filter-control {
-    padding-left: 38px;
-  }
-
-  .search-icon {
-    left: 12px;
-    font-size: 11px;
-  }
-  /* Mobile: 1 cột */
-  :deep(.col-lg-4),
-  :deep(.col-md-6) {
-    width: 100% !important;
-  }
-
-  .main-title-premium {
-    font-size: 2rem;
-    letter-spacing: 2px;
-  }
-  .combo-title-premium {
-    font-size: 1.7rem;
-  }
-  .services-hero {
-    padding: 60px 0 30px;
-  }
-  .service-card-item {
-    padding: 16px;
-  }
-  .combo-white-section {
-    padding: 50px 0;
-  }
-}
-
-/* =========================================================
-   LƯỚI DANH MỤC (gộp từ Dmdichvu.vue)
+   LƯỚI DANH MỤC (loading spinner)
    ========================================================= */
 .dm-spinner {
   width: 32px;
   height: 32px;
-  border: 1.5px solid #e5e7eb;
-  border-top-color: #111827;
+  border: 1.5px solid var(--line);
+  border-top-color: var(--red);
   border-radius: 50%;
   animation: spin 0.75s linear infinite;
 }
@@ -2208,15 +1559,203 @@ const formatPrice = (price: number) => {
   }
 }
 
-.font-heading {
-  font-family: var(--font-heading, "Inter", sans-serif);
+/* =========================================================
+   BỘ LỌC — nút nổi cố định + panel trượt từ phải
+   ========================================================= */
+.combo-filter-fab {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #000;
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 12px 22px;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 0.8rem;
   font-weight: 500;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
-/* Card danh mục đang được lọc (đồng bộ với "Đang xem" ở phần dịch vụ bên dưới) */
-.is-active h3 {
+.combo-filter-fab:hover {
+  transform: translateX(-50%) translateY(-2px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3);
+}
+
+.combo-filter-fab-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #e53935;
+}
+
+.combo-filter-fab.has-active-filter {
+  background: #e53935;
+}
+
+.combo-filter-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.combo-filter-panel {
+  width: 100%;
+  max-width: 360px;
+  height: 100%;
+  background: #fff;
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.combo-filter-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 24px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.combo-filter-panel-header h3 {
+  font-size: 1rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #111;
+  margin: 0;
+}
+
+.combo-filter-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #111;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.combo-filter-panel-body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.combo-filter-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #999;
+  margin: 12px 0 4px;
+}
+
+.combo-filter-label:first-child {
+  margin-top: 0;
+}
+
+.combo-filter-search-wrap {
+  position: relative;
+}
+
+.combo-filter-search-icon {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  color: #999;
+}
+
+.combo-filter-search-input {
+  width: 100%;
+  font-size: 0.85rem;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #e5e5e5;
+  padding: 8px 4px 8px 22px;
+  outline: none;
+  color: #111;
+}
+
+.combo-filter-search-input:focus {
+  border-bottom-color: #111;
+}
+
+.combo-filter-select {
+  width: 100%;
+  font-size: 0.85rem;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #e5e5e5;
+  padding: 8px 4px;
+  outline: none;
+  cursor: pointer;
+  color: #111;
+}
+
+.combo-filter-select:focus {
+  border-bottom-color: #111;
+}
+
+.combo-filter-reset {
+  margin-top: 20px;
+  align-self: flex-start;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #e53935;
+  background: none;
+  border: none;
   text-decoration: underline;
-  text-underline-offset: 4px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  padding: 0;
+}
+
+/* Transitions */
+.combo-filter-fade-enter-active,
+.combo-filter-fade-leave-active {
+  transition: opacity 0.25s ease;
+}
+.combo-filter-fade-enter-from,
+.combo-filter-fade-leave-to {
+  opacity: 0;
+}
+
+.combo-filter-slide-enter-active,
+.combo-filter-slide-leave-active {
+  transition: transform 0.3s ease;
+}
+.combo-filter-slide-enter-from,
+.combo-filter-slide-leave-to {
+  transform: translateX(100%);
+}
+
+@media (max-width: 480px) {
+  .combo-filter-panel {
+    max-width: 100%;
+  }
+  .combo-filter-fab {
+    bottom: 18px;
+    padding: 10px 18px;
+    font-size: 0.75rem;
+  }
 }
 </style>
