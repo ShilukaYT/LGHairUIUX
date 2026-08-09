@@ -178,6 +178,11 @@ const stylistsList = computed(() => {
                 <span class="font-bold">-{{ formatPrice(detail.flashSaleDiscount) }}</span>
               </div>
 
+              <div v-if="detail.memberDiscount > 0" class="flex justify-between text-blue-600">
+                <span class="font-medium">Giảm giá thành viên:</span>
+                <span class="font-bold">-{{ formatPrice(detail.memberDiscount) }}</span>
+              </div>
+
               <div v-if="detail.voucherGiam && detail.voucherGiam.amount > 0" class="flex justify-between text-red-600">
                 <span class="font-medium">Voucher ({{ detail.voucherGiam.code }}):</span>
                 <span class="font-bold">-{{ formatPrice(detail.voucherGiam.amount) }}</span>

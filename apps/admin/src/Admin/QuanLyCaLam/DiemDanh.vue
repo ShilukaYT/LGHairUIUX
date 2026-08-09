@@ -10,7 +10,8 @@ const route = useRoute()
 import { logActivity } from '@/utils/activityLogger'
 
 // --- CẤU HÌNH API ---
-const API_BASE_URL = 'https://localhost:7196/api/admin/lich-lam-viec'
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
+const API_BASE_URL = API + '/api/admin/lich-lam-viec'
 axios.defaults.withCredentials = true
 
 // --- STATE QUẢN LÝ DỮ LIỆU ---
@@ -370,6 +371,8 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
           <v-text-field
             v-model="searchQuery"
             label="Tìm tên thợ hoặc loại thợ..."
+            maxlength="100"
+            @input="searchQuery = searchQuery ? searchQuery.slice(0, 100) : ''"
             density="compact"
             variant="outlined"
             hide-details
@@ -443,7 +446,18 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
                  {{ getShiftData(item.maNv, date).caLam }}
                </v-chip>
 
-               <v-tooltip v-if="getShiftData(item.maNv, date).trangThai === 2" text="Bấm để cập nhật (Rời ca, Vắng mặt, Muộn)" location="top">
+               <v-btn
+                  v-if="getShiftData(item.maNv, date).caLam === 'Nghỉ lễ' || getShiftData(item.maNv, date).trangThai === 7"
+                  color="error"
+                  variant="flat"
+                  size="40"
+                  class="rounded-lg font-weight-bold text-white elevation-1"
+                  disabled
+                >
+                  Nghỉ
+                </v-btn>
+
+               <v-tooltip v-else-if="getShiftData(item.maNv, date).trangThai === 2" text="Bấm để cập nhật (Rời ca, Vắng mặt, Muộn)" location="top">
                  <template v-slot:activator="{ props }">
                     <v-btn
                       v-bind="props"
@@ -482,10 +496,10 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
 
                 <v-btn
                   v-else-if="getShiftData(item.maNv, date).trangThai === 6"
-                  color="info"
+                  color="warning"
                   variant="tonal"
                   size="40"
-                  class="rounded-lg"
+                  class="rounded-lg font-weight-bold"
                   style="pointer-events: none;"
                 >
                   <Clock class="w-5 h-5" />

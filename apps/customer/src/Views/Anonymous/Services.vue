@@ -5,7 +5,7 @@ import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 import { ref, computed, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import axios from "axios";
-import { useWishlistStore } from "@/stores/useWishlistStore";
+import { useWishlistStore, showToast } from "@/stores/useWishlistStore";
 import { Heart } from "lucide-vue-next";
 
 const route = useRoute();
@@ -116,7 +116,7 @@ const fetchFiltered = async () => {
   try {
     console.log("🔍 Đang gọi API filter...");
     const res = await axios.get(
-      "https://localhost:7196/api/DanhSachDichVu/filter",
+      API + "/api/DanhSachDichVu/filter",
       {
         params: {
           search: searchQuery.value,
@@ -212,7 +212,7 @@ const addToCart = async (rawItem: any) => {
   await addToCartDB(formattedItem, customer.maKH);
   await updateCartBadge();
   window.dispatchEvent(new Event("cart-updated"));
-  alert("Đã thêm dịch vụ vào giỏ hàng thành công!");
+  showToast("Đã thêm dịch vụ vào giỏ hàng!", "success");
 };
 // =======================
 // MOUNT
@@ -224,7 +224,7 @@ onMounted(async () => {
   }, 1000);
 
   // =======================
-  // ĐỌC QUERY PARAM ?category=... TỪ Dmdichvu
+  // ĐỌC QUERY PARAM ?category=... TỪ Home / Dmdichvu
   // =======================
   if (route.query.category && typeof route.query.category === "string") {
     selectedCategory.value = route.query.category;
@@ -235,6 +235,24 @@ onMounted(async () => {
   await updateCartBadge(); // 🔥 cập nhật số lượng badge khi vào trang dịch vụ
   await fetchRatings(); // 🔥 lấy đánh giá trung bình cho tất cả dịch vụ
 });
+
+// =======================
+// WATCH ROUTE QUERY — để bắt navigate từ trang khác (Home, Dmdichvu)
+// ngay cả khi component đã được cache/mount rồi
+// =======================
+watch(
+  () => route.query.category,
+  (newCat) => {
+    if (newCat && typeof newCat === "string") {
+      selectedCategory.value = newCat;
+    } else {
+      selectedCategory.value = "all";
+    }
+    currentPage.value = 1;
+    fetchFiltered();
+  }
+);
+
 
 // =======================
 // FORMAT (OPTIONAL)

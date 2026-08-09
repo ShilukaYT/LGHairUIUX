@@ -536,6 +536,21 @@ watch(
   }
 );
 
+watch(
+  () => route.query.tenDanhMuc,
+  (newTenDanhMuc) => {
+    if (newTenDanhMuc) {
+      const tenDM = (newTenDanhMuc as string).toLowerCase();
+      const found = categoryList.value.find(c => c.tenDanhMuc?.toLowerCase().includes(tenDM)) ||
+                    danhMucList.value.find(d => d.tenDanhMuc?.toLowerCase().includes(tenDM));
+      if (found && selectedDanhMuc.value !== (found.maDM || found.maDMSP)) {
+        selectedDanhMuc.value = found.maDM || found.maDMSP;
+      }
+    }
+  },
+  { immediate: true }
+);
+
 // Đồng bộ lại thương hiệu mỗi khi query ?thuongHieu=... đổi (vd: bấm menu tổng hợp
 // từ trang Dmdichvu.vue sang đây để lọc theo thương hiệu).
 watch(

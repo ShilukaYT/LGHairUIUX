@@ -1,6 +1,6 @@
 <template>
   <div class="logo">
-    <RouterLink to="/admin/dashboard" aria-label="logo" class="d-flex align-center" style="gap: 8px; overflow: hidden;">
+    <RouterLink :to="logoRedirectUrl" aria-label="logo" class="d-flex align-center" style="gap: 8px; overflow: hidden;">
       <svg
         width="40"
         height="55"
@@ -244,13 +244,41 @@ l-1 -383 42 -42 c24 -24 47 -43 51 -43 4 0 8 200 8 444 0 441 0 444 22 486 13
 </template>
 <script setup lang="ts">
 import { computed } from 'vue';
-import { RouterLink } from 'vue-router';
+import { RouterLink, useRoute } from 'vue-router';
 import { useTheme } from 'vuetify';
 import { useCustomizerStore } from '../../../stores/customizer';
 
 const customizer = useCustomizerStore();
 const theme = useTheme();
+const route = useRoute();
 
 // Nền tối -> logo màu trắng, nền sáng -> logo màu đen
 const logoColor = computed(() => theme.global.current.value.dark ? '#ffffff' : '#000000');
+
+// Phân luồng điều hướng theo Role (Admin / Nhân viên)
+const logoRedirectUrl = computed(() => {
+  const adminStr = sessionStorage.getItem('adminUser');
+  if (adminStr) {
+    try {
+      const user = JSON.parse(adminStr);
+      if (user.maRole === 'R01') {
+        return '/admin/dashboard';
+      }
+    } catch (e) {
+      return '/admin/dashboard';
+    }
+  }
+
+  const staffStr = sessionStorage.getItem('staffUser') || sessionStorage.getItem('nhanVienUser') || localStorage.getItem('staffUser') || localStorage.getItem('nhanVienUser');
+  if (staffStr) {
+    return '/nhanvien/ca-lam-viec';
+  }
+
+  // Fallback theo URL hiện tại nếu chưa xác định session
+  if (route.path && route.path.startsWith('/admin')) {
+    return '/admin/dashboard';
+  }
+
+  return '/nhanvien/ca-lam-viec';
+});
 </script>

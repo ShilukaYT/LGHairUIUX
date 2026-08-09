@@ -9,7 +9,6 @@ import NotificationDD from './NotificationDD.vue';
 import Searchbar from './SearchBarPanel.vue';
 import ProfileDD from './ProfileDD.vue';
 import { useTheme } from 'vuetify';
-import { SunIcon, MoonIcon } from 'vue-tabler-icons';
 
 const customizer = useCustomizerStore();
 const theme = useTheme();
@@ -39,13 +38,16 @@ const loadUserFromStorage = () => {
     const rawAvatar = user.hinhAnh || user.avatar || '';
     if (rawAvatar) {
       userAvatar.value = rawAvatar.startsWith('/')
-        ? `https://localhost:7196${rawAvatar}`
+        ? API + rawAvatar
         : rawAvatar;
     } else {
       userAvatar.value = '';
     }
   }
 };
+
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
+
 
 const avatarSrc = computed(() => {
   return userAvatar.value || `https://ui-avatars.com/api/?name=${encodeURIComponent(userName.value)}&background=random&color=fff&size=100`;

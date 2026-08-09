@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
+import apexchart from 'vue3-apexcharts'
 import {
   CalendarDays,
   Trophy,

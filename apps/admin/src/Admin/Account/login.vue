@@ -22,7 +22,8 @@ const errorMessage = ref('')
 const showPassword = ref(false)
 
 // Đổi port URL dưới đây cho khớp với Backend của bạn nếu cần
-const API_URL = 'https://localhost:7196/api/admin/auth/login'
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
+const API_URL = API + '/api/admin/auth/login'
 
 const handleLogin = async () => {
   if (!email.value || !password.value) {
@@ -74,8 +75,8 @@ const handleLogin = async () => {
         // Nếu là Admin -> Chuyển vào Dashboard Quản trị
         router.push('/admin/Dashboard') 
       } else {
-        // Nếu là Role khác (Ví dụ: Thợ cắt tóc, Thu ngân...) -> Chuyển vào trang Nhân viên
-        router.push('/nhanvien') 
+        // Nếu là Role khác (Ví dụ: Thợ cắt tóc, Thu ngân...) -> Chuyển vào trang Ca làm việc của Nhân viên
+        router.push('/nhanvien/ca-lam-viec') 
       }
     }
   } catch (error: any) {

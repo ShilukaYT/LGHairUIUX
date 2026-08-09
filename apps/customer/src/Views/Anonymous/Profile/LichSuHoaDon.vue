@@ -27,8 +27,9 @@ const isCancelModalOpen = ref(false);
 const selectedCancelId = ref('');
 const isRescheduleModalOpen = ref(false);
 const selectedRescheduleId = ref('');
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
 
-const API_URL = "https://localhost:7196/api/LichSuHoaDon/booking-history";
+const API_URL = API + "/api/LichSuHoaDon/booking-history";
 
 // Fetch booking history list from Backend
 const fetchHistory = async () => {

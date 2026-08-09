@@ -4,8 +4,9 @@ import axios from 'axios'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Plus, RotateCcw } from 'lucide-vue-next'
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
 
-const API_BASE = 'https://localhost:7196/api/admin/vouchers'
+const API_BASE = API + '/api/admin/vouchers'
 
 export interface AdminVoucherRow {
   maCode: string
@@ -369,7 +370,7 @@ async function load() {
   } catch (e: unknown) {
     listError.value = formatApiError(
       e,
-      'Không tải được danh sách. Kiểm tra backend tại https://localhost:7196 (HTTPS / CORS).',
+      'Không tải được danh sách. Kiểm tra backend tại '+API+' (HTTPS / CORS).',
     )
     list.value = []
   } finally {

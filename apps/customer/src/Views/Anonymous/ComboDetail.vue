@@ -4,6 +4,7 @@ const API = import.meta.env.VITE_API_URL;
 // import ReviewList from "./ReviewList.vue";
 import { getCartDB, addToCartDB } from "@/Views/Anonymous/CSDL/cartDB";
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
+import { showToast } from "@/stores/useWishlistStore";
 
 export default {
   name: "ComboDetail",
@@ -164,7 +165,7 @@ export default {
       await addToCartDB(item, this.userMaKH);
       await this.updateCartBadge();
       window.dispatchEvent(new Event("cart-updated"));
-      alert(`Đã thêm "${item.tenItem}" vào giỏ hàng thành công!`);
+      showToast(`Đã thêm "${item.tenItem}" vào giỏ hàng!`, "success");
     },
 
     async bookNow() {

@@ -33,7 +33,11 @@ import {
   RotateCcw,
   CheckCircle,
   XCircle,
-  Clock
+  Clock,
+  CalendarDays,
+  ChevronRight,
+  Filter,
+  UserCheck
 } from 'lucide-vue-next'
 
 const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
@@ -61,6 +65,102 @@ const maKh = ref<string | undefined>(undefined)
 const selectedMaKhs = ref<string[]>([])
 const bulkSearchQuery = ref('')
 const sortByZalo = ref(false)
+
+// ── Danh sách khách hàng đặt lịch ──
+interface KhachHangDatLich {
+  maLd: string
+  maKh: string
+  hoTen: string | null
+  sdt: string | null
+  email: string | null
+  ngayHen: string | null
+  gioBatDau: string | null
+  gioKetThuc: string | null
+  trangThai: number | null
+  tongTienDuKien: number | null
+}
+
+const datLichList = ref<KhachHangDatLich[]>([])
+const loadingDatLich = ref(false)
+const showDatLichPanel = ref(true)
+const datLichNgayFilter = ref(new Date().toISOString().slice(0, 10))
+const datLichTrangThaiFilter = ref<string>('all')
+const datLichSearch = ref('')
+
+const filteredDatLichList = computed(() => {
+  let list = datLichList.value
+  if (datLichTrangThaiFilter.value !== 'all') {
+    const ts = parseInt(datLichTrangThaiFilter.value)
+    list = list.filter(d => d.trangThai === ts)
+  }
+  const q = datLichSearch.value.trim().toLowerCase()
+  if (q) {
+    list = list.filter(d =>
+      (d.hoTen && d.hoTen.toLowerCase().includes(q)) ||
+      (d.sdt && d.sdt.toLowerCase().includes(q)) ||
+      (d.maKh && d.maKh.toLowerCase().includes(q))
+    )
+  }
+  return list
+})
+
+async function loadKhachHangDatLich() {
+  loadingDatLich.value = true
+  try {
+    const params: Record<string, string> = {}
+    if (datLichNgayFilter.value) params.ngay = datLichNgayFilter.value
+    if (datLichTrangThaiFilter.value !== 'all') params.trangThai = datLichTrangThaiFilter.value
+    const res = await axios.get<KhachHangDatLich[]>(`${API}/api/ThongBao/khach-hang-dat-lich`, {
+      params,
+      withCredentials: true,
+    })
+    datLichList.value = Array.isArray(res.data) ? res.data : []
+  } catch {
+    toast.error('Không tải được danh sách lịch đặt.')
+    datLichList.value = []
+  } finally {
+    loadingDatLich.value = false
+  }
+}
+
+function getTrangThaiDatLich(ts: number | null) {
+  switch (ts) {
+    case 0: return { label: 'Chờ xác nhận', cls: 'bg-amber-500/10 text-amber-700 border-amber-500/30' }
+    case 1: return { label: 'Xác nhận', cls: 'bg-blue-500/10 text-blue-700 border-blue-500/30' }
+    case 2: return { label: 'Hoàn thành', cls: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30' }
+    case 3: return { label: 'Đã hủy', cls: 'bg-red-500/10 text-red-600 border-red-500/30' }
+    default: return { label: 'Không rõ', cls: 'bg-muted/50 text-muted-foreground border-border' }
+  }
+}
+
+function formatNgayVN(ngay: string | null) {
+  if (!ngay) return '—'
+  try {
+    const d = new Date(ngay + 'T00:00:00')
+    return d.toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })
+  } catch { return ngay }
+}
+
+function selectDatLichKhach(item: KhachHangDatLich) {
+  sendMode.value = 'single'
+  maKh.value = item.maKh
+  const ngayStr = item.ngayHen ? formatNgayVN(item.ngayHen) : ''
+  const gioStr = item.gioBatDau ? ` lúc ${item.gioBatDau}` : ''
+  tieuDe.value = `Nhắc lịch hẹn tại Minh Tâm Hair`
+  noiDung.value = `Kính chào ${item.hoTen || 'Quý khách'},\n\nChúng tôi xin nhắc lịch hẹn của bạn tại Minh Tâm Hair:\n📅 Ngày: ${ngayStr}${gioStr}\n\nVui lòng có mặt đúng giờ. Nếu cần thay đổi hoặc hủy lịch, xin liên hệ chúng tôi sớm.\n\nTrân trọng,\nMinh Tâm Hair 💇`
+  toast.success(`Đã chọn ${item.hoTen || item.maKh} — kiểm tra nội dung rồi gửi!`, {
+    description: `Lịch hẹn: ${ngayStr}${gioStr}`
+  })
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+function selectBulkDatLich(item: KhachHangDatLich) {
+  sendMode.value = 'bulk'
+  if (!selectedMaKhs.value.includes(item.maKh)) {
+    selectedMaKhs.value.push(item.maKh)
+  }
+  toast.success(`Đã thêm ${item.hoTen || item.maKh} vào danh sách gửi hàng loạt`)
+}
 
 const tieuDe = ref('')
 const noiDung = ref('')
@@ -186,9 +286,9 @@ const canSubmit = computed(
     !sending.value,
 )
 
-/** Chuỗi dùng cho typeahead / textValue (reka-ui). */
+/** Chuỗi dùng cho typeahead / textValue (reka-ui) — chỉ hiển thị tên & SĐT trong trigger. */
 function khachTextValue(k: KhachHangOption) {
-  return [k.maKh, k.hoTen, k.sdt, k.email].filter(Boolean).join(' ')
+  return [k.hoTen?.trim(), k.sdt?.trim()].filter(Boolean).join(' — ') || k.maKh
 }
 
 async function loadKhachHang() {
@@ -756,6 +856,7 @@ onMounted(() => {
   loadKhachHang()
   loadZaloTrangThai()
   loadSentNotifications()
+  loadKhachHangDatLich()
 })
 
 onUnmounted(() => {
@@ -816,7 +917,11 @@ onUnmounted(() => {
             <div v-if="sendMode === 'single'" class="space-y-3">
               <Select v-model="maKh" :disabled="loadingList">
                 <SelectTrigger id="khach" class="border-input bg-background h-10 w-full px-3 text-xs font-normal shadow-sm">
-                  <SelectValue :placeholder="loadingList ? 'Đang tải...' : 'Chọn khách hàng...'" />
+                  <span v-if="!maKh" class="text-muted-foreground">{{ loadingList ? 'Đang tải...' : 'Chọn khách hàng...' }}</span>
+                  <span v-else class="flex items-center gap-1.5 min-w-0 truncate">
+                    <span class="font-medium text-foreground truncate">{{ selectedKhach?.hoTen?.trim() || maKh }}</span>
+                    <span v-if="selectedKhach?.sdt" class="text-muted-foreground text-[10px] shrink-0">— {{ selectedKhach.sdt }}</span>
+                  </span>
                 </SelectTrigger>
                 <SelectContent class="max-h-[min(24rem,70vh)] rounded-xl border-border/80 shadow-xl">
                   <SelectItem v-for="k in khachHangList" :key="k.maKh" :value="k.maKh" :text-value="khachTextValue(k)" class="cursor-pointer py-2 px-3 text-xs rounded-lg my-0.5">
@@ -833,6 +938,7 @@ onUnmounted(() => {
                   </SelectItem>
                 </SelectContent>
               </Select>
+
 
               <transition enter-active-class="transition duration-200 ease-out" enter-from-class="opacity-0 scale-95" enter-to-class="opacity-100 scale-100">
                 <div v-if="selectedKhach" class="rounded-xl border border-border/60 bg-muted/20 p-3 space-y-2 text-xs">
@@ -1014,6 +1120,157 @@ onUnmounted(() => {
 
     </form>
 
+    <!-- ── PANEL: KHÁCH HÀNG ĐẶT LỊCH ── -->
+    <div class="rounded-2xl border border-border/80 bg-card shadow-sm overflow-hidden">
+      <!-- Header -->
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-5 py-4 border-b border-border/60 bg-muted/20">
+        <div class="flex items-center gap-3">
+          <div class="flex size-8 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 border border-violet-500/20">
+            <CalendarDays class="size-4" />
+          </div>
+          <div>
+            <div class="font-bold text-sm text-foreground flex items-center gap-2">
+              Khách hàng đặt lịch
+              <span class="rounded-full bg-violet-500/15 px-2 py-0.5 text-[11px] font-bold text-violet-700">{{ filteredDatLichList.length }}</span>
+            </div>
+            <div class="text-xs text-muted-foreground">Nhấn vào để soạn thông báo nhắc lịch nhanh</div>
+          </div>
+        </div>
+        <!-- Bộ lọc -->
+        <div class="flex items-center gap-2 flex-wrap">
+          <div class="flex items-center gap-1.5 bg-background border border-input rounded-lg px-2 h-8">
+            <CalendarDays class="size-3.5 text-muted-foreground shrink-0" />
+            <input
+              v-model="datLichNgayFilter"
+              type="date"
+              class="h-full text-xs bg-transparent outline-none text-foreground w-[120px]"
+              @change="loadKhachHangDatLich"
+            />
+          </div>
+          <select
+            v-model="datLichTrangThaiFilter"
+            class="h-8 px-2 rounded-lg border border-input bg-background text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer"
+            @change="loadKhachHangDatLich"
+          >
+            <option value="all">Tất cả trạng thái</option>
+            <option value="0">Chờ xác nhận</option>
+            <option value="1">Xác nhận</option>
+            <option value="2">Hoàn thành</option>
+            <option value="3">Đã hủy</option>
+          </select>
+          <div class="relative">
+            <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+            <input v-model="datLichSearch" type="text" placeholder="Tìm khách..." class="h-8 w-32 pl-8 pr-3 rounded-lg border border-input bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/40" />
+          </div>
+          <button
+            type="button"
+            class="h-8 px-3 rounded-lg border border-violet-500/30 text-violet-700 text-xs font-medium hover:bg-violet-500/10 transition-colors flex items-center gap-1.5"
+            :disabled="loadingDatLich"
+            @click="loadKhachHangDatLich"
+          >
+            <RefreshCw class="size-3.5" :class="{ 'animate-spin': loadingDatLich }" />
+            Làm mới
+          </button>
+        </div>
+      </div>
+
+      <!-- Loading -->
+      <div v-if="loadingDatLich" class="flex items-center justify-center py-12 gap-3 text-muted-foreground">
+        <RefreshCw class="size-5 animate-spin text-violet-500" />
+        <span class="text-sm">Đang tải danh sách lịch đặt...</span>
+      </div>
+
+      <!-- Empty -->
+      <div v-else-if="filteredDatLichList.length === 0" class="flex flex-col items-center justify-center py-14 gap-3">
+        <div class="flex size-14 items-center justify-center rounded-2xl bg-muted/40 border border-border/60">
+          <CalendarDays class="size-7 text-muted-foreground/40" />
+        </div>
+        <p class="text-sm font-semibold text-foreground">Không có lịch đặt nào</p>
+        <p class="text-xs text-muted-foreground max-w-xs text-center">Trong khoảng thời gian từ ngày đã chọn đến 7 ngày tới, không có lịch hẹn.</p>
+      </div>
+
+      <!-- Table -->
+      <div v-else class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="border-b border-border/60 bg-muted/30 text-muted-foreground text-[11px] uppercase font-bold">
+              <th class="py-2.5 px-4 w-[130px]">Ngày hẹn</th>
+              <th class="py-2.5 px-4 w-[100px]">Giờ</th>
+              <th class="py-2.5 px-4 min-w-[160px]">Khách hàng</th>
+              <th class="py-2.5 px-4 w-[120px]">Trạng thái</th>
+              <th class="py-2.5 px-4 w-[110px]">Dự kiến</th>
+              <th class="py-2.5 px-4 text-right w-[180px]">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-border/40">
+            <tr
+              v-for="item in filteredDatLichList"
+              :key="item.maLd"
+              class="hover:bg-violet-500/5 transition-colors"
+            >
+              <!-- Ngày hẹn -->
+              <td class="py-2.5 px-4">
+                <div class="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                  <CalendarDays class="size-3.5 text-violet-500 shrink-0" />
+                  {{ formatNgayVN(item.ngayHen) }}
+                </div>
+              </td>
+              <!-- Giờ -->
+              <td class="py-2.5 px-4">
+                <div class="flex items-center gap-1 text-xs font-mono text-foreground">
+                  <Clock class="size-3 text-violet-400 shrink-0" />
+                  <span>{{ item.gioBatDau || '—' }}</span>
+                  <span v-if="item.gioKetThuc" class="text-muted-foreground">→ {{ item.gioKetThuc }}</span>
+                </div>
+              </td>
+              <!-- Khách hàng -->
+              <td class="py-2.5 px-4 max-w-[200px]">
+                <div class="font-semibold text-foreground text-xs truncate" :title="item.hoTen || 'Khách hàng'">{{ item.hoTen || 'Khách hàng' }}</div>
+                <div class="flex flex-col gap-0.5 text-[10px] text-muted-foreground mt-0.5">
+                  <span v-if="item.sdt" class="flex items-center gap-0.5"><Phone class="size-2.5 text-emerald-600 shrink-0" />{{ item.sdt }}</span>
+                  <span v-if="item.email" class="flex items-center gap-0.5 truncate" :title="item.email"><Mail class="size-2.5 text-blue-600 shrink-0" /><span class="truncate">{{ item.email }}</span></span>
+                </div>
+              </td>
+              <!-- Trạng thái -->
+              <td class="py-2.5 px-4">
+                <span
+                  class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border"
+                  :class="getTrangThaiDatLich(item.trangThai).cls"
+                >
+                  {{ getTrangThaiDatLich(item.trangThai).label }}
+                </span>
+              </td>
+              <!-- Dự kiến -->
+              <td class="py-2.5 px-4 text-xs font-mono text-muted-foreground">
+                {{ item.tongTienDuKien ? item.tongTienDuKien.toLocaleString('vi-VN') + '₫' : '—' }}
+              </td>
+              <!-- Thao tác -->
+              <td class="py-2.5 px-4 text-right whitespace-nowrap">
+                <div class="flex items-center justify-end gap-1.5">
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg border border-violet-500/40 text-violet-700 bg-violet-500/5 hover:bg-violet-500/15 text-[11px] font-semibold transition-colors"
+                    @click="selectDatLichKhach(item)"
+                    title="Soạn thông báo nhắc lịch cho khách này"
+                  >
+                    <Send class="size-3" />Nhắc lịch
+                  </button>
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-1.5 h-7 px-2 rounded-lg border border-blue-500/40 text-blue-700 bg-blue-500/5 hover:bg-blue-500/15 text-[11px] font-semibold transition-colors"
+                    @click="selectBulkDatLich(item)"
+                    title="Thêm vào danh sách gửi hàng loạt"
+                  >
+                    <UserCheck class="size-3" />+ Hàng loạt
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- LỊCH SỬ TIN NHẮN ĐÃ GỬI -->
     <div class="rounded-2xl border border-border/80 bg-card shadow-sm overflow-hidden">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-5 py-4 border-b border-border/60 bg-muted/20">
@@ -1123,10 +1380,9 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Modal Chi tiết -->
     <Dialog :open="detailModalOpen" @update:open="(val) => !val && (detailModalOpen = false)">
-      <DialogContent class="sm:max-w-xl rounded-2xl p-6 border border-border/80 shadow-2xl">
-        <DialogHeader class="border-b border-border/40 pb-3 mb-4">
+      <DialogContent class="w-[calc(100vw-2rem)] max-w-3xl rounded-2xl p-0 border border-border/80 shadow-2xl overflow-hidden">
+        <DialogHeader class="border-b border-border/40 pb-3 mb-0 px-6 pt-6">
           <DialogTitle class="flex items-center gap-2 text-base font-bold text-foreground tracking-tight">
             <div class="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary border border-primary/20">
               <FileText class="size-4" />
@@ -1138,22 +1394,22 @@ onUnmounted(() => {
           </DialogDescription>
         </DialogHeader>
 
-        <div v-if="selectedDetailItem" class="space-y-4 text-xs">
+        <div v-if="selectedDetailItem" class="space-y-4 text-xs px-6 pb-6 pt-4 max-h-[80vh] overflow-y-auto">
           <!-- Người nhận & Kênh gửi -->
-          <div class="grid grid-cols-2 gap-4 p-4 rounded-xl bg-muted/30 border border-border/40">
-            <div class="space-y-1">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-muted/30 border border-border/40">
+            <div class="space-y-1 min-w-0">
               <span class="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Khách hàng nhận</span>
-              <div class="font-bold text-foreground text-sm flex items-center gap-1">
-                {{ selectedDetailItem.hoTen }}
-                <span v-if="selectedDetailItem.mode === 'bulk'" class="px-1.5 py-0.2 rounded bg-purple-500/10 text-purple-700 text-[9px] font-bold border border-purple-500/20">Hàng loạt</span>
+              <div class="font-bold text-foreground text-sm flex items-center gap-1 flex-wrap">
+                <span class="truncate">{{ selectedDetailItem.hoTen }}</span>
+                <span v-if="selectedDetailItem.mode === 'bulk'" class="px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-700 text-[9px] font-bold border border-purple-500/20 shrink-0">Hàng loạt</span>
               </div>
               <div class="text-muted-foreground text-[10px] space-y-0.5 mt-1">
-                <div v-if="selectedDetailItem.sdt" class="flex items-center gap-1"><Phone class="size-3 text-emerald-600" /> {{ selectedDetailItem.sdt }}</div>
-                <div v-if="selectedDetailItem.email" class="flex items-center gap-1"><Mail class="size-3 text-blue-600" /> {{ selectedDetailItem.email }}</div>
+                <div v-if="selectedDetailItem.sdt" class="flex items-center gap-1"><Phone class="size-3 text-emerald-600 shrink-0" /> {{ selectedDetailItem.sdt }}</div>
+                <div v-if="selectedDetailItem.email" class="flex items-center gap-1 min-w-0"><Mail class="size-3 text-blue-600 shrink-0" /> <span class="truncate">{{ selectedDetailItem.email }}</span></div>
               </div>
             </div>
             <div class="space-y-1">
-              <span class="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Kênh & Trạng thái</span>
+              <span class="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Kênh &amp; Trạng thái</span>
               <div class="flex items-center gap-1.5 flex-wrap">
                 <span v-if="selectedDetailItem.kenhGui.includes('Zalo')" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 border border-emerald-500/20 font-bold text-[9px]">
                   <MessageSquare class="size-2.5" /> Zalo
@@ -1179,7 +1435,7 @@ onUnmounted(() => {
           <!-- Tiêu đề -->
           <div class="space-y-1">
             <span class="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Tiêu đề tin nhắn</span>
-            <div class="p-3 rounded-lg border border-border/80 bg-background font-semibold text-foreground text-xs shadow-inner">
+            <div class="p-3 rounded-lg border border-border/80 bg-background font-semibold text-foreground text-xs shadow-inner break-words">
               {{ selectedDetailItem.tieuDe || '(Không có tiêu đề)' }}
             </div>
           </div>
@@ -1187,7 +1443,7 @@ onUnmounted(() => {
           <!-- Nội dung -->
           <div class="space-y-1">
             <span class="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Nội dung tin nhắn</span>
-            <div class="p-3 rounded-lg border border-border/80 bg-background font-mono text-xs whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed shadow-inner">
+            <div class="p-3 rounded-lg border border-border/80 bg-background font-mono text-xs whitespace-pre-wrap break-words max-h-48 overflow-y-auto leading-relaxed shadow-inner">
               {{ selectedDetailItem.noiDung || '(Nội dung trống)' }}
             </div>
           </div>
@@ -1198,7 +1454,7 @@ onUnmounted(() => {
             <div class="p-3 rounded-lg border font-mono text-[11px] leading-relaxed flex items-start gap-2 shadow-sm"
               :class="selectedDetailItem.trangThai === 'success' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700' : selectedDetailItem.trangThai === 'partial' ? 'bg-amber-500/10 border-amber-500/30 text-amber-700' : 'bg-red-500/10 border-red-500/30 text-red-700'">
               <AlertCircle class="size-4 shrink-0 mt-0.5" />
-              <span>{{ selectedDetailItem.chiTiet }}</span>
+              <span class="break-words min-w-0 flex-1">{{ selectedDetailItem.chiTiet }}</span>
             </div>
           </div>
 

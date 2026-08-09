@@ -58,6 +58,8 @@ const handleLogout = () => {
   router.push({ name: 'login' });
 };
 
+
+
 const getHeaderAvatarUrl = (user: any) => {
   if (!user) return '';
   const imgPath = user.hinhAnh || user.picture || user.avatar;
@@ -149,7 +151,7 @@ onMounted(() => {
   checkSessionInterval = setInterval(async () => {
     if (!currentUser.value) return; // Chỉ kiểm tra khi có user đăng nhập
     try {
-      await axios.get('https://localhost:7196/api/account/verify-session', {
+      await axios.get(API + '/api/account/verify-session', {
         withCredentials: true // Quan trọng để gửi kèm cookie HttpOnly
       });
     } catch (error: any) {

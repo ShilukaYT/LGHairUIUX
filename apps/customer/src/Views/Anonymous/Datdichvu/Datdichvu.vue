@@ -3,6 +3,7 @@ import { getCartDB, removeFromCartDB, addToCartDB } from "@/Views/Anonymous/CSDL
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios';
+import Swal from 'sweetalert2';
 
 declare const AOS: any;
 
@@ -95,12 +96,25 @@ const loadVouchers = async () => {
         myVouchers.value = res.data;
 
         // Bỏ các mã không còn trong danh sách hợp lệ
-        bookingData.value.voucherIds = bookingData.value.voucherIds.filter((id) =>
-            myVouchers.value.some((v) => v.id === id)
-        );
+        bookingData.value.voucherIds = bookingData.value.voucherIds.filter((id) => {
+            const v = myVouchers.value.find((x: any) => x.id === id);
+            return v && !isVoucherDisabled(v);
+        });
     } catch (error) {
         console.error("Lỗi load voucher:", error);
     }
+};
+
+const isVoucherDisabled = (v: any) => {
+    if (v.isAvailable === false) return true; // Backend trả về
+    if (v.desc && v.desc.includes('Đơn tối thiểu')) {
+        const match = v.desc.match(/Đơn tối thiểu ([\d,]+)đ/);
+        if (match) {
+            const minVal = parseInt(match[1].replace(/,/g, ''));
+            if (subTotal.value < minVal) return true;
+        }
+    }
+    return false;
 };
 
 
@@ -309,11 +323,11 @@ const totalOriginalPrice = computed(() => {
 });
 
 /** Tổng giảm & tổng sau giảm (API xếp chồng tối đa 2 mã) */
-const stackPreview = ref({ totalDiscount: 0, finalAmount: 0 });
+const stackPreview = ref({ totalDiscount: 0, memberDiscount: 0, memberRankPercent: 0, finalAmount: 0 });
 
 const refreshStackPreview = async () => {
-    if (!customerId.value || customerId.value === 'GUEST' || bookingData.value.voucherIds.length === 0) {
-        stackPreview.value = { totalDiscount: 0, finalAmount: subTotal.value };
+    if (!customerId.value || customerId.value === 'GUEST') {
+        stackPreview.value = { totalDiscount: 0, memberDiscount: 0, memberRankPercent: 0, finalAmount: subTotal.value };
         return;
     }
     try {
@@ -329,10 +343,19 @@ const refreshStackPreview = async () => {
         });
         stackPreview.value = {
             totalDiscount: Number(res.data.totalDiscount) || 0,
+            memberDiscount: Number(res.data.memberDiscount) || 0,
+            memberRankPercent: Number(res.data.memberRankPercent) || 0,
             finalAmount: Number(res.data.finalAmount) ?? Math.max(0, subTotal.value)
         };
-    } catch {
-        stackPreview.value = { totalDiscount: 0, finalAmount: subTotal.value };
+        console.log("preview-voucher-stack response:", res.data, stackPreview.value);
+    } catch (e: any) {
+        console.error("Lỗi preview voucher:", e);
+        stackPreview.value = { totalDiscount: 0, memberDiscount: 0, memberRankPercent: 0, finalAmount: subTotal.value };
+        const msg = e.response?.data?.message || 'Voucher không đủ điều kiện áp dụng!';
+        Swal.fire({ title: 'Opps!', text: msg, icon: 'warning', confirmButtonText: 'Đã hiểu', confirmButtonColor: '#d4af37' });
+        if (bookingData.value.voucherIds.length > 0) {
+            bookingData.value.voucherIds.pop();
+        }
     }
 };
 
@@ -350,14 +373,21 @@ watch(
 );
 
 const discountAmount = computed(() => stackPreview.value.totalDiscount);
+const memberDiscountAmount = computed(() => stackPreview.value.memberDiscount);
+const memberRankPercent = computed(() => stackPreview.value.memberRankPercent);
 const totalBill = computed(() => Math.max(0, stackPreview.value.finalAmount));
-const payNow = computed(() => bookingData.value.paymentMode === '10' ? totalBill.value * 0.1 : totalBill.value);
+const payNow = computed(() => bookingData.value.paymentMode === '10' ? subTotal.value * 0.1 : totalBill.value);
 
 function toggleVoucher(id: string) {
     const ids = bookingData.value.voucherIds;
     const i = ids.indexOf(id);
     if (i >= 0) {
         ids.splice(i, 1);
+        return;
+    }
+    const v = myVouchers.value.find((x: any) => x.id === id);
+    if (v && isVoucherDisabled(v)) {
+        Swal.fire({ title: 'Không hợp lệ', text: 'Không thể áp dụng voucher: ' + (v.errorMessage || 'Chưa đủ điều kiện.'), icon: 'warning', confirmButtonText: 'Đã hiểu', confirmButtonColor: '#d4af37' });
         return;
     }
     if (ids.length >= 1) {
@@ -370,13 +400,13 @@ function toggleVoucher(id: string) {
 // Tìm hàm handleBooking và thay thế nội dung:
 const handleBooking = async () => {
     if (!bookingData.value.customerName || !bookingData.value.phone || !bookingData.value.email || !bookingData.value.bookingDate) {
-        alert("Vui lòng điền đầy đủ thông tin (Bao gồm cả Email để nhận mã QR)!");
+        Swal.fire({ title: 'Thiếu thông tin', text: 'Vui lòng điền đầy đủ thông tin (Bao gồm cả Email để nhận mã QR)!', icon: 'warning', confirmButtonColor: '#d4af37' });
         return;
     }
 
     const invoiceErr = validateInvoiceInfo();
     if (invoiceErr) {
-        alert(invoiceErr);
+        Swal.fire({ title: 'Lỗi hoá đơn', text: invoiceErr, icon: 'warning', confirmButtonColor: '#d4af37' });
         return;
     }
 
@@ -492,7 +522,7 @@ const loadAvailableStylists = async () => {
         // Nếu stylist đang chọn bị bận do đổi giờ/đổi dịch vụ, reset về null
         if (bookingData.value.stylistId && !stylists.value.some(s => s.id === bookingData.value.stylistId)) {
             bookingData.value.stylistId = null;
-            alert("Stylist bạn chọn đã bận vào khung giờ này do thay đổi thời gian dịch vụ. Vui lòng chọn thợ khác!");
+            Swal.fire({ title: 'Thông báo', text: 'Stylist bạn chọn đã bận vào khung giờ này do thay đổi thời gian dịch vụ. Vui lòng chọn thợ khác!', icon: 'warning', confirmButtonColor: '#d4af37' });
         }
     } catch (e) {
         console.error("Lỗi tải danh sách thợ:", e);
@@ -512,6 +542,7 @@ watch(
 
 watch(
     [
+        () => customerId.value,
         () => bookingData.value.voucherIds.slice(),
         () => subTotal.value,
         () => bookingData.value.bookingDate,
@@ -712,9 +743,9 @@ watch(
                             <div class="heading-line"></div>
                         </div>
 
-                        <div class="voucher-list-modern">
+                        <div v-if="myVouchers.length > 0" class="voucher-list-modern">
                             <div v-for="v in myVouchers" :key="v.id" class="voucher-ticket-item"
-                                :class="{ active: bookingData.voucherIds.includes(v.id) }" @click="toggleVoucher(v.id)">
+                                :class="{ active: bookingData.voucherIds.includes(v.id), disabled: isVoucherDisabled(v) }" @click="toggleVoucher(v.id)">
 
                                 <div class="ticket-left">
                                     <span class="ticket-brand-text">LGHAIR</span>
@@ -738,6 +769,9 @@ watch(
                                     <i class="fas fa-check-circle"></i>
                                 </div>
                             </div>
+                        </div>
+                        <div v-else class="text-gray-500 italic mt-3 text-sm font-bold">
+                            Không có voucher nào khả dụng cho đơn hàng của bạn lúc này.
                         </div>
                     </div>
                 </div>
@@ -853,6 +887,11 @@ watch(
                                     <span>{{ subTotal.toLocaleString() }}đ</span>
                                 </div>
 
+                                <div v-if="memberDiscountAmount > 0" class="summary-line saving text-success">
+                                    <span>Giảm giá thành viên ({{ memberRankPercent }}%):</span>
+                                    <span class="font-bold">-{{ memberDiscountAmount.toLocaleString() }}đ</span>
+                                </div>
+
                                 <div v-if="bookingData.voucherIds.length" class="summary-line saving text-success">
                                     <span>Voucher giảm giá:</span>
                                     <span class="font-bold">-{{ discountAmount.toLocaleString() }}đ</span>
@@ -878,7 +917,7 @@ watch(
                                     <div class="mt-2 text-xs text-gray-500" v-if="bookingData.paymentMode === '10'">
                                         <div class="flex justify-between py-0.5">
                                             <span>+ Tiền cọc dịch vụ (10%):</span>
-                                            <span>{{ (totalBill * 0.1).toLocaleString() }}đ</span>
+                                            <span>{{ (subTotal * 0.1).toLocaleString() }}đ</span>
                                         </div>
                                     </div>
 
@@ -1449,6 +1488,11 @@ select.booking-input {
     border: 2px solid #000000;
     background: #fafafa;
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+}
+.voucher-ticket-item.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #f5f5f5;
 }
 
 .ticket-left {

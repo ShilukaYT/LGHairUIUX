@@ -51,7 +51,7 @@ const routes = [
     path: '/nhanvien',
     component: () => import('@/NhanVien/layout/LayoutNhanVien.vue'),
     children: [
-      { path: '', name: 'NhanVienHome', component: () => import('@/NhanVien/TrangChuNhanVien.vue') },
+      { path: '', redirect: '/nhanvien/ca-lam-viec' },
       { path: 'ca-lam-viec', name: 'NhanVienCaLamViec', component: () => import('@/NhanVien/CaLamViec/CaLamViec.vue') },
       { path: 'lich-su-diem-danh', name: 'NhanVienLichSuDiemDanh', component: () => import('@/Admin/QuanLyCaLam/LichSuDiemDanh.vue') },
       { path: 'profile', name: 'NhanVienProfile', component: () => import('@/Admin/Profile/StaffProfile.vue') },
@@ -110,7 +110,7 @@ router.beforeEach((to, from, next) => {
   }
 
   if (to.matched.some(record => record.meta.requiresGuestStaff)) {
-    if (isStaffLoggedIn) next({ path: '/nhanvien' });
+    if (isStaffLoggedIn) next({ path: '/nhanvien/ca-lam-viec' });
     else next();
     return;
   }

@@ -17,6 +17,9 @@ const isLoading = ref(false);
 const googleBtnWidth = ref(372);
 const formWidthRef = ref<HTMLElement | null>(null);
 
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
+
+
 const updateGoogleBtnWidth = () => {
   if (formWidthRef.value) {
     googleBtnWidth.value = Math.min(formWidthRef.value.clientWidth, 400);
@@ -104,7 +107,7 @@ const handleLogin = async () => {
   isLoading.value = true;
 
   try {
-    const response = await axios.post('https://localhost:7196/api/account/login', {
+    const response = await axios.post(API + '/api/account/login', {
       username: username.value,
       password: password.value,
       rememberMe: true
@@ -144,7 +147,7 @@ const handleLogin = async () => {
 const submitRegistration = async (otpCode: string) => {
   isLoading.value = true;
   try {
-    const response = await axios.post('https://localhost:7196/api/account/register', {
+    const response = await axios.post(API + '/api/account/register', {
       hoTen: registerForm.hoTen,
       sdt: registerForm.sdt,
       email: registerForm.email,
@@ -171,7 +174,7 @@ const submitRegistration = async (otpCode: string) => {
 const handleRegister = async () => {
   // 1. Logic Validate
   const nameRegex = /^[\p{L}\s]+$/u;
-  const phoneRegex = /^[0-9]+$/;
+  const phoneRegex = /^(03|05|07|08|09)\d{8}$/;
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d).{6,}$/;
 
@@ -183,13 +186,19 @@ const handleRegister = async () => {
     showStatus("Lỗi", "Họ tên không được chứa số hoặc ký tự đặc biệt.", "error");
     return;
   }
-  if (!phoneRegex.test(registerForm.sdt) || registerForm.sdt.length < 10 || registerForm.sdt.length > 11) {
-    showStatus("Lỗi", "Số điện thoại không hợp lệ (phải từ 10-11 số).", "error");
+  if (!phoneRegex.test(registerForm.sdt)) {
+    showStatus("Lỗi", "Số điện thoại không hợp lệ (phải bắt đầu bằng 03, 05, 07, 08, 09 và gồm 10 chữ số).", "error");
     return;
   }
-  if (registerForm.email && !emailRegex.test(registerForm.email)) {
-    showStatus("Lỗi", "Định dạng Email không hợp lệ.", "error");
-    return;
+  if (registerForm.email) {
+    if (registerForm.email.length > 100) {
+      showStatus("Lỗi", "Email không được vượt quá 100 ký tự.", "error");
+      return;
+    }
+    if (!emailRegex.test(registerForm.email)) {
+      showStatus("Lỗi", "Định dạng Email không hợp lệ.", "error");
+      return;
+    }
   }
   if (!passwordRegex.test(registerForm.matKhau)) {
     showStatus("Lỗi", "Mật khẩu phải có ít nhất 6 ký tự, bao gồm cả chữ cái và số.", "error");
@@ -208,7 +217,7 @@ const handleRegister = async () => {
   if (registerForm.email) {
     isLoading.value = true;
     try {
-      const response = await axios.post('https://localhost:7196/api/account/send-register-otp', `"${registerForm.email}"`, {
+      const response = await axios.post(API + '/api/account/send-register-otp', `"${registerForm.email}"`, {
         headers: { 'Content-Type': 'application/json' }
       });
       if (response.data.success) {
@@ -227,7 +236,7 @@ const handleRegister = async () => {
 
 const handleGoogleLogin = async (response: any) => {
   try {
-    const res = await axios.post('https://localhost:7196/api/account/google-login', {
+    const res = await axios.post(API + '/api/account/google-login', {
       credential: response.credential
     });
 
@@ -258,7 +267,7 @@ const handleSendOTP = async () => {
 
   isLoading.value = true;
   try {
-    const response = await axios.post('https://localhost:7196/api/account/send-otp', `"${forgotForm.email}"`, {
+    const response = await axios.post(API + '/api/account/send-otp', `"${forgotForm.email}"`, {
       headers: { 'Content-Type': 'application/json' }
     });
     if (response.data.success) {
@@ -290,7 +299,7 @@ const handleResetPassword = async () => {
 
   isLoading.value = true;
   try {
-    const response = await axios.post('https://localhost:7196/api/account/reset-password', {
+    const response = await axios.post(API + '/api/account/reset-password', {
       email: forgotForm.email,
       otp: forgotForm.isGoogleVerified ? "" : forgotForm.otp,
       newPassword: forgotForm.newPassword
@@ -311,7 +320,7 @@ const handleResetPassword = async () => {
 const handleGoogleVerify = async (response: any) => {
   isLoading.value = true;
   try {
-    const res = await axios.post('https://localhost:7196/api/account/forgot-password-google', {
+    const res = await axios.post(API + '/api/account/forgot-password-google', {
       credential: response.credential
     });
     if (res.data.success) {
@@ -430,7 +439,8 @@ const handleGoogleVerify = async (response: any) => {
           <div class="grid grid-cols-2 gap-4">
             <div class="flex flex-col space-y-2">
               <label class="text-[10px] uppercase tracking-widest text-gray-500">Số điện thoại *</label>
-              <input type="text" v-model="registerForm.sdt" maxlength="11"
+              <input type="text" v-model="registerForm.sdt" maxlength="10"
+                @input="registerForm.sdt = registerForm.sdt.replace(/\D/g, '').slice(0, 10)"
                 class="w-full h-12 px-4 bg-transparent border border-gray-200 rounded-none focus:outline-none focus:border-black transition-colors text-sm font-light"
                 placeholder="Nhập số điện thoại..." />
             </div>

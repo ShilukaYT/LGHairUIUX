@@ -11,10 +11,13 @@ const isLoading = ref(false)
 const rawStats = ref<any[]>([])
 const activeTab = ref('good')
 
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
+
+
 const loadData = async () => {
     isLoading.value = true
     try {
-        const res = await axios.get('https://localhost:7196/api/QuanLyDanhGiaDichVu/thong-ke')
+        const res = await axios.get(API + '/api/QuanLyDanhGiaDichVu/thong-ke')
         
         // Hỗ trợ cả PascalCase từ Backend C# và camelCase để tránh lỗi cấu hình Serializer JSON
         rawStats.value = res.data.map((item: any) => ({

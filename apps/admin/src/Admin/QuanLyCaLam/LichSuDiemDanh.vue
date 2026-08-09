@@ -4,7 +4,8 @@ import axios from 'axios'
 import { Check, X, LogOut, CalendarDays, AlertTriangle, Clock, MessageSquare } from 'lucide-vue-next'
 
 const filterType = ref('all') // 'all', 'issues'
-const API_BASE_URL = 'https://localhost:7196/api/admin/lich-lam-viec'
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
+const API_BASE_URL = API + '/api/admin/lich-lam-viec'
 
 const nhanViens = ref<any[]>([])
 const selectedNhanVien = ref<string>('')
@@ -40,7 +41,7 @@ const fetchLichSu = async () => {
       params: { tuNgay, denNgay }
     })
     if (res.data.success) {
-      lichSuData.value = res.data.data.filter((x: any) => x.maNv === selectedNhanVien.value)
+      lichSuData.value = res.data.data.filter((x: any) => x.maNv?.toLowerCase() === selectedNhanVien.value?.toLowerCase())
     } else {
       lichSuData.value = []
     }
@@ -61,11 +62,11 @@ onMounted(async () => {
   try {
     const res = await axios.get(`${API_BASE_URL}/nhan-vien-hop-le`)
     if (res.data.success) {
-      nhanViens.value = res.data.data
-      if (nhanViens.value.length > 0) {
-        selectedNhanVien.value = nhanViens.value[0].maNv
-        // Watcher will automatically trigger fetchLichSu
-      }
+      nhanViens.value = res.data.data.map((nv: any) => ({
+        ...nv,
+        displayName: `${nv.hoTenNv} - ${nv.loaiNhanVien || 'Nhân viên'}`
+      }))
+      // Mặc định không chọn trước nhân viên nào (để ô chọn trống)
     }
   } catch (e) {
     console.error(e)
@@ -82,15 +83,25 @@ const historyMap = computed(() => {
 
 const stats = computed(() => {
   let v = 0, m = 0, x = 0, c = 0
+  const todayStr = formatYYYYMMDD(currentDate.getFullYear(), currentDate.getMonth() + 1, currentDate.getDate())
+
   lichSuData.value.forEach(item => {
     if (item.caLam === 'Chưa xếp' || item.caLam === 'Nghỉ lễ') return
-    if (item.trangThai === 2) v++ // Có mặt
-    else if (item.trangThai === 3 || item.trangThai === 6) m++ // Rời sớm / Muộn
-    else if (item.trangThai === 5) x++ // Vắng
-    else if (item.trangThai === 1) {
-      const todayStr = formatYYYYMMDD(currentDate.getFullYear(), currentDate.getMonth() + 1, currentDate.getDate())
-      if (item.ngayLamViec < todayStr) x++ // Past and not checked in -> Vắng
-      else c++ // Future or today not yet checked in -> Chưa ĐD
+
+    const itemDateStr = item.ngayLamViec ? item.ngayLamViec.substring(0, 10) : ''
+
+    if (item.trangThai === 2) {
+      v++ // Có mặt
+    } else if (item.trangThai === 3 || item.trangThai === 6) {
+      m++ // Rời sớm / Muộn
+    } else if (item.trangThai === 5) {
+      x++ // Vắng mặt
+    } else if (item.trangThai === 1) {
+      if (itemDateStr < todayStr) {
+        x++ // Ca trong quá khứ chưa điểm danh -> Tính là Vắng mặt
+      } else {
+        c++ // Ca trong tương lai hoặc hôm nay (ngayLamViec >= todayStr) -> Đếm vào "Chưa ĐD"
+      }
     }
   })
   return { v, m, x, c }
@@ -167,17 +178,28 @@ const calendarGrid = computed(() => {
           <v-select
             v-model="selectedNhanVien"
             :items="nhanViens"
-            item-title="hoTenNv"
+            item-title="displayName"
             item-value="maNv"
             label="Chọn nhân viên"
             variant="outlined"
             density="compact"
             hide-details
-            min-width="220"
+            clearable
+            min-width="260"
             rounded="lg"
           >
             <template v-slot:item="{ props, item }">
-              <v-list-item v-bind="props" :title="item.raw.hoTenNv" :subtitle="item.raw.loaiNhanVien"></v-list-item>
+              <v-list-item v-bind="props">
+                <template v-slot:title>
+                  <span class="font-weight-bold">{{ item.raw.hoTenNv }}</span>
+                </template>
+                <template v-slot:subtitle>
+                  <span class="text-caption text-primary font-weight-bold">{{ item.raw.loaiNhanVien || 'Nhân viên' }}</span>
+                </template>
+              </v-list-item>
+            </template>
+            <template v-slot:selection="{ item }">
+              <span><strong class="font-weight-bold">{{ item.raw.hoTenNv }}</strong> <small class="text-primary font-weight-bold">({{ item.raw.loaiNhanVien || 'Nhân viên' }})</small></span>
             </template>
           </v-select>
 
@@ -205,7 +227,15 @@ const calendarGrid = computed(() => {
         </div>
       </v-card-title>
 
-      <v-card-text class="pa-6 cal-wrapper bg-slate-50" style="min-height: 600px;">
+      <v-card-text class="pa-6 cal-wrapper bg-slate-50 position-relative" style="min-height: 600px;">
+        <!-- Overlay Loading Spinner khi đổi Tháng/Năm hoặc Nhân viên (Tự động blur sáng trên nền sáng, blur tối trên nền tối) -->
+        <v-overlay :model-value="isLoading" contained class="align-center justify-center cal-loading-overlay" style="z-index: 10;">
+          <div class="d-flex flex-column align-center gap-2 pa-4 rounded-xl shadow-md cal-loading-content">
+            <v-progress-circular indeterminate color="primary" size="52" width="5"></v-progress-circular>
+            <span class="text-caption font-weight-bold text-primary">Đang tải dữ liệu điểm danh...</span>
+          </div>
+        </v-overlay>
+
         <div v-if="selectedNhanVien">
           <!-- Stats summary -->
           <div class="d-flex flex-wrap gap-4 mb-6">
@@ -239,6 +269,17 @@ const calendarGrid = computed(() => {
             </v-btn-toggle>
           </div>
 
+          <!-- Thông báo Tháng hoàn hảo khi bật bộ lọc Vắng/Muộn mà không có vi phạm -->
+          <v-alert
+            v-if="filterType === 'issues' && stats.m === 0 && stats.x === 0"
+            type="success"
+            variant="tonal"
+            class="mb-4 rounded-xl font-weight-bold"
+            density="comfortable"
+          >
+            🎉 <strong>Tháng làm việc hoàn hảo!</strong> Nhân viên đi làm đầy đủ 100%, không có ngày nào bị Vắng mặt, Rời ca sớm hoặc Đi muộn.
+          </v-alert>
+
           <!-- Calendar -->
           <div class="grid grid-cols-7 gap-px cal-grid bg-slate-200 border rounded-2xl overflow-hidden shadow-sm">
             <div v-for="day in ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật']" :key="day" class="cal-cell bg-white py-3 text-center text-sm font-bold cal-text text-slate-700">
@@ -249,7 +290,7 @@ const calendarGrid = computed(() => {
               <div v-for="(day, dIdx) in week" :key="dIdx" class="min-h-[140px] p-2 flex flex-col gap-1 relative transition-all duration-300"
                 :class="[
                   !day ? 'bg-slate-50/50' : 'cal-cell bg-white hover:bg-slate-50',
-                  (filterType === 'issues' && day && (!day.shift || (day.shift.trangThai !== 3 && day.shift.trangThai !== 5 && day.shift.trangThai !== 6))) ? 'opacity-30 grayscale' : ''
+                  (filterType === 'issues' && day && (!day.shift || (day.shift.trangThai !== 3 && day.shift.trangThai !== 5 && day.shift.trangThai !== 6))) ? 'opacity-20 grayscale pointer-events-none' : ''
                 ]">
                 <template v-if="day">
                   <div class="text-right text-sm font-bold mb-2" :class="isToday(day.dateStr) ? 'text-primary' : 'cal-text-muted text-slate-600'">
@@ -257,9 +298,9 @@ const calendarGrid = computed(() => {
                     <span v-else class="w-8 h-8 inline-flex items-center justify-center">{{ day.date }}</span>
                   </div>
                   
-                  <div v-if="day.shift && day.shift.caLam !== 'Chưa xếp' && day.shift.caLam !== 'Nghỉ lễ'" class="flex-1 flex flex-col items-center justify-start gap-2 w-full px-1">
+                  <div v-if="day.shift && day.shift.caLam !== 'Chưa xếp' && day.shift.caLam !== 'Nghỉ lễ' && day.shift.trangThai !== 7" class="flex-1 flex flex-col items-center justify-start gap-2 w-full px-1">
                     <div class="text-[11px] font-bold px-3 py-1 rounded-pill w-[85%] max-w-[120px] text-center truncate mx-auto"
-                         :class="(day.shift.caLam || '').toLowerCase().includes('sáng') || (day.shift.caLam || '').toLowerCase().includes('chiều') ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'bg-purple-50 text-purple-700 border border-purple-100'">
+                         :class="(day.shift.caLam || '').toLowerCase().includes('sáng') || (day.shift.caLam || '').toLowerCase().includes('chiều') ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-xs' : ((day.shift.caLam || '').toLowerCase().includes('tối') ? 'bg-purple-50 text-purple-700 border border-purple-200 shadow-xs' : 'bg-amber-50 text-amber-700 border border-amber-200 shadow-xs')">
                       {{ day.shift.caLam }}
                     </div>
                     
@@ -287,7 +328,7 @@ const calendarGrid = computed(() => {
                     </div>
                   </div>
 
-                  <div v-else-if="day.shift && day.shift.caLam === 'Nghỉ lễ'" class="flex-1 flex flex-col items-center justify-start gap-2 w-full px-1">
+                  <div v-else-if="day.shift && (day.shift.caLam === 'Nghỉ lễ' || day.shift.trangThai === 7)" class="flex-1 flex flex-col items-center justify-start gap-2 w-full px-1">
                     <div class="text-[11px] font-bold px-3 py-1 rounded-pill w-[85%] max-w-[120px] text-center truncate mx-auto bg-error text-white shadow-sm">
                       Nghỉ lễ
                     </div>
@@ -306,8 +347,10 @@ const calendarGrid = computed(() => {
             </template>
           </div>
         </div>
-        <div v-else class="h-full d-flex align-center justify-center text-slate-400">
-          Vui lòng chọn nhân viên để xem lịch sử điểm danh
+        <div v-else class="h-full min-h-[450px] d-flex flex-column align-center justify-center text-slate-400 py-16">
+          <CalendarDays class="w-16 h-16 text-slate-300 mb-3" />
+          <h3 class="text-h6 font-weight-bold text-slate-600 mb-1">Chưa chọn nhân viên</h3>
+          <p class="text-caption text-slate-400">Vui lòng chọn một nhân viên từ danh sách để xem lịch sử điểm danh chi tiết.</p>
         </div>
       </v-card-text>
     </v-card>
@@ -315,6 +358,31 @@ const calendarGrid = computed(() => {
 </template>
 
 <style>
+/* CSS Loading Overlay thích ứng theo chế độ Sáng / Tối */
+.cal-loading-overlay .v-overlay__scrim {
+  background-color: #ffffff !important;
+  opacity: 0.75 !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.cal-loading-content {
+  background-color: #ffffff !important;
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04) !important;
+}
+
+.v-theme--dark .cal-loading-overlay .v-overlay__scrim {
+  background-color: #121212 !important; /* Màu đen trung tính chuẩn dark theme, không bị ám xanh */
+  opacity: 0.8 !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.v-theme--dark .cal-loading-content {
+  background-color: #1e1e1e !important; /* Hộp spinner đen trung tính đồng bộ v-card */
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5) !important;
+}
+
 /* Đè màu Tailwind khi Vuetify bật chế độ tối (.v-theme--dark) - Sử dụng biến CSS chuẩn của Vuetify để đồng bộ layout */
 .v-theme--dark .cal-wrapper {
   background-color: transparent !important; /* Để lộ nền của v-card */

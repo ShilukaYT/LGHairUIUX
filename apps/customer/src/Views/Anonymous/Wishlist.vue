@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { useWishlistStore, showToast } from '@/stores/useWishlistStore';
 import { useRouter } from 'vue-router';
 import axios from 'axios';
 import Swal from 'sweetalert2';
-import { useWishlistStore } from '@/stores/useWishlistStore';
 import { addToCartDB } from "@/Views/Anonymous/CSDL/cartDB";
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 import { Heart, X, Clock, ShoppingBag, Star, Calendar } from 'lucide-vue-next';
@@ -111,7 +111,7 @@ const bookService = async (service: any) => {
     const customer = getCustomerInfo();
     await addToCartDB(formattedItem, customer.maKH);
     window.dispatchEvent(new Event("cart-updated"));
-    alert(`Đã thêm dịch vụ "${formattedItem.tenItem}" vào giỏ hàng thành công!`);
+    showToast(`Đã thêm dịch vụ "${formattedItem.tenItem}" vào giỏ hàng thành công!`, "success");
   } catch (err) {
     console.error("Lỗi thêm dịch vụ vào giỏ hàng:", err);
     alert("Có lỗi xảy ra, vui lòng thử lại sau!");
@@ -175,7 +175,7 @@ const addProductToCart = async (prod: any, isBuyNow = false) => {
     if (isBuyNow) {
       router.push('/cart');
     } else {
-      alert(`Đã thêm sản phẩm "${formattedItem.tenItem}" vào giỏ hàng thành công!`);
+      showToast(`Đã thêm sản phẩm "${formattedItem.tenItem}" vào giỏ hàng thành công!`, "success");
     }
   } catch (err) {
     console.error("Lỗi thêm sản phẩm vào giỏ hàng:", err);
