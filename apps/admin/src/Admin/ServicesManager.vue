@@ -871,14 +871,81 @@ async function editTieuDe(maTd, dvMaDv, formObj) {
   }
 }
 
-async function deleteTieuDe(maTd, dvMaDv) {
-  if (!confirm("Xóa tiêu đề này (kèm tất cả chi tiết)?")) return;
+// ══ XÁC NHẬN XÓA (thay cho confirm() mặc định của trình duyệt) ══════
+// type: "dichvu" | "combo" | "tieude" | "chitiet" — dùng chung 1 dialog
+const confirmDialog = reactive({
+  open: false, type: "", loading: false,
+  target: null,   // đối tượng/id đang chờ xóa
+  extra: null,    // tham số phụ (dvMaDv / tdMaDv để reload đúng danh sách)
+});
+
+function deleteTieuDe(maTd, dvMaDv) {
+  confirmDialog.type = "tieude";
+  confirmDialog.target = maTd;
+  confirmDialog.extra = dvMaDv;
+  confirmDialog.open = true;
+}
+
+function deleteChiTiet(maCttd, tdMaDv) {
+  confirmDialog.type = "chitiet";
+  confirmDialog.target = maCttd;
+  confirmDialog.extra = tdMaDv;
+  confirmDialog.open = true;
+}
+
+function cancelDelete() {
+  confirmDialog.open = false;
+  confirmDialog.target = null;
+  confirmDialog.extra = null;
+  confirmDialog.type = "";
+}
+
+async function confirmDelete() {
+  const { type, target, extra } = confirmDialog;
+  if (!target) return;
+  confirmDialog.loading = true;
+
   try {
-    await axios.delete(`${API}/api/TieudeDichvu/tieude/${maTd}`);
-    showToast("Đã xóa tiêu đề!");
-    await loadTieudeDichVu(dvMaDv);
+    if (type === "tieude") {
+      await axios.delete(`${API}/api/TieudeDichvu/tieude/${target}`);
+      showToast("Đã xóa tiêu đề!");
+      await loadTieudeDichVu(extra);
+    } else if (type === "chitiet") {
+      await axios.delete(`${API}/api/TieudeDichvu/chitiet/${target}`);
+      showToast("Đã xóa chi tiết!");
+      await loadTieudeDichVu(extra);
+    } else if (type === "dichvu") {
+      const d = target;
+      await axios.delete(`${API}/api/DichVu/${d.maDV}`);
+      logActivity("Xóa dịch vụ", `Đã xóa dịch vụ ${d.tenDV} (Mã: ${d.maDV})`, "Dịch vụ");
+      showToast(`Đã xóa dịch vụ "${d.tenDV}"`);
+      await loadDichVu();
+    } else if (type === "combo") {
+      const c = target;
+      await axios.delete(`${API}/api/Combo/${c.maCB}`);
+      logActivity("Xóa combo", `Đã xóa combo ${c.tenCombo} (Mã: ${c.maCB})`, "Dịch vụ");
+      showToast(`Đã xóa combo "${c.tenCombo}"`);
+      await loadCombos();
+    }
   } catch (err) {
-    showToast("Lỗi khi xóa tiêu đề!", "error");
+    if (type === "tieude") {
+      showToast("Lỗi khi xóa tiêu đề!", "error");
+    } else if (type === "chitiet") {
+      showToast("Lỗi khi xóa chi tiết!", "error");
+    } else if (type === "dichvu") {
+      const d = target;
+      const msg = err.response?.data || "Lỗi khi xóa dịch vụ!";
+      logActivity("Xóa dịch vụ", `Thất bại khi xóa dịch vụ ${d.tenDV} (Mã: ${d.maDV}) - Lỗi: ${err.message || ""}`, "Dịch vụ", "Thất bại");
+      showToast(msg, "error");
+    } else if (type === "combo") {
+      const c = target;
+      const msg = err.response?.data || "Lỗi khi xóa combo!";
+      logActivity("Xóa combo", `Thất bại khi xóa combo ${c.tenCombo} (Mã: ${c.maCB}) - Lỗi: ${err.message || ""}`, "Dịch vụ", "Thất bại");
+      showToast(msg, "error");
+    }
+  } finally {
+    confirmDialog.loading = false;
+    cancelDelete();
   }
 }
 
@@ -918,17 +985,6 @@ async function saveChiTiet(tdMaTd, tdMaDv, formObj) {
     tdSaving.value = false;
   }
 }
-async function deleteChiTiet(maCttd, tdMaDv) {
-  if (!confirm("Xóa chi tiết này?")) return;
-  try {
-    await axios.delete(`${API}/api/TieudeDichvu/chitiet/${maCttd}`);
-    showToast("Đã xóa chi tiết!");
-    await loadTieudeDichVu(tdMaDv);
-  } catch (err) {
-    showToast("Lỗi khi xóa chi tiết!", "error");
-  }
-}
-
 // ── MODAL ──────────────────────────────────────────────────────────
 function openModal() {
   editingId.value = null;
@@ -1110,55 +1166,18 @@ async function saveItem() {
 }
 
 // ── DELETE ─────────────────────────────────────────────────────────
-async function delDV(d) {
-  if (
-    !confirm(
-      `Xóa dịch vụ "${d.tenDV}"?\nDịch vụ sẽ bị xóa khỏi tất cả combo liên quan.`,
-    )
-  )
-    return;
-  try {
-    await axios.delete(`${API}/api/DichVu/${d.maDV}`);
-    logActivity(
-      "Xóa dịch vụ",
-      `Đã xóa dịch vụ ${d.tenDV} (Mã: ${d.maDV})`,
-      "Dịch vụ",
-    );
-    showToast(`Đã xóa dịch vụ "${d.tenDV}"`);
-    await loadDichVu();
-  } catch (err) {
-    const msg = err.response?.data || "Lỗi khi xóa dịch vụ!";
-    logActivity(
-      "Xóa dịch vụ",
-      `Thất bại khi xóa dịch vụ ${d.tenDV} (Mã: ${d.maDV}) - Lỗi: ${err.message || ""}`,
-      "Dịch vụ",
-      "Thất bại",
-    );
-    showToast(msg, "error");
-  }
+function delDV(d) {
+  confirmDialog.type = "dichvu";
+  confirmDialog.target = d;
+  confirmDialog.extra = null;
+  confirmDialog.open = true;
 }
 
-async function delCombo(c) {
-  if (!confirm(`Xóa combo "${c.tenCombo}"?`)) return;
-  try {
-    await axios.delete(`${API}/api/Combo/${c.maCB}`);
-    logActivity(
-      "Xóa combo",
-      `Đã xóa combo ${c.tenCombo} (Mã: ${c.maCB})`,
-      "Dịch vụ",
-    );
-    showToast(`Đã xóa combo "${c.tenCombo}"`);
-    await loadCombos();
-  } catch (err) {
-    const msg = err.response?.data || "Lỗi khi xóa dịch vụ!";
-    logActivity(
-      "Xóa combo",
-      `Thất bại khi xóa combo ${c.tenCombo} (Mã: ${c.maCB}) - Lỗi: ${err.message || ""}`,
-      "Dịch vụ",
-      "Thất bại",
-    );
-    showToast(msg, "error");
-  }
+function delCombo(c) {
+  confirmDialog.type = "combo";
+  confirmDialog.target = c;
+  confirmDialog.extra = null;
+  confirmDialog.open = true;
 }
 
 function toggleDV(id) {
@@ -1646,6 +1665,61 @@ onMounted(async () => {
     </v-card>
 
     <!-- ── LIGHTBOX ────────────────────────────────────────────── -->
+    <!-- ══ DIALOG XÁC NHẬN XÓA (dùng chung: dịch vụ / combo / tiêu đề / chi tiết) ══ -->
+    <v-dialog v-model="confirmDialog.open" max-width="420" persistent>
+      <v-card rounded="lg">
+        <v-card-item class="pa-5 pb-0">
+          <div class="d-flex align-center gap-3">
+            <v-avatar color="error" variant="tonal" size="42">
+              <Trash2 class="w-5 h-5" />
+            </v-avatar>
+            <div class="text-subtitle-1 font-weight-bold">
+              <template v-if="confirmDialog.type === 'combo'">Xóa combo?</template>
+              <template v-else-if="confirmDialog.type === 'tieude'">Xóa tiêu đề?</template>
+              <template v-else-if="confirmDialog.type === 'chitiet'">Xóa chi tiết?</template>
+              <template v-else>Xóa dịch vụ?</template>
+            </div>
+          </div>
+        </v-card-item>
+        <v-card-text class="pa-5 pt-3">
+          <template v-if="confirmDialog.type === 'combo'">
+            Bạn có chắc muốn xóa combo
+            <strong>"{{ confirmDialog.target?.tenCombo }}"</strong>?
+          </template>
+          <template v-else-if="confirmDialog.type === 'tieude'">
+            Bạn có chắc muốn xóa tiêu đề này?
+            <br />
+            <span class="text-caption text-medium-emphasis">Tất cả chi tiết bên trong cũng sẽ bị xóa.</span>
+          </template>
+          <template v-else-if="confirmDialog.type === 'chitiet'">
+            Bạn có chắc muốn xóa chi tiết này?
+          </template>
+          <template v-else>
+            Bạn có chắc muốn xóa dịch vụ
+            <strong>"{{ confirmDialog.target?.tenDV }}"</strong>?
+            <br />
+            <span class="text-caption text-medium-emphasis">Dịch vụ sẽ bị xóa khỏi tất cả combo liên quan.</span>
+          </template>
+        </v-card-text>
+        <v-card-actions class="pa-4 px-5 d-flex justify-end border-t">
+          <v-btn
+            variant="outlined" rounded="lg" class="text-none font-weight-bold mr-2"
+            color="grey-darken-2" :disabled="confirmDialog.loading"
+            @click="cancelDelete"
+          >
+            Hủy
+          </v-btn>
+          <v-btn
+            variant="flat" rounded="lg" class="text-none font-weight-bold"
+            color="error" :loading="confirmDialog.loading"
+            @click="confirmDelete"
+          >
+            Xóa
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <v-dialog v-model="lightbox.open" max-width="900">
       <div class="position-relative d-flex align-center justify-center" style="background: rgba(0,0,0,0.9); min-height: 60vh; border-radius: 12px;">
         <v-btn icon variant="text" color="white" class="position-absolute" style="top: 12px; right: 12px; z-index: 2;" @click="lightbox.open = false">

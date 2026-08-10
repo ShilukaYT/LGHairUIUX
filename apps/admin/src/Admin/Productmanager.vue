@@ -448,18 +448,68 @@ async function saveBT() {
   }
 }
 
-async function delSP(sp) {
-  if (!confirm(`Xóa sản phẩm "${sp.tenSP}"?`)) return;
-  try {
-    await axios.delete(`${API}/api/QuanLySanPham/${sp.maSP}`);
-    logActivity("Xóa sản phẩm", `Đã xóa sản phẩm ${sp.tenSP} (Mã: ${sp.maSP})`, "Sản phẩm");
-    showToast("Đã xóa sản phẩm!"); await loadSanPham();
-  } catch (err) {
-    logActivity("Xóa sản phẩm", `Thất bại khi xóa sản phẩm ${sp.tenSP} (Mã: ${sp.maSP}) - Lỗi: ${err.message || ''}`, "Sản phẩm", "Thất bại");
-    showToast(
-      err.response?.data?.message || "Lỗi khi xóa sản phẩm!",
-      "error"
-    );
+// ══ XÁC NHẬN XÓA (thay cho confirm() mặc định của trình duyệt) ══════
+// type: "sanpham" | "bienthe" — dùng chung 1 dialog cho cả 2 loại xóa
+const confirmDialog = reactive({
+  open: false, type: "", loading: false,
+  target: null, // sp hoặc bt đang chờ xóa
+});
+
+function delSP(sp) {
+  confirmDialog.type = "sanpham";
+  confirmDialog.target = sp;
+  confirmDialog.open = true;
+}
+
+function deleteBT(bt) {
+  confirmDialog.type = "bienthe";
+  confirmDialog.target = bt;
+  confirmDialog.open = true;
+}
+
+function cancelDelete() {
+  confirmDialog.open = false;
+  confirmDialog.target = null;
+  confirmDialog.type = "";
+}
+
+async function confirmDelete() {
+  if (confirmDialog.type === "sanpham") {
+    const sp = confirmDialog.target;
+    if (!sp) return;
+    confirmDialog.loading = true;
+    try {
+      await axios.delete(`${API}/api/QuanLySanPham/${sp.maSP}`);
+      logActivity("Xóa sản phẩm", `Đã xóa sản phẩm ${sp.tenSP} (Mã: ${sp.maSP})`, "Sản phẩm");
+      showToast("Đã xóa sản phẩm!"); await loadSanPham();
+    } catch (err) {
+      logActivity("Xóa sản phẩm", `Thất bại khi xóa sản phẩm ${sp.tenSP} (Mã: ${sp.maSP}) - Lỗi: ${err.message || ''}`, "Sản phẩm", "Thất bại");
+      showToast(
+        err.response?.data?.message || "Lỗi khi xóa sản phẩm!",
+        "error"
+      );
+    } finally {
+      confirmDialog.loading = false;
+      cancelDelete();
+    }
+  } else if (confirmDialog.type === "bienthe") {
+    const bt = confirmDialog.target;
+    if (!bt) return;
+    confirmDialog.loading = true;
+    try {
+      await axios.delete(`${API}/api/QuanLySanPham/bienthe/${bt.maBienThe}`);
+      logActivity("Xóa biến thể", `Đã xóa biến thể ${bt.tenBienThe} (Mã: ${bt.maBienThe})`, "Sản phẩm");
+      showToast("Đã xóa biến thể!"); await loadBienThe(bt.maSanPham);
+    } catch (err) {
+      logActivity("Xóa biến thể", `Thất bại khi xóa biến thể ${bt.tenBienThe} (Mã: ${bt.maBienThe}) - Lỗi: ${err.message || ''}`, "Sản phẩm", "Thất bại");
+      showToast(
+        err.response?.data?.message || "Lỗi khi xóa biến thể!",
+        "error"
+      );
+    } finally {
+      confirmDialog.loading = false;
+      cancelDelete();
+    }
   }
 }
 
@@ -503,21 +553,6 @@ async function openEditBT(bt) {
 }
 
 function closeBtModal() { btModal.open = false; }
-
-async function deleteBT(bt) {
-  if (!confirm(`Xóa biến thể "${bt.tenBienThe}"?`)) return;
-  try {
-    await axios.delete(`${API}/api/QuanLySanPham/bienthe/${bt.maBienThe}`);
-    logActivity("Xóa biến thể", `Đã xóa biến thể ${bt.tenBienThe} (Mã: ${bt.maBienThe})`, "Sản phẩm");
-    showToast("Đã xóa biến thể!"); await loadBienThe(bt.maSanPham);
-  } catch (err) {
-    logActivity("Xóa biến thể", `Thất bại khi xóa biến thể ${bt.tenBienThe} (Mã: ${bt.maBienThe}) - Lỗi: ${err.message || ''}`, "Sản phẩm", "Thất bại");
-    showToast(
-      err.response?.data?.message || "Lỗi khi xóa biến thể!",
-      "error"
-    );
-  }
-}
 
 // Tự load biến thể khi mở rộng dòng
 watch(expandedRows, (rows) => {
@@ -1124,6 +1159,48 @@ onMounted(async () => {
     </v-dialog>
 
     <!-- ══ LIGHTBOX ══════════════════════════════════════════════════ -->
+    <!-- ══ DIALOG XÁC NHẬN XÓA (dùng chung cho sản phẩm & biến thể) ══════════ -->
+    <v-dialog v-model="confirmDialog.open" max-width="420" persistent>
+      <v-card rounded="lg">
+        <v-card-item class="pa-5 pb-0">
+          <div class="d-flex align-center gap-3">
+            <v-avatar color="error" variant="tonal" size="42">
+              <Trash2 class="w-5 h-5" />
+            </v-avatar>
+            <div class="text-subtitle-1 font-weight-bold">
+              {{ confirmDialog.type === "bienthe" ? "Xóa biến thể?" : "Xóa sản phẩm?" }}
+            </div>
+          </div>
+        </v-card-item>
+        <v-card-text class="pa-5 pt-3">
+          <template v-if="confirmDialog.type === 'bienthe'">
+            Bạn có chắc muốn xóa biến thể
+            <strong>"{{ confirmDialog.target?.tenBienThe }}"</strong>?
+          </template>
+          <template v-else>
+            Bạn có chắc muốn xóa sản phẩm
+            <strong>"{{ confirmDialog.target?.tenSP }}"</strong>?
+          </template>
+        </v-card-text>
+        <v-card-actions class="pa-4 px-5 d-flex justify-end border-t">
+          <v-btn
+            variant="outlined" rounded="lg" class="text-none font-weight-bold mr-2"
+            color="grey-darken-2" :disabled="confirmDialog.loading"
+            @click="cancelDelete"
+          >
+            Hủy
+          </v-btn>
+          <v-btn
+            variant="flat" rounded="lg" class="text-none font-weight-bold"
+            color="error" :loading="confirmDialog.loading"
+            @click="confirmDelete"
+          >
+            Xóa
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <v-dialog v-model="lightbox.open" max-width="900">
       <div class="lb-overlay-content">
         <v-btn icon color="white" variant="text" class="lb-close" @click="lightbox.open = false">

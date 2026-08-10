@@ -269,17 +269,71 @@ async function saveDM() {
   } finally { saving.value = false; }
 }
 
-async function deleteDM(dm) {
-  if (!confirm(`Xóa danh mục "${dm.tenDanhMuc}"?\nLưu ý: danh mục có sản phẩm sẽ không xóa được.`)) return;
-  try {
-    await axios.delete(`${API}/api/QuanLyDanhMucSP/${dm.maDMSP}`);
-    logActivity("Xóa danh mục sản phẩm", `Đã xóa danh mục sản phẩm ${dm.tenDanhMuc} (Mã: ${dm.maDMSP})`, "Sản phẩm");
-    showToast("Đã xóa danh mục!");
-    await loadData();
-  } catch (e) {
-    const msg = e.response?.data?.message ?? "Lỗi khi xóa danh mục!";
-    logActivity("Xóa danh mục sản phẩm", `Thất bại khi xóa danh mục sản phẩm ${dm.tenDanhMuc} (Mã: ${dm.maDMSP}) - Lỗi: ${msg}`, "Sản phẩm", "Thất bại");
-    showToast(msg, "error");
+// ══ XÁC NHẬN XÓA (thay cho confirm() mặc định của trình duyệt) ══════
+// type: "danhmuc" | "banner" — dùng chung 1 dialog cho cả 2 loại xóa
+const confirmDialog = reactive({
+  open: false, type: "", loading: false,
+  target: null,      // đối tượng đang chờ xóa (dm hoặc banner)
+  maDMSP: null,       // chỉ dùng khi type === "banner", để biết reload banner của danh mục nào
+});
+
+function deleteDM(dm) {
+  confirmDialog.type = "danhmuc";
+  confirmDialog.target = dm;
+  confirmDialog.maDMSP = null;
+  confirmDialog.open = true;
+}
+
+function deleteBanner(banner, maDMSP) {
+  confirmDialog.type = "banner";
+  confirmDialog.target = banner;
+  confirmDialog.maDMSP = maDMSP;
+  confirmDialog.open = true;
+}
+
+function cancelDelete() {
+  confirmDialog.open = false;
+  confirmDialog.target = null;
+  confirmDialog.maDMSP = null;
+  confirmDialog.type = "";
+}
+
+async function confirmDelete() {
+  if (confirmDialog.type === "danhmuc") {
+    const dm = confirmDialog.target;
+    if (!dm) return;
+    confirmDialog.loading = true;
+    try {
+      await axios.delete(`${API}/api/QuanLyDanhMucSP/${dm.maDMSP}`);
+      logActivity("Xóa danh mục sản phẩm", `Đã xóa danh mục sản phẩm ${dm.tenDanhMuc} (Mã: ${dm.maDMSP})`, "Sản phẩm");
+      showToast("Đã xóa danh mục!");
+      await loadData();
+    } catch (e) {
+      const msg = e.response?.data?.message ?? "Lỗi khi xóa danh mục!";
+      logActivity("Xóa danh mục sản phẩm", `Thất bại khi xóa danh mục sản phẩm ${dm.tenDanhMuc} (Mã: ${dm.maDMSP}) - Lỗi: ${msg}`, "Sản phẩm", "Thất bại");
+      showToast(msg, "error");
+    } finally {
+      confirmDialog.loading = false;
+      cancelDelete();
+    }
+  } else if (confirmDialog.type === "banner") {
+    const banner = confirmDialog.target;
+    const maDMSP = confirmDialog.maDMSP;
+    if (!banner) return;
+    confirmDialog.loading = true;
+    try {
+      await axios.delete(`${API}/api/QuanLyDanhMucSP/banner/${banner.maBanner}`);
+      logActivity("Xóa banner danh mục", `Đã xóa banner ${banner.maBanner}`, "Sản phẩm");
+      showToast("Đã xóa banner!");
+      await loadBanners(maDMSP);
+    } catch (err) {
+      const msg = err.response?.data?.message ?? "Lỗi khi xóa banner!";
+      logActivity("Xóa banner danh mục", `Thất bại khi xóa banner ${banner.maBanner} - Lỗi: ${msg}`, "Sản phẩm", "Thất bại");
+      showToast(msg, "error");
+    } finally {
+      confirmDialog.loading = false;
+      cancelDelete();
+    }
   }
 }
 
@@ -410,20 +464,6 @@ async function replaceBannerImg(e, banner, maDMSP) {
     showToast(msg, "error");
   } finally {
     bannerUploading[maDMSP] = false;
-  }
-}
-
-async function deleteBanner(banner, maDMSP) {
-  if (!confirm(`Xóa banner "${banner.maBanner}"?`)) return;
-  try {
-    await axios.delete(`${API}/api/QuanLyDanhMucSP/banner/${banner.maBanner}`);
-    logActivity("Xóa banner danh mục", `Đã xóa banner ${banner.maBanner}`, "Sản phẩm");
-    showToast("Đã xóa banner!");
-    await loadBanners(maDMSP);
-  } catch (err) {
-    const msg = err.response?.data?.message ?? "Lỗi khi xóa banner!";
-    logActivity("Xóa banner danh mục", `Thất bại khi xóa banner ${banner.maBanner} - Lỗi: ${msg}`, "Sản phẩm", "Thất bại");
-    showToast(msg, "error");
   }
 }
 
@@ -792,6 +832,52 @@ onMounted(loadData);
             color="primary" @click="openEdit(form)"
           >
             Chỉnh sửa
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- ══ DIALOG XÁC NHẬN XÓA (dùng chung cho danh mục & banner) ══════════ -->
+    <v-dialog v-model="confirmDialog.open" max-width="420" persistent>
+      <v-card rounded="lg">
+        <v-card-item class="pa-5 pb-0">
+          <div class="d-flex align-center gap-3">
+            <v-avatar color="error" variant="tonal" size="42">
+              <Trash2 class="w-5 h-5" />
+            </v-avatar>
+            <div class="text-subtitle-1 font-weight-bold">
+              {{ confirmDialog.type === "banner" ? "Xóa banner?" : "Xóa danh mục?" }}
+            </div>
+          </div>
+        </v-card-item>
+        <v-card-text class="pa-5 pt-3">
+          <template v-if="confirmDialog.type === 'banner'">
+            Bạn có chắc muốn xóa banner
+            <strong>"{{ confirmDialog.target?.tieuDe || confirmDialog.target?.maBanner }}"</strong>?
+          </template>
+          <template v-else>
+            Bạn có chắc muốn xóa danh mục
+            <strong>"{{ confirmDialog.target?.tenDanhMuc }}"</strong>?
+            <br />
+            <span class="text-caption text-medium-emphasis">
+              Lưu ý: danh mục đang có sản phẩm sẽ không thể xóa được.
+            </span>
+          </template>
+        </v-card-text>
+        <v-card-actions class="pa-4 px-5 d-flex justify-end border-t">
+          <v-btn
+            variant="outlined" rounded="lg" class="text-none font-weight-bold mr-2"
+            color="grey-darken-2" :disabled="confirmDialog.loading"
+            @click="cancelDelete"
+          >
+            Hủy
+          </v-btn>
+          <v-btn
+            variant="flat" rounded="lg" class="text-none font-weight-bold"
+            color="error" :loading="confirmDialog.loading"
+            @click="confirmDelete"
+          >
+            Xóa
           </v-btn>
         </v-card-actions>
       </v-card>
