@@ -380,46 +380,74 @@ async function savePN() {
 }
 
 async function duyetPN(p) {
-  if (!confirm(`Duyệt phiếu nhập "${p.maPn}"? Tồn kho sẽ được cập nhật.`)) return;
-  try {
-    await axios.post(`${API}/api/QuanLyKho/phieunhap/${p.maPn}/duyet`);
-    logActivity("Duyệt phiếu nhập kho", `Đã duyệt phiếu nhập kho ${p.maPn}, cập nhật tồn kho`, "Quản lý kho");
-    showToast(
-      `Phiếu "${p.maPn}" đã được duyệt, tồn kho cập nhật · ${fmt(p.tongTien)}`,
-      "success",
-      "Duyệt phiếu nhập thành công"
-    );
-    await loadPhieuNhap();
-    if (activeTab.value === "tonkho") loadTonKho();
-    if (activeTab.value === "canhbao") loadCanhBao();
-    if (activeTab.value === "lichsu") loadLichSu();
-  } catch (err) {
-    logActivity("Duyệt phiếu nhập kho", `Thất bại khi duyệt phiếu nhập kho ${p.maPn} - Lỗi: ${err.message || ''}`, "Quản lý kho", "Thất bại");
-    showToast(err.response?.data?.message || "Lỗi khi duyệt phiếu!", "error");
-  }
+  confirmPN.type = "duyet";
+  confirmPN.target = p;
+  confirmPN.open = true;
 }
 
 async function huyPN(p) {
-  if (!confirm(`Hủy phiếu nhập "${p.maPn}"?`)) return;
-  try {
-    await axios.post(`${API}/api/QuanLyKho/phieunhap/${p.maPn}/huy`);
-    logActivity("Hủy phiếu nhập kho", `Đã hủy phiếu nhập kho ${p.maPn}`, "Quản lý kho");
-    showToast("Đã hủy phiếu nhập!"); await loadPhieuNhap();
-  } catch (err) {
-    logActivity("Hủy phiếu nhập kho", `Thất bại khi hủy phiếu nhập kho ${p.maPn} - Lỗi: ${err.message || ''}`, "Quản lý kho", "Thất bại");
-    showToast(err.response?.data?.message || "Lỗi khi hủy phiếu!", "error");
-  }
+  confirmPN.type = "huy";
+  confirmPN.target = p;
+  confirmPN.open = true;
 }
 
-async function deletePN(p) {
-  if (!confirm(`Xóa phiếu nhập "${p.maPn}"? Hành động không thể hoàn tác.`)) return;
+// ══ XÁC NHẬN DUYỆT / HỦY / XÓA PHIẾU NHẬP (thay cho confirm() mặc định) ══
+// type: "duyet" | "huy" | "xoa"
+const confirmPN = reactive({ open: false, type: "", target: null, loading: false });
+
+function deletePN(p) {
+  confirmPN.type = "xoa";
+  confirmPN.target = p;
+  confirmPN.open = true;
+}
+
+function cancelConfirmPN() {
+  confirmPN.open = false;
+  confirmPN.target = null;
+  confirmPN.type = "";
+}
+
+async function confirmPNAction() {
+  const { type, target: p } = confirmPN;
+  if (!p) return;
+  confirmPN.loading = true;
+
   try {
-    await axios.delete(`${API}/api/QuanLyKho/phieunhap/${p.maPn}`);
-    logActivity("Xóa phiếu nhập kho", `Đã xóa phiếu nhập kho ${p.maPn}`, "Quản lý kho");
-    showToast("Đã xóa phiếu nhập!"); await loadPhieuNhap();
+    if (type === "duyet") {
+      await axios.post(`${API}/api/QuanLyKho/phieunhap/${p.maPn}/duyet`);
+      logActivity("Duyệt phiếu nhập kho", `Đã duyệt phiếu nhập kho ${p.maPn}, cập nhật tồn kho`, "Quản lý kho");
+      showToast(
+        `Phiếu "${p.maPn}" đã được duyệt, tồn kho cập nhật · ${fmt(p.tongTien)}`,
+        "success",
+        "Duyệt phiếu nhập thành công"
+      );
+      await loadPhieuNhap();
+      if (activeTab.value === "tonkho") loadTonKho();
+      if (activeTab.value === "canhbao") loadCanhBao();
+      if (activeTab.value === "lichsu") loadLichSu();
+    } else if (type === "huy") {
+      await axios.post(`${API}/api/QuanLyKho/phieunhap/${p.maPn}/huy`);
+      logActivity("Hủy phiếu nhập kho", `Đã hủy phiếu nhập kho ${p.maPn}`, "Quản lý kho");
+      showToast("Đã hủy phiếu nhập!"); await loadPhieuNhap();
+    } else if (type === "xoa") {
+      await axios.delete(`${API}/api/QuanLyKho/phieunhap/${p.maPn}`);
+      logActivity("Xóa phiếu nhập kho", `Đã xóa phiếu nhập kho ${p.maPn}`, "Quản lý kho");
+      showToast("Đã xóa phiếu nhập!"); await loadPhieuNhap();
+    }
   } catch (err) {
-    logActivity("Xóa phiếu nhập kho", `Thất bại khi xóa phiếu nhập kho ${p.maPn} - Lỗi: ${err.message || ''}`, "Quản lý kho", "Thất bại");
-    showToast(err.response?.data?.message || "Lỗi khi xóa phiếu!", "error");
+    if (type === "duyet") {
+      logActivity("Duyệt phiếu nhập kho", `Thất bại khi duyệt phiếu nhập kho ${p.maPn} - Lỗi: ${err.message || ''}`, "Quản lý kho", "Thất bại");
+      showToast(err.response?.data?.message || "Lỗi khi duyệt phiếu!", "error");
+    } else if (type === "huy") {
+      logActivity("Hủy phiếu nhập kho", `Thất bại khi hủy phiếu nhập kho ${p.maPn} - Lỗi: ${err.message || ''}`, "Quản lý kho", "Thất bại");
+      showToast(err.response?.data?.message || "Lỗi khi hủy phiếu!", "error");
+    } else if (type === "xoa") {
+      logActivity("Xóa phiếu nhập kho", `Thất bại khi xóa phiếu nhập kho ${p.maPn} - Lỗi: ${err.message || ''}`, "Quản lý kho", "Thất bại");
+      showToast(err.response?.data?.message || "Lỗi khi xóa phiếu!", "error");
+    }
+  } finally {
+    confirmPN.loading = false;
+    cancelConfirmPN();
   }
 }
 
@@ -1582,6 +1610,67 @@ onMounted(async () => {
     </v-dialog>
 
     <!-- ══ LIGHTBOX ══════════════════════════════════════════════════ -->
+    <!-- ══ DIALOG XÁC NHẬN DUYỆT / HỦY / XÓA PHIẾU NHẬP ═══════════════ -->
+    <v-dialog v-model="confirmPN.open" max-width="420" persistent>
+      <v-card rounded="lg">
+        <v-card-item class="pa-5 pb-0">
+          <div class="d-flex align-center gap-3">
+            <v-avatar
+              :color="confirmPN.type === 'duyet' ? 'success' : confirmPN.type === 'huy' ? 'warning' : 'error'"
+              variant="tonal" size="42"
+            >
+              <Check v-if="confirmPN.type === 'duyet'" class="w-5 h-5" />
+              <X v-else-if="confirmPN.type === 'huy'" class="w-5 h-5" />
+              <Trash2 v-else class="w-5 h-5" />
+            </v-avatar>
+            <div class="text-subtitle-1 font-weight-bold">
+              <template v-if="confirmPN.type === 'duyet'">Duyệt phiếu nhập?</template>
+              <template v-else-if="confirmPN.type === 'huy'">Hủy phiếu nhập?</template>
+              <template v-else>Xóa phiếu nhập?</template>
+            </div>
+          </div>
+        </v-card-item>
+        <v-card-text class="pa-5 pt-3">
+          <template v-if="confirmPN.type === 'duyet'">
+            Bạn có chắc muốn duyệt phiếu nhập
+            <strong>"{{ confirmPN.target?.maPn }}"</strong>?
+            <br />
+            <span class="text-caption text-medium-emphasis">Tồn kho sẽ được cập nhật ngay sau khi duyệt.</span>
+          </template>
+          <template v-else-if="confirmPN.type === 'huy'">
+            Bạn có chắc muốn hủy phiếu nhập
+            <strong>"{{ confirmPN.target?.maPn }}"</strong>?
+          </template>
+          <template v-else>
+            Bạn có chắc muốn xóa phiếu nhập
+            <strong>"{{ confirmPN.target?.maPn }}"</strong>?
+            <br />
+            <span class="text-caption text-medium-emphasis">Hành động này không thể hoàn tác.</span>
+          </template>
+        </v-card-text>
+        <v-card-actions class="pa-4 px-5 d-flex justify-end border-t">
+          <v-btn
+            variant="outlined" rounded="lg" class="text-none font-weight-bold mr-2"
+            color="grey-darken-2" :disabled="confirmPN.loading"
+            @click="cancelConfirmPN"
+          >
+            Hủy bỏ
+          </v-btn>
+          <v-btn
+            variant="flat" rounded="lg" class="text-none font-weight-bold"
+            :color="confirmPN.type === 'duyet' ? 'success' : confirmPN.type === 'huy' ? 'warning' : 'error'"
+            :loading="confirmPN.loading"
+            @click="confirmPNAction"
+          >
+            <template v-if="confirmPN.type === 'duyet'">Duyệt</template>
+            <template v-else-if="confirmPN.type === 'huy'">Hủy phiếu</template>
+            <template v-else>Xóa</template>
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+
     <v-dialog v-model="lightbox.open" max-width="800">
       <v-card rounded="lg" class="pa-2">
         <v-btn icon size="small" variant="text" class="position-absolute" style="top: 8px; right: 8px; z-index: 1;" @click="lightbox.open = false">
