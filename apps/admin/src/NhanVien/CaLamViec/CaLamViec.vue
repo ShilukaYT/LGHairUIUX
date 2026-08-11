@@ -427,9 +427,18 @@ const showSnackbar = (msg: string, color = 'success') => {
               Điểm danh vào ca
             </v-btn>
 
-            <v-btn v-else-if="todayShift.trangThai === 1 && todayShift.caLam !== 'Chưa xếp' && todayShift.caLam !== 'Nghỉ lễ' && !isCheckInTimeValid()" disabled color="grey" block size="large" rounded="lg" class="mb-3 font-weight-bold text-none" elevation="2">
-              <template v-slot:prepend><Clock :size="20"/></template>
-              Chưa đến hoặc đã quá giờ điểm danh
+            <v-btn
+              v-else-if="todayShift.trangThai === 1 && todayShift.caLam !== 'Chưa xếp' && todayShift.caLam !== 'Nghỉ lễ' && !isCheckInTimeValid()"
+              disabled
+              color="grey"
+              block
+              rounded="lg"
+              class="mb-3 font-weight-medium text-none text-wrap px-2 py-2"
+              style="height: auto; min-height: 42px; font-size: 0.78rem; line-height: 1.3;"
+              elevation="1"
+            >
+              <template v-slot:prepend><Clock :size="16" class="mr-1 shrink-0" /></template>
+              <span class="text-center">Chưa đến hoặc đã quá giờ điểm danh</span>
             </v-btn>
 
             <v-btn v-if="(todayShift.trangThai === 1 && todayShift.caLam !== 'Nghỉ lễ') || todayShift.caLam === 'Chưa xếp'" @click="openRequestModal" color="info" variant="outlined" block size="large" rounded="lg" class="font-weight-bold text-none border-opacity-100 py-3" style="height: auto; white-space: normal; line-height: 1.4;">

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import axios from 'axios';
-import Swal from 'sweetalert2';
 import { useRouter } from 'vue-router';
 import { getCartDB, removeFromCartDB, addToCartDB } from '@/Views/Anonymous/CSDL/cartDB';
 import { getCustomerInfo } from '@/Views/Anonymous/CSDL/DuLieuNguoiDung';
@@ -35,7 +34,6 @@ const allItemsFromApi = ref<any[]>([]);
 const allProductsFromApi = ref<any[]>([]);
 const stylists = ref<any[]>([]);
 const favoriteStylistIds = ref<string[]>([]);
-const isSubmitting = ref(false);
 
 const isStylistFavorite = (stylistId: string) => {
     if (!stylistId) return false;
@@ -73,6 +71,11 @@ const productData = ref({
     paymentMethod: 'vnpay'
 });
 
+// ==========================================
+// HÓA ĐƠN ĐIỆN TỬ
+// Mặc định luôn xuất hóa đơn cá nhân, dùng Email + Địa chỉ đã nhập ở trên (không hỏi lại).
+// Chỉ mở rộng khi khách cần hóa đơn công ty (có MST).
+// ==========================================
 const showInvoiceCompanyForm = ref(false);
 const invoiceCompany = ref({ tenCongTy: '', mst: '' });
 const mstError = ref('');
@@ -178,6 +181,10 @@ const productSubTotal = computed(() => {
     return productItems.value.reduce((sum, p) => sum + Number(p.gia || 0) * Number(p.soLuong || 1), 0);
 });
 
+const needDeliveryAddress = computed(() => {
+    return productItems.value.length > 0 && productData.value.receiveType === 'home';
+});
+
 const distanceText = ref<string>('');
 const shippingFee = ref<number>(0);
 const isCalculatingRoute = ref(false);
@@ -224,6 +231,9 @@ watch(() => productData.value.address, (newAddress) => {
 
 const stackPreview = ref({ totalDiscount: 0, finalAmount: 0, memberDiscount: 0, voucherAmount: 0, memberRankPercent: 0 });
 const discountAmount = computed(() => Number(stackPreview.value.totalDiscount || 0));
+const memberDiscount = computed(() => Number(stackPreview.value.memberDiscount || 0));
+const voucherAmount = computed(() => Number(stackPreview.value.voucherAmount || 0));
+const memberRankPercent = computed(() => Number(stackPreview.value.memberRankPercent || 0));
 const serviceAfterVoucher = computed(() => Math.max(0, serviceSubTotal.value - discountAmount.value));
 const grandTotal = computed(() => Math.max(0, stackPreview.value.finalAmount) + shippingFee.value);
 
@@ -246,17 +256,128 @@ const payNow = computed(() => {
 
 const remainAtStore = computed(() => {
     let total = 0;
+
+    // Dịch vụ: còn lại sau khi cọc
     if (bookingData.value.selectedServices.length > 0 && bookingData.value.paymentMode === '10') {
         total += Math.max(0, serviceAfterVoucher.value - (serviceSubTotal.value * 0.1));
     }
+
+    // Sản phẩm: nhận tại tiệm → trả tại tiệm
     if (productItems.value.length > 0 && productData.value.receiveType === 'store') {
         const remainingDiscount = Math.max(0, discountAmount.value - serviceSubTotal.value);
         const productAfterVoucher = Math.max(0, productSubTotal.value - remainingDiscount);
         total += productAfterVoucher;
     }
+
     return total;
 });
 
+const remainCOD = computed(() => {
+    if (productItems.value.length === 0 || productData.value.paymentMethod !== 'cod') return 0;
+    const remainingDiscount = Math.max(0, discountAmount.value - serviceSubTotal.value);
+    const productAfterVoucher = Math.max(0, productSubTotal.value - remainingDiscount);
+    return productAfterVoucher + shippingFee.value;
+});
+
+const filteredServices = computed(() => {
+    const query = serviceSearch.value.toLowerCase().trim();
+    let list = allItemsFromApi.value;
+    if (query) {
+        list = list.filter(s => String(s.name || '').toLowerCase().includes(query));
+    }
+    return list.filter(item => !bookingData.value.selectedServices.find(s => s.id === item.id));
+});
+
+let productSearchTimeout: any = null;
+watch(productSearch, (newVal) => {
+    clearTimeout(productSearchTimeout);
+    productSearchTimeout = setTimeout(() => {
+        loadProducts(newVal);
+    }, 500);
+});
+
+const formatMoney = (money: number) => {
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(money || 0));
+};
+
+const addService = async (service: any) => {
+    if (bookingData.value.selectedServices.find(s => s.id === service.id)) return;
+
+    bookingData.value.selectedServices.push({
+        id: service.id,
+        name: service.name,
+        price: Number(service.price || 0),
+        originalPrice: Number(service.originalPrice || service.price || 0),
+        icon: service.icon || 'fas fa-check-circle',
+        duration: Number(service.duration || 30),
+        hinhAnh: service.hinhAnh
+    });
+
+    try {
+        await addToCartDB({
+            id: service.id,
+            tenItem: service.name,
+            gia: Number(service.price || 0),
+            giaGoc: Number(service.originalPrice || service.price || 0),
+            type: 'DICHVU',
+            duration: Number(service.duration || 30),
+            hinhAnh: service.hinhAnh || service.icon || 'fas fa-check-circle'
+        }, customerId.value || 'GUEST');
+    } catch (error) {
+        console.error('Lỗi lưu dịch vụ vào giỏ:', error);
+    }
+
+    serviceSearch.value = '';
+    showServiceDropdown.value = false;
+    await loadVouchers();
+};
+
+const removeService = async (id: any) => {
+    bookingData.value.selectedServices = bookingData.value.selectedServices.filter(s => s.id !== id);
+    try {
+        await removeFromCartDB(id);
+    } catch (error) {
+        console.error('Lỗi xóa dịch vụ:', error);
+    }
+    await loadVouchers();
+};
+
+const addProduct = (sp: any, bt: any) => {
+    if (bt.soLuongTon <= 0 || productItems.value.some(p => p.id === bt.maBienThe)) return;
+
+    productItems.value.push({
+        id: bt.maBienThe,
+        tenItem: `${sp.tenSp} - ${bt.tenBienThe}`,
+        gia: Number(bt.giaBan || 0),
+        hinhAnh: bt.hinhAnhDaiDien || bt.hinhAnh || sp.hinhAnhDaiDien,
+        soLuong: 1
+    });
+
+    productSearch.value = '';
+    showProductDropdown.value = false;
+};
+
+const removeProduct = (id: any) => {
+    productItems.value = productItems.value.filter(p => p.id !== id);
+};
+
+const increaseQuantity = (item: ProductItem) => {
+    item.soLuong++;
+};
+
+const decreaseQuantity = (item: ProductItem) => {
+    if (item.soLuong > 1) item.soLuong--;
+};
+
+const validateQuantity = (item: ProductItem) => {
+    if (typeof item.soLuong !== 'number' || isNaN(item.soLuong) || item.soLuong < 1) {
+        item.soLuong = 1;
+    }
+};
+
+// ==========================================
+// TÍNH TỔNG TIỀN VÀ GOM ID (DỊCH VỤ + SẢN PHẨM)
+// ==========================================
 const combinedSubTotal = computed(() => serviceSubTotal.value + productSubTotal.value);
 
 const combinedItemIds = computed(() => {
@@ -268,18 +389,18 @@ const combinedItemIds = computed(() => {
 const loadVouchers = async () => {
     if (!customerId.value || customerId.value === 'GUEST') return;
     try {
+        // Đổi về Controller ThanhToanTong
         const res = await axios.get(`${API}/api/ThanhToanTong/get-my-vouchers/${customerId.value}`, {
             params: {
                 subTotal: combinedSubTotal.value, 
                 ngayGioHen: bookingData.value.bookingDate || undefined,
-                itemIds: combinedItemIds.value || undefined
+                itemIds: combinedItemIds.value || undefined // Đổi serviceIds thành itemIds
             }
         });
         myVouchers.value = res.data || [];
-        bookingData.value.voucherIds = bookingData.value.voucherIds.filter(id => {
-            const v = myVouchers.value.find(x => x.id === id);
-            return v && v.isAvailable;
-        });
+        bookingData.value.voucherIds = bookingData.value.voucherIds.filter(id =>
+            myVouchers.value.some(v => v.id === id)
+        );
     } catch (error) {
         console.error('Lỗi load voucher:', error);
     }
@@ -292,13 +413,14 @@ const refreshStackPreview = async () => {
     }
     try {
         const codes = bookingData.value.voucherIds.join(',');
+        // Đổi về Controller ThanhToanTong
         const res = await axios.get(`${API}/api/ThanhToanTong/preview-voucher-stack`, {
             params: {
                 maKH: customerId.value,
                 codes,
                 subTotal: combinedSubTotal.value,
                 ngayGioHen: bookingData.value.bookingDate || undefined,
-                itemIds: combinedItemIds.value || undefined
+                itemIds: combinedItemIds.value || undefined // Đổi serviceIds thành itemIds
             }
         });
         stackPreview.value = {
@@ -308,26 +430,9 @@ const refreshStackPreview = async () => {
             voucherAmount: Number(res.data.voucherAmount) || 0,
             memberRankPercent: Number(res.data.memberRankPercent) || 0
         };
-    } catch (error: any) {
+    } catch {
         stackPreview.value = { totalDiscount: 0, finalAmount: combinedSubTotal.value, memberDiscount: 0, voucherAmount: 0, memberRankPercent: 0 };
-        const msg = error.response?.data?.message || 'Voucher không đủ điều kiện áp dụng!';
-        Swal.fire({ title: 'Opps!', text: msg, icon: 'warning', confirmButtonText: 'Đã hiểu', confirmButtonColor: '#d4af37' });
-        if (bookingData.value.voucherIds.length > 0) {
-            bookingData.value.voucherIds.pop();
-        }
     }
-};
-
-const isVoucherDisabled = (v: any) => {
-    if (v.isAvailable === false) return true;
-    if (v.desc && v.desc.includes('Đơn tối thiểu')) {
-        const match = v.desc.match(/Đơn tối thiểu ([\d,]+)đ/);
-        if (match) {
-            const minVal = parseInt(match[1].replace(/,/g, ''));
-            if (combinedSubTotal.value < minVal) return true;
-        }
-    }
-    return false;
 };
 
 function toggleVoucher(id: string) {
@@ -337,13 +442,8 @@ function toggleVoucher(id: string) {
         ids.splice(i, 1);
         return;
     }
-    const v = myVouchers.value.find(x => x.id === id);
-    if (v && isVoucherDisabled(v)) {
-        Swal.fire({ title: 'Không hợp lệ', text: 'Không thể áp dụng voucher: ' + (v.errorMessage || 'Chưa đủ điều kiện.'), icon: 'warning', confirmButtonText: 'Đã hiểu', confirmButtonColor: '#d4af37' });
-        return;
-    }
     if (ids.length >= 2) {
-        Swal.fire({ title: 'Giới hạn voucher', text: 'Chỉ chọn tối đa 2 voucher.', icon: 'info', confirmButtonText: 'Đã hiểu', confirmButtonColor: '#d4af37' });
+        alert('Chỉ chọn tối đa 2 voucher.');
         return;
     }
     ids.push(id);
@@ -370,20 +470,26 @@ const loadAvailableStylists = async () => {
             maKh: customerId.value
         });
 
-        if (res.data && res.data.message === "Trùng lịch") {
-            Swal.fire({ title: 'Trùng lịch', text: 'Stylist bạn chọn đã bận vào khung giờ này do thay đổi thời gian dịch vụ. Vui lòng chọn thợ khác!', icon: 'warning', confirmButtonColor: '#d4af37' });
-            return;
-        }
-
-        const rawList = Array.isArray(res.data) ? res.data : (res.data?.data || res.data?.stylists || res.data?.nhanViens || []);
+        const rawList = Array.isArray(res.data)
+            ? res.data
+            : Array.isArray(res.data?.data)
+                ? res.data.data
+                : Array.isArray(res.data?.stylists)
+                    ? res.data.stylists
+                    : Array.isArray(res.data?.nhanViens)
+                        ? res.data.nhanViens
+                        : [];
 
         const mapped = rawList.map(normalizeStylist).filter((s: any) => s.id).map((s: any) => ({
             ...s,
             isFavorite: s.isFavorite || isStylistFavorite(s.id)
         }));
 
+        // Sắp xếp: Ưu tiên thợ rảnh (isAvailable) -> Ưu tiên thợ yêu thích (isFavorite)
         mapped.sort((a: any, b: any) => {
-            if (a.isAvailable !== b.isAvailable) return a.isAvailable ? -1 : 1;
+            if (a.isAvailable !== b.isAvailable) {
+                return a.isAvailable ? -1 : 1;
+            }
             const favA = a.isFavorite ? 1 : 0;
             const favB = b.isFavorite ? 1 : 0;
             return favB - favA;
@@ -391,61 +497,125 @@ const loadAvailableStylists = async () => {
 
         stylists.value = mapped;
 
+        // Nếu stylist đang chọn bị bận do đổi giờ/đổi dịch vụ, reset về null
         if (bookingData.value.stylistId && !stylists.value.some(s => String(s.id) === String(bookingData.value.stylistId))) {
             bookingData.value.stylistId = null;
-            Swal.fire({ title: 'Cập nhật', text: "Stylist bạn chọn đã bận vào khung giờ này do thay đổi thời gian dịch vụ. Vui lòng chọn thợ khác!", icon: 'warning', confirmButtonColor: '#d4af37' });
+            alert("Stylist bạn chọn đã bận vào khung giờ này do thay đổi thời gian dịch vụ. Vui lòng chọn thợ khác!");
         }
 
         if (stylists.value.length === 0) {
-            stylistMessage.value = 'Không tìm thấy stylist trống trong khung giờ này.';
+            stylistMessage.value = 'Không tìm thấy stylist trống trong khung giờ này. Hãy đổi ngày hoặc giờ khác.';
         }
     } catch (error) {
         console.error('Lỗi tải stylist:', error);
         stylists.value = [];
         bookingData.value.stylistId = null;
+        stylistMessage.value = 'Không tải được danh sách stylist. Kiểm tra API get-available-stylists.';
     } finally {
         loadingStylists.value = false;
     }
 };
 
-const validateBeforeSubmit = (): boolean => {
-    if (!bookingData.value.customerName || !bookingData.value.phone) {
-        Swal.fire({ title: 'Thiếu thông tin', text: 'Vui lòng nhập đầy đủ thông tin khách hàng (Họ tên, Số điện thoại).', icon: 'warning', confirmButtonColor: '#d4af37' });
-        return false;
+watch(
+    () => [
+        bookingData.value.voucherIds.slice(),
+        combinedSubTotal.value,
+        customerId.value,
+        bookingData.value.bookingDate,
+        bookingData.value.selectedServices.map(s => s.id).join(',')
+    ],
+    () => void refreshStackPreview(),
+    { deep: true, immediate: true }
+);
+
+watch(
+    () => [
+        tempDate.value,
+        tempTime.value,
+        bookingData.value.selectedServices.map(s => s.id).join(','),
+        estimatedTotalMinutes.value
+    ],
+    () => loadAvailableStylists(),
+    { deep: true }
+);
+
+watch(() => productData.value.receiveType, (newVal) => {
+    if (newVal === 'store') {
+        productData.value.address = '';
+        productData.value.deliveryNote = '';
+        shippingFee.value = 0;
+        distanceText.value = '';
+        if (productData.value.paymentMethod === 'cod') {
+            productData.value.paymentMethod = bookingData.value.paymentMethod || 'vnpay';
+        }
+    } else if (newVal === 'home' && productData.value.address) {
+        calculateRouteAndFee();
     }
+});
+
+// Synchronize payment methods (forcing VNPay/MoMo alignment, no mixing)
+watch(() => bookingData.value.paymentMethod, (newVal) => {
+    if (productData.value.paymentMethod !== 'cod') {
+        productData.value.paymentMethod = newVal;
+    }
+});
+
+watch(() => productData.value.paymentMethod, (newVal) => {
+    if (newVal !== 'cod' && bookingData.value.paymentMethod !== newVal) {
+        bookingData.value.paymentMethod = newVal;
+    }
+    if (newVal === 'cod' && productData.value.receiveType === 'store') {
+        productData.value.paymentMethod = bookingData.value.paymentMethod || 'vnpay';
+    }
+});
+
+// Phương thức thanh toán hiện tại (ưu tiên dịch vụ, nếu không có thì lấy sản phẩm)
+const activePaymentMethod = computed(() => {
+    if (bookingData.value.selectedServices.length > 0) return bookingData.value.paymentMethod;
+    return productData.value.paymentMethod;
+});
+
+// ==========================================
+// HÀM THANH TOÁN TỔNG (GỌI 1 API DUY NHẤT)
+// ==========================================
+const handlePayment = async () => {
+    // 1. KIỂM TRA ĐIỀU KIỆN (Validations)
+    if (!bookingData.value.customerName || !bookingData.value.phone) {
+        alert('Vui lòng nhập đầy đủ thông tin khách hàng (Họ tên, Số điện thoại).');
+        return;
+    }
+
     if (bookingData.value.selectedServices.length > 0) {
-        if (!bookingData.value.bookingDate || !tempTime.value || !tempDate.value) {
-            Swal.fire({ title: 'Thiếu thông tin đặt lịch', text: 'Vui lòng chọn ngày và giờ đặt lịch.', icon: 'warning', confirmButtonColor: '#d4af37' });
-            return false;
+        if (!bookingData.value.bookingDate) {
+            alert('Vui lòng chọn ngày và giờ đặt lịch.');
+            return;
         }
     }
+
     if (productItems.value.length > 0 && productData.value.receiveType === 'home') {
         if (!productData.value.receiverName || !productData.value.receiverPhone || !productData.value.address) {
-            Swal.fire({ title: 'Thiếu thông tin giao hàng', text: 'Vui lòng nhập đầy đủ thông tin giao hàng (Tên, SĐT, Địa chỉ).', icon: 'warning', confirmButtonColor: '#d4af37' });
-            return false;
+            alert('Vui lòng nhập đầy đủ thông tin giao hàng (Tên, SĐT, Địa chỉ).');
+            return;
         }
     }
+
     if (bookingData.value.selectedServices.length === 0 && productItems.value.length === 0) {
-        Swal.fire({ title: 'Giỏ hàng trống', text: 'Giỏ hàng trống! Vui lòng chọn ít nhất 1 dịch vụ hoặc 1 sản phẩm.', icon: 'warning', confirmButtonColor: '#d4af37' });
-        return false;
+        alert('Giỏ hàng trống! Vui lòng chọn ít nhất 1 dịch vụ hoặc 1 sản phẩm.');
+        return;
     }
+
     const invoiceErr = validateInvoiceInfo();
     if (invoiceErr) {
-        Swal.fire({ title: 'Lỗi xuất hoá đơn', text: invoiceErr, icon: 'warning', confirmButtonColor: '#d4af37' });
-        return false;
+        alert(invoiceErr);
+        return;
     }
-    return true;
-};
-
-const handlePayment = async () => {
-    if (!validateBeforeSubmit()) return;
-    isSubmitting.value = true;
 
     try {
         const checkoutType = bookingData.value.selectedServices.length > 0 && productItems.value.length > 0
                 ? 'DAT_LICH_VA_MUA_SAN_PHAM'
                 : bookingData.value.selectedServices.length > 0 ? 'CHI_DAT_LICH' : 'CHI_MUA_SAN_PHAM';
 
+        // 2. GOM DỮ LIỆU THÀNH 1 GÓI DUY NHẤT CHUẨN DTO CỦA C#
         const payload = {
             checkoutType: checkoutType,
             maKh: customerId.value || 'GUEST',
@@ -453,13 +623,17 @@ const handlePayment = async () => {
             phone: bookingData.value.phone,
             email: bookingData.value.email || '',
             note: bookingData.value.note || '',
+            
+            // Thông tin Dịch vụ
             bookingDate: bookingData.value.bookingDate || null,
             stylistId: bookingData.value.stylistId || '',
             services: bookingData.value.selectedServices.map(s => ({ 
                 id: s.id, 
                 price: s.price,
-                duration: Number(s.duration || 30)
+                duration: Number(s.duration || 30) // Bắt buộc gửi số phút để Backend cộng giờ
             })),
+            
+            // Thông tin Sản phẩm
             products: productItems.value.map(p => ({ 
                 id: p.id, 
                 gia: p.gia, 
@@ -472,27 +646,72 @@ const handlePayment = async () => {
                 email: productData.value.receiverEmail || '',
                 diaChi: productData.value.address
             } : null,
+
+            // Tiền bạc & Voucher
             voucherIds: bookingData.value.voucherIds || [],
             shippingFee: shippingFee.value || 0,
             grandTotal: grandTotal.value, 
-            paidAmount: payNow.value,
+            paidAmount: payNow.value, // Số tiền cần quẹt thẻ/momo ngay lúc này
+
+            // Cấu hình phương thức thanh toán
             paymentMode: bookingData.value.paymentMode, 
             servicePaymentMethod: bookingData.value.paymentMethod,
             productPaymentMethod: productData.value.paymentMethod,
+
+            // Hóa đơn điện tử
             invoiceInfo: buildInvoiceInfoPayload()
         };
 
+        // 3. GỌI API LƯU TẤT CẢ VÀO DATABASE BẰNG 1 LẦN GỌI
         const res = await axios.post(`${API}/api/ThanhToanTong/submit-checkout`, payload);
 
         if (res.data && res.data.success) {
+            // LƯU TRỮ THÔNG TIN LỊCH HẸN VÀ SẢN PHẨM VÀO LOCALSTORAGE CHO TRANG XACNHANDICHVU
             localStorage.setItem('last_booking_ref', res.data.maHd || 'N/A');
-            localStorage.setItem('cart', JSON.stringify([])); 
-            
-            try {
-                for (const s of bookingData.value.selectedServices) await removeFromCartDB(s.id);
-                for (const p of productItems.value) await removeFromCartDB(p.id);
-            } catch (err) { console.error(err); }
+            localStorage.setItem('current_pay_mode', bookingData.value.paymentMode);
+            localStorage.setItem('total_bill_original', grandTotal.value.toString());
+            localStorage.setItem('temp_services', JSON.stringify(bookingData.value.selectedServices));
+            localStorage.setItem('temp_products', JSON.stringify(productItems.value));
+            localStorage.setItem('temp_date', bookingData.value.bookingDate || 'Chưa chọn ngày');
+            localStorage.setItem('temp_stylist_name', selectedStylist.value?.name || 'LG Stylist');
+            localStorage.setItem('temp_receive_type', productData.value.receiveType);
+            localStorage.setItem('temp_shipping_fee', shippingFee.value.toString());
+            localStorage.setItem('temp_pay_now', payNow.value.toString());
+            localStorage.setItem('temp_remain_at_store', remainAtStore.value.toString());
+            if (productData.value.receiveType === 'home' && productItems.value.length > 0) {
+                localStorage.setItem('temp_delivery_info', JSON.stringify({
+                    hoTen: productData.value.receiverName,
+                    soDienThoai: productData.value.receiverPhone,
+                    diaChi: productData.value.address
+                }));
+            } else {
+                localStorage.removeItem('temp_delivery_info');
+            }
 
+            // ===============================================
+            // DỌN SẠCH RÁC TRONG GIỎ HÀNG (ĐÃ FIX LỖI CARTDB)
+            // ===============================================
+            localStorage.removeItem('checkoutData');
+            localStorage.removeItem('cart'); 
+            localStorage.removeItem('cartSP'); 
+
+            // Quét và xóa sạch từng món trong cơ sở dữ liệu giỏ hàng (cartDB)
+            try {
+                for (const s of bookingData.value.selectedServices) {
+                    await removeFromCartDB(s.id);
+                }
+                for (const p of productItems.value) {
+                    await removeFromCartDB(p.id);
+                }
+            } catch (err) {
+                console.error('Lỗi khi xóa cartDB:', err);
+            }
+
+            productItems.value = [];
+            bookingData.value.selectedServices = [];
+            // ===============================================
+
+            // KIỂM TRA CHUYỂN HƯỚNG
             if (res.data.isOnlinePayment && res.data.url) {
                 window.location.href = res.data.url;
             } else {
@@ -859,7 +1078,7 @@ onMounted(async () => {
 
                             <div v-if="myVouchers.length > 0" class="voucher-list-modern">
                                 <div v-for="v in myVouchers" :key="v.id" class="voucher-ticket-item"
-                                    :class="{ active: bookingData.voucherIds.includes(v.id), disabled: isVoucherDisabled(v) }" @click="toggleVoucher(v.id)">
+                                    :class="{ active: bookingData.voucherIds.includes(v.id) }" @click="toggleVoucher(v.id)">
                                     
                                     <div class="ticket-left">
                                         <span class="ticket-brand-text">LGHAIR</span>
@@ -1783,13 +2002,9 @@ textarea.booking-input {
 }
 
 .voucher-ticket-item.active {
-    border-color: #d4af37;
-    background: #fffdf5;
-}
-.voucher-ticket-item.disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    background: #f5f5f5;
+    border: 2px solid #000000;
+    background: #fafafa;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
 }
 
 .ticket-left {
