@@ -14,15 +14,22 @@ const username = ref('');
 const password = ref('');
 const isLoading = ref(false);
 
-const googleBtnWidth = ref(372);
+const googleBtnWidth = ref(280);
 const formWidthRef = ref<HTMLElement | null>(null);
 
 const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
 
 
 const updateGoogleBtnWidth = () => {
-  if (formWidthRef.value) {
-    googleBtnWidth.value = Math.min(formWidthRef.value.clientWidth, 400);
+  const windowWidth = window.innerWidth;
+  if (formWidthRef.value && formWidthRef.value.clientWidth > 0) {
+    const padding = windowWidth < 640 ? 32 : 64;
+    const availableWidth = formWidthRef.value.clientWidth - padding;
+    googleBtnWidth.value = windowWidth < 640
+      ? Math.max(200, Math.min(availableWidth, 250))
+      : Math.max(200, Math.min(availableWidth, 360));
+  } else {
+    googleBtnWidth.value = windowWidth < 640 ? 240 : 340;
   }
 };
 
@@ -340,8 +347,8 @@ const handleGoogleVerify = async (response: any) => {
 
 <template>
   <div
-    class="w-full animate-in fade-in duration-500 min-h-screen bg-[#f8f8f8] py-24 px-6 flex items-center justify-center">
-    <div class="w-full max-w-[500px] bg-white border border-gray-200 p-8 md:p-16">
+    class="w-full animate-in fade-in duration-500 min-h-screen bg-[#f8f8f8] py-16 sm:py-24 px-4 sm:px-6 flex items-center justify-center">
+    <div ref="formWidthRef" class="w-full max-w-[500px] bg-white border border-gray-200 p-6 sm:p-8 md:p-16">
       <div class="text-center mb-12">
         <h1 class="text-2xl md:text-3xl font-heading uppercase tracking-[0.2em] font-light mb-4">
           <template v-if="isForgotPassword">Khôi Phục Mật Khẩu</template>
@@ -356,7 +363,7 @@ const handleGoogleVerify = async (response: any) => {
       <!-- Form Quên Mật Khẩu -->
       <form v-if="isForgotPassword" class="space-y-6" @submit.prevent>
         <div v-if="forgotForm.step === 1" class="flex flex-col space-y-4">
-          <div class="flex flex-col space-y-2" ref="formWidthRef">
+          <div class="flex flex-col space-y-2">
             <label class="text-[10px] uppercase tracking-widest text-gray-500 mb-2">Xác minh nhanh bằng Mạng xã
               hội</label>
             <div class="flex flex-col space-y-3">
@@ -512,7 +519,7 @@ const handleGoogleVerify = async (response: any) => {
             <div class="flex-grow border-t border-gray-200"></div>
           </div>
           <div class="flex flex-col space-y-4">
-            <div class="w-full flex justify-center h-[40px]">
+            <div class="w-full flex justify-center h-[40px] overflow-hidden">
               <GoogleLogin :key="googleBtnWidth" :callback="handleGoogleLogin"
                 :button-config="{ width: googleBtnWidth, shape: 'rectangular' }" />
             </div>
