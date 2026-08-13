@@ -3,6 +3,7 @@ import { RouterView } from 'vue-router';
 import LoaderWrapper from './LoaderWrapper.vue';
 import VerticalSidebarVue from './vertical-sidebar/VerticalSidebar.vue';
 import VerticalHeaderVue from './vertical-header/VerticalHeader.vue';
+import MobileNoticeAlert from '@/components/shared/MobileNoticeAlert.vue';
 import { useCustomizerStore } from '../../stores/customizer';
 
 const customizer = useCustomizerStore();
@@ -20,6 +21,7 @@ const customizer = useCustomizerStore();
             <!-- Loader start -->
             <LoaderWrapper />
             <!-- Loader end -->
+            <MobileNoticeAlert />
             <RouterView />
           </div>
         </v-container>

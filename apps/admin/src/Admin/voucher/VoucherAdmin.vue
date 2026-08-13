@@ -1,11 +1,25 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, watch, reactive } from 'vue'
+import { useTheme } from 'vuetify'
+import { useCustomizerStore } from '@/stores/customizer'
 import axios from 'axios'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Plus, RotateCcw } from 'lucide-vue-next'
-const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
+import { Plus, RotateCcw, X, Check, AlertCircle, Eye, Edit3, Trash2, Tag, Calendar, UserCheck, Receipt } from 'lucide-vue-next'
 
+// ── THEME SYNC ──
+const theme = useTheme()
+const customizer = useCustomizerStore()
+
+watch(
+  [() => theme.global.name.value, () => customizer.actTheme],
+  ([vTheme, cTheme]) => {
+    const current = vTheme || cTheme
+    if (current === 'dark') document.documentElement.classList.add('dark')
+    else document.documentElement.classList.remove('dark')
+  },
+  { immediate: true }
+)
+
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
 const API_BASE = API + '/api/admin/vouchers'
 
 export interface AdminVoucherRow {
@@ -23,12 +37,24 @@ export interface AdminVoucherRow {
 }
 
 const list = ref<AdminVoucherRow[]>([])
-/** Tham số API: dangChay | sapChay | hetHan | hetLuot; để trống = tất cả */
 const lifecycleFilter = ref('')
 const loading = ref(false)
 const listError = ref('')
-const toast = ref('')
-const saveError = ref('')
+const saving = ref(false)
+
+// High Priority Notification Toast (Snackbar)
+const snackbar = reactive({
+  show: false,
+  text: '',
+  color: 'success',
+  icon: 'mdi-check-circle-outline'
+})
+
+const showNotification = (msg: string, type: 'success' | 'error' | 'warning' | 'info' = 'success') => {
+  snackbar.text = msg
+  snackbar.color = type === 'success' ? 'success' : type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'info'
+  snackbar.show = true
+}
 
 const detailOpen = ref(false)
 const detailLoading = ref(false)
@@ -49,10 +75,11 @@ const detailHoaDon = ref<
 >([])
 
 const modalOpen = ref(false)
+const deleteModalOpen = ref(false)
+const selectedRowToDelete = ref<AdminVoucherRow | null>(null)
 const editingCode = ref<string | null>(null)
-/** Bản gốc khi sửa — dùng cho khóa ô theo soLuongDaDung */
 const originalRowForEdit = ref<AdminVoucherRow | null>(null)
-const saving = ref(false)
+const saveError = ref('')
 
 const form = ref({
   maCode: '',
@@ -68,10 +95,16 @@ const form = ref({
 })
 
 const isEdit = computed(() => editingCode.value !== null)
-
 const maCodePattern = /^[A-Z0-9]{1,20}$/
 
-/** Voucher đã đến ngày bắt đầu (hoặc không có ngày bắt đầu = coi như đã trong/không lên lịch sau). */
+const lifecycleOptions = [
+  { title: 'Tất cả vòng đời', value: '' },
+  { title: 'Đang chạy', value: 'dangChay' },
+  { title: 'Sắp chạy', value: 'sapChay' },
+  { title: 'Đã hết hạn', value: 'hetHan' },
+  { title: 'Đã hết lượt', value: 'hetLuot' }
+]
+
 function isDaBatDau(isoStart: string | null): boolean {
   if (!isoStart) return true
   const t = new Date(isoStart).getTime()
@@ -79,10 +112,6 @@ function isDaBatDau(isoStart: string | null): boolean {
   return Date.now() >= t
 }
 
-/**
- * Chế độ hạn chế: đã bắt đầu VÀ (đã có lượt dùng hoặc đã có KH lưu mã).
- * Chưa bắt đầu → sửa được mọi thứ dù đã có người lưu.
- */
 const isRestrictedEdit = computed(() => {
   if (!isEdit.value || !originalRowForEdit.value) return false
   const row = originalRowForEdit.value
@@ -97,13 +126,11 @@ const minSoLuongEdit = computed(() => {
   return Math.max(1, originalRowForEdit.value?.soLuongDaDung ?? 0)
 })
 
-/** Ngày kết thúc tối thiểu (chỉ kéo dài) khi sửa hạn chế — datetime-local */
 const minNgayKetThucLocal = computed(() => {
   if (!isRestrictedEdit.value || !originalRowForEdit.value?.ngayKetThuc) return ''
   return toInputDate(originalRowForEdit.value.ngayKetThuc)
 })
 
-/** input type="number" có thể gán number vào ref — luôn ép string trước khi trim. */
 function asTrimmedString(v: unknown): string {
   if (v == null) return ''
   return String(v).trim()
@@ -117,7 +144,6 @@ function toInputDate(iso: string | null): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-/** datetime-local → ISO UTC; không hợp lệ → null (không gọi toISOString để tránh throw). */
 function toIsoOrNull(localVal: unknown): string | null {
   const t = asTrimmedString(localVal)
   if (!t) return null
@@ -138,6 +164,24 @@ function parseIntOrNull(v: unknown): number | null {
   if (t === '') return null
   const n = parseInt(t, 10)
   return Number.isFinite(n) ? n : null
+}
+
+function onPhanTramGiamInput() {
+  if (form.value.phanTramGiam !== '') {
+    let val = Number(form.value.phanTramGiam)
+    if (isNaN(val) || val < 0) val = 0
+    if (val > 100) val = 100
+    form.value.phanTramGiam = String(val)
+  }
+}
+
+function onPhanTramGiamPaste(e: ClipboardEvent) {
+  e.preventDefault()
+  const pastedText = e.clipboardData?.getData('text') || ''
+  let num = parseFloat(pastedText)
+  if (isNaN(num) || num < 0) num = 0
+  if (num > 100) num = 100
+  form.value.phanTramGiam = String(num)
 }
 
 function formatApiError(
@@ -186,6 +230,7 @@ function validateBeforeSave(): string | null {
   const pt = parseIntOrNull(form.value.phanTramGiam) ?? 0
   const money = parseNum(form.value.soTienGiam) ?? 0
   if (!isRestrictedEdit.value) {
+    if (pt > 100) return 'Giảm theo % tối đa là 100%.'
     if (pt > 0 && money > 0) return 'Chỉ được chọn một: giảm % hoặc giảm tiền.'
     if (pt <= 0 && money <= 0) return 'Vui lòng nhập giảm theo % hoặc theo số tiền.'
   }
@@ -294,23 +339,28 @@ async function save() {
   const v = validateBeforeSave()
   if (v) {
     saveError.value = v
+    showNotification(v, 'warning')
     return
   }
   saving.value = true
-  toast.value = ''
   try {
     const payload = buildPayload(!isEdit.value)
+    let msg = ''
     if (isEdit.value && editingCode.value) {
       await axios.put(`${API_BASE}/${encodeURIComponent(editingCode.value)}`, payload)
-      toast.value = 'Đã cập nhật voucher.'
+      msg = 'Đã cập nhật voucher thành công!'
     } else {
       await axios.post(API_BASE, payload)
-      toast.value = 'Đã tạo voucher.'
+      msg = 'Đã tạo voucher mới thành công!'
     }
+    // Modal auto closes immediately after saving
     closeModal()
+    showNotification(msg, 'success')
     await load()
   } catch (e: unknown) {
-    saveError.value = formatApiError(e)
+    const errText = formatApiError(e)
+    saveError.value = errText
+    showNotification(errText, 'error')
   } finally {
     saving.value = false
   }
@@ -332,6 +382,7 @@ async function openDetail(row: AdminVoucherRow) {
     detailHoaDon.value = Array.isArray(data?.hoaDonApDung) ? data.hoaDonApDung : []
   } catch (e: unknown) {
     detailError.value = formatApiError(e, 'Không tải được chi tiết voucher.')
+    showNotification(detailError.value, 'error')
   } finally {
     detailLoading.value = false
   }
@@ -345,15 +396,24 @@ function closeDetail() {
 
 const MSG_VOUCHER_VO_HIEU = 'Voucher đã vô hiệu hóa, không ảnh hưởng lịch sử.'
 
-async function remove(row: AdminVoucherRow) {
-  if (!confirm(MSG_VOUCHER_VO_HIEU)) return
-  toast.value = ''
+function confirmRemove(row: AdminVoucherRow) {
+  selectedRowToDelete.value = row
+  deleteModalOpen.value = true
+}
+
+async function executeRemove() {
+  if (!selectedRowToDelete.value) return
+  const row = selectedRowToDelete.value
   try {
     await axios.delete(`${API_BASE}/${encodeURIComponent(row.maCode)}`)
-    toast.value = MSG_VOUCHER_VO_HIEU
+    // Modal auto closes immediately after confirming deletion
+    deleteModalOpen.value = false
+    showNotification(MSG_VOUCHER_VO_HIEU, 'success')
     await load()
   } catch (e: unknown) {
-    alert(formatApiError(e))
+    showNotification(formatApiError(e), 'error')
+  } finally {
+    selectedRowToDelete.value = null
   }
 }
 
@@ -370,9 +430,10 @@ async function load() {
   } catch (e: unknown) {
     listError.value = formatApiError(
       e,
-      'Không tải được danh sách. Kiểm tra backend tại '+API+' (HTTPS / CORS).',
+      'Không tải được danh sách. Kiểm tra backend tại ' + API + ' (HTTPS / CORS).',
     )
     list.value = []
+    showNotification(listError.value, 'error')
   } finally {
     loading.value = false
   }
@@ -401,386 +462,601 @@ function formatMoney(n: number | null | undefined): string {
 
 onMounted(async () => {
   await load()
-  const wrapper = document.querySelector('.page-wrapper')
-  if (wrapper) {
-    wrapper.classList.add('full-width-layout')
-  }
-})
-
-onUnmounted(() => {
-  const wrapper = document.querySelector('.page-wrapper')
-  if (wrapper) {
-    wrapper.classList.remove('full-width-layout')
-  }
 })
 </script>
 
 <template>
-  <v-container fluid class="pa-6 fill-height align-start" style="min-height: 100vh;">
-    <v-card width="100%" elevation="2" rounded="xl" class="d-flex flex-column w-full">
-      <div class="d-flex flex-column flex-md-row align-md-center justify-space-between pa-6">
+  <v-container fluid class="pa-6">
+    <!-- ═══════ HIGH-PRIORITY SNACKBAR NOTIFICATION ═══════ -->
+    <v-snackbar
+      v-model="snackbar.show"
+      :color="snackbar.color"
+      location="top right"
+      elevation="24"
+      :timeout="3500"
+      style="z-index: 99999 !important;"
+    >
+      <div class="d-flex align-center gap-3">
+        <Check v-if="snackbar.color === 'success'" class="w-5 h-5 shrink-0" />
+        <AlertCircle v-else-if="snackbar.color === 'error' || snackbar.color === 'warning'" class="w-5 h-5 shrink-0" />
+        <Tag v-else class="w-5 h-5 shrink-0" />
+        <span class="text-subtitle-2 font-weight-medium">{{ snackbar.text }}</span>
+      </div>
+      <template v-slot:actions>
+        <v-btn variant="text" icon density="compact" @click="snackbar.show = false">
+          <X class="w-4 h-4" />
+        </v-btn>
+      </template>
+    </v-snackbar>
+
+    <!-- ═══════ HEADER CARD ═══════ -->
+    <v-card elevation="2" rounded="xl" class="pa-6 mb-6">
+      <div class="d-flex flex-column flex-lg-row align-lg-center justify-space-between gap-4">
         <div>
-          <h2 class="text-h5 font-weight-bold mb-1">Quản Lý Voucher</h2>
-          <div class="text-subtitle-2 text-medium-emphasis">Quản lý mã giảm giá, ưu đãi và lượt sử dụng của khách hàng</div>
+          <h2 class="text-h5 font-weight-bold text-slate-900 dark:text-white d-flex align-center gap-2 mb-1">
+            <Tag class="w-6 h-6 text-primary shrink-0" />
+            <span>Quản Lý Voucher & Mã Giảm Giá</span>
+          </h2>
+          <p class="text-subtitle-2 text-medium-emphasis mb-0">
+            Quản lý mã giảm giá, ưu đãi và lượt sử dụng của khách hàng trong hệ thống
+          </p>
         </div>
 
-        <div class="d-flex align-center gap-3 mt-4 mt-md-0 flex-wrap">
-          <div class="d-flex align-center gap-2 text-caption font-weight-bold text-medium-emphasis">
-            <span>VÒNG ĐỜI:</span>
-            <select
-              v-model="lifecycleFilter"
-              class="h-10 px-3 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-700 outline-none cursor-pointer"
-              @change="load"
-            >
-              <option value="">Tất cả</option>
-              <option value="dangChay">Đang chạy</option>
-              <option value="sapChay">Sắp chạy</option>
-              <option value="hetHan">Đã hết hạn</option>
-              <option value="hetLuot">Đã hết lượt</option>
-            </select>
-          </div>
+        <div class="d-flex align-center gap-3 flex-grow-1 justify-lg-end flex-wrap">
+          <v-select
+            v-model="lifecycleFilter"
+            :items="lifecycleOptions"
+            item-title="title"
+            item-value="value"
+            variant="outlined"
+            density="compact"
+            hide-details
+            class="flex-grow-1"
+            style="max-width: 280px; min-width: 200px;"
+            @update:model-value="load"
+          >
+            <template v-slot:prepend-inner>
+              <Tag class="w-4 h-4 text-slate-400 mr-1 shrink-0" />
+            </template>
+          </v-select>
 
-          <v-btn variant="outlined" color="grey-darken-1" size="40" rounded="lg" :loading="loading" @click="load" title="Tải lại">
-            <RotateCcw class="w-5 h-5" />
+          <v-btn
+            variant="outlined"
+            color="grey-darken-1"
+            height="40"
+            width="40"
+            icon
+            rounded="xl"
+            :loading="loading"
+            @click="load"
+            title="Tải lại"
+          >
+            <RotateCcw class="w-5 h-5 text-slate-600 dark:text-slate-300" />
           </v-btn>
 
-          <v-btn color="primary" variant="flat" rounded="lg" class="text-none font-weight-bold" @click="openCreate">
-            <template v-slot:prepend><Plus class="w-4 h-4 mr-1" /></template>
+          <v-btn
+            color="primary"
+            height="40"
+            rounded="xl"
+            elevation="2"
+            class="text-none font-weight-bold px-5"
+            @click="openCreate"
+          >
+            <template v-slot:prepend>
+              <Plus class="w-4 h-4 mr-1 shrink-0" />
+            </template>
             Thêm voucher
           </v-btn>
         </div>
       </div>
-
-      <v-divider></v-divider>
-
-      <p v-if="toast" class="px-6 pt-4 text-sm font-bold text-emerald-600">{{ toast }}</p>
-      <p v-if="listError" class="px-6 pt-4 text-sm font-bold text-rose-600">{{ listError }}</p>
-
-      <div class="overflow-x-auto w-full px-6 pb-6 pt-2 bg-slate-50/50">
-        <table class="w-full min-w-[960px] text-left text-xs border-separate [border-spacing:0_8px]">
-          <thead class="text-slate-550 uppercase tracking-wider text-[11px]">
-            <tr>
-              <th class="w-[8%] px-4 py-2 text-center font-bold">Mã</th>
-              <th class="w-[8%] px-4 py-2 text-center font-bold">Ưu đãi</th>
-              <th class="w-[32%] px-4 py-2 text-left font-bold">Mô tả</th>
-              <th class="w-[10%] px-4 py-2 text-center font-bold">HSD</th>
-              <th class="w-[10%] px-4 py-2 text-center font-bold">Lượt dùng</th>
-              <th class="w-[6%] px-4 py-2 text-center font-bold">KH lưu</th>
-              <th class="w-[10%] px-4 py-2 text-center font-bold">Trạng thái</th>
-              <th class="w-[16%] px-4 py-2 text-center font-bold whitespace-nowrap">Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading">
-              <td colspan="8" class="px-4 py-8 text-center text-slate-450 text-xs font-medium bg-white border border-slate-200/60 rounded-xl">Đang tải dữ liệu voucher…</td>
-            </tr>
-            <tr v-else-if="list.length === 0">
-              <td colspan="8" class="px-4 py-8 text-center text-slate-450 text-xs font-medium bg-white border border-slate-200/60 rounded-xl">Chưa có voucher nào.</td>
-            </tr>
-            <tr
-              v-for="row in list"
-              :key="row.maCode"
-              class="hover:bg-slate-50/10 transition-colors group"
-            >
-              <td class="px-4 py-3 text-center font-mono text-xs text-slate-800 font-bold bg-white border-l border-t border-b border-slate-200/60 rounded-l-xl">{{ row.maCode }}</td>
-              <td class="px-4 py-3 text-center text-xs font-bold text-primary bg-white border-t border-b border-slate-200/60">{{ discountLabel(row) }}</td>
-              <td class="px-4 py-3 text-left break-words text-xs leading-relaxed text-slate-600 font-medium bg-white border-t border-b border-slate-200/60" :title="row.moTa ?? ''">
-                {{ row.moTa || '—' }}
-              </td>
-              <td class="px-4 py-3 text-center whitespace-nowrap text-xs font-medium text-slate-600 bg-white border-t border-b border-slate-200/60">{{ formatShortDate(row.ngayKetThuc) }}</td>
-              <td class="px-4 py-3 text-center font-mono text-xs text-slate-600 bg-white border-t border-b border-slate-200/60">
-                <span v-if="row.soLuong != null">{{ row.soLuongDaDung ?? 0 }}/{{ row.soLuong }}</span>
-                <span v-else>∞</span>
-              </td>
-              <td class="px-4 py-3 text-center text-xs font-bold text-slate-700 bg-white border-t border-b border-slate-200/60">{{ row.soKhachDaLuu }}</td>
-              <td class="px-4 py-3 text-center text-xs bg-white border-t border-b border-slate-200/60">
-                <span v-if="row.trangThai === 1" class="inline-block px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md">Hoạt động</span>
-                <span v-else class="inline-block px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-500 border border-slate-200 rounded-md">Vô hiệu</span>
-              </td>
-              <td class="px-4 py-3 text-center bg-white border-r border-t border-b border-slate-200/60 rounded-r-xl">
-                <div class="d-flex align-center justify-center gap-4">
-                  <v-btn
-                    color="info" variant="tonal" size="small" rounded="lg" class="text-none font-weight-bold"
-                    @click="openDetail(row)"
-                  >
-                    Chi tiết
-                  </v-btn>
-                  <v-btn
-                    color="primary" variant="tonal" size="small" rounded="lg" class="text-none font-weight-bold"
-                    @click="openEdit(row)"
-                  >
-                    Sửa
-                  </v-btn>
-                  <v-btn
-                    color="error" variant="tonal" size="small" rounded="lg" class="text-none font-weight-bold"
-                    @click="remove(row)"
-                  >
-                    Xóa
-                  </v-btn>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
     </v-card>
 
-    <!-- Modal giữa màn hình — footer Luu/Hủy luôn thấy -->
-    <Teleport to="body">
-      <div
-        v-if="modalOpen"
-        class="fixed inset-0 z-[2400] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="voucher-modal-title"
-      >
-        <button
-          type="button"
-          class="absolute inset-0 bg-transparent cursor-default"
-          aria-label="Đóng"
-          @click="closeModal"
-        />
-        <div
-          class="relative z-10 flex max-h-[90vh] w-full max-w-2xl min-h-0 flex-col overflow-hidden rounded-2xl border border-solid !border-slate-300 bg-white shadow-2xl transition-all"
-          @click.stop
-        >
-          <div class="shrink-0 border-b border-solid !border-slate-200 !px-8 !pt-6 !pb-4 bg-slate-50/50">
-            <h2 id="voucher-modal-title" class="!text-lg !font-sans !font-bold text-[#8c734b] tracking-wider uppercase">
-              {{ isEdit ? 'Sửa voucher' : 'Thêm voucher mới' }}
-            </h2>
-            <p class="text-slate-500 mt-1 text-xs leading-relaxed">
-              Mã: gồm chữ in hoa và số. Chỉ điền <span class="font-bold text-slate-700">% hoặc số tiền</span> giảm giá.
-            </p>
-            <div v-if="isRestrictedEdit" class="mt-2 bg-amber-50 border border-solid border-amber-200 p-2.5 rounded-xl text-amber-700 text-[11px] leading-relaxed">
-              <strong>Hạn chế chỉnh sửa:</strong> Voucher đã phát hành và được lưu/sử dụng. Chỉ được sửa mô tả, trạng thái, gia hạn ngày kết thúc và tăng tổng số lượng.
-            </div>
-            <div v-if="saveError" class="mt-2 bg-rose-50 border border-solid border-rose-200 p-2.5 rounded-xl text-rose-600 text-xs font-bold">{{ saveError }}</div>
-          </div>
+    <!-- ═══════ DATA TABLE CARD ═══════ -->
+    <v-card elevation="2" rounded="xl" class="pa-6">
+      <v-table class="rounded-xl border">
+        <thead>
+          <tr class="bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700">
+            <th class="font-weight-bold text-caption uppercase text-center py-3 text-slate-700 dark:text-slate-200" style="width: 10%;">Mã</th>
+            <th class="font-weight-bold text-caption uppercase text-center py-3 text-slate-700 dark:text-slate-200" style="width: 12%;">Ưu đãi</th>
+            <th class="font-weight-bold text-caption uppercase text-left py-3 text-slate-700 dark:text-slate-200" style="width: 28%;">Mô tả</th>
+            <th class="font-weight-bold text-caption uppercase text-center py-3 text-slate-700 dark:text-slate-200" style="width: 12%;">HSD</th>
+            <th class="font-weight-bold text-caption uppercase text-center py-3 text-slate-700 dark:text-slate-200" style="width: 10%;">Lượt dùng</th>
+            <th class="font-weight-bold text-caption uppercase text-center py-3 text-slate-700 dark:text-slate-200" style="width: 8%;">KH lưu</th>
+            <th class="font-weight-bold text-caption uppercase text-center py-3 text-slate-700 dark:text-slate-200" style="width: 10%;">Trạng thái</th>
+            <th class="font-weight-bold text-caption uppercase text-right py-3 text-slate-700 dark:text-slate-200" style="width: 10%;">Thao tác</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Loading -->
+          <tr v-if="loading">
+            <td colspan="8" class="text-center py-8">
+              <v-progress-circular indeterminate color="primary" size="36" class="mb-2"></v-progress-circular>
+              <div class="text-caption text-medium-emphasis">Đang tải dữ liệu voucher...</div>
+            </td>
+          </tr>
 
-          <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain !px-8 !py-6 space-y-5 text-xs">
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-x-6">
-              <div class="space-y-1">
-                <label class="text-xs font-bold text-slate-500 tracking-wider uppercase">Mã voucher *</label>
-                <Input
-                  v-model="form.maCode"
-                  :disabled="isEdit"
-                  placeholder="VD: CHAOHEXIN"
-                  class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all font-mono uppercase"
-                  @blur="form.maCode = asTrimmedString(form.maCode).toUpperCase()"
-                />
-              </div>
-              <div class="space-y-1 md:col-span-2">
-                <label class="text-xs font-bold text-slate-500 tracking-wider uppercase">Mô tả</label>
-                <Input
-                  v-model="form.moTa"
-                  placeholder="Hiển thị cho khách"
-                  class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
-                />
-              </div>
+          <!-- Empty -->
+          <tr v-else-if="list.length === 0">
+            <td colspan="8" class="text-center py-10">
+              <v-avatar color="grey-lighten-4" size="56" class="mb-3">
+                <Tag class="w-7 h-7 text-grey" />
+              </v-avatar>
+              <div class="text-subtitle-2 font-weight-bold text-medium-emphasis">Chưa có voucher nào</div>
+            </td>
+          </tr>
 
-              <div class="grid grid-cols-2 gap-4 md:col-span-2 lg:grid-cols-3">
-                <div class="space-y-1">
-                  <label class="text-xs font-bold text-slate-500 tracking-wider uppercase">Giảm %</label>
-                  <Input
-                    v-model="form.phanTramGiam"
-                    type="number"
-                    min="0"
-                    max="100"
-                    placeholder="Để trống"
-                    :disabled="isRestrictedEdit"
-                    class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
-                  />
-                </div>
-                <div class="space-y-1">
-                  <label class="text-xs font-bold text-slate-500 tracking-wider uppercase">Giảm tiền (đ)</label>
-                  <Input
-                    v-model="form.soTienGiam"
-                    type="number"
-                    min="0"
-                    step="1000"
-                    placeholder="VD: 50000"
-                    :disabled="isRestrictedEdit"
-                    class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
-                  />
-                </div>
-                <div class="col-span-2 space-y-1 lg:col-span-1">
-                  <label class="text-xs font-bold text-slate-500 tracking-wider uppercase">Đơn tối thiểu (đ)</label>
-                  <Input
-                    v-model="form.giaTriToiThieu"
-                    type="number"
-                    min="0"
-                    step="1000"
-                    placeholder="Tùy chọn"
-                    :disabled="isRestrictedEdit"
-                    class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
-                  />
-                </div>
+          <!-- Data Rows -->
+          <tr v-else v-for="row in list" :key="row.maCode" class="hover:bg-primary-lighten-5 transition-colors">
+            <td class="py-4 text-center font-weight-bold font-mono">
+              <v-chip color="grey-darken-3" variant="flat" size="small" class="font-weight-bold font-mono">
+                {{ row.maCode }}
+              </v-chip>
+            </td>
+            <td class="py-4 text-center">
+              <v-chip color="primary" variant="tonal" size="small" class="font-weight-bold">
+                {{ discountLabel(row) }}
+              </v-chip>
+            </td>
+            <td class="py-4 text-left">
+              <span class="text-body-2 text-slate-700 dark:text-slate-200 line-clamp-2" :title="row.moTa ?? ''">
+                {{ row.moTa || '—' }}
+              </span>
+            </td>
+            <td class="py-4 text-center">
+              <div class="d-flex align-center justify-center gap-1.5 text-slate-600 dark:text-slate-300">
+                <Calendar class="w-3.5 h-3.5 text-grey shrink-0" />
+                <span class="text-body-2 font-weight-medium">{{ formatShortDate(row.ngayKetThuc) }}</span>
               </div>
-
-              <div class="grid gap-4 md:col-span-2 sm:grid-cols-2">
-                <div class="space-y-1">
-                  <label class="text-xs font-bold text-slate-500 tracking-wider uppercase">Bắt đầu</label>
-                  <Input
-                    v-model="form.ngayBatDau"
-                    type="datetime-local"
-                    :disabled="isRestrictedEdit"
-                    class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
-                  />
-                </div>
-                <div class="space-y-1">
-                  <label class="text-xs font-bold text-slate-500 tracking-wider uppercase">Kết thúc</label>
-                  <Input
-                    v-model="form.ngayKetThuc"
-                    type="datetime-local"
-                    :min="minNgayKetThucLocal || undefined"
-                    class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
-                  />
-                </div>
-              </div>
-
-              <div class="grid grid-cols-2 gap-4 md:col-span-2">
-                <div class="space-y-1">
-                  <label class="text-xs font-bold text-slate-500 tracking-wider uppercase">Số lượng phát hành *</label>
-                  <Input
-                    v-model="form.soLuong"
-                    type="number"
-                    :min="minSoLuongEdit"
-                    step="1"
-                    placeholder="VD: 100"
-                    class="h-11 text-xs rounded-xl border border-solid !border-slate-300 outline-none focus:!border-[#8c734b] !bg-slate-50/50 focus:!bg-white text-slate-800 shadow-none transition-all"
-                  />
-                </div>
-                <div class="space-y-1">
-                  <label class="text-xs font-bold text-slate-500 tracking-wider uppercase">Đã dùng</label>
-                  <Input
-                    v-model="form.soLuongDaDung"
-                    type="number"
-                    min="0"
-                    disabled
-                    title="Hệ thống tự quản lý"
-                    class="h-11 text-xs rounded-xl border border-solid !border-slate-300 bg-slate-100 text-slate-500 shadow-none cursor-not-allowed"
-                  />
-                </div>
-              </div>
-
-              <div class="space-y-1 sm:max-w-xs">
-                <label class="text-xs font-bold text-slate-500 tracking-wider uppercase">Trạng thái</label>
-                <select
-                  v-model="form.trangThai"
-                  class="h-11 w-full text-xs font-semibold text-slate-700 !bg-slate-50/50 rounded-xl border border-solid !border-slate-300 outline-none focus:ring-0 shadow-none transition-all cursor-pointer"
+            </td>
+            <td class="py-4 text-center font-mono">
+              <span v-if="row.soLuong != null" class="text-body-2 font-weight-medium">
+                {{ row.soLuongDaDung ?? 0 }} / {{ row.soLuong }}
+              </span>
+              <span v-else class="text-body-2 font-weight-bold">∞</span>
+            </td>
+            <td class="py-4 text-center">
+              <v-chip color="info" variant="flat" size="small" class="font-weight-bold">
+                {{ row.soKhachDaLuu }}
+              </v-chip>
+            </td>
+            <td class="py-4 text-center">
+              <v-chip
+                :color="row.trangThai === 1 ? 'success' : 'grey'"
+                variant="flat"
+                size="small"
+                class="font-weight-bold"
+              >
+                <template v-slot:prepend>
+                  <Check v-if="row.trangThai === 1" class="w-3.5 h-3.5 mr-1" />
+                  <X v-else class="w-3.5 h-3.5 mr-1" />
+                </template>
+                {{ row.trangThai === 1 ? 'Hoạt động' : 'Vô hiệu' }}
+              </v-chip>
+            </td>
+            <td class="py-4 text-right">
+              <div class="d-flex align-center justify-end gap-1">
+                <v-btn
+                  icon
+                  variant="text"
+                  color="info"
+                  size="small"
+                  @click="openDetail(row)"
+                  title="Chi tiết"
                 >
-                  <option value="1">Hoạt động</option>
-                  <option value="0">Ngưng</option>
-                </select>
+                  <Eye class="w-4 h-4" />
+                </v-btn>
+                <v-btn
+                  icon
+                  variant="text"
+                  color="warning"
+                  size="small"
+                  @click="openEdit(row)"
+                  title="Sửa"
+                >
+                  <Edit3 class="w-4 h-4" />
+                </v-btn>
+                <v-btn
+                  icon
+                  variant="text"
+                  color="error"
+                  size="small"
+                  @click="confirmRemove(row)"
+                  title="Xóa"
+                >
+                  <Trash2 class="w-4 h-4" />
+                </v-btn>
               </div>
+            </td>
+          </tr>
+        </tbody>
+      </v-table>
+    </v-card>
+
+    <!-- ═══════ MODAL: THÊM / SỬA VOUCHER ═══════ -->
+    <v-dialog v-model="modalOpen" max-width="750px" persistent scrollable>
+      <v-card rounded="xl">
+        <!-- Dialog Header -->
+        <v-card-title class="pa-6 pb-4 d-flex align-center justify-space-between border-b">
+          <div class="d-flex align-center gap-3">
+            <v-avatar :color="isEdit ? 'warning' : 'primary'" size="42" rounded="lg" elevation="2">
+              <Plus v-if="!isEdit" class="w-5 h-5 text-white" />
+              <Edit3 v-else class="w-5 h-5 text-white" />
+            </v-avatar>
+            <div>
+              <h3 class="text-h6 font-weight-bold mb-0">
+                {{ isEdit ? 'Sửa voucher' : 'Thêm voucher mới' }}
+              </h3>
+              <p class="text-caption text-medium-emphasis mb-0">
+                Cấu hình mã ưu đãi và giới hạn áp dụng
+              </p>
             </div>
           </div>
+          <v-btn icon variant="text" density="comfortable" @click="closeModal">
+            <X class="w-5 h-5" />
+          </v-btn>
+        </v-card-title>
 
-          <div class="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-solid !border-slate-200 bg-slate-50/50 !px-8 !py-4">
-            <Button type="button" variant="outline" class="h-11 px-5 text-xs font-bold rounded-xl border border-solid !border-slate-300 text-slate-700 hover:bg-slate-100 cursor-pointer" @click="closeModal">Hủy</Button>
-            <Button
-              type="button"
-              class="h-11 px-5 !bg-[#9d804e] !text-white hover:!bg-[#866a3d] border border-solid !border-[#9d804e] text-xs font-bold rounded-xl shadow-none cursor-pointer tracking-wider"
-              :disabled="saving || (!isEdit && !asTrimmedString(form.maCode))"
-              @click="save"
-            >
-              {{ saving ? 'Đang lưu…' : 'Lưu' }}
-            </Button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+        <!-- Dialog Body -->
+        <v-card-text class="pa-6">
+          <v-form @submit.prevent="save">
+            <v-alert v-if="isRestrictedEdit" type="warning" variant="tonal" class="mb-4 rounded-xl text-caption">
+              <strong>Hạn chế chỉnh sửa:</strong> Voucher đã phát hành và được lưu/sử dụng. Chỉ được sửa mô tả, trạng thái, gia hạn ngày kết thúc và tăng tổng số lượng.
+            </v-alert>
 
-    <Teleport to="body">
-      <div
-        v-if="detailOpen"
-        class="fixed inset-0 z-[2400] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="voucher-detail-title"
-      >
-        <button type="button" class="absolute inset-0 bg-transparent cursor-default" aria-label="Đóng" @click="closeDetail" />
-        <div
-          class="relative z-10 flex max-h-[85vh] w-full max-w-4xl min-h-0 flex-col overflow-hidden rounded-2xl border border-solid !border-slate-300 bg-white shadow-2xl transition-all"
-          @click.stop
-        >
-          <div class="shrink-0 border-b border-solid !border-slate-200 !px-8 !pt-6 !pb-4 bg-slate-50/50">
-            <h2 id="voucher-detail-title" class="!text-lg !font-sans !font-bold text-[#8c734b] tracking-wider uppercase flex items-center gap-2">
-              <span>Chi tiết voucher:</span>
-              <span v-if="detailCode" class="font-mono text-base text-slate-800 bg-slate-200/60 px-2 py-0.5 rounded-md">{{ detailCode }}</span>
-            </h2>
-            <p class="text-slate-500 mt-1 text-xs">Danh sách khách hàng đã lưu mã và các hóa đơn đã áp dụng mã voucher này.</p>
-            <div v-if="detailError" class="mt-2 bg-rose-50 border border-solid border-rose-200 p-2.5 rounded-xl text-rose-600 text-xs font-bold">{{ detailError }}</div>
-          </div>
-          <div class="min-h-0 flex-1 space-y-5 overflow-y-auto !px-8 !py-6 text-xs">
-            <p v-if="detailLoading" class="text-slate-450 text-xs">Đang tải…</p>
-            <template v-else>
-              <div class="space-y-3">
-                <h3 class="!text-sm !font-bold !font-sans text-[#8c734b] uppercase tracking-wider">Khách đã lưu mã</h3>
-                <div class="overflow-x-auto rounded-xl border border-solid border-slate-200 shadow-xs bg-white">
-                  <table class="w-full min-w-[540px] text-left text-xs border-collapse">
-                    <thead class="bg-slate-50 border-b border-solid border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
-                      <tr>
-                        <th class="px-4 py-3 text-center font-semibold border-b border-solid border-slate-200">Mã KH</th>
-                        <th class="px-4 py-3 text-left font-semibold border-b border-solid border-slate-200">Họ tên</th>
-                        <th class="px-4 py-3 text-center font-semibold border-b border-solid border-slate-200">SĐT</th>
-                        <th class="px-4 py-3 text-left font-semibold border-b border-solid border-slate-200">Email</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-if="detailKhach.length === 0">
-                        <td colspan="4" class="text-slate-450 px-4 py-8 text-center bg-white">Chưa có khách lưu mã.</td>
-                      </tr>
-                      <tr v-for="k in detailKhach" :key="k.maKh" class="border-b border-solid border-slate-100 hover:bg-slate-50/50 transition-colors">
-                        <td class="px-4 py-3 text-center font-mono text-[11px] text-slate-800 font-semibold bg-white">{{ k.maKh }}</td>
-                        <td class="px-4 py-3 text-slate-700 font-medium bg-white">{{ k.hoTen || '—' }}</td>
-                        <td class="px-4 py-3 text-center font-mono text-[11px] text-slate-600 whitespace-nowrap bg-white">{{ k.sdt || '—' }}</td>
-                        <td class="px-4 py-3 text-left font-mono text-[11px] text-slate-500 break-all bg-white">{{ k.email || '—' }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              <div class="space-y-3">
-                <h3 class="!text-sm !font-bold !font-sans text-[#8c734b] uppercase tracking-wider">Hóa đơn đã áp dụng mã</h3>
-                <div class="overflow-x-auto rounded-xl border border-solid border-slate-200 shadow-xs bg-white">
-                  <table class="w-full min-w-[640px] text-left text-xs border-collapse">
-                    <thead class="bg-slate-50 border-b border-solid border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
-                      <tr>
-                        <th class="px-4 py-3 text-center font-semibold border-b border-solid border-slate-200">Mã HĐ</th>
-                        <th class="px-4 py-3 text-center font-semibold border-b border-solid border-slate-200">Mã KH</th>
-                        <th class="px-4 py-3 text-center font-semibold border-b border-solid border-slate-200">Ngày</th>
-                        <th class="px-4 py-3 text-center font-semibold border-b border-solid border-slate-200">Tổng tiền</th>
-                        <th class="px-4 py-3 text-center font-semibold border-b border-solid border-slate-200">Thành tiền</th>
-                        <th class="px-4 py-3 text-center font-semibold border-b border-solid border-slate-200">Trạng thái</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-if="detailHoaDon.length === 0">
-                        <td colspan="6" class="text-slate-450 px-4 py-8 text-center bg-white">Chưa có hóa đơn.</td>
-                      </tr>
-                      <tr v-for="h in detailHoaDon" :key="h.maHd" class="border-b border-solid border-slate-100 hover:bg-slate-50/50 transition-colors">
-                        <td class="px-4 py-3 text-center font-mono text-[11px] text-slate-800 font-semibold bg-white">{{ h.maHd }}</td>
-                        <td class="px-4 py-3 text-center font-mono text-[11px] text-slate-600 bg-white">{{ h.maKh || '—' }}</td>
-                        <td class="px-4 py-3 text-center text-slate-600 whitespace-nowrap bg-white">{{ formatShortDate(h.ngayTao) }}</td>
-                        <td class="px-4 py-3 text-center font-mono text-[11px] text-slate-700 bg-white">{{ formatMoney(h.tongTien) }}</td>
-                        <td class="px-4 py-3 text-center font-mono text-[11px] text-[#8c734b] font-bold bg-white">{{ formatMoney(h.thanhTien) }}</td>
-                        <td class="px-4 py-3 text-center text-[10px] font-bold bg-white">
-                          <span v-if="h.trangThai === 1" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-solid border-emerald-200">Thành công</span>
-                          <span v-else class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 border border-solid border-slate-200">Chờ</span>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+            <v-alert v-if="saveError" type="error" variant="tonal" class="mb-4 rounded-xl text-caption font-weight-bold">
+              {{ saveError }}
+            </v-alert>
+
+            <v-row class="mb-2">
+              <!-- Mã Code -->
+              <v-col cols="12" sm="6">
+                <v-text-field
+                  v-model="form.maCode"
+                  label="Mã voucher *"
+                  placeholder="VD: CHAOHEXIN"
+                  variant="outlined"
+                  density="compact"
+                  hide-details="auto"
+                  :disabled="isEdit"
+                  @blur="form.maCode = asTrimmedString(form.maCode).toUpperCase()"
+                ></v-text-field>
+              </v-col>
+
+              <!-- Mô tả -->
+              <v-col cols="12" sm="6">
+                <v-text-field
+                  v-model="form.moTa"
+                  label="Mô tả"
+                  placeholder="Hiển thị cho khách hàng"
+                  variant="outlined"
+                  density="compact"
+                  hide-details="auto"
+                ></v-text-field>
+              </v-col>
+            </v-row>
+
+            <v-row class="mb-2">
+              <!-- Giảm % -->
+              <v-col cols="12" sm="4">
+                <v-text-field
+                  v-model="form.phanTramGiam"
+                  type="number"
+                  label="Giảm %"
+                  placeholder="0 - 100"
+                  variant="outlined"
+                  density="compact"
+                  hide-details="auto"
+                  suffix="%"
+                  :disabled="isRestrictedEdit"
+                  :max="100"
+                  :min="0"
+                  @input="onPhanTramGiamInput"
+                  @paste="onPhanTramGiamPaste"
+                ></v-text-field>
+              </v-col>
+
+              <!-- Giảm tiền -->
+              <v-col cols="12" sm="4">
+                <v-text-field
+                  v-model="form.soTienGiam"
+                  type="number"
+                  label="Giảm số tiền"
+                  placeholder="VD: 50000"
+                  variant="outlined"
+                  density="compact"
+                  hide-details="auto"
+                  suffix="đ"
+                  :disabled="isRestrictedEdit"
+                ></v-text-field>
+              </v-col>
+
+              <!-- Đơn tối thiểu -->
+              <v-col cols="12" sm="4">
+                <v-text-field
+                  v-model="form.giaTriToiThieu"
+                  type="number"
+                  label="Đơn tối thiểu"
+                  placeholder="VD: 100000"
+                  variant="outlined"
+                  density="compact"
+                  hide-details="auto"
+                  suffix="đ"
+                  :disabled="isRestrictedEdit"
+                ></v-text-field>
+              </v-col>
+            </v-row>
+
+            <v-row class="mb-2">
+              <!-- Bắt đầu -->
+              <v-col cols="12" sm="6">
+                <v-text-field
+                  v-model="form.ngayBatDau"
+                  type="datetime-local"
+                  label="Thời gian bắt đầu"
+                  variant="outlined"
+                  density="compact"
+                  hide-details="auto"
+                  :disabled="isRestrictedEdit"
+                >
+                  <template v-slot:prepend-inner>
+                    <Calendar class="w-4 h-4 text-grey mr-1" />
+                  </template>
+                </v-text-field>
+              </v-col>
+
+              <!-- Kết thúc -->
+              <v-col cols="12" sm="6">
+                <v-text-field
+                  v-model="form.ngayKetThuc"
+                  type="datetime-local"
+                  label="Thời gian kết thúc *"
+                  variant="outlined"
+                  density="compact"
+                  hide-details="auto"
+                  :min="minNgayKetThucLocal || undefined"
+                >
+                  <template v-slot:prepend-inner>
+                    <Calendar class="w-4 h-4 text-grey mr-1" />
+                  </template>
+                </v-text-field>
+              </v-col>
+            </v-row>
+
+            <v-row class="mb-2">
+              <!-- Số lượng phát hành -->
+              <v-col cols="12" sm="4">
+                <v-text-field
+                  v-model="form.soLuong"
+                  type="number"
+                  label="Tổng số lượng *"
+                  placeholder="VD: 100"
+                  variant="outlined"
+                  density="compact"
+                  hide-details="auto"
+                  :min="minSoLuongEdit"
+                ></v-text-field>
+              </v-col>
+
+              <!-- Đã dùng -->
+              <v-col cols="12" sm="4">
+                <v-text-field
+                  v-model="form.soLuongDaDung"
+                  type="number"
+                  label="Đã sử dụng"
+                  variant="filled"
+                  density="compact"
+                  hide-details="auto"
+                  disabled
+                ></v-text-field>
+              </v-col>
+
+              <!-- Trạng thái -->
+              <v-col cols="12" sm="4">
+                <v-select
+                  v-model="form.trangThai"
+                  :items="[
+                    { title: 'Hoạt động', value: '1' },
+                    { title: 'Ngưng / Vô hiệu', value: '0' }
+                  ]"
+                  item-title="title"
+                  item-value="value"
+                  label="Trạng thái"
+                  variant="outlined"
+                  density="compact"
+                  hide-details="auto"
+                ></v-select>
+              </v-col>
+            </v-row>
+          </v-form>
+        </v-card-text>
+
+        <!-- Dialog Actions -->
+        <v-card-actions class="pa-6 pt-4 border-t">
+          <v-spacer></v-spacer>
+          <v-btn
+            variant="outlined"
+            color="grey-darken-1"
+            height="44"
+            rounded="xl"
+            class="text-none font-weight-bold px-5"
+            :disabled="saving"
+            @click="closeModal"
+          >
+            Hủy bỏ
+          </v-btn>
+          <v-btn
+            color="primary"
+            height="44"
+            variant="flat"
+            rounded="xl"
+            elevation="4"
+            class="text-none font-weight-black px-7"
+            :loading="saving"
+            :disabled="!isEdit && !asTrimmedString(form.maCode)"
+            @click="save"
+          >
+            <template v-slot:prepend>
+              <Check class="w-5 h-5 mr-1 shrink-0" />
             </template>
+            {{ isEdit ? 'Lưu cập nhật' : 'Tạo Voucher' }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- ═══════ MODAL: CHI TIẾT VOUCHER ═══════ -->
+    <v-dialog v-model="detailOpen" max-width="850px" persistent scrollable>
+      <v-card rounded="xl">
+        <v-card-title class="pa-6 pb-4 d-flex align-center justify-space-between border-b">
+          <div class="d-flex align-center gap-3">
+            <v-avatar color="info" size="42" rounded="lg" elevation="2">
+              <Eye class="w-5 h-5 text-white" />
+            </v-avatar>
+            <div>
+              <h3 class="text-h6 font-weight-bold mb-0 d-flex align-center gap-2">
+                <span>Chi tiết voucher:</span>
+                <v-chip color="grey-darken-3" size="small" class="font-mono">{{ detailCode }}</v-chip>
+              </h3>
+              <p class="text-caption text-medium-emphasis mb-0">
+                Danh sách khách hàng đã lưu mã và các hóa đơn đã áp dụng
+              </p>
+            </div>
           </div>
-          <div class="flex shrink-0 justify-end border-t border-solid !border-slate-200 bg-slate-50/50 !px-8 !py-4">
-            <Button type="button" variant="outline" class="h-11 px-6 text-xs font-bold rounded-xl border border-solid !border-slate-300 text-slate-700 hover:bg-slate-100 cursor-pointer" @click="closeDetail">Đóng</Button>
-          </div>
+          <v-btn icon variant="text" density="comfortable" @click="closeDetail">
+            <X class="w-5 h-5" />
+          </v-btn>
+        </v-card-title>
+
+        <v-card-text class="pa-6">
+          <v-progress-circular v-if="detailLoading" indeterminate color="info" class="my-6 mx-auto d-block"></v-progress-circular>
+          <template v-else>
+            <!-- Khách đã lưu mã -->
+            <div class="mb-6">
+              <h4 class="text-subtitle-2 font-weight-bold d-flex align-center gap-2 mb-3">
+                <UserCheck class="w-4 h-4 text-info" />
+                Khách hàng đã lưu mã ({{ detailKhach.length }})
+              </h4>
+              <v-table density="compact" class="border rounded-xl">
+                <thead>
+                  <tr class="bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700">
+                    <th class="font-weight-bold text-caption uppercase text-center py-2 text-slate-700 dark:text-slate-200">Mã KH</th>
+                    <th class="font-weight-bold text-caption uppercase text-left py-2 text-slate-700 dark:text-slate-200">Họ tên</th>
+                    <th class="font-weight-bold text-caption uppercase text-center py-2 text-slate-700 dark:text-slate-200">SĐT</th>
+                    <th class="font-weight-bold text-caption uppercase text-left py-2 text-slate-700 dark:text-slate-200">Email</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-if="detailKhach.length === 0">
+                    <td colspan="4" class="text-center py-6 text-caption text-medium-emphasis">Chưa có khách hàng nào lưu mã.</td>
+                  </tr>
+                  <tr v-for="k in detailKhach" :key="k.maKh">
+                    <td class="text-center font-mono py-2">{{ k.maKh }}</td>
+                    <td class="font-weight-medium py-2">{{ k.hoTen || '—' }}</td>
+                    <td class="text-center font-mono py-2">{{ k.sdt || '—' }}</td>
+                    <td class="font-mono text-caption py-2">{{ k.email || '—' }}</td>
+                  </tr>
+                </tbody>
+              </v-table>
+            </div>
+
+            <!-- Hóa đơn áp dụng -->
+            <div>
+              <h4 class="text-subtitle-2 font-weight-bold d-flex align-center gap-2 mb-3">
+                <Receipt class="w-4 h-4 text-primary" />
+                Hóa đơn đã áp dụng mã ({{ detailHoaDon.length }})
+              </h4>
+              <v-table density="compact" class="border rounded-xl">
+                <thead>
+                  <tr class="bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700">
+                    <th class="font-weight-bold text-caption uppercase text-center py-2 text-slate-700 dark:text-slate-200">Mã HĐ</th>
+                    <th class="font-weight-bold text-caption uppercase text-center py-2 text-slate-700 dark:text-slate-200">Mã KH</th>
+                    <th class="font-weight-bold text-caption uppercase text-center py-2 text-slate-700 dark:text-slate-200">Ngày</th>
+                    <th class="font-weight-bold text-caption uppercase text-center py-2 text-slate-700 dark:text-slate-200">Tổng tiền</th>
+                    <th class="font-weight-bold text-caption uppercase text-center py-2 text-slate-700 dark:text-slate-200">Thành tiền</th>
+                    <th class="font-weight-bold text-caption uppercase text-center py-2 text-slate-700 dark:text-slate-200">Trạng thái</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-if="detailHoaDon.length === 0">
+                    <td colspan="6" class="text-center py-6 text-caption text-medium-emphasis">Chưa có hóa đơn nào áp dụng mã.</td>
+                  </tr>
+                  <tr v-for="h in detailHoaDon" :key="h.maHd">
+                    <td class="text-center font-mono font-weight-bold py-2">{{ h.maHd }}</td>
+                    <td class="text-center font-mono py-2">{{ h.maKh || '—' }}</td>
+                    <td class="text-center py-2">{{ formatShortDate(h.ngayTao) }}</td>
+                    <td class="text-center font-mono py-2">{{ formatMoney(h.tongTien) }}</td>
+                    <td class="text-center font-mono font-weight-bold text-primary py-2">{{ formatMoney(h.thanhTien) }}</td>
+                    <td class="text-center py-2">
+                      <v-chip :color="h.trangThai === 1 ? 'success' : 'grey'" size="x-small" class="font-weight-bold">
+                        {{ h.trangThai === 1 ? 'Thành công' : 'Chờ' }}
+                      </v-chip>
+                    </td>
+                  </tr>
+                </tbody>
+              </v-table>
+            </div>
+          </template>
+        </v-card-text>
+
+        <v-card-actions class="pa-6 pt-4 border-t">
+          <v-spacer></v-spacer>
+          <v-btn variant="outlined" color="grey-darken-1" rounded="lg" @click="closeDetail">Đóng</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- ═══════ MODAL: XÁC NHẬN XÓA ═══════ -->
+    <v-dialog v-model="deleteModalOpen" max-width="450px" persistent>
+      <v-card rounded="xl" class="pa-6 text-center">
+        <v-avatar color="rose-lighten-5" size="64" class="mx-auto mb-4">
+          <AlertCircle class="w-8 h-8 text-rose-500" />
+        </v-avatar>
+        <h3 class="text-h6 font-weight-bold mb-2">Xác nhận xóa Voucher?</h3>
+        <p class="text-body-2 text-medium-emphasis mb-6">
+          Voucher
+          <strong class="text-slate-900 dark:text-white">{{ selectedRowToDelete?.maCode }}</strong>
+          sẽ bị vô hiệu hóa nhưng không ảnh hưởng đến lịch sử sử dụng trước đó.
+        </p>
+
+        <div class="d-flex align-center justify-center gap-3">
+          <v-btn
+            variant="outlined"
+            color="grey-darken-1"
+            height="44"
+            rounded="xl"
+            class="text-none font-weight-bold px-5"
+            @click="deleteModalOpen = false"
+          >
+            Hủy
+          </v-btn>
+          <v-btn
+            color="error"
+            height="44"
+            variant="flat"
+            rounded="xl"
+            elevation="4"
+            class="text-none font-weight-black px-6"
+            @click="executeRemove"
+          >
+            <template v-slot:prepend>
+              <Trash2 class="w-5 h-5 mr-1 shrink-0" />
+            </template>
+            Xác nhận xóa
+          </v-btn>
         </div>
-      </div>
-    </Teleport>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
+
+<style scoped>
+/* Number input spin button styling */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+</style>

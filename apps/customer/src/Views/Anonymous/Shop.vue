@@ -523,7 +523,7 @@ const onBannerTouchEnd = (e: TouchEvent, maDanhMuc: string, total: number) => {
 // danh mục đầu tiên trong feed — cố định, không phụ thuộc đang lọc theo gì.
 const firstFeedBanner = computed<FeedBanner | null>(() => {
   for (const state of feedCategories.value) {
-    if (state.category.banners.length) return state.category.banners[0];
+    if (state.category.banners.length && state.category.banners[0]) return state.category.banners[0];
   }
   return null;
 });
