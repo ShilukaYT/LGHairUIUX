@@ -99,6 +99,7 @@ export default {
 
     getImageUrl(path) {
       if (!path) return "";
+      if (path.startsWith("http")) return path; // URL Cloudinary — giữ nguyên
       return `${API}/${path}`;
     },
 

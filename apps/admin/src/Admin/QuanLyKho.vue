@@ -309,16 +309,16 @@ const trangThaiPNOptions = [
 
 // ── Modal Phiếu nhập ───────────────────────────────────────────────
 const pnModal = reactive({ open: false, mode: "form", title: "" });
-const pnErrors = reactive({ maPn: "", maNcc: "", maNv: "", ngayNhap: "", chiTiet: "" });
+const pnErrors = reactive({ maNcc: "", maNv: "", ngayNhap: "", chiTiet: "" });
 function clearPnErrors() { Object.keys(pnErrors).forEach(k => pnErrors[k] = ""); }
 
 const pnForm = reactive({
-  maPn: "", maNcc: null, maNv: currentNhanVien?.maNv || "", ngayNhap: todayStr(), ghiChu: "", chiTiet: [],
+  maNcc: null, maNv: currentNhanVien?.maNv || "", ngayNhap: todayStr(), ghiChu: "", chiTiet: [],
 });
 const pnDetail = ref(null); // dùng cho mode "view"
 
 function resetPnForm() {
-  Object.assign(pnForm, { maPn: "", maNcc: null, maNv: currentNhanVien?.maNv || "", ngayNhap: todayStr(), ghiChu: "", chiTiet: [] });
+  Object.assign(pnForm, { maNcc: null, maNv: currentNhanVien?.maNv || "", ngayNhap: todayStr(), ghiChu: "", chiTiet: [] });
 }
 
 function openAddPN() {
@@ -341,8 +341,6 @@ function closePnModal() { pnModal.open = false; }
 
 function validatePN() {
   clearPnErrors(); let ok = true;
-  if (!pnForm.maPn.trim()) { pnErrors.maPn = "Mã phiếu nhập không được để trống."; ok = false; }
-  else if (!/^[A-Za-z0-9]{2,15}$/.test(pnForm.maPn.trim())) { pnErrors.maPn = "Mã chỉ gồm chữ và số, 2–15 ký tự."; ok = false; }
   if (pnForm.maNv && pnForm.maNv.trim().length > 20) { pnErrors.maNv = "Mã nhân viên không hợp lệ (tối đa 20 ký tự)."; ok = false; }
   if (pnForm.ngayNhap && pnForm.ngayNhap > todayStr()) { pnErrors.ngayNhap = "Ngày nhập không được lớn hơn ngày hiện tại."; ok = false; }
   if (!pnForm.chiTiet.length) { pnErrors.chiTiet = "Phiếu nhập phải có ít nhất một dòng chi tiết."; ok = false; }
@@ -360,7 +358,6 @@ async function savePN() {
   savingPN.value = true;
   try {
     const payload = {
-      maPn: pnForm.maPn.trim(),
       maNcc: pnForm.maNcc || null,
       maNv: pnForm.maNv || null,
       ngayNhap: pnForm.ngayNhap || null,
@@ -369,12 +366,13 @@ async function savePN() {
         maBienThe: c.maBienThe, soLuong: Number(c.soLuong), giaNhap: Number(c.giaNhap),
       })),
     };
-    await axios.post(`${API}/api/QuanLyKho/phieunhap`, payload);
-    logActivity("Tạo phiếu nhập kho", `Đã tạo phiếu nhập kho mới ${pnForm.maPn} với ${pnForm.chiTiet.length} dòng hàng, tổng tiền ${fmt(tongTienForm.value)}`, "Quản lý kho");
+    const res = await axios.post(`${API}/api/QuanLyKho/phieunhap`, payload);
+    const newMaPn = res.data?.maPn || "";
+    logActivity("Tạo phiếu nhập kho", `Đã tạo phiếu nhập kho mới ${newMaPn} với ${pnForm.chiTiet.length} dòng hàng, tổng tiền ${fmt(tongTienForm.value)}`, "Quản lý kho");
     showToast("Tạo phiếu nhập thành công!");
     closePnModal(); await loadPhieuNhap();
   } catch (err) {
-    logActivity("Tạo phiếu nhập kho", `Thất bại khi tạo phiếu nhập kho ${pnForm.maPn} - Lỗi: ${err.message || ''}`, "Quản lý kho", "Thất bại");
+    logActivity("Tạo phiếu nhập kho", `Thất bại khi tạo phiếu nhập kho - Lỗi: ${err.message || ''}`, "Quản lý kho", "Thất bại");
     showToast(err.response?.data?.message || "Lỗi khi tạo phiếu nhập!", "error");
   } finally { savingPN.value = false; }
 }
@@ -1407,15 +1405,15 @@ onMounted(async () => {
           <template v-else>
             <v-row>
               <v-col cols="12" sm="6">
-                <div class="mb-1 text-caption font-weight-bold text-medium-emphasis">Mã phiếu nhập *</div>
+                <div class="mb-1 text-caption font-weight-bold text-medium-emphasis">Mã phiếu nhập</div>
                 <v-text-field
-                  v-model="pnForm.maPn"
                   variant="outlined"
                   density="comfortable"
                   rounded="lg"
-                  placeholder="VD: PN001"
-                  maxlength="15"
-                  :error-messages="pnErrors.maPn"
+                  readonly
+                  model-value="Tự động tạo (PN01, PN02...)"
+                  hint="Mã phiếu nhập sẽ được hệ thống tự động cấp khi lưu."
+                  persistent-hint
                 ></v-text-field>
               </v-col>
               <v-col cols="12" sm="6">

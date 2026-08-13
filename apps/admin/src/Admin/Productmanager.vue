@@ -88,19 +88,14 @@ const btImgInput = ref(null);
 const btGalleryInput = ref(null);
 
 // ══ VALIDATION ═════════════════════════════════════════════════════
-const spErrors = reactive({ maSP: "", tenSP: "", maDanhMuc: "" });
-const btErrors = reactive({ maBienThe: "", tenBienThe: "", giaBan: "", soLuong: "", phanTramHoaHong: "", ghiChu: "" });
+const spErrors = reactive({ tenSP: "", maDanhMuc: "" });
+const btErrors = reactive({ tenBienThe: "", giaBan: "", soLuong: "", phanTramHoaHong: "", ghiChu: "" });
 
 function clearSpErrors() { Object.keys(spErrors).forEach(k => spErrors[k] = ""); }
 function clearBtErrors() { Object.keys(btErrors).forEach(k => btErrors[k] = ""); }
 
 function validateSP() {
   clearSpErrors(); let ok = true;
-  if (!editingSpId.value) {
-    if (!spForm.maSP.trim()) { spErrors.maSP = "Mã sản phẩm không được để trống."; ok = false; }
-    else if (!/^[A-Za-z0-9]{2,10}$/.test(spForm.maSP.trim())) { spErrors.maSP = "Mã SP chỉ gồm chữ và số, 2–10 ký tự."; ok = false; }
-    else if (sanPhams.value.find(x => x.maSP === spForm.maSP.trim())) { spErrors.maSP = "Mã sản phẩm đã tồn tại."; ok = false; }
-  }
   if (!spForm.tenSP.trim()) { spErrors.tenSP = "Tên sản phẩm không được để trống."; ok = false; }
   else if (spForm.tenSP.trim().length < 2) { spErrors.tenSP = "Tên tối thiểu 2 ký tự."; ok = false; }
   else if (spForm.tenSP.trim().length > 150) { spErrors.tenSP = "Tên tối đa 150 ký tự."; ok = false; }
@@ -110,10 +105,6 @@ function validateSP() {
 
 function validateBT() {
   clearBtErrors(); let ok = true;
-  if (!editingBtId.value) {
-    if (!btForm.maBienThe.trim()) { btErrors.maBienThe = "Mã biến thể không được để trống."; ok = false; }
-    else if (!/^[A-Za-z0-9]{2,10}$/.test(btForm.maBienThe.trim())) { btErrors.maBienThe = "Mã chỉ gồm chữ và số, 2–10 ký tự."; ok = false; }
-  }
   if (!btForm.tenBienThe.trim()) { btErrors.tenBienThe = "Tên biến thể không được để trống."; ok = false; }
   const gia = Number(btForm.giaBan);
   if (btForm.giaBan === "" || isNaN(gia)) { btErrors.giaBan = "Giá bán không được để trống."; ok = false; }
@@ -380,9 +371,8 @@ async function saveSP() {
       logActivity("Cập nhật sản phẩm", `Đã cập nhật sản phẩm ${spForm.tenSP} (Mã: ${editingSpId.value})`, "Sản phẩm");
       showToast("Cập nhật sản phẩm thành công!");
     } else {
-      fd.append("MaSp", spForm.maSP.trim());
-      await axios.post(`${API}/api/QuanLySanPham`, fd, { headers: { "Content-Type": "multipart/form-data" } });
-      logActivity("Thêm sản phẩm", `Đã thêm sản phẩm mới ${spForm.tenSP} (Mã: ${spForm.maSP})`, "Sản phẩm");
+      const res = await axios.post(`${API}/api/QuanLySanPham`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+      logActivity("Thêm sản phẩm", `Đã thêm sản phẩm mới ${spForm.tenSP} (Mã: ${res.data?.maSp || ""})`, "Sản phẩm");
       showToast("Thêm sản phẩm thành công!");
     }
     closeSpModal(); await loadSanPham();
@@ -429,9 +419,8 @@ async function saveBT() {
       logActivity("Cập nhật biến thể", `Đã cập nhật biến thể ${btForm.tenBienThe} (Mã: ${editingBtId.value})`, "Sản phẩm");
       showToast("Cập nhật biến thể thành công!");
     } else {
-      fd.append("MaBienThe", btForm.maBienThe.trim());
-      await axios.post(`${API}/api/QuanLySanPham/bienthe`, fd, { headers: { "Content-Type": "multipart/form-data" } });
-      logActivity("Thêm biến thể", `Đã thêm biến thể mới ${btForm.tenBienThe} (Mã: ${btForm.maBienThe})`, "Sản phẩm");
+      const res = await axios.post(`${API}/api/QuanLySanPham/bienthe`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+      logActivity("Thêm biến thể", `Đã thêm biến thể mới ${btForm.tenBienThe} (Mã: ${res.data?.maBienThe || ""})`, "Sản phẩm");
       showToast("Thêm biến thể thành công!");
     }
     closeBtModal(); await loadBienThe(btForm.maSanPham); await loadSanPham();
@@ -891,16 +880,7 @@ onMounted(async () => {
           <!-- Form add/edit -->
           <v-form v-else @submit.prevent="saveSP">
             <v-row>
-              <v-col cols="12" sm="6" v-if="!editingSpId">
-                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Mã sản phẩm *</div>
-                <v-text-field
-                  v-model="spForm.maSP"
-                  variant="outlined" density="comfortable" rounded="lg"
-                  placeholder="VD: SP001" maxlength="10"
-                  :error-messages="spErrors.maSP"
-                ></v-text-field>
-              </v-col>
-              <v-col cols="12" :sm="editingSpId ? 12 : 6">
+              <v-col cols="12">
                 <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Tên sản phẩm *</div>
                 <v-text-field
                   v-model="spForm.tenSP"
@@ -1026,16 +1006,7 @@ onMounted(async () => {
         <v-card-text class="pa-6">
           <v-form @submit.prevent="saveBT">
             <v-row>
-              <v-col cols="12" sm="6" v-if="!editingBtId">
-                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Mã biến thể *</div>
-                <v-text-field
-                  v-model="btForm.maBienThe"
-                  variant="outlined" density="comfortable" rounded="lg"
-                  placeholder="VD: BT001" maxlength="10"
-                  :error-messages="btErrors.maBienThe"
-                ></v-text-field>
-              </v-col>
-              <v-col cols="12" :sm="editingBtId ? 12 : 6">
+              <v-col cols="12">
                 <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Tên biến thể *</div>
                 <v-text-field
                   v-model="btForm.tenBienThe"
