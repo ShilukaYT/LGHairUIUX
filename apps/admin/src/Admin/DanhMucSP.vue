@@ -39,8 +39,8 @@ const form = reactive({
 const imgInput = ref(null);
 
 // ══ VALIDATION ════════════════════════════════════════════════════
-const errors  = reactive({ maDMSP: "", tenDanhMuc: "" });
-const touched = reactive({ maDMSP: false, tenDanhMuc: false });
+const errors  = reactive({ tenDanhMuc: "" });
+const touched = reactive({ tenDanhMuc: false });
 
 function clearErrors() {
   Object.keys(errors).forEach(k => errors[k] = "");
@@ -49,20 +49,6 @@ function clearErrors() {
 
 // Validate từng field riêng lẻ — dùng cho cả blur và submit
 function validateField(field) {
-  if (field === "maDMSP" && !editingId.value) {
-    const val = form.maDMSP.trim();
-    if (!val)
-      errors.maDMSP = "Mã danh mục không được để trống.";
-    else if (val.length < 2 || val.length > 10)
-      errors.maDMSP = "Mã phải từ 2 đến 10 ký tự.";
-    else if (!/^[A-Za-z0-9]+$/.test(val))
-      errors.maDMSP = "Mã chỉ được chứa chữ cái (A–Z) và chữ số (0–9), không dấu, không khoảng trắng.";
-    else if (danhMucs.value.find(x => x.maDMSP.toUpperCase() === val.toUpperCase()))
-      errors.maDMSP = "Mã danh mục này đã tồn tại trong hệ thống.";
-    else
-      errors.maDMSP = "";
-  }
-
   if (field === "tenDanhMuc") {
     const val = form.tenDanhMuc.trim();
     if (!val)
@@ -92,9 +78,8 @@ function onBlur(field) {
 function validate() {
   // Mark all touched để show lỗi đồng loạt
   Object.keys(touched).forEach(k => touched[k] = true);
-  if (!editingId.value) validateField("maDMSP");
   validateField("tenDanhMuc");
-  return !errors.maDMSP && !errors.tenDanhMuc;
+  return !errors.tenDanhMuc;
 }
 
 // Char counter
@@ -162,11 +147,14 @@ const totalProducts = computed(() => danhMucs.value.reduce((s, d) => s + (d.soSa
 
 const filteredData = computed(() => {
   const q = search.value.toLowerCase().trim();
-  return danhMucs.value.filter(d => {
-    const mq = !q || d.tenDanhMuc.toLowerCase().includes(q) || d.maDMSP.toLowerCase().includes(q);
-    const ms = filterStatus.value === "" || String(d.trangThai) === filterStatus.value;
-    return mq && ms;
-  });
+  return danhMucs.value
+    .filter(d => {
+      const mq = !q || d.tenDanhMuc.toLowerCase().includes(q) || d.maDMSP.toLowerCase().includes(q);
+      const ms = filterStatus.value === "" || String(d.trangThai) === filterStatus.value;
+      return mq && ms;
+    })
+    // Mã mới nhất (số lớn nhất trong DMSPxx) hiển thị trước, mã cũ ở sau
+    .sort((a, b) => b.maDMSP.localeCompare(a.maDMSP, undefined, { numeric: true }));
 });
 
 // ══ HEADERS cho v-data-table ═══════════════════════════════════════
@@ -193,6 +181,8 @@ function resetForm() {
     maDMSP: "", tenDanhMuc: "", hinhAnh: "", trangThai: 1, _newImgFile: null,
   });
 }
+// maDMSP trong form chỉ dùng để hiển thị (view/edit) — với "Thêm mới" mã sẽ
+// được backend tự sinh (DMSP01, DMSP02, ...) nên không cần người dùng nhập.
 
 function openAdd() {
   editingId.value = null; clearErrors(); resetForm();
@@ -235,12 +225,12 @@ async function saveDM() {
       logActivity("Cập nhật danh mục sản phẩm", `Đã cập nhật danh mục sản phẩm ${form.tenDanhMuc} (Mã: ${editingId.value})`, "Sản phẩm");
       showToast("Cập nhật danh mục thành công!");
     } else {
-      const maDMSPUpper = form.maDMSP.trim().toUpperCase();
-      fd.append("MaDMSP", maDMSPUpper);
-      await axios.post(`${API}/api/QuanLyDanhMucSP`, fd, {
+      // Mã danh mục (DMSP01, DMSP02, ...) do backend tự sinh, không gửi lên từ client
+      const res = await axios.post(`${API}/api/QuanLyDanhMucSP`, fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      logActivity("Thêm danh mục sản phẩm", `Đã thêm danh mục sản phẩm mới ${form.tenDanhMuc} (Mã: ${maDMSPUpper})`, "Sản phẩm");
+      const maMoi = res.data?.maDMSP ?? "";
+      logActivity("Thêm danh mục sản phẩm", `Đã thêm danh mục sản phẩm mới ${form.tenDanhMuc} (Mã: ${maMoi})`, "Sản phẩm");
       showToast("Thêm danh mục thành công!");
     }
     closeModal(); await loadData();
@@ -255,10 +245,7 @@ async function saveDM() {
       "Thất bại"
     );
 
-    if (status === 409 || msg.toLowerCase().includes("mã")) {
-      errors.maDMSP = msg || "Mã danh mục đã tồn tại trên server.";
-      touched.maDMSP = true;
-    } else if (msg.toLowerCase().includes("tên")) {
+    if (status === 409 || msg.toLowerCase().includes("tên")) {
       errors.tenDanhMuc = msg;
       touched.tenDanhMuc = true;
     } else if (status === 400 && msg.toLowerCase().includes("ảnh")) {
@@ -745,17 +732,21 @@ onMounted(loadData);
 
           <!-- FORM MODE -->
           <v-form v-else @submit.prevent="saveDM">
-            <!-- Mã danh mục (chỉ khi thêm mới) -->
+            <!-- Mã danh mục: tự động sinh (DMSP01, DMSP02, ...), không cho nhập tay -->
             <div v-if="!editingId" class="mb-4">
-              <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Mã danh mục *</div>
+              <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Mã danh mục</div>
               <v-text-field
-                v-model="form.maDMSP"
+                model-value="Sẽ được tự động tạo (DMSP01, DMSP02, ...)"
                 variant="outlined" density="comfortable" rounded="lg"
-                placeholder="Ví dụ: DM001" maxlength="10"
-                autocomplete="off"
-                :error-messages="touched.maDMSP ? errors.maDMSP : ''"
-                @blur="onBlur('maDMSP')"
-                @update:model-value="touched.maDMSP && validateField('maDMSP')"
+                readonly disabled
+              ></v-text-field>
+            </div>
+            <div v-else class="mb-4">
+              <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Mã danh mục</div>
+              <v-text-field
+                :model-value="form.maDMSP"
+                variant="outlined" density="comfortable" rounded="lg"
+                readonly disabled
               ></v-text-field>
             </div>
 

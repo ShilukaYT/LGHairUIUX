@@ -349,7 +349,7 @@ async function loadCombos() {
         trangThai: filterStatus.value === "" ? null : filterStatus.value,
       },
     });
-    combos.value = res.data.map((c) => ({
+    const mapped = res.data.map((c) => ({
       maCB: c.maCB,
       tenCombo: c.tenCombo,
       gia: c.gia,
@@ -361,6 +361,15 @@ async function loadCombos() {
       icon: "🎁",
       mauNen: "135deg,#f8fafc,#f1f5f9",
     }));
+
+    // 🆕 Mã combo mới (số lớn hơn, ví dụ CB05) lên đầu, mã cũ (CB01) xuống sau
+    const comboNum = (maCB) => {
+      const n = parseInt(String(maCB || "").replace(/^CB/i, ""), 10);
+      return isNaN(n) ? -1 : n;
+    };
+    mapped.sort((a, b) => comboNum(b.maCB) - comboNum(a.maCB));
+
+    combos.value = mapped;
   } catch (err) {
     console.error(err);
     showToast("Lỗi tải danh sách combo!", "error");
@@ -419,7 +428,6 @@ const errors = reactive({
   phanTramHoaHong: "",
   thoiGianLam: "",
   moTa: "",
-  maCB: "",
   tenCombo: "",
   giaCombo: "",
   giaGoc: "",
@@ -435,18 +443,7 @@ function validateDV() {
   clearErrors();
   let ok = true;
 
-  if (!editingId.value) {
-    if (!form.maDV.trim()) {
-      errors.maDV = "Mã dịch vụ không được để trống.";
-      ok = false;
-    } else if (!/^[A-Za-z0-9]{2,10}$/.test(form.maDV.trim())) {
-      errors.maDV = "Mã dịch vụ chỉ gồm chữ và số, 2–10 ký tự.";
-      ok = false;
-    } else if (dichvus.value.find((x) => x.maDV === form.maDV.trim())) {
-      errors.maDV = "Mã dịch vụ này đã tồn tại.";
-      ok = false;
-    }
-  }
+  // Mã dịch vụ được server tự sinh (DV001, DV002...) khi thêm mới, không cần validate.
 
   if (!form.tenDV.trim()) {
     errors.tenDV = "Tên dịch vụ không được để trống.";
@@ -511,18 +508,7 @@ function validateCombo() {
   clearErrors();
   let ok = true;
 
-  if (!editingId.value) {
-    if (!form.maCB.trim()) {
-      errors.maCB = "Mã combo không được để trống.";
-      ok = false;
-    } else if (!/^[A-Za-z0-9]{2,10}$/.test(form.maCB.trim())) {
-      errors.maCB = "Mã combo chỉ gồm chữ và số, 2–10 ký tự.";
-      ok = false;
-    } else if (combos.value.find((x) => x.maCB === form.maCB.trim())) {
-      errors.maCB = "Mã combo này đã tồn tại.";
-      ok = false;
-    }
-  }
+  // Mã combo do server tự sinh (CB01, CB02, ...) nên không cần validate ở đây.
 
   if (!form.tenCombo.trim()) {
     errors.tenCombo = "Tên combo không được để trống.";
@@ -1059,7 +1045,10 @@ async function saveItem() {
     saving.value = true;
     try {
       const fd = new FormData();
-      fd.append("MaDv", editingId.value || form.maDV.trim());
+      // Khi sửa: gửi mã hiện có. Khi thêm mới: không gửi, server sẽ tự sinh mã (DV001, DV002...).
+      if (editingId.value) {
+        fd.append("MaDv", editingId.value);
+      }
       fd.append("MaDm", form.maDM);
       fd.append("TenDv", form.tenDV.trim());
       fd.append("MoTa", form.moTa || "");
@@ -1087,10 +1076,11 @@ async function saveItem() {
         );
         showToast("Cập nhật dịch vụ thành công!");
       } else {
-        await axios.post(`${API}/api/DichVu`, fd);
+        const res = await axios.post(`${API}/api/DichVu`, fd);
+        const newMaDv = res.data?.maDv || "";
         logActivity(
           "Thêm dịch vụ",
-          `Đã thêm dịch vụ mới ${form.tenDV} (Mã: ${form.maDV})`,
+          `Đã thêm dịch vụ mới ${form.tenDV} (Mã: ${newMaDv})`,
           "Dịch vụ",
         );
         showToast("Thêm dịch vụ thành công!");
@@ -1118,7 +1108,10 @@ async function saveItem() {
     saving.value = true;
     try {
       const fd = new FormData();
-      fd.append("MaCB", editingId.value || form.maCB.trim());
+      // Khi sửa: gửi mã hiện có. Khi thêm mới: không gửi, server sẽ tự sinh mã (CB01, CB02...).
+      if (editingId.value) {
+        fd.append("MaCB", editingId.value);
+      }
       fd.append("TenCombo", form.tenCombo.trim());
       fd.append("Gia", Number(form.gia));
       fd.append("MoTa", form.moTa || "");
@@ -1140,10 +1133,11 @@ async function saveItem() {
         );
         showToast("Cập nhật combo thành công!");
       } else {
-        await axios.post(`${API}/api/Combo`, fd);
+        const res = await axios.post(`${API}/api/Combo`, fd);
+        const newMaCb = res.data?.maCb || res.data?.MaCb || "";
         logActivity(
           "Thêm combo",
-          `Đã thêm combo mới ${form.tenCombo} (Mã: ${form.maCB})`,
+          `Đã thêm combo mới ${form.tenCombo} (Mã: ${newMaCb})`,
           "Dịch vụ",
         );
         showToast("Thêm combo thành công!");
@@ -1919,17 +1913,28 @@ onMounted(async () => {
           <!-- ── FORM DV ── -->
           <v-form v-else-if="modal.mode === 'formDV'" @submit.prevent="saveItem">
             <v-row dense>
-              <v-col cols="12" sm="6">
+              <v-col cols="12" sm="6" v-if="editingId">
                 <v-text-field
                   v-model="form.maDV"
-                  label="Mã dịch vụ *"
+                  label="Mã dịch vụ"
                   variant="outlined"
                   density="comfortable"
                   rounded="lg"
-                  :readonly="!!editingId"
-                  placeholder="VD: DV015"
-                  :error-messages="errors.maDV"
-                  @update:model-value="errors.maDV = ''"
+                  readonly
+                  hint="Mã dịch vụ được hệ thống tự sinh, không thể chỉnh sửa."
+                  persistent-hint
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12" sm="6" v-else>
+                <v-text-field
+                  label="Mã dịch vụ"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                  readonly
+                  model-value="Tự động tạo (DV001, DV002...)"
+                  hint="Mã dịch vụ sẽ được hệ thống tự động cấp khi lưu."
+                  persistent-hint
                 ></v-text-field>
               </v-col>
               <v-col cols="12" sm="6">
@@ -2082,15 +2087,15 @@ onMounted(async () => {
             <v-row dense>
               <v-col cols="12" sm="6">
                 <v-text-field
-                  v-model="form.maCB"
-                  label="Mã combo *"
+                  :model-value="editingId ? form.maCB : 'Tự động sinh mã'"
+                  label="Mã combo"
                   variant="outlined"
                   density="comfortable"
                   rounded="lg"
-                  :readonly="!!editingId"
-                  placeholder="VD: CB008"
-                  :error-messages="errors.maCB"
-                  @update:model-value="errors.maCB = ''"
+                  readonly
+                  disabled
+                  hint="Mã combo được hệ thống tự động sinh (CB01, CB02, ...)"
+                  persistent-hint
                 ></v-text-field>
               </v-col>
               <v-col cols="12" sm="6">

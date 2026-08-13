@@ -26,11 +26,14 @@ const ratingsMap = ref<Record<string, { avg: number; count: number }>>({});
 
 const API = import.meta.env.VITE_API_URL;
 const getImageUrl = (img: string) => {
-  return img ? `${API}/${img}` : `${API}/assets/images/default.jpg`;
+  if (!img) return `${API}/assets/images/default.jpg`;
+  if (img.startsWith("http")) return img; // URL Cloudinary — giữ nguyên
+  return `${API}/${img}`;
 };
 // Ảnh cho lưới danh mục (API danh mục trả path khác với ảnh dịch vụ/combo)
 const getCategoryImageUrl = (img?: string) => {
   if (!img) return `${API}/assets/images/default.jpg`;
+  if (img.startsWith("http")) return img; // URL Cloudinary — giữ nguyên
   if (img.startsWith("/")) return `${API}${img}`;
   return `${API}/uploads/danhmuc/${img}`;
 };

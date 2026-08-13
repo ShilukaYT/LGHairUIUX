@@ -20,6 +20,7 @@ const scrollToProductsTop = (smooth = true) => {
 
 const getImageUrl = (img?: string) => {
   if (!img) return `${API}/assets/images/default.jpg`;
+  if (img.startsWith("http")) return img; // URL Cloudinary (hoặc URL tuyệt đối khác) — giữ nguyên
   if (img.startsWith("/")) return `${API}${img}`;
   return `${API}/${img}`;
 };
@@ -76,6 +77,7 @@ const onTouchEnd = (e: TouchEvent, p: any) => {
 // Ảnh cho lưới danh mục (API danh mục trả path khác với ảnh sản phẩm)
 const getCategoryImageUrl = (img?: string) => {
   if (!img) return `${API}/assets/images/default.jpg`;
+  if (img.startsWith("http")) return img; // URL Cloudinary — giữ nguyên
   if (img.startsWith("/")) return `${API}${img}`;
   return `${API}/uploads/sanpham/${img}`;
 };
@@ -83,6 +85,7 @@ const getCategoryImageUrl = (img?: string) => {
 // Ảnh cho lưới thương hiệu — kiểm tra lại đúng folder lưu ảnh Thuonghieu.HinhAnh nếu khác
 const getBrandImageUrl = (img?: string) => {
   if (!img) return `${API}/assets/images/default.jpg`;
+  if (img.startsWith("http")) return img; // URL Cloudinary — giữ nguyên
   if (img.startsWith("/")) return `${API}${img}`;
   return `${API}/uploads/thuonghieu/${img}`;
 };
@@ -99,6 +102,10 @@ const categoryList      = ref<any[]>([]);
 const categoriesLoading = ref(true);
 const categoriesError   = ref(false);
 const categoryGridRef   = ref<HTMLElement | null>(null);
+
+// 🔥 Loading tổng cho lần tải đầu tiên: gộp danh mục + feed lại thành 1 spinner duy
+// nhất (thay vì mỗi khối tự hiện/tắt spinner riêng gây cảm giác load 2 lần liên tiếp).
+// Vẫn còn true nếu 1 trong 2 khối chưa xong.
 
 const searchQuery        = ref("");
 const selectedDanhMuc     = ref("all");
@@ -333,6 +340,10 @@ const feedLoading    = ref(true);
 const feedError      = ref(false);
 const FEED_PAGE_SIZE = 8; // ~2 hàng x 4 cột desktop
 
+// 🔥 true khi CẢ danh mục lẫn feed đều đang tải lần đầu — dùng để hiện đúng 1 spinner
+// chung, tránh 2 spinner của 2 khối hiện tách rời nhìn giật cục.
+const initialLoading = computed(() => categoriesLoading.value || feedLoading.value);
+
 const fetchFeedCategories = async () => {
   try {
     feedLoading.value = true;
@@ -564,8 +575,6 @@ watch(
 );
 
 onMounted(async () => {
-  await fetchInit();
-  await fetchCategoryGrid(); // 🔥 lấy danh mục để hiển thị lưới (gộp từ Shop.vue)
   if (route.query.danhMuc) {
     selectedDanhMuc.value = route.query.danhMuc as string;
   }
@@ -573,16 +582,22 @@ onMounted(async () => {
     selectedThuongHieu.value = route.query.thuongHieu as string;
   }
 
-  // 🔥 Khu vực grid+filter giờ ẩn mặc định (chỉ hiện khi có filter active) — chỉ cần
-  // gọi fetchFiltered() ngay lúc mount nếu người dùng vào thẳng bằng URL đã có sẵn
-  // query (?danhMuc=... / ?thuongHieu=...). Nếu chưa lọc gì, watch ở trên sẽ tự gọi
-  // fetchFiltered() khi người dùng thao tác lọc sau này.
+  // 🔥 Gộp các lệnh tải ban đầu chạy SONG SONG (thay vì nối tiếp từng cái) để chỉ có
+  // 1 khoảng chờ loading duy nhất thay vì 2 spinner (danh mục + feed) hiện tách rời
+  // trông giật cục. initialLoading bao trùm cả 2 khối, chỉ tắt khi tất cả xong.
+  const tasks: Promise<any>[] = [
+    fetchInit(),
+    fetchCategoryGrid(), // 🔥 lấy danh mục để hiển thị lưới (gộp từ Shop.vue)
+    fetchFeedCategories(), // 🔥 Feed banner + sản phẩm theo từng danh mục
+  ];
   if (productFilterActive.value) {
-    await fetchFiltered();
+    // Khu vực grid+filter giờ ẩn mặc định (chỉ hiện khi có filter active) — chỉ cần
+    // gọi fetchFiltered() ngay lúc mount nếu người dùng vào thẳng bằng URL đã có sẵn
+    // query (?danhMuc=... / ?thuongHieu=...). Nếu chưa lọc gì, watch ở trên sẽ tự gọi
+    // fetchFiltered() khi người dùng thao tác lọc sau này.
+    tasks.push(fetchFiltered());
   }
-
-  // 🔥 Feed banner + sản phẩm theo từng danh mục (khối riêng ở đầu trang)
-  await fetchFeedCategories();
+  await Promise.all(tasks);
   initFeedObserver();
 
   // 🔥 Bắt đầu auto-slide cho các danh mục có từ 2 banner trở lên
@@ -615,59 +630,60 @@ onUnmounted(() => {
       
 
       <!-- ======================= -->
-      <!-- LƯỚI DANH MỤC (đồng bộ với Dmdichvu.vue) -->
+      <!-- LOADING TỔNG cho lần tải đầu (danh mục + feed) — chỉ 1 spinner duy nhất
+           thay vì mỗi khối tự hiện spinner riêng, tránh cảm giác "load 2 lần". -->
       <!-- ======================= -->
-      <section class="category-grid-section" data-aos="fade-up">
-        <div class="category-grid-container">
-          <h2 class="category-grid-heading">Tất cả Sản Phẩm</h2>
+      <div v-if="initialLoading" class="category-grid-loading">
+        <div class="dm-spinner"></div>
+      </div>
 
-          <div v-if="categoriesLoading" class="category-grid-loading">
-            <div class="dm-spinner"></div>
-          </div>
+      <template v-else>
+        <!-- ======================= -->
+        <!-- LƯỚI DANH MỤC (đồng bộ với Dmdichvu.vue) -->
+        <!-- ======================= -->
+        <section class="category-grid-section" data-aos="fade-up">
+          <div class="category-grid-container">
+            <h2 class="category-grid-heading">Tất cả Sản Phẩm</h2>
 
-          <div v-else-if="categoriesError" class="category-grid-error">
-            Không thể tải danh mục sản phẩm.
-          </div>
+            <div v-if="categoriesError" class="category-grid-error">
+              Không thể tải danh mục sản phẩm.
+            </div>
 
-          <div v-else class="category-grid" ref="categoryGridRef">
-            <div
-              v-for="cat in categoryList"
-              :key="cat.maDM"
-              class="category-grid-item"
-              :class="{ 'is-active': selectedDanhMuc === cat.maDM }"
-              @click="goToCategory(cat.maDM)"
-            >
-              <div class="category-grid-image-wrap">
-                <img
-                  :src="getCategoryImageUrl(cat.hinhAnh)"
-                  :alt="cat.tenDanhMuc"
-                  class="category-grid-img"
-                />
+            <div v-else class="category-grid" ref="categoryGridRef">
+              <div
+                v-for="cat in categoryList"
+                :key="cat.maDM"
+                class="category-grid-item"
+                :class="{ 'is-active': selectedDanhMuc === cat.maDM }"
+                @click="goToCategory(cat.maDM)"
+              >
+                <div class="category-grid-image-wrap">
+                  <img
+                    :src="getCategoryImageUrl(cat.hinhAnh)"
+                    :alt="cat.tenDanhMuc"
+                    class="category-grid-img"
+                  />
+                </div>
+                <h3 class="category-grid-name font-heading">
+                  {{ cat.tenDanhMuc }}
+                </h3>
               </div>
-              <h3 class="category-grid-name font-heading">
-                {{ cat.tenDanhMuc }}
-              </h3>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <!-- ======================= -->
-      <!-- FEED: BANNER DANH MỤC + SẢN PHẨM (Banner A -> SP A -> Banner B -> SP B -> ...) -->
-      <!-- Chỉ hiện khi người dùng CHƯA lọc gì. Khi có lọc (search / chọn danh mục /
-           thương hiệu / khoảng giá), feed này ẩn HẲN, nhường chỗ hoàn toàn cho khu
-           vực kết quả lọc bên dưới — không hiện đồng thời cả hai. -->
-      <!-- ======================= -->
-      <section v-if="!productFilterActive" class="feed-section" data-aos="fade-up">
-        <div v-if="feedLoading" class="category-grid-loading">
-          <div class="dm-spinner"></div>
-        </div>
+        <!-- ======================= -->
+        <!-- FEED: BANNER DANH MỤC + SẢN PHẨM (Banner A -> SP A -> Banner B -> SP B -> ...) -->
+        <!-- Chỉ hiện khi người dùng CHƯA lọc gì. Khi có lọc (search / chọn danh mục /
+             thương hiệu / khoảng giá), feed này ẩn HẲN, nhường chỗ hoàn toàn cho khu
+             vực kết quả lọc bên dưới — không hiện đồng thời cả hai. -->
+        <!-- ======================= -->
+        <section v-if="!productFilterActive" class="feed-section" data-aos="fade-up">
+          <div v-if="feedError" class="category-grid-error">
+            Không thể tải nội dung danh mục.
+          </div>
 
-        <div v-else-if="feedError" class="category-grid-error">
-          Không thể tải nội dung danh mục.
-        </div>
-
-        <div v-else>
+          <div v-else>
           <div
             v-for="state in feedCategories"
             :key="state.category.maDanhMuc"
@@ -833,7 +849,8 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
-      </section>
+        </section>
+      </template>
 
       <!-- ======================= -->
       <!-- LƯỚI THƯƠNG HIỆU -->

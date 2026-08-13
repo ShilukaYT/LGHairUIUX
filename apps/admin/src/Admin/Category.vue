@@ -25,7 +25,7 @@ async function loadData() {
         trangThai: filterStatus.value === "" ? null : filterStatus.value,
       },
     });
-    danhMucs.value = res.data.map((d) => ({
+    const mapped = res.data.map((d) => ({
       maDM: d.maDM,
       tenDanhMuc: d.tenDanhMuc,
       hinhAnh: d.hinhAnh ?? null,
@@ -33,6 +33,15 @@ async function loadData() {
       trangThai: d.trangThai,
       soDichVu: d.soDichVu ?? 0,
     }));
+
+    // 🆕 Mã danh mục mới (số lớn hơn, ví dụ DM05) lên đầu, mã cũ (DM01) xuống sau
+    const dmNum = (maDM) => {
+      const n = parseInt(String(maDM || "").replace(/^DM/i, ""), 10);
+      return isNaN(n) ? -1 : n;
+    };
+    mapped.sort((a, b) => dmNum(b.maDM) - dmNum(a.maDM));
+
+    danhMucs.value = mapped;
   } catch {
     showToast("Lỗi tải danh mục!", "error");
   } finally {
@@ -165,22 +174,7 @@ function clearErrors() {
 function validate() {
   clearErrors();
   let ok = true;
-  if (!editingId.value) {
-    if (!form.maDM.trim()) {
-      errors.maDM = "Mã danh mục không được để trống.";
-      ok = false;
-    } else if (!/^[A-Za-z0-9]{2,10}$/.test(form.maDM.trim())) {
-      errors.maDM = "Mã chỉ gồm chữ và số, 2–10 ký tự.";
-      ok = false;
-    } else if (
-      danhMucs.value.find(
-        (x) => x.maDM.toLowerCase() === form.maDM.trim().toLowerCase(),
-      )
-    ) {
-      errors.maDM = "Mã danh mục đã tồn tại.";
-      ok = false;
-    }
-  }
+  // Mã danh mục do server tự sinh (DM01, DM02, ...) nên không cần validate ở đây.
   if (!form.tenDanhMuc.trim()) {
     errors.tenDanhMuc = "Tên danh mục không được để trống.";
     ok = false;
@@ -244,7 +238,7 @@ async function saveItem() {
   saving.value = true;
   try {
     const fd = new FormData();
-    if (!editingId.value) fd.append("MaDM", form.maDM.trim().toUpperCase());
+    // Khi sửa: mã dùng luôn theo route (editingId). Khi thêm mới: không gửi, server tự sinh mã (DM01, DM02...).
     fd.append("TenDanhMuc", form.tenDanhMuc.trim());
     fd.append("TrangThai", String(form.trangThai));
 
@@ -260,8 +254,9 @@ async function saveItem() {
       logActivity("Cập nhật danh mục", `Đã cập nhật thông tin danh mục dịch vụ ${form.tenDanhMuc} (Mã: ${editingId.value})`, "Dịch vụ");
       showToast("Cập nhật danh mục thành công!");
     } else {
-      await axios.post(`${API}/api/DanhMuc`, fd);
-      logActivity("Thêm danh mục", `Đã thêm danh mục dịch vụ mới ${form.tenDanhMuc} (Mã: ${form.maDM.trim().toUpperCase()})`, "Dịch vụ");
+      const res = await axios.post(`${API}/api/DanhMuc`, fd);
+      const newMaDM = res.data?.maDM || "";
+      logActivity("Thêm danh mục", `Đã thêm danh mục dịch vụ mới ${form.tenDanhMuc} (Mã: ${newMaDM})`, "Dịch vụ");
       showToast("Thêm danh mục thành công!");
     }
     await loadData();
@@ -622,14 +617,14 @@ onMounted(loadData);
               </v-col>
 
               <v-col cols="12" sm="6">
-                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Mã danh mục *</div>
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Mã danh mục</div>
                 <v-text-field
-                  v-model="form.maDM"
+                  :model-value="editingId ? form.maDM : 'Tự động sinh mã'"
                   variant="outlined" density="comfortable" rounded="lg"
-                  :readonly="!!editingId"
-                  placeholder="VD: DM001" maxlength="10"
-                  :error-messages="errors.maDM"
-                  @update:model-value="errors.maDM = ''"
+                  readonly
+                  disabled
+                  hint="Mã danh mục được hệ thống tự động sinh (DM01, DM02, ...)"
+                  persistent-hint
                 ></v-text-field>
               </v-col>
               <v-col cols="12" sm="6">

@@ -122,6 +122,7 @@ const fetchProduct = async (id: string) => {
 
 const getImageUrl = (path?: string) => {
   if (!path) return `${API}/assets/images/default.jpg`;
+  if (path.startsWith("http")) return path; // URL Cloudinary — giữ nguyên
   if (path.startsWith("/")) return `${API}${path}`;
   return `${API}/${path}`;
 };
