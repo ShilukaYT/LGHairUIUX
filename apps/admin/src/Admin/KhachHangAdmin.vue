@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, reactive } from 'vue'
 import axios from 'axios'
-import { toast } from 'vue-sonner'
-import Swal from 'sweetalert2'
 import { logActivity } from '@/utils/activityLogger'
 import {
   Plus,
@@ -11,33 +9,15 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
-  Users,
   Upload,
   Eye,
   EyeOff,
+  RotateCcw,
+  X,
+  Check,
+  AlertCircle,
+  Users
 } from 'lucide-vue-next'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Toaster } from '@/components/ui/sonner'
-import 'vue-sonner/style.css'
 
 const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
 const BASE = `${API}/api/admin/khach-hang`
@@ -76,6 +56,31 @@ const editingMaKh = ref<string | null>(null)
 /** Giá trị mật khẩu lúc mở form sửa (để chỉ gửi API khi thật sự đổi). */
 const editMatKhauBanDau = ref('')
 
+// ── DELETE DIALOG STATE ──
+const showDeleteModal = ref(false)
+const selectedItemToDelete = ref<KhachHangRow | null>(null)
+const isDeleting = ref(false)
+
+// ── PASSWORD RESULT MODAL ──
+const passwordResultModal = reactive({
+  show: false,
+  title: '',
+  message: '',
+})
+
+// ── NOTIFICATION (SNACKBAR) ──
+const snackbar = reactive({
+  show: false,
+  text: '',
+  color: 'success',
+})
+
+const showNotification = (msg: string, type: 'success' | 'error' | 'warning' | 'info' = 'success') => {
+  snackbar.text = msg
+  snackbar.color = type === 'success' ? 'success' : type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'info'
+  snackbar.show = true
+}
+
 const editForm = ref({
   hoTen: '',
   email: '',
@@ -106,7 +111,6 @@ const avatarUploading = ref(false)
 const editAvatarFileRef = ref<HTMLInputElement | null>(null)
 const createAvatarFileRef = ref<HTMLInputElement | null>(null)
 
-const GIOI_TINH_NONE = 'none'
 /** Mặc định hiện ký tự mật khẩu khi tạo/sửa (có nút ẩn nếu cần). */
 const showCreatePassword = ref(true)
 const showEditPassword = ref(true)
@@ -147,11 +151,6 @@ function toggleEditPassword() {
   showEditPassword.value = !showEditPassword.value
 }
 
-function onCreateGioiTinhSelect(v: unknown) {
-  createForm.value.gioiTinh = v === GIOI_TINH_NONE ? '' : String(v)
-  createGioiTinhError.value = ''
-}
-
 const totalPages = computed(() => Math.max(1, Math.ceil(totalCount.value / pageSize.value)))
 
 function mediaUrl(path: string | null | undefined) {
@@ -173,10 +172,10 @@ async function uploadAvatarFile(file: File, target: 'edit' | 'create') {
     const path = res.data.duongDan
     if (target === 'edit') editForm.value.hinhAnh = path
     else createForm.value.hinhAnh = path
-    toast.success('Đã tải ảnh lên.')
+    showNotification('Đã tải ảnh lên thành công.', 'success')
     if (target === 'create') createAvatarError.value = ''
   } catch {
-    toast.error('Không upload được ảnh.')
+    showNotification('Không upload được ảnh.', 'error')
   } finally {
     avatarUploading.value = false
   }
@@ -188,11 +187,11 @@ function onPickAvatar(e: Event, target: 'edit' | 'create') {
   input.value = ''
   if (!file) return
   if (!file.type.startsWith('image/')) {
-    toast.error('Chỉ chọn file ảnh (JPG, PNG, WEBP).')
+    showNotification('Chỉ chọn file ảnh (JPG, PNG, WEBP).', 'warning')
     return
   }
   if (file.size > 5 * 1024 * 1024) {
-    toast.error('Ảnh tối đa 5MB.')
+    showNotification('Ảnh tối đa 5MB.', 'warning')
     return
   }
   uploadAvatarFile(file, target)
@@ -223,16 +222,15 @@ async function fetchList() {
     list.value = res.data.items ?? []
     totalCount.value = res.data.totalCount ?? 0
   } catch {
-    toast.error('Không tải được danh sách khách hàng.')
     list.value = []
+    showNotification('Không tải được danh sách khách hàng.', 'error')
   } finally {
     loading.value = false
   }
 }
 
-function onCreateLoaiChange(v: unknown) {
-  const val = String(v ?? '')
-  if (val === 'vang_lai') {
+function onCreateLoaiChange(v: string) {
+  if (v === 'vang_lai') {
     createLoaiKhach.value = 'vang_lai'
     createForm.value.hoTen = TEN_KHACH_VANG_LAI
   } else {
@@ -247,7 +245,7 @@ function openCreate() {
     hoTen: TEN_KHACH_VANG_LAI,
     sdt: '',
     email: '',
-    gioiTinh: '',
+    gioiTinh: 'Nam',
     matKhau: '',
     hinhAnh: '',
   }
@@ -263,27 +261,25 @@ async function openEdit(row: KhachHangRow) {
   editingMaKh.value = row.maKh
   editOpen.value = true
   saving.value = false
-  showEditPassword.value = true
+  showEditPassword.value = false
   try {
     const res = await axios.get<DetailRow>(`${BASE}/${encodeURIComponent(row.maKh)}`, {
       withCredentials: true,
     })
     const d = res.data
-    const mkHienTai = d.matKhau ?? ''
-    editMatKhauBanDau.value = mkHienTai
     editForm.value = {
       hoTen: d.hoTen ?? '',
       email: d.email ?? '',
       sdt: d.sdt ?? '',
-      gioiTinh: d.gioiTinh ?? '',
+      gioiTinh: d.gioiTinh ?? 'Nam',
       diemTichLuy: d.diemTichLuy != null ? String(d.diemTichLuy) : '0',
       trangThai: d.trangThai != null ? String(d.trangThai) : '1',
       hinhAnh: d.hinhAnh ?? '',
-      matKhauMoi: mkHienTai,
+      matKhauMoi: '',
       tenRank: d.tenRank ?? d.maRank ?? '',
     }
   } catch {
-    toast.error('Không tải chi tiết khách hàng.')
+    showNotification('Không tải được chi tiết khách hàng.', 'error')
     editOpen.value = false
   }
 }
@@ -292,7 +288,7 @@ async function saveEdit() {
   if (!editingMaKh.value) return
   const emailChk = validateEmail(editForm.value.email)
   if (!emailChk.ok) {
-    toast.error(emailChk.message)
+    showNotification(emailChk.message, 'warning')
     return
   }
   editForm.value.email = emailChk.email
@@ -300,7 +296,7 @@ async function saveEdit() {
   if (sdtRaw) {
     const chk = validateSdtVn(sdtRaw)
     if (!chk.ok) {
-      toast.error(chk.message)
+      showNotification(chk.message, 'warning')
       return
     }
     editForm.value.sdt = chk.sdt
@@ -309,9 +305,7 @@ async function saveEdit() {
   try {
     const diem = parseInt(editForm.value.diemTichLuy, 10)
     const mkTrim = editForm.value.matKhauMoi.trim()
-    const banDauTrim = editMatKhauBanDau.value.trim()
-    const matKhauMoiPayload =
-      mkTrim === '' ? null : mkTrim === banDauTrim ? null : mkTrim
+    const matKhauMoiPayload = mkTrim === '' ? null : mkTrim
     const res = await axios.put<{ message?: string; matKhau?: string | null }>(
       `${BASE}/${encodeURIComponent(editingMaKh.value)}`,
       {
@@ -328,18 +322,18 @@ async function saveEdit() {
     )
     const mkMoi = res.data?.matKhau
     if (mkMoi) {
-      toast.success('Đã cập nhật khách hàng.', {
-        description: `Mật khẩu mới (đăng nhập khách): ${mkMoi}`,
-        duration: 25_000,
-      })
+      passwordResultModal.title = 'Đã Cập Nhật Khách Hàng'
+      passwordResultModal.message = `Mật khẩu mới (đăng nhập khách): <strong class="text-primary">${mkMoi}</strong>`
+      passwordResultModal.show = true
     } else {
-      toast.success('Đã cập nhật khách hàng.')
+      showNotification('Đã cập nhật khách hàng thành công.', 'success')
     }
+    logActivity('Cập nhật khách hàng', `Đã cập nhật khách hàng ${editForm.value.hoTen || editingMaKh.value}`, 'Khách hàng')
     editOpen.value = false
     await fetchList()
-  } catch (e: unknown) {
-    const msg = axios.isAxiosError(e) ? (e.response?.data as { message?: string })?.message : null
-    toast.error(msg || 'Lưu thất bại.')
+  } catch (e: any) {
+    const msg = e.response?.data?.message || 'Lưu thất bại.'
+    showNotification(msg, 'error')
   } finally {
     saving.value = false
   }
@@ -347,34 +341,34 @@ async function saveEdit() {
 
 async function saveCreate() {
   if (!createForm.value.hoTen.trim()) {
-    toast.error('Nhập họ tên.')
+    showNotification('Vui lòng nhập họ tên.', 'warning')
     return
   }
   const sdtCheck = validateSdtVn(createForm.value.sdt)
   if (!sdtCheck.ok) {
     createSdtError.value = sdtCheck.message
-    toast.error(sdtCheck.message)
+    showNotification(sdtCheck.message, 'warning')
     return
   }
   createSdtError.value = ''
   const emailCheck = validateEmail(createForm.value.email)
   if (!emailCheck.ok) {
     createEmailError.value = emailCheck.message
-    toast.error(emailCheck.message)
+    showNotification(emailCheck.message, 'warning')
     return
   }
   createEmailError.value = ''
   if (!createForm.value.gioiTinh.trim()) {
     const msg = 'Vui lòng chọn giới tính.'
     createGioiTinhError.value = msg
-    toast.error(msg)
+    showNotification(msg, 'warning')
     return
   }
   createGioiTinhError.value = ''
   if (!createForm.value.hinhAnh.trim()) {
     const msg = 'Vui lòng tải ảnh đại diện.'
     createAvatarError.value = msg
-    toast.error(msg)
+    showNotification(msg, 'warning')
     return
   }
   createAvatarError.value = ''
@@ -397,34 +391,22 @@ async function saveCreate() {
     const mk = res.data?.matKhau
     const maKh = res.data?.maKh
     if (mk) {
-      toast.success('Đã tạo khách hàng mới.', {
-        description: `${maKh ? `Mã KH: ${maKh}. ` : ''}Mật khẩu đăng nhập: ${mk}`,
-        duration: 25_000,
-      })
+      passwordResultModal.title = 'Tạo Khách Hàng Thành Công'
+      passwordResultModal.message = `${maKh ? `Mã KH: <strong>${maKh}</strong><br>` : ''}Mật khẩu đăng nhập: <strong class="text-primary">${mk}</strong>`
+      passwordResultModal.show = true
     } else {
-      toast.success('Đã tạo khách hàng mới.')
+      showNotification('Đã tạo khách hàng mới thành công.', 'success')
     }
+    logActivity('Thêm khách hàng', `Đã thêm khách hàng mới: ${createForm.value.hoTen} (${maKh})`, 'Khách hàng')
     createOpen.value = false
     page.value = 1
     await fetchList()
-  } catch (e: unknown) {
-    const msg = axios.isAxiosError(e) ? (e.response?.data as { message?: string })?.message : null
-    toast.error(msg || 'Tạo thất bại.')
+  } catch (e: any) {
+    const msg = e.response?.data?.message || 'Tạo thất bại.'
+    showNotification(msg, 'error')
   } finally {
     saving.value = false
   }
-}
-
-function trangThaiLabel(t: number | null | undefined) {
-  if (t === 1) return 'Hoạt động'
-  if (t === 0) return 'Khóa'
-  return t == null ? '—' : `Trạng thái ${t}`
-}
-
-function trangThaiVariant(t: number | null | undefined): 'default' | 'secondary' | 'destructive' | 'outline' {
-  if (t === 1) return 'default'
-  if (t === 0) return 'destructive'
-  return 'secondary'
 }
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
@@ -433,39 +415,38 @@ function onSearchInput() {
   searchTimer = setTimeout(() => {
     page.value = 1
     fetchList()
-  }, 400)
+  }, 350)
 }
 
-async function confirmDelete(row: KhachHangRow) {
-  const res = await Swal.fire({
-    title: 'Xác nhận xóa?',
-    text: `Bạn có chắc chắn muốn xóa khách hàng "${row.hoTen || row.maKh}" không?`,
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonColor: '#d33',
-    cancelButtonColor: '#3085d6',
-    confirmButtonText: 'Xóa ngay',
-    cancelButtonText: 'Hủy'
-  })
+function openDelete(row: KhachHangRow) {
+  selectedItemToDelete.value = row
+  showDeleteModal.value = true
+}
 
-  if (!res.isConfirmed) return
-
+async function confirmDelete() {
+  if (!selectedItemToDelete.value) return
+  isDeleting.value = true
   try {
-    await axios.delete(`${BASE}/${encodeURIComponent(row.maKh)}`, { withCredentials: true })
-    toast.success('Đã xóa khách hàng thành công.')
-    logActivity("Xóa khách hàng", `Đã xóa khách hàng ${row.hoTen || row.maKh}`, "Quản lý khách hàng")
+    await axios.delete(`${BASE}/${encodeURIComponent(selectedItemToDelete.value.maKh)}`, { withCredentials: true })
+    showNotification('Đã xóa khách hàng thành công.', 'success')
+    logActivity('Xóa khách hàng', `Đã xóa khách hàng ${selectedItemToDelete.value.hoTen || selectedItemToDelete.value.maKh}`, 'Quản lý khách hàng')
+    showDeleteModal.value = false
+    selectedItemToDelete.value = null
     await fetchList()
-  } catch (e: unknown) {
-    const msg = axios.isAxiosError(e) ? (e.response?.data as { message?: string })?.message : null
-    toast.error(msg || 'Xóa thất bại.')
+  } catch (e: any) {
+    const msg = e.response?.data?.message || 'Xóa khách hàng thất bại.'
+    showNotification(msg, 'error')
+  } finally {
+    isDeleting.value = false
   }
 }
 
 watch(trangThaiFilter, () => {
   page.value = 1
+  fetchList()
 })
 
-watch([page, pageSize, trangThaiFilter], () => {
+watch(page, () => {
   fetchList()
 })
 
@@ -475,529 +456,676 @@ onMounted(() => {
 </script>
 
 <template>
-  <v-container fluid class="pa-6 fill-height align-start font-sans select-none" style="min-height: 100vh;">
-    <Toaster rich-colors position="top-right" />
+  <v-container fluid class="pa-6 fill-height align-start">
+    <!-- ═══════ SNACKBAR NOTIFICATION ═══════ -->
+    <v-snackbar
+      v-model="snackbar.show"
+      :color="snackbar.color"
+      location="top right"
+      elevation="24"
+      :timeout="3500"
+      style="z-index: 99999 !important;"
+    >
+      <div class="d-flex align-center gap-3">
+        <Check v-if="snackbar.color === 'success'" class="w-5 h-5 shrink-0" />
+        <AlertCircle v-else-if="snackbar.color === 'error' || snackbar.color === 'warning'" class="w-5 h-5 shrink-0" />
+        <span class="text-subtitle-2 font-weight-medium">{{ snackbar.text }}</span>
+      </div>
+      <template v-slot:actions>
+        <v-btn variant="text" icon density="compact" @click="snackbar.show = false">
+          <X class="w-4 h-4" />
+        </v-btn>
+      </template>
+    </v-snackbar>
 
     <v-card width="100%" elevation="2" rounded="xl" class="d-flex flex-column w-full">
-      <v-card-title class="d-flex flex-column flex-md-row align-md-center justify-space-between pa-6">
+      <!-- Card Header -->
+      <div class="d-flex flex-column flex-md-row align-md-center justify-space-between pa-6 pb-4 gap-4">
         <div>
-          <h2 class="text-h5 font-weight-bold mb-1">Quản Lý Khách Hàng</h2>
-          <div class="text-subtitle-2 text-medium-emphasis">Quản lý danh sách, tìm kiếm và chỉnh sửa thông tin khách hàng thân thiết</div>
+          <h2 class="text-h5 font-weight-bold text-slate-900 dark:text-white d-flex align-center gap-2 mb-1">
+            <Users class="w-6 h-6 text-primary shrink-0" />
+            <span>Quản Lý Khách Hàng</span>
+          </h2>
+          <div class="text-subtitle-2 text-medium-emphasis">
+            Quản lý danh sách, tìm kiếm và chỉnh sửa thông tin khách hàng thân thiết
+          </div>
         </div>
 
-        <div class="d-flex align-center gap-3 mt-4 mt-md-0 flex-wrap">
-          <div class="relative w-full sm:w-64">
-            <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              id="kw"
-              v-model="keyword"
-              class="w-full h-10 pl-10 pr-8 rounded-lg border border-slate-300 text-xs font-medium outline-none focus:border-primary bg-white text-slate-800"
-              placeholder="Mã KH, họ tên, SĐT, email…"
-              @input="onSearchInput"
-            />
-          </div>
+        <div class="d-flex align-center gap-3 mt-4 mt-md-0 flex-wrap justify-md-end">
+          <!-- Search input -->
+          <v-text-field
+            v-model="keyword"
+            placeholder="Mã KH, họ tên, SĐT, email…"
+            variant="outlined"
+            density="compact"
+            hide-details
+            clearable
+            style="min-width: 220px; max-width: 300px;"
+            @input="onSearchInput"
+          >
+            <template v-slot:prepend-inner>
+              <Search class="w-4 h-4 text-slate-400 mr-1 shrink-0" />
+            </template>
+          </v-text-field>
 
-          <div class="d-flex align-center gap-2 text-caption font-weight-bold text-medium-emphasis">
-            <span>TRẠNG THÁI:</span>
-            <select
+          <!-- Status Filter -->
+          <div class="d-flex align-center gap-2">
+            <span class="text-caption font-weight-bold text-medium-emphasis text-no-wrap">TRẠNG THÁI:</span>
+            <v-select
               v-model="trangThaiFilter"
-              class="h-10 px-3 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-700 outline-none cursor-pointer"
-            >
-              <option value="all">Tất cả</option>
-              <option value="1">Hoạt động</option>
-              <option value="0">Khóa</option>
-            </select>
+              :items="[
+                { title: 'Tất cả', value: 'all' },
+                { title: 'Hoạt động', value: '1' },
+                { title: 'Khóa', value: '0' }
+              ]"
+              item-title="title"
+              item-value="value"
+              variant="outlined"
+              density="compact"
+              hide-details
+              style="width: 130px;"
+            ></v-select>
           </div>
 
-          <v-btn color="primary" variant="flat" rounded="lg" class="text-none font-weight-bold" @click="openCreate">
-            <template v-slot:prepend><Plus class="w-4 h-4 mr-1" /></template>
+          <!-- Add Button -->
+          <v-btn
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            class="text-none font-weight-bold px-4"
+            height="40"
+            @click="openCreate"
+          >
+            <template v-slot:prepend>
+              <Plus class="w-4 h-4 mr-1 shrink-0" />
+            </template>
             Thêm khách hàng
           </v-btn>
         </div>
-      </v-card-title>
+      </div>
 
       <v-divider></v-divider>
 
-      <!-- Table -->
-      <div class="flex-1 overflow-x-auto w-full p-6 pt-2">
-        <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
-          <Table class="w-full text-left text-xs">
-            <TableHeader class="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 uppercase tracking-wider text-[11px]">
-              <TableRow class="hover:bg-transparent">
-                <TableHead class="py-3.5 px-4 font-bold text-center w-[120px] dark:text-slate-400">MÃ KH</TableHead>
-                <TableHead class="py-3.5 px-4 font-bold text-left dark:text-slate-400">HỌ TÊN</TableHead>
-                <TableHead class="py-3.5 px-4 font-bold text-center dark:text-slate-400">SỐ ĐIỆN THOẠI</TableHead>
-                <TableHead class="py-3.5 px-4 font-bold text-left dark:text-slate-400">EMAIL</TableHead>
-                <TableHead class="py-3.5 px-4 font-bold text-center dark:text-slate-400">HẠNG</TableHead>
-                <TableHead class="py-3.5 px-4 font-bold text-center dark:text-slate-400">ĐIỂM TÍCH LŨY</TableHead>
-                <TableHead class="py-3.5 px-4 font-bold text-center dark:text-slate-400">TRẠNG THÁI</TableHead>
-                <TableHead class="py-3.5 px-4 font-bold text-center dark:text-slate-400">THAO TÁC</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody class="divide-y divide-slate-100 dark:divide-slate-800">
-            <TableRow v-if="loading">
-              <TableCell colspan="8" class="text-slate-550 dark:text-slate-400 py-14 text-center text-xs font-bold tracking-widest uppercase bg-white dark:bg-[#1e1e2d]">
-                Đang tải dữ liệu khách hàng...
-              </TableCell>
-            </TableRow>
-            <TableRow v-else-if="!list.length">
-              <TableCell colspan="8" class="text-slate-450 dark:text-slate-500 py-14 text-center text-xs font-semibold bg-white dark:bg-[#1e1e2d]">
+      <!-- Table Section -->
+      <div class="pa-6 pt-4 overflow-x-auto w-full">
+        <v-table class="rounded-xl border w-full" hover>
+          <thead>
+            <tr class="border-b" style="background-color: rgba(var(--v-theme-on-surface), 0.04);">
+              <th class="font-weight-bold text-caption uppercase text-center py-3 text-medium-emphasis" style="width: 12%;">MÃ KH</th>
+              <th class="font-weight-bold text-caption uppercase text-left py-3 text-medium-emphasis" style="width: 20%;">HỌ TÊN</th>
+              <th class="font-weight-bold text-caption uppercase text-center py-3 text-medium-emphasis" style="width: 14%;">SỐ ĐIỆN THOẠI</th>
+              <th class="font-weight-bold text-caption uppercase text-left py-3 text-medium-emphasis" style="width: 20%;">EMAIL</th>
+              <th class="font-weight-bold text-caption uppercase text-center py-3 text-medium-emphasis" style="width: 10%;">HẠNG</th>
+              <th class="font-weight-bold text-caption uppercase text-center py-3 text-medium-emphasis" style="width: 10%;">ĐIỂM TÍCH LŨY</th>
+              <th class="font-weight-bold text-caption uppercase text-center py-3 text-medium-emphasis" style="width: 10%;">TRẠNG THÁI</th>
+              <th class="font-weight-bold text-caption uppercase text-center py-3 text-medium-emphasis" style="width: 14%;">THAO TÁC</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Loading -->
+            <tr v-if="loading">
+              <td colspan="8" class="text-center py-10">
+                <v-progress-circular indeterminate color="primary" size="32" class="mb-2"></v-progress-circular>
+                <div class="text-caption text-medium-emphasis font-weight-bold uppercase tracking-wider">Đang tải dữ liệu khách hàng...</div>
+              </td>
+            </tr>
+
+            <!-- Empty -->
+            <tr v-else-if="!list.length">
+              <td colspan="8" class="text-center py-10 text-caption text-medium-emphasis font-weight-medium">
                 Không có dữ liệu khách hàng.
-              </TableCell>
-            </TableRow>
-            <TableRow 
-              v-else 
-              v-for="row in list" 
+              </td>
+            </tr>
+
+            <!-- Data Rows -->
+            <tr
+              v-else
+              v-for="row in list"
               :key="row.maKh"
-              class="hover:bg-[#bfa77a]/5 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-[#1e1e2d] transition-all duration-150 group cursor-pointer"
+              class="transition-colors"
             >
-              <!-- Mã KH (Center) -->
-              <TableCell class="py-5 px-4 text-center font-mono font-bold text-slate-800 dark:text-slate-200 bg-transparent">{{ row.maKh }}</TableCell>
-              
-              <!-- Họ tên (Left) -->
-              <TableCell class="py-5 px-4 text-left font-semibold text-slate-800 dark:text-slate-200 group-hover:text-[#8c734b] bg-transparent transition-colors">{{ row.hoTen || '—' }}</TableCell>
-              
-              <!-- SĐT (Center) -->
-              <TableCell class="py-5 px-4 text-center text-slate-700 dark:text-slate-350 bg-transparent whitespace-nowrap">{{ row.sdt || '—' }}</TableCell>
-              
-              <!-- Email (Left) -->
-              <TableCell class="py-5 px-4 text-left text-slate-650 dark:text-slate-400 bg-transparent max-w-xs truncate sm:max-w-md">{{ row.email || '—' }}</TableCell>
-              
-              <!-- Hạng (Center) -->
-              <TableCell class="py-5 px-4 text-center bg-transparent">
-                <span 
-                  v-if="row.tenRank?.toUpperCase().includes('KIM CƯƠNG') || row.maRank?.toUpperCase().includes('KIM CƯƠNG')" 
-                  class="inline-flex items-center px-2.5 py-0.5 rounded-md text-[8px] font-extrabold uppercase tracking-widest bg-cyan-50 dark:bg-cyan-950/30 text-cyan-600 dark:text-cyan-400 border border-cyan-150 dark:border-cyan-900/50"
+              <!-- Mã KH -->
+              <td class="py-4 text-center font-weight-bold text-body-2">
+                {{ row.maKh }}
+              </td>
+
+              <!-- Họ tên -->
+              <td class="py-4 text-left font-weight-semibold text-body-2">
+                {{ row.hoTen || '—' }}
+              </td>
+
+              <!-- SĐT -->
+              <td class="py-4 text-center text-body-2 whitespace-nowrap">
+                {{ row.sdt || '—' }}
+              </td>
+
+              <!-- Email -->
+              <td class="py-4 text-left text-body-2 text-medium-emphasis truncate max-w-xs">
+                {{ row.email || '—' }}
+              </td>
+
+              <!-- Hạng -->
+              <td class="py-4 text-center">
+                <v-chip
+                  v-if="row.tenRank?.toUpperCase().includes('KIM CƯƠNG') || row.maRank?.toUpperCase().includes('KIM CƯƠNG')"
+                  color="cyan"
+                  size="x-small"
+                  variant="tonal"
+                  class="font-weight-bold uppercase tracking-wider"
                 >
                   {{ row.tenRank || row.maRank }}
-                </span>
-                <span 
-                  v-else-if="row.tenRank?.toUpperCase().includes('VÀNG') || row.maRank?.toUpperCase().includes('VÀNG') || row.tenRank?.toUpperCase().includes('GOLD')" 
-                  class="inline-flex items-center px-2.5 py-0.5 rounded-md text-[8px] font-extrabold uppercase tracking-widest bg-[#bfa77a]/15 text-[#8c734b] border border-[#bfa77a]/25"
+                </v-chip>
+                <v-chip
+                  v-else-if="row.tenRank?.toUpperCase().includes('VÀNG') || row.maRank?.toUpperCase().includes('VÀNG') || row.tenRank?.toUpperCase().includes('GOLD')"
+                  color="amber-darken-2"
+                  size="x-small"
+                  variant="tonal"
+                  class="font-weight-bold uppercase tracking-wider"
                 >
                   {{ row.tenRank || row.maRank }}
-                </span>
-                <span 
-                  v-else-if="row.tenRank?.toUpperCase().includes('BẠC') || row.maRank?.toUpperCase().includes('BẠC') || row.tenRank?.toUpperCase().includes('SILVER')" 
-                  class="inline-flex items-center px-2.5 py-0.5 rounded-md text-[8px] font-extrabold uppercase tracking-widest bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
+                </v-chip>
+                <v-chip
+                  v-else-if="row.tenRank?.toUpperCase().includes('BẠC') || row.maRank?.toUpperCase().includes('BẠC') || row.tenRank?.toUpperCase().includes('SILVER')"
+                  color="grey"
+                  size="x-small"
+                  variant="tonal"
+                  class="font-weight-bold uppercase tracking-wider"
                 >
                   {{ row.tenRank || row.maRank }}
-                </span>
-                <span 
-                  v-else 
-                  class="inline-flex items-center px-2.5 py-0.5 rounded-md text-[8px] font-extrabold uppercase tracking-widest bg-amber-55 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border border-amber-100 dark:border-amber-900/55"
+                </v-chip>
+                <v-chip
+                  v-else
+                  color="brown-darken-1"
+                  size="x-small"
+                  variant="tonal"
+                  class="font-weight-bold uppercase tracking-wider"
                 >
                   {{ row.tenRank || row.maRank || 'Đồng' }}
-                </span>
-              </TableCell>
-              
-              <!-- Điểm (Center) -->
-              <TableCell class="py-5 px-4 text-center font-bold font-mono text-slate-700 dark:text-slate-300 bg-transparent text-xs">{{ row.diemTichLuy ?? 0 }}</TableCell>
-              
-              <!-- Trạng thái (Center) -->
-              <TableCell class="py-5 px-4 text-center bg-transparent">
-                <span 
+                </v-chip>
+              </td>
+
+              <!-- Điểm -->
+              <td class="py-4 text-center font-weight-bold text-body-2 text-slate-800 dark:text-slate-200">
+                {{ row.diemTichLuy ?? 0 }}
+              </td>
+
+              <!-- Trạng thái -->
+              <td class="py-4 text-center">
+                <v-chip
                   v-if="row.trangThai === 1"
-                  class="inline-flex items-center px-2.5 py-0.5 rounded-md text-[8px] font-extrabold uppercase tracking-widest bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border border-emerald-150 dark:border-emerald-900/50"
+                  color="success"
+                  size="x-small"
+                  variant="tonal"
+                  class="font-weight-bold uppercase tracking-wider"
                 >
                   Hoạt động
-                </span>
-                <span 
+                </v-chip>
+                <v-chip
                   v-else
-                  class="inline-flex items-center px-2.5 py-0.5 rounded-md text-[8px] font-extrabold uppercase tracking-widest bg-rose-50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 border border-rose-150 dark:border-rose-900/50"
+                  color="error"
+                  size="x-small"
+                  variant="tonal"
+                  class="font-weight-bold uppercase tracking-wider"
                 >
                   Khóa
-                </span>
-              </TableCell>
-              
-              <!-- Thao tác (Center) -->
-              <TableCell class="py-3.5 px-4 text-center bg-transparent" @click.stop>
-                <div class="flex items-center justify-center gap-1.5">
+                </v-chip>
+              </td>
+
+              <!-- Thao tác -->
+              <td class="py-4 text-center">
+                <div class="d-flex align-center justify-center gap-2">
                   <v-btn
-                    color="primary" variant="tonal" size="small" rounded="lg" class="text-none font-weight-bold"
+                    color="primary"
+                    variant="tonal"
+                    size="small"
+                    rounded="lg"
+                    class="text-none font-weight-bold"
                     @click="openEdit(row)"
                   >
                     <template v-slot:prepend><Pencil class="w-3.5 h-3.5 mr-1" /></template>
                     Sửa
                   </v-btn>
                   <v-btn
-                    color="error" variant="tonal" size="small" rounded="lg" class="text-none font-weight-bold"
-                    @click="confirmDelete(row)"
+                    color="error"
+                    variant="tonal"
+                    size="small"
+                    rounded="lg"
+                    class="text-none font-weight-bold"
+                    @click="openDelete(row)"
                   >
                     <template v-slot:prepend><Trash2 class="w-3.5 h-3.5 mr-1" /></template>
                     Xóa
                   </v-btn>
                 </div>
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
+              </td>
+            </tr>
+          </tbody>
+        </v-table>
       </div>
-    </div>
 
-    <!-- Pagination -->
-    <div class="text-slate-500 dark:text-slate-400 flex flex-col items-center justify-between gap-4 border-t border-slate-200 dark:border-slate-800 px-6 py-4 text-xs font-semibold sm:flex-row bg-slate-50/50 dark:bg-slate-900/30">
-      <span>
-        Tổng số <strong class="text-slate-800 dark:text-slate-200 font-mono">{{ totalCount }}</strong> khách hàng · Trang {{ page }} / {{ totalPages }}
-      </span>
-      <div class="flex items-center gap-2">
-        <v-btn
-          variant="outlined" color="grey-darken-1" size="36" rounded="lg"
-          :disabled="page <= 1 || loading"
-          @click="page = Math.max(1, page - 1)"
-        >
-          <ChevronLeft class="w-4 h-4" />
-        </v-btn>
-        <v-btn
-          variant="outlined" color="grey-darken-1" size="36" rounded="lg"
-          :disabled="page >= totalPages || loading"
-          @click="page = Math.min(totalPages, page + 1)"
-        >
-          <ChevronRight class="w-4 h-4" />
-        </v-btn>
+      <!-- Pagination Footer -->
+      <div class="d-flex flex-column flex-sm-row align-center justify-space-between px-6 py-4 border-t gap-3">
+        <span class="text-caption text-medium-emphasis font-weight-semibold">
+          Tổng số <strong>{{ totalCount }}</strong> khách hàng · Trang {{ page }} / {{ totalPages }}
+        </span>
+        <div class="d-flex align-center gap-2">
+          <v-btn
+            variant="outlined"
+            color="grey-darken-1"
+            size="36"
+            rounded="lg"
+            :disabled="page <= 1 || loading"
+            @click="page = Math.max(1, page - 1)"
+          >
+            <ChevronLeft class="w-4 h-4" />
+          </v-btn>
+          <v-btn
+            variant="outlined"
+            color="grey-darken-1"
+            size="36"
+            rounded="lg"
+            :disabled="page >= totalPages || loading"
+            @click="page = Math.min(totalPages, page + 1)"
+          >
+            <ChevronRight class="w-4 h-4" />
+          </v-btn>
+        </div>
       </div>
-    </div>
-  </v-card>
+    </v-card>
 
-    <!-- Sửa khách hàng -->
-    <Teleport to="body">
-      <div
-        v-if="editOpen"
-        class="fixed inset-0 z-[2400] flex items-center justify-center p-4 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs transition-opacity"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="edit-kh-title"
-      >
-        <button
-          type="button"
-          class="absolute inset-0 bg-transparent cursor-default"
-          aria-label="Đóng"
-          @click="editOpen = false"
-        />
-        <div
-          class="relative z-10 flex max-h-[90vh] w-full max-w-3xl min-h-0 flex-col overflow-hidden rounded-2xl border border-solid border-slate-300 dark:border-slate-800 bg-white dark:bg-[#1e1e2d] shadow-2xl transition-all"
-          @click.stop
-        >
-          <!-- Header -->
-          <div class="shrink-0 border-b border-solid border-slate-200 dark:border-slate-800 px-8 pt-6 pb-4 bg-slate-50/50 dark:bg-slate-800/40">
-            <h2 id="edit-kh-title" class="text-lg font-serif text-[#8c734b] tracking-wider uppercase">Sửa thông tin khách hàng</h2>
-          </div>
-
-          <!-- Body -->
-          <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-8 py-6 space-y-5 text-xs">
-            <p class="text-slate-500 dark:text-slate-400 text-xs leading-relaxed">
-              Hạng thành viên được hệ thống tự cập nhật theo điểm (giống đăng nhập khách).
-              <span v-if="editForm.tenRank" class="text-slate-800 dark:text-slate-200 font-bold ml-1">Hiện tại: {{ editForm.tenRank }}</span>
+    <!-- ═══════ VUETIFY MODAL: SỬA KHÁCH HÀNG ═══════ -->
+    <v-dialog v-model="editOpen" max-width="680px" persistent scrollable>
+      <v-card rounded="2xl" class="overflow-hidden">
+        <!-- Dialog Header -->
+        <v-card-title class="pa-6 pb-4 d-flex align-center justify-space-between border-b">
+          <div>
+            <h3 class="text-h6 font-weight-bold mb-0">SỬA THÔNG TIN KHÁCH HÀNG</h3>
+            <p class="text-caption text-medium-emphasis mb-0 mt-0.5">
+              Hạng thành viên được hệ thống tự cập nhật theo điểm.
+              <span v-if="editForm.tenRank" class="font-weight-bold ml-1 text-primary">Hiện tại: {{ editForm.tenRank }}</span>
             </p>
+          </div>
+          <v-btn icon variant="text" density="comfortable" @click="editOpen = false">
+            <X class="w-4 h-4" />
+          </v-btn>
+        </v-card-title>
 
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-x-6">
-              <div class="space-y-2">
-                <Label for="ef-ten" class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">HỌ TÊN</Label>
-                <Input id="ef-ten" v-model="editForm.hoTen" class="h-11 text-xs rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:border-[#8c734b] bg-slate-50/50 dark:bg-slate-850/50 focus:bg-white dark:focus:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-none transition-all" />
-              </div>
-              <div class="space-y-2">
-                <Label for="ef-sdt" class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">SỐ ĐIỆN THOẠI</Label>
-                <Input
-                  id="ef-sdt"
-                  v-model="editForm.sdt"
-                  class="h-11 text-xs rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:border-[#8c734b] bg-slate-50/50 dark:bg-slate-850/50 focus:bg-white dark:focus:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-none transition-all"
-                  placeholder="VD: 09xxxxxxxx"
-                  inputmode="tel"
-                  autocomplete="tel"
-                />
-              </div>
-              <div class="space-y-2">
-                <Label for="ef-email" class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">EMAIL *</Label>
-                <Input
-                  id="ef-email"
-                  v-model="editForm.email"
-                  class="h-11 text-xs rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:border-[#8c734b] bg-slate-50/50 dark:bg-slate-850/50 focus:bg-white dark:focus:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-none transition-all"
-                  type="email"
-                  autocomplete="email"
-                  placeholder="vidu@email.com"
-                />
-              </div>
-              <div class="space-y-2">
-                <Label class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">GIỚI TÍNH</Label>
-                <Select
-                  :model-value="editForm.gioiTinh.trim() ? editForm.gioiTinh.trim() : GIOI_TINH_NONE"
-                  @update:model-value="
-                    (v: unknown) => {
-                      editForm.gioiTinh = v === GIOI_TINH_NONE ? '' : String(v)
-                    }
-                  "
+        <!-- Dialog Body -->
+        <v-card-text class="pa-6">
+          <v-row>
+            <v-col cols="12" sm="6" class="py-2">
+              <label class="text-caption font-weight-bold text-medium-emphasis mb-1 d-block">HỌ TÊN</label>
+              <v-text-field
+                v-model="editForm.hoTen"
+                placeholder="Nhập họ tên"
+                variant="outlined"
+                density="comfortable"
+                rounded="lg"
+                hide-details
+              ></v-text-field>
+            </v-col>
+
+            <v-col cols="12" sm="6" class="py-2">
+              <label class="text-caption font-weight-bold text-medium-emphasis mb-1 d-block">SỐ ĐIỆN THOẠI</label>
+              <v-text-field
+                v-model="editForm.sdt"
+                placeholder="VD: 09xxxxxxxx"
+                variant="outlined"
+                density="comfortable"
+                rounded="lg"
+                hide-details
+              ></v-text-field>
+            </v-col>
+
+            <v-col cols="12" sm="6" class="py-2">
+              <label class="text-caption font-weight-bold text-medium-emphasis mb-1 d-block">EMAIL <span class="text-error">*</span></label>
+              <v-text-field
+                v-model="editForm.email"
+                type="email"
+                placeholder="vidu@email.com"
+                variant="outlined"
+                density="comfortable"
+                rounded="lg"
+                hide-details
+              ></v-text-field>
+            </v-col>
+
+            <v-col cols="12" sm="6" class="py-2">
+              <label class="text-caption font-weight-bold text-medium-emphasis mb-1 d-block">GIỚI TÍNH</label>
+              <v-select
+                v-model="editForm.gioiTinh"
+                :items="['Nam', 'Nữ', 'Khác']"
+                variant="outlined"
+                density="comfortable"
+                rounded="lg"
+                hide-details
+              ></v-select>
+            </v-col>
+
+            <v-col cols="12" sm="6" class="py-2">
+              <label class="text-caption font-weight-bold text-medium-emphasis mb-1 d-block">ĐIỂM TÍCH LŨY</label>
+              <v-text-field
+                v-model="editForm.diemTichLuy"
+                type="number"
+                min="0"
+                variant="outlined"
+                density="comfortable"
+                rounded="lg"
+                hide-details
+              ></v-text-field>
+            </v-col>
+
+            <v-col cols="12" sm="6" class="py-2">
+              <label class="text-caption font-weight-bold text-medium-emphasis mb-1 d-block">TRẠNG THÁI</label>
+              <v-select
+                v-model="editForm.trangThai"
+                :items="[
+                  { title: 'Hoạt động', value: '1' },
+                  { title: 'Khóa', value: '0' }
+                ]"
+                item-title="title"
+                item-value="value"
+                variant="outlined"
+                density="comfortable"
+                rounded="lg"
+                hide-details
+              ></v-select>
+            </v-col>
+          </v-row>
+
+          <!-- Ảnh đại diện -->
+          <div class="border-t mt-4 pt-4">
+            <label class="text-caption font-weight-bold text-medium-emphasis mb-1 d-block">ẢNH ĐẠI DIỆN</label>
+            <p class="text-caption text-medium-emphasis mb-2">Chọn file JPG, PNG hoặc WEBP (tối đa 5MB).</p>
+            <div class="d-flex align-center gap-4">
+              <v-avatar size="72" rounded="xl" class="border">
+                <img v-if="mediaUrl(editForm.hinhAnh)" :src="mediaUrl(editForm.hinhAnh)" alt="" class="w-100 h-100 object-cover" />
+                <span v-else class="text-caption text-medium-emphasis font-weight-bold">Chưa có</span>
+              </v-avatar>
+              <div class="d-flex align-center gap-2">
+                <input ref="editAvatarFileRef" type="file" accept="image/*" class="d-none" @change="onPickAvatar($event, 'edit')" />
+                <v-btn
+                  variant="outlined"
+                  color="primary"
+                  rounded="lg"
+                  class="text-none font-weight-bold"
+                  :loading="avatarUploading"
+                  @click="editAvatarFileRef?.click()"
                 >
-                  <SelectTrigger class="h-11 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-50/50 dark:bg-slate-850/50 rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:ring-0 shadow-none transition-all">
-                     <SelectValue placeholder="Chọn giới tính" />
-                  </SelectTrigger>
-                  <SelectContent class="!z-[3000] rounded-xl border border-solid border-slate-300 dark:border-slate-800 bg-white dark:bg-[#1e1e2d] shadow-lg">
-                    <SelectItem :value="GIOI_TINH_NONE">Chưa chọn</SelectItem>
-                    <SelectItem value="Nam">Nam</SelectItem>
-                    <SelectItem value="Nữ">Nữ</SelectItem>
-                    <SelectItem value="Khác">Khác</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div class="space-y-2">
-                <Label for="ef-diem" class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">ĐIỂM TÍCH LŨY</Label>
-                <Input id="ef-diem" v-model="editForm.diemTichLuy" class="h-11 text-xs rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:border-[#8c734b] bg-slate-50/50 dark:bg-slate-850/50 focus:bg-white dark:focus:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-none transition-all" type="number" min="0" />
-              </div>
-              <div class="space-y-2">
-                <Label class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">TRẠNG THÁI</Label>
-                <Select v-model="editForm.trangThai">
-                  <SelectTrigger class="h-11 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-50/50 dark:bg-slate-850/50 rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:ring-0 shadow-none transition-all">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent class="!z-[3000] rounded-xl border border-solid border-slate-300 dark:border-slate-800 bg-white dark:bg-[#1e1e2d] shadow-lg">
-                    <SelectItem value="1">Hoạt động</SelectItem>
-                    <SelectItem value="0">Khóa</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div class="border-border dark:border-slate-800 space-y-3 border-t pt-4">
-              <Label class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">ẢNH ĐẠI DIỆN</Label>
-              <p class="text-slate-450 dark:text-slate-500 text-[10px]">Chọn file JPG, PNG hoặc WEBP (tối đa 5MB). Không cần dán URL.</p>
-              <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
-                <div class="bg-slate-50 dark:bg-slate-850 border-slate-300 dark:border-slate-700 flex size-28 shrink-0 items-center justify-center overflow-hidden rounded-xl border">
-                  <img v-if="mediaUrl(editForm.hinhAnh)" :src="mediaUrl(editForm.hinhAnh)" alt="" class="size-full object-cover" />
-                  <span v-else class="text-slate-400 dark:text-slate-500 px-2 text-center text-[10px] font-semibold uppercase">Chưa có ảnh</span>
-                </div>
-                <div class="flex flex-wrap items-center gap-2">
-                  <input ref="editAvatarFileRef" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" class="hidden" @change="onPickAvatar($event, 'edit')" />
-                  <Button type="button" variant="outline" class="h-11 gap-2 rounded-xl text-xs font-bold border-slate-300 dark:border-slate-700 hover:border-[#bfa77a] hover:bg-[#bfa77a]/10 hover:text-[#8c734b]" :disabled="avatarUploading" @click="editAvatarFileRef?.click()">
-                    <Upload class="size-4" />
-                    {{ avatarUploading ? 'Đang tải…' : 'Chọn ảnh' }}
-                  </Button>
-                  <Button v-if="editForm.hinhAnh" type="button" variant="ghost" class="h-11 rounded-xl text-xs text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 hover:text-rose-600" :disabled="avatarUploading" @click="clearAvatar('edit')">
-                    Xóa ảnh
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            <div class="space-y-2">
-              <Label for="ef-mk" class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">MẬT KHẨU ĐĂNG NHẬP</Label>
-              <p class="text-slate-450 dark:text-slate-500 text-[10px] leading-relaxed">
-                Hiển thị mật khẩu hiện tại. Sửa nội dung để đổi mật khẩu; xóa trắng ô rồi lưu = giữ nguyên mật khẩu cũ.
-              </p>
-              <div class="relative">
-                <Input
-                  id="ef-mk"
-                  v-model="editForm.matKhauMoi"
-                  class="h-11 pr-11 text-xs rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:border-[#8c734b] bg-slate-50/50 dark:bg-slate-850/50 focus:bg-white dark:focus:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-none transition-all font-mono"
-                  :type="showEditPassword ? 'text' : 'password'"
-                  autocomplete="off"
-                  spellcheck="false"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  class="text-slate-400 absolute top-0 right-0 z-20 h-11 w-11 shrink-0 rounded-xl hover:bg-transparent"
-                  :aria-pressed="showEditPassword"
-                  :aria-label="showEditPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'"
-                  @click.stop.prevent="toggleEditPassword"
+                  <template v-slot:prepend><Upload class="w-4 h-4 mr-1" /></template>
+                  Chọn ảnh
+                </v-btn>
+                <v-btn
+                  v-if="editForm.hinhAnh"
+                  variant="text"
+                  color="error"
+                  rounded="lg"
+                  class="text-none font-weight-bold"
+                  @click="clearAvatar('edit')"
                 >
-                  <Eye v-if="!showEditPassword" class="pointer-events-none size-4" />
-                  <EyeOff v-else class="pointer-events-none size-4" />
-                </Button>
+                  Xóa ảnh
+                </v-btn>
               </div>
             </div>
           </div>
 
-          <!-- Footer -->
-          <div class="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-solid border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 px-8 py-4">
-            <Button type="button" variant="outline" class="h-11 px-5 text-xs font-bold rounded-xl border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800" @click="editOpen = false">
-              Hủy
-            </Button>
-            <Button
-              type="button"
-              class="h-11 px-5 !bg-[#9d804e] !text-white hover:!bg-[#866a3d] border !border-[#9d804e] text-xs font-bold rounded-xl shadow-none cursor-pointer tracking-wider"
-              :disabled="saving"
-              @click="saveEdit"
+          <!-- Mật khẩu mới -->
+          <div class="border-t mt-4 pt-4">
+            <label class="text-caption font-weight-bold text-medium-emphasis mb-1 d-block">MẬT KHẨU MỚI</label>
+            <p class="text-caption text-medium-emphasis mb-2">
+              Để trống nếu muốn giữ nguyên mật khẩu cũ; chỉ nhập khi muốn cấp mật khẩu mới cho khách hàng.
+            </p>
+            <v-text-field
+              v-model="editForm.matKhauMoi"
+              :type="showEditPassword ? 'text' : 'password'"
+              placeholder="Nhập mật khẩu mới (để trống nếu không đổi)..."
+              variant="outlined"
+              density="comfortable"
+              rounded="lg"
+              hide-details
             >
-              Lưu
-            </Button>
+              <template v-slot:append-inner>
+                <v-btn icon variant="text" density="compact" @click="toggleEditPassword">
+                  <Eye v-if="!showEditPassword" class="w-4 h-4" />
+                  <EyeOff v-else class="w-4 h-4" />
+                </v-btn>
+              </template>
+            </v-text-field>
           </div>
-        </div>
-      </div>
-    </Teleport>
+        </v-card-text>
 
-    <!-- Thêm khách hàng -->
-    <Teleport to="body">
-      <div
-        v-if="createOpen"
-        class="fixed inset-0 z-[2400] flex items-center justify-center p-4 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs transition-opacity"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="create-kh-title"
-      >
-        <button
-          type="button"
-          class="absolute inset-0 bg-transparent cursor-default"
-          aria-label="Đóng"
-          @click="createOpen = false"
-        />
-        <div
-          class="relative z-10 flex max-h-[90vh] w-full max-w-3xl min-h-0 flex-col overflow-hidden rounded-2xl border border-solid border-slate-300 dark:border-slate-800 bg-white dark:bg-[#1e1e2d] shadow-2xl transition-all"
-          @click.stop
-        >
-          <!-- Header -->
-          <div class="shrink-0 border-b border-solid border-slate-200 dark:border-slate-800 px-8 pt-6 pb-4 bg-slate-50/50 dark:bg-slate-800/40">
-            <h2 id="create-kh-title" class="text-lg font-serif text-[#8c734b] tracking-wider uppercase">Thêm khách hàng mới</h2>
+        <!-- Dialog Actions -->
+        <v-card-actions class="pa-6 pt-4 border-t d-flex justify-end gap-3">
+          <v-btn variant="outlined" color="grey-darken-1" rounded="lg" class="text-none font-weight-bold px-5" @click="editOpen = false">
+            Hủy
+          </v-btn>
+          <v-btn color="primary" variant="flat" rounded="lg" class="text-none font-weight-bold px-6" :loading="saving" @click="saveEdit">
+            Lưu
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- ═══════ VUETIFY MODAL: THÊM KHÁCH HÀNG ═══════ -->
+    <v-dialog v-model="createOpen" max-width="680px" persistent scrollable>
+      <v-card rounded="2xl" class="overflow-hidden">
+        <!-- Dialog Header -->
+        <v-card-title class="pa-6 pb-4 d-flex align-center justify-space-between border-b">
+          <h3 class="text-h6 font-weight-bold mb-0">THÊM KHÁCH HÀNG MỚI</h3>
+          <v-btn icon variant="text" density="comfortable" @click="createOpen = false">
+            <X class="w-4 h-4" />
+          </v-btn>
+        </v-card-title>
+
+        <!-- Dialog Body -->
+        <v-card-text class="pa-6">
+          <!-- Loại khách -->
+          <div class="mb-4">
+            <label class="text-caption font-weight-bold text-medium-emphasis mb-1 d-block">LOẠI KHÁCH</label>
+            <v-select
+              v-model="createLoaiKhach"
+              :items="[
+                { title: 'Khách vãng lai (mặc định)', value: 'vang_lai' },
+                { title: 'Khách có tên cụ thể', value: 'ten_cu_the' }
+              ]"
+              item-title="title"
+              item-value="value"
+              variant="outlined"
+              density="comfortable"
+              rounded="lg"
+              hide-details
+              @update:model-value="onCreateLoaiChange"
+            ></v-select>
+            <p class="text-caption text-medium-emphasis mt-1 mb-0">
+              {{
+                createLoaiKhach === 'vang_lai'
+                  ? 'Họ tên đặt sẵn "Khách vãng lai" — có thể sửa nếu cần. Email bắt buộc.'
+                  : 'Nhập họ tên, số điện thoại và email đầy đủ.'
+              }}
+            </p>
           </div>
 
-          <!-- Body -->
-          <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-8 py-6 space-y-5 text-xs">
-            <div class="space-y-2">
-              <Label class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">LOẠI KHÁCH</Label>
-              <Select :model-value="createLoaiKhach" @update:model-value="onCreateLoaiChange">
-                <SelectTrigger class="h-11 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-50/50 dark:bg-slate-850/50 rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:ring-0 shadow-none transition-all">
-                  <SelectValue placeholder="Chọn loại" />
-                </SelectTrigger>
-                <SelectContent class="!z-[3000] rounded-xl border border-solid border-slate-300 dark:border-slate-800 bg-white dark:bg-[#1e1e2d] shadow-lg">
-                  <SelectItem value="vang_lai">Khách vãng lai (mặc định)</SelectItem>
-                  <SelectItem value="ten_cu_the">Khách có tên cụ thể</SelectItem>
-                </SelectContent>
-              </Select>
-              <p class="text-slate-450 dark:text-slate-500 text-[10px]">
-                {{
-                  createLoaiKhach === 'vang_lai'
-                    ? 'Họ tên đặt sẵn "Khách vãng lai" — có thể sửa nếu cần. Email bắt buộc.'
-                    : 'Nhập họ tên, số điện thoại và email đầy đủ.'
-                }}
-              </p>
-            </div>
+          <v-row>
+            <v-col cols="12" sm="6" class="py-2">
+              <label class="text-caption font-weight-bold text-medium-emphasis mb-1 d-block">HỌ TÊN <span class="text-error">*</span></label>
+              <v-text-field
+                v-model="createForm.hoTen"
+                placeholder="Nhập họ tên"
+                variant="outlined"
+                density="comfortable"
+                rounded="lg"
+                hide-details
+              ></v-text-field>
+            </v-col>
 
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-x-6">
-              <div class="space-y-2">
-                <Label for="cf-ten" class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">HỌ TÊN *</Label>
-                <Input id="cf-ten" v-model="createForm.hoTen" class="h-11 text-xs rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:border-[#8c734b] bg-slate-50/50 dark:bg-slate-850/50 focus:bg-white dark:focus:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-none transition-all" />
-              </div>
-              <div class="space-y-2">
-                <Label for="cf-sdt" class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">SỐ ĐIỆN THOẠI *</Label>
-                <Input
-                  id="cf-sdt"
-                  v-model="createForm.sdt"
-                  class="h-11 text-xs rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:border-[#8c734b] bg-slate-50/50 dark:bg-slate-850/50 focus:bg-white dark:focus:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-none transition-all"
-                  :class="createSdtError ? 'border-destructive' : ''"
-                  placeholder="VD: 09xxxxxxxx hoặc +84…"
-                  inputmode="tel"
-                  autocomplete="tel"
-                  :aria-invalid="!!createSdtError"
-                  @input="createSdtError = ''"
-                />
-                <p v-if="createSdtError" class="text-rose-500 text-[10px] mt-1 font-bold">{{ createSdtError }}</p>
-              </div>
-              <div class="space-y-2">
-                <Label for="cf-email" class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">EMAIL *</Label>
-                <Input
-                  id="cf-email"
-                  v-model="createForm.email"
-                  class="h-11 text-xs rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:border-[#8c734b] bg-slate-50/50 dark:bg-slate-850/50 focus:bg-white dark:focus:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-none transition-all"
-                  :class="createEmailError ? 'border-destructive' : ''"
-                  type="email"
-                  autocomplete="email"
-                  placeholder="vidu@email.com"
-                  :aria-invalid="!!createEmailError"
-                  @input="createEmailError = ''"
-                />
-                <p v-if="createEmailError" class="text-rose-500 text-[10px] mt-1 font-bold">{{ createEmailError }}</p>
-              </div>
-              <div class="space-y-2">
-                <Label class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">GIỚI TÍNH *</Label>
-                <Select
-                  :model-value="createForm.gioiTinh.trim() ? createForm.gioiTinh.trim() : GIOI_TINH_NONE"
-                  @update:model-value="onCreateGioiTinhSelect"
+            <v-col cols="12" sm="6" class="py-2">
+              <label class="text-caption font-weight-bold text-medium-emphasis mb-1 d-block">SỐ ĐIỆN THOẠI <span class="text-error">*</span></label>
+              <v-text-field
+                v-model="createForm.sdt"
+                placeholder="VD: 09xxxxxxxx hoặc +84…"
+                variant="outlined"
+                density="comfortable"
+                rounded="lg"
+                hide-details
+                :error-messages="createSdtError"
+                @input="createSdtError = ''"
+              ></v-text-field>
+            </v-col>
+
+            <v-col cols="12" sm="6" class="py-2">
+              <label class="text-caption font-weight-bold text-medium-emphasis mb-1 d-block">EMAIL <span class="text-error">*</span></label>
+              <v-text-field
+                v-model="createForm.email"
+                type="email"
+                placeholder="vidu@email.com"
+                variant="outlined"
+                density="comfortable"
+                rounded="lg"
+                hide-details
+                :error-messages="createEmailError"
+                @input="createEmailError = ''"
+              ></v-text-field>
+            </v-col>
+
+            <v-col cols="12" sm="6" class="py-2">
+              <label class="text-caption font-weight-bold text-medium-emphasis mb-1 d-block">GIỚI TÍNH <span class="text-error">*</span></label>
+              <v-select
+                v-model="createForm.gioiTinh"
+                :items="['Nam', 'Nữ', 'Khác']"
+                variant="outlined"
+                density="comfortable"
+                rounded="lg"
+                hide-details
+                :error-messages="createGioiTinhError"
+                @update:model-value="createGioiTinhError = ''"
+              ></v-select>
+            </v-col>
+          </v-row>
+
+          <!-- Ảnh đại diện -->
+          <div class="border-t mt-4 pt-4">
+            <label class="text-caption font-weight-bold text-medium-emphasis mb-1 d-block">ẢNH ĐẠI DIỆN <span class="text-error">*</span></label>
+            <p class="text-caption text-medium-emphasis mb-2">Bắt buộc — JPG, PNG, WEBP — tối đa 5MB.</p>
+            <div class="d-flex align-center gap-4">
+              <v-avatar size="72" rounded="xl" class="border">
+                <img v-if="mediaUrl(createForm.hinhAnh)" :src="mediaUrl(createForm.hinhAnh)" alt="" class="w-100 h-100 object-cover" />
+                <span v-else class="text-caption text-medium-emphasis font-weight-bold">Chưa chọn</span>
+              </v-avatar>
+              <div class="d-flex align-center gap-2">
+                <input ref="createAvatarFileRef" type="file" accept="image/*" class="d-none" @change="onPickAvatar($event, 'create')" />
+                <v-btn
+                  variant="outlined"
+                  color="primary"
+                  rounded="lg"
+                  class="text-none font-weight-bold"
+                  :loading="avatarUploading"
+                  @click="createAvatarFileRef?.click()"
                 >
-                  <SelectTrigger
-                    class="h-11 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-50/50 dark:bg-slate-850/50 rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:ring-0 shadow-none transition-all"
-                    :class="createGioiTinhError ? 'border-destructive' : ''"
-                    :aria-invalid="!!createGioiTinhError"
-                  >
-                    <SelectValue placeholder="Chọn giới tính" />
-                  </SelectTrigger>
-                  <SelectContent class="!z-[3000] rounded-xl border border-solid border-slate-300 dark:border-slate-850 bg-white dark:bg-[#1e1e2d] shadow-lg">
-                    <SelectItem :value="GIOI_TINH_NONE">Chưa chọn</SelectItem>
-                    <SelectItem value="Nam">Nam</SelectItem>
-                    <SelectItem value="Nữ">Nữ</SelectItem>
-                    <SelectItem value="Khác">Khác</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p v-if="createGioiTinhError" class="text-rose-500 text-[10px] mt-1 font-bold">{{ createGioiTinhError }}</p>
-              </div>
-            </div>
-
-            <div class="border-border dark:border-slate-800 space-y-3 border-t pt-4">
-              <Label class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">ẢNH ĐẠI DIỆN *</Label>
-              <p class="text-slate-450 dark:text-slate-500 text-[10px]">Bắt buộc — JPG, PNG, WEBP — tối đa 5MB.</p>
-              <div
-                class="flex flex-col gap-4 sm:flex-row sm:items-center"
-                :class="createAvatarError ? 'border border-rose-200 p-2 bg-rose-50/20 dark:bg-rose-950/20 rounded-xl' : ''"
-              >
-                <div class="bg-slate-50 dark:bg-slate-850 border-slate-300 dark:border-slate-700 flex size-28 shrink-0 items-center justify-center overflow-hidden rounded-xl border">
-                  <img v-if="mediaUrl(createForm.hinhAnh)" :src="mediaUrl(createForm.hinhAnh)" alt="" class="size-full object-cover" />
-                  <span v-else class="text-slate-400 dark:text-slate-500 px-2 text-center text-[10px] font-semibold uppercase">Chưa chọn</span>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                  <input ref="createAvatarFileRef" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" class="hidden" @change="onPickAvatar($event, 'create')" />
-                  <Button type="button" variant="outline" class="h-11 gap-2 rounded-xl text-xs font-bold border-slate-300 dark:border-slate-700 hover:border-[#bfa77a] hover:bg-[#bfa77a]/10 hover:text-[#8c734b]" :disabled="avatarUploading" @click="createAvatarFileRef?.click()">
-                    <Upload class="size-4" />
-                    {{ avatarUploading ? 'Đang tải…' : 'Chọn ảnh' }}
-                  </Button>
-                  <Button v-if="createForm.hinhAnh" type="button" variant="ghost" class="h-11 rounded-xl text-xs text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 hover:text-rose-600" :disabled="avatarUploading" @click="clearAvatar('create')">
-                    Xóa ảnh
-                  </Button>
-                </div>
-              </div>
-              <p v-if="createAvatarError" class="text-rose-500 text-[10px] mt-1 font-bold">{{ createAvatarError }}</p>
-            </div>
-
-            <div class="space-y-2">
-              <Label for="cf-mk" class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">MẬT KHẨU (ĐỂ TRỐNG = HỆ THỐNG TẠO NGẪU NHIÊN)</Label>
-              <div class="relative">
-                <Input
-                  id="cf-mk"
-                  v-model="createForm.matKhau"
-                  class="h-11 pr-11 text-xs rounded-xl border border-solid border-slate-300 dark:border-slate-700 outline-none focus:border-[#8c734b] bg-slate-50/50 dark:bg-slate-850/50 focus:bg-white dark:focus:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-none transition-all font-mono"
-                  :type="showCreatePassword ? 'text' : 'password'"
-                  autocomplete="off"
-                  spellcheck="false"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  class="text-slate-400 absolute top-0 right-0 z-20 h-11 w-11 shrink-0 rounded-xl hover:bg-transparent"
-                  :aria-pressed="showCreatePassword"
-                  :aria-label="showCreatePassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'"
-                  @click.stop.prevent="toggleCreatePassword"
+                  <template v-slot:prepend><Upload class="w-4 h-4 mr-1" /></template>
+                  Chọn ảnh
+                </v-btn>
+                <v-btn
+                  v-if="createForm.hinhAnh"
+                  variant="text"
+                  color="error"
+                  rounded="lg"
+                  class="text-none font-weight-bold"
+                  @click="clearAvatar('create')"
                 >
-                  <Eye v-if="!showCreatePassword" class="pointer-events-none size-4" />
-                  <EyeOff v-else class="pointer-events-none size-4" />
-                </Button>
+                  Xóa ảnh
+                </v-btn>
               </div>
             </div>
+            <p v-if="createAvatarError" class="text-caption text-error font-weight-bold mt-1">{{ createAvatarError }}</p>
           </div>
 
-          <!-- Footer -->
-          <div class="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-solid border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 px-8 py-4">
-            <Button type="button" variant="outline" class="h-11 px-5 text-xs font-bold rounded-xl border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800" @click="createOpen = false">
-              Hủy
-            </Button>
-            <Button
-              type="button"
-              class="h-11 px-5 !bg-[#9d804e] !text-white hover:!bg-[#866a3d] border !border-[#9d804e] text-xs font-bold rounded-xl shadow-none cursor-pointer tracking-wider"
-              :disabled="saving"
-              @click="saveCreate"
+          <!-- Mật khẩu -->
+          <div class="border-t mt-4 pt-4">
+            <label class="text-caption font-weight-bold text-medium-emphasis mb-1 d-block">
+              MẬT KHẨU (ĐỂ TRỐNG = HỆ THỐNG TẠO NGẪU NHIÊN)
+            </label>
+            <v-text-field
+              v-model="createForm.matKhau"
+              :type="showCreatePassword ? 'text' : 'password'"
+              placeholder="Nhập mật khẩu..."
+              variant="outlined"
+              density="comfortable"
+              rounded="lg"
+              hide-details
             >
-              Tạo
-            </Button>
+              <template v-slot:append-inner>
+                <v-btn icon variant="text" density="compact" @click="toggleCreatePassword">
+                  <Eye v-if="!showCreatePassword" class="w-4 h-4" />
+                  <EyeOff v-else class="w-4 h-4" />
+                </v-btn>
+              </template>
+            </v-text-field>
           </div>
+        </v-card-text>
+
+        <!-- Dialog Actions -->
+        <v-card-actions class="pa-6 pt-4 border-t d-flex justify-end gap-3">
+          <v-btn variant="outlined" color="grey-darken-1" rounded="lg" class="text-none font-weight-bold px-5" @click="createOpen = false">
+            Hủy
+          </v-btn>
+          <v-btn color="primary" variant="flat" rounded="lg" class="text-none font-weight-bold px-6" :loading="saving" @click="saveCreate">
+            Tạo
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- ═══════ VUETIFY MODAL: XÁC NHẬN XÓA (MATCHING SALE & CHUCVU) ═══════ -->
+    <v-dialog v-model="showDeleteModal" max-width="440px" persistent>
+      <v-card rounded="2xl" class="pa-6 text-center">
+        <div class="d-flex justify-center mb-4">
+          <v-avatar color="error-lighten-4" size="64" rounded="circle">
+            <Trash2 class="w-8 h-8 text-error" />
+          </v-avatar>
         </div>
-      </div>
-    </Teleport>
+        <h3 class="text-h6 font-weight-bold mb-2">Xác nhận xóa?</h3>
+        <p class="text-body-2 text-medium-emphasis mb-6">
+          Bạn có chắc chắn muốn xóa khách hàng <strong>"{{ selectedItemToDelete?.hoTen || selectedItemToDelete?.maKh }}"</strong> không?
+        </p>
+
+        <div class="d-flex align-center justify-center gap-3">
+          <v-btn
+            variant="outlined"
+            color="grey-darken-1"
+            rounded="lg"
+            class="text-none font-weight-bold px-5"
+            @click="showDeleteModal = false"
+          >
+            Hủy
+          </v-btn>
+          <v-btn
+            color="error"
+            variant="flat"
+            rounded="lg"
+            class="text-none font-weight-bold px-6"
+            :loading="isDeleting"
+            @click="confirmDelete"
+          >
+            Xóa ngay
+          </v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
+
+    <!-- ═══════ VUETIFY MODAL: KẾT QUẢ MẬT KHẨU TẠO / SỬA ═══════ -->
+    <v-dialog v-model="passwordResultModal.show" max-width="450px">
+      <v-card rounded="2xl" class="pa-6 text-center">
+        <div class="d-flex justify-center mb-4">
+          <v-avatar color="success-lighten-4" size="64" rounded="circle">
+            <Check class="w-8 h-8 text-success" />
+          </v-avatar>
+        </div>
+        <h3 class="text-h6 font-weight-bold mb-2">{{ passwordResultModal.title }}</h3>
+        <div class="text-body-2 text-medium-emphasis mb-6" v-html="passwordResultModal.message"></div>
+        <v-btn color="primary" rounded="lg" class="text-none font-weight-bold px-6" @click="passwordResultModal.show = false">
+          Đã Hiểu
+        </v-btn>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>

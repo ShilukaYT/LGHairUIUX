@@ -65,8 +65,8 @@ onUnmounted(() => {
 
 function toggleTheme() {
   const newTheme = customizer.actTheme === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('theme_selection', newTheme);
   customizer.SET_THEME(newTheme);
-  theme.global.name.value = newTheme;
 }
 </script>
 

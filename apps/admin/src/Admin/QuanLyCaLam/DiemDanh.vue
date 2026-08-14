@@ -197,7 +197,7 @@ const getShiftStatus = (caLam: string, ngayLam: string) => {
   };
   const s = shifts[caLam];
   if (!s) return 'NO_SHIFT';
-  if (currentMin < s.start) return 'TOO_EARLY';
+  if (currentMin < s.start - 60) return 'TOO_EARLY';
   if (currentMin > s.end) return 'TOO_LATE';
   return 'ON_TIME';
 }

@@ -37,14 +37,14 @@ const errors = ref({
 })
 
 // Headers cho v-data-table
-const headers = [
-  { title: 'Mã đối tác', key: 'maNcc', align: 'start', sortable: true },
-  { title: 'Tên nhà cung cấp', key: 'tenNcc', align: 'start', sortable: true },
-  { title: 'Số điện thoại', key: 'soDienThoai', align: 'start', sortable: false },
-  { title: 'Email', key: 'email', align: 'start', sortable: false },
-  { title: 'Địa chỉ', key: 'diaChi', align: 'start', sortable: false },
-  { title: 'Trạng thái', key: 'trangThai', align: 'center', sortable: true },
-  { title: 'Thao tác', key: 'actions', align: 'center', sortable: false }
+const headers: any[] = [
+  { title: 'MÃ ĐỐI TÁC', key: 'maNcc', align: 'center', sortable: true },
+  { title: 'TÊN NHÀ CUNG CẤP', key: 'tenNcc', align: 'start', sortable: true },
+  { title: 'SỐ ĐIỆN THOẠI', key: 'soDienThoai', align: 'start', sortable: false },
+  { title: 'EMAIL', key: 'email', align: 'start', sortable: false },
+  { title: 'ĐỊA CHỈ', key: 'diaChi', align: 'start', sortable: false },
+  { title: 'TRẠNG THÁI', key: 'trangThai', align: 'center', sortable: true },
+  { title: 'THAO TÁC', key: 'actions', align: 'center', sortable: false }
 ]
 
 // Hàm kiểm tra Validation
@@ -449,6 +449,7 @@ onUnmounted(() => {
 
       <!-- ── TABLE ── -->
       <v-data-table
+        :headers="headers"
         :items="listNcc"
         :loading="isLoading"
         items-per-page="10"

@@ -321,18 +321,35 @@ const submitRequest = async () => {
 
 const isCheckInTimeValid = () => {
   const caLam = todayShift.value.caLam || '';
-  const currentHour = new Date().getHours();
-  
-  if (caLam.includes('Ca sáng')) {
-    // Sáng: Cho phép từ 6h đến trước 17h
-    return currentHour >= 6 && currentHour < 17;
-  } else if (caLam.includes('Ca chiều')) {
-    // Chiều: Cho phép từ 11h đến trước 18h
-    return currentHour >= 11 && currentHour < 18;
-  } else if (caLam.includes('Ca tối')) {
-    // Tối: Cho phép từ 12h đến trước 23h
-    return currentHour >= 12 && currentHour < 23;
+  const now = new Date();
+  const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
+
+  // 1. Ca sáng Full-time (7h - 17h): Bắt đầu 7h -> Mở từ 6h00 (sớm 1 tiếng) đến 17h00
+  if (caLam === 'Ca sáng (7h-17h)') {
+    return currentTotalMinutes >= 6 * 60 && currentTotalMinutes <= 17 * 60;
   }
+  // 2. Ca tối Full-time (13h - 20h): Bắt đầu 13h -> Mở từ 12h00 (sớm 1 tiếng) đến 20h00
+  if (caLam === 'Ca tối (13h-20h)') {
+    return currentTotalMinutes >= 12 * 60 && currentTotalMinutes <= 20 * 60;
+  }
+  // 3. Ca sáng Part-time (7h - 11h): Bắt đầu 7h -> Mở từ 6h00 (sớm 1 tiếng) đến 11h00
+  if (caLam === 'Ca sáng (Part-time)') {
+    return currentTotalMinutes >= 6 * 60 && currentTotalMinutes <= 11 * 60;
+  }
+  // 4. Ca chiều Part-time (13h - 17h): Bắt đầu 13h -> Mở từ 12h00 (sớm 1 tiếng) đến 17h00
+  if (caLam === 'Ca chiều (Part-time)') {
+    return currentTotalMinutes >= 12 * 60 && currentTotalMinutes <= 17 * 60;
+  }
+  // 5. Ca tối Part-time (16h - 20h): Bắt đầu 16h -> Mở từ 15h00 (sớm 1 tiếng) đến 20h00
+  if (caLam === 'Ca tối (Part-time)') {
+    return currentTotalMinutes >= 15 * 60 && currentTotalMinutes <= 20 * 60;
+  }
+
+  // Fallback linh hoạt cho các biến thể ca
+  if (caLam.includes('Ca sáng')) return currentTotalMinutes >= 6 * 60 && currentTotalMinutes <= 17 * 60;
+  if (caLam.includes('Ca chiều')) return currentTotalMinutes >= 12 * 60 && currentTotalMinutes <= 18 * 60;
+  if (caLam.includes('Ca tối')) return currentTotalMinutes >= 15 * 60 && currentTotalMinutes <= 22 * 60;
+
   return true;
 }
 

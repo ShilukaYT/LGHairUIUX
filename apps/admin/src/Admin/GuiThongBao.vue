@@ -1,47 +1,54 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue'
 import axios from 'axios'
-import { toast } from 'vue-sonner'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Toaster } from '@/components/ui/sonner'
-import 'vue-sonner/style.css'
 import { logActivity } from '@/utils/activityLogger'
+import { useTheme } from 'vuetify'
+import { useCustomizerStore } from '@/stores/customizer'
 import {
-  Bell,
-  Send,
-  Mail,
-  MessageSquare,
-  RefreshCw,
-  User,
-  Phone,
-  AtSign,
-  FileText,
-  CheckCircle2,
-  AlertCircle,
-  Smartphone,
-  Sparkles,
-  QrCode,
-  Search,
-  Users,
-  History,
-  Trash2,
-  Eye,
-  RotateCcw,
-  CheckCircle,
-  XCircle,
-  Clock,
-  CalendarDays,
-  ChevronRight,
-  Filter,
-  UserCheck
+  Bell, Send, Mail, MessageSquare, RefreshCw, User, Phone, AtSign,
+  FileText, CheckCircle2, AlertCircle, Smartphone, Sparkles, QrCode,
+  Search, Users, History, Trash2, Eye, RotateCcw, CheckCircle,
+  XCircle, Clock, CalendarDays, ChevronRight, Filter, UserCheck, X
 } from 'lucide-vue-next'
+
+// ── THEME SYNC ──
+const theme = useTheme()
+const customizer = useCustomizerStore()
+
+const isDark = computed(() => {
+  const vTheme = theme.global.name.value
+  const cTheme = customizer.actTheme
+  return vTheme === 'dark' || cTheme === 'dark' || document.documentElement.classList.contains('dark')
+})
+
+watch(
+  [() => theme.global.name.value, () => customizer.actTheme],
+  ([vTheme, cTheme]) => {
+    const current = vTheme || cTheme
+    if (current === 'dark') {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  },
+  { immediate: true }
+)
 
 const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
 const BRIDGE_URL = 'http://127.0.0.1:3847'
+
+// ── HIGH PRIORITY SNACKBAR ──
+const snackbar = reactive({
+  show: false,
+  text: '',
+  color: 'success'
+})
+
+const showNotification = (text: string, color: 'success' | 'error' | 'warning' | 'info' = 'success') => {
+  snackbar.text = text
+  snackbar.color = color
+  snackbar.show = true
+}
 
 export interface KhachHangOption {
   maKh: string
@@ -65,6 +72,7 @@ const maKh = ref<string | undefined>(undefined)
 const selectedMaKhs = ref<string[]>([])
 const bulkSearchQuery = ref('')
 const sortByZalo = ref(false)
+const activeBottomTab = ref<'datlich' | 'lichsu'>('datlich')
 
 // ── Danh sách khách hàng đặt lịch ──
 interface KhachHangDatLich {
@@ -82,7 +90,6 @@ interface KhachHangDatLich {
 
 const datLichList = ref<KhachHangDatLich[]>([])
 const loadingDatLich = ref(false)
-const showDatLichPanel = ref(true)
 const datLichNgayFilter = ref(new Date().toISOString().slice(0, 10))
 const datLichTrangThaiFilter = ref<string>('all')
 const datLichSearch = ref('')
@@ -116,7 +123,7 @@ async function loadKhachHangDatLich() {
     })
     datLichList.value = Array.isArray(res.data) ? res.data : []
   } catch {
-    toast.error('Không tải được danh sách lịch đặt.')
+    showNotification('Không tải được danh sách lịch đặt.', 'error')
     datLichList.value = []
   } finally {
     loadingDatLich.value = false
@@ -125,11 +132,11 @@ async function loadKhachHangDatLich() {
 
 function getTrangThaiDatLich(ts: number | null) {
   switch (ts) {
-    case 0: return { label: 'Chờ xác nhận', cls: 'bg-amber-500/10 text-amber-700 border-amber-500/30' }
-    case 1: return { label: 'Xác nhận', cls: 'bg-blue-500/10 text-blue-700 border-blue-500/30' }
-    case 2: return { label: 'Hoàn thành', cls: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30' }
-    case 3: return { label: 'Đã hủy', cls: 'bg-red-500/10 text-red-600 border-red-500/30' }
-    default: return { label: 'Không rõ', cls: 'bg-muted/50 text-muted-foreground border-border' }
+    case 0: return { label: 'Chờ xác nhận', color: 'warning' }
+    case 1: return { label: 'Xác nhận', color: 'info' }
+    case 2: return { label: 'Hoàn thành', color: 'success' }
+    case 3: return { label: 'Đã hủy', color: 'error' }
+    default: return { label: 'Không rõ', color: 'grey' }
   }
 }
 
@@ -146,20 +153,10 @@ function selectDatLichKhach(item: KhachHangDatLich) {
   maKh.value = item.maKh
   const ngayStr = item.ngayHen ? formatNgayVN(item.ngayHen) : ''
   const gioStr = item.gioBatDau ? ` lúc ${item.gioBatDau}` : ''
-  tieuDe.value = `Nhắc lịch hẹn tại Minh Tâm Hair`
-  noiDung.value = `Kính chào ${item.hoTen || 'Quý khách'},\n\nChúng tôi xin nhắc lịch hẹn của bạn tại Minh Tâm Hair:\n📅 Ngày: ${ngayStr}${gioStr}\n\nVui lòng có mặt đúng giờ. Nếu cần thay đổi hoặc hủy lịch, xin liên hệ chúng tôi sớm.\n\nTrân trọng,\nMinh Tâm Hair 💇`
-  toast.success(`Đã chọn ${item.hoTen || item.maKh} — kiểm tra nội dung rồi gửi!`, {
-    description: `Lịch hẹn: ${ngayStr}${gioStr}`
-  })
+  tieuDe.value = `Nhắc lịch hẹn tại LG Hair Salon`
+  noiDung.value = `Kính chào ${item.hoTen || 'Quý khách'},\n\nChúng tôi xin nhắc lịch hẹn của bạn tại LG Hair Salon:\n📅 Ngày: ${ngayStr}${gioStr}\n\nVui lòng có mặt đúng giờ. Nếu cần thay đổi hoặc hủy lịch, xin liên hệ hotline chúng tôi sớm.\n\nTrân trọng,\nLG Hair Salon 💇`
+  showNotification(`Đã chọn ${item.hoTen || item.maKh} — kiểm tra nội dung rồi gửi!`, 'success')
   window.scrollTo({ top: 0, behavior: 'smooth' })
-}
-
-function selectBulkDatLich(item: KhachHangDatLich) {
-  sendMode.value = 'bulk'
-  if (!selectedMaKhs.value.includes(item.maKh)) {
-    selectedMaKhs.value.push(item.maKh)
-  }
-  toast.success(`Đã thêm ${item.hoTen || item.maKh} vào danh sách gửi hàng loạt`)
 }
 
 const tieuDe = ref('')
@@ -220,7 +217,7 @@ function checkKhachZalo(k?: KhachHangOption | null) {
   if (k?.sdt && k?.maKh) {
     checkZaloPhone(k.sdt, k.maKh)
   } else {
-    toast.error('Khách hàng chưa có số điện thoại')
+    showNotification('Khách hàng chưa có số điện thoại', 'error')
   }
 }
 
@@ -238,15 +235,15 @@ async function loadZaloTrangThai() {
   }
 }
 
-const zaloBannerClass = computed(() => {
-  const z = zaloTrangThai.value
-  if (!z?.isPersonal) return 'border-border bg-muted/30 text-foreground'
-  if (z.personalBridgeReachable !== true)
-    return 'border-destructive/40 bg-destructive/10 text-foreground'
-  if (z.personalLoggedIn === true && z.credentialsValidShape === true)
-    return 'border-emerald-500/40 bg-emerald-500/10 text-foreground'
-  return 'border-amber-500/50 bg-amber-500/10 text-foreground'
-})
+function getAvatarColor(name?: string): string {
+  if (!name) return 'primary'
+  const colors = ['primary', 'secondary', 'info', 'success', 'warning', 'indigo', 'purple']
+  let sum = 0
+  for (let i = 0; i < name.length; i++) {
+    sum += name.charCodeAt(i)
+  }
+  return colors[sum % colors.length] || 'primary'
+}
 
 const selectedKhach = computed(() => {
   const id = maKh.value?.trim()
@@ -272,7 +269,7 @@ const filteredKhachHangList = computed(() => {
       const bCheck = zaloPhoneChecks.value[b.maKh]
       const aVal = aCheck && aCheck.exists === true ? 1 : 0
       const bVal = bCheck && bCheck.exists === true ? 1 : 0
-      return bVal - aVal // Có Zalo (1) lên trước Không Zalo/chưa check (0)
+      return bVal - aVal
     })
   }
   return list
@@ -286,11 +283,6 @@ const canSubmit = computed(
     !sending.value,
 )
 
-/** Chuỗi dùng cho typeahead / textValue (reka-ui) — chỉ hiển thị tên & SĐT trong trigger. */
-function khachTextValue(k: KhachHangOption) {
-  return [k.hoTen?.trim(), k.sdt?.trim()].filter(Boolean).join(' — ') || k.maKh
-}
-
 async function loadKhachHang() {
   loadingList.value = true
   try {
@@ -299,7 +291,7 @@ async function loadKhachHang() {
     })
     khachHangList.value = Array.isArray(res.data) ? res.data : []
   } catch {
-    toast.error('Không tải được danh sách khách hàng.')
+    showNotification('Không tải được danh sách khách hàng.', 'error')
     khachHangList.value = []
   } finally {
     loadingList.value = false
@@ -341,7 +333,7 @@ async function checkQrStatus() {
       }
       if (qrLoginState.value.loggedIn || qrLoginState.value.status === 'logged_in') {
         stopQrPolling()
-        toast.success('🎉 Đăng nhập Zalo thành công!')
+        showNotification('🎉 Đăng nhập Zalo thành công!', 'success')
         await loadZaloTrangThai()
         setTimeout(() => {
           qrModalOpen.value = false
@@ -368,7 +360,7 @@ function stopQrPolling() {
 /* ── Zalo Phone Check Methods ── */
 async function checkZaloPhone(phone: string | null | undefined, id: string) {
   if (!phone || !phone.trim()) {
-    toast.error('Khách hàng chưa có số điện thoại')
+    showNotification('Khách hàng chưa có số điện thoại', 'error')
     return
   }
   zaloPhoneChecks.value[id] = { checking: true }
@@ -382,31 +374,83 @@ async function checkZaloPhone(phone: string | null | undefined, id: string) {
         error: res.data.error,
       }
       if (res.data.exists && res.data.user) {
-        toast.success(`Tìm thấy Zalo: ${res.data.user.displayName}`)
+        showNotification(`Tìm thấy Zalo: ${res.data.user.displayName}`, 'success')
       } else {
-        toast.warning(res.data.error || 'SĐT chưa đăng ký Zalo hoặc chặn tìm kiếm')
+        showNotification(res.data.error || 'SĐT chưa đăng ký Zalo hoặc chặn tìm kiếm', 'warning')
       }
     } else {
       zaloPhoneChecks.value[id] = { checking: false, exists: false, error: res.data?.error || 'Lỗi rà soát' }
     }
   } catch {
     zaloPhoneChecks.value[id] = { checking: false, exists: false, error: 'Không kết nối được Bridge 3847' }
-    toast.error('Không kết nối được Zalo Bridge (Cổng 3847)')
+    showNotification('Không kết nối được Zalo Bridge (Cổng 3847)', 'error')
   }
 }
 
-async function checkBulkZaloPhones() {
-  const toCheck = khachHangList.value.filter((k) => selectedMaKhs.value.includes(k.maKh) && k.sdt)
-  if (toCheck.length === 0) {
-    toast.error('Vui lòng chọn ít nhất một khách hàng có SĐT để rà soát')
+/* ── Bulk Zalo Check Methods ── */
+const isBulkCheckingZalo = ref(false)
+const bulkCheckProgress = ref({ current: 0, total: 0, found: 0 })
+
+async function checkBulkZalo() {
+  // Ưu tiên rà soát danh sách đã chọn, nếu chưa chọn thì rà toàn bộ danh sách đang hiển thị
+  const candidateList = selectedMaKhs.value.length > 0
+    ? filteredKhachHangList.value.filter(k => selectedMaKhs.value.includes(k.maKh) && k.sdt && k.sdt.trim())
+    : filteredKhachHangList.value.filter(k => k.sdt && k.sdt.trim())
+
+  if (!candidateList.length) {
+    showNotification('Không có khách hàng nào có số điện thoại hợp lệ để rà Zalo!', 'warning')
     return
   }
-  toast.info(`Đang kiểm tra Zalo cho ${toCheck.length} khách hàng...`)
-  for (const k of toCheck) {
-    await checkZaloPhone(k.sdt, k.maKh)
-    await new Promise((r) => setTimeout(r, 300))
+
+  isBulkCheckingZalo.value = true
+  bulkCheckProgress.value = { current: 0, total: candidateList.length, found: 0 }
+
+  let foundCount = 0
+  for (let i = 0; i < candidateList.length; i++) {
+    const k = candidateList[i]
+    if (!k || !k.maKh || !k.sdt) continue
+    bulkCheckProgress.value.current = i + 1
+
+    // Nếu đã có kết quả kiểm tra trước đó thì giữ nguyên
+    if (zaloPhoneChecks.value[k.maKh]?.exists !== undefined) {
+      if (zaloPhoneChecks.value[k.maKh]?.exists) foundCount++
+      continue
+    }
+
+    zaloPhoneChecks.value[k.maKh] = { checking: true }
+    try {
+      const res = await axios.post(`${BRIDGE_URL}/api/check-phone`, { phone: k.sdt.trim() })
+      if (res.data?.ok) {
+        zaloPhoneChecks.value[k.maKh] = {
+          checking: false,
+          exists: res.data.exists,
+          user: res.data.user,
+          error: res.data.error,
+        }
+        if (res.data.exists && res.data.user) {
+          foundCount++
+        }
+      } else {
+        zaloPhoneChecks.value[k.maKh] = { checking: false, exists: false, error: res.data?.error || 'Lỗi rà soát' }
+      }
+    } catch {
+      zaloPhoneChecks.value[k.maKh] = { checking: false, exists: false, error: 'Không kết nối được Bridge 3847' }
+    }
   }
-  toast.success('Đã hoàn tất rà soát SĐT Zalo!')
+
+  bulkCheckProgress.value.found = foundCount
+  isBulkCheckingZalo.value = false
+  showNotification(`Đã hoàn tất rà Zalo: Tìm thấy ${foundCount}/${candidateList.length} tài khoản Zalo khả dụng!`, 'success')
+}
+
+function selectOnlyZaloUsers() {
+  const zaloUsers = filteredKhachHangList.value.filter(k => zaloPhoneChecks.value[k.maKh]?.exists === true)
+  if (!zaloUsers.length) {
+    showNotification('Chưa tìm thấy khách hàng nào có tài khoản Zalo. Hãy bấm "Rà Zalo đồng loạt" trước!', 'warning')
+    return
+  }
+  selectedMaKhs.value = zaloUsers.map(k => k.maKh)
+  showNotification(`Đã chọn ${zaloUsers.length} khách hàng có tài khoản Zalo!`, 'success')
 }
 
 /* ── Bulk Selection Methods ── */
@@ -427,19 +471,19 @@ function toggleSelectKhach(id: string) {
 /* ── Submit Handler ── */
 async function onSubmit() {
   if (!canSubmit.value) {
-    toast.error('Chọn khách hàng và ít nhất một kênh (Gmail hoặc Zalo).')
+    showNotification('Chọn khách hàng và ít nhất một kênh (Gmail hoặc Zalo).', 'error')
     return
   }
 
   sending.value = true
 
-  // ── 1. GỬI HÀNG LOẠT (BULK SEND) ──
+  // ── 1. GỬI HÀNG LOẠT ──
   if (sendMode.value === 'bulk') {
     const targetCustomers = khachHangList.value.filter((k) => selectedMaKhs.value.includes(k.maKh))
     let successCount = 0
     let failCount = 0
     const channels = [sendViaGmail.value && 'Gmail', sendViaZalo.value && 'Zalo'].filter(Boolean).join(', ')
-    toast.info(`Bắt đầu gửi thông báo cho ${targetCustomers.length} khách hàng...`)
+    showNotification(`Bắt đầu gửi thông báo cho ${targetCustomers.length} khách hàng...`, 'info')
 
     for (const k of targetCustomers) {
       try {
@@ -532,19 +576,19 @@ async function onSubmit() {
     sending.value = false
 
     if (successCount > 0 && failCount === 0) {
-      toast.success(`🎉 Đã gửi thành công cho tất cả ${successCount} khách hàng!`)
+      showNotification(`🎉 Đã gửi thành công cho tất cả ${successCount} khách hàng!`, 'success')
       logActivity('Gửi hàng loạt', `Đã gửi thông báo thành công cho ${successCount} khách hàng qua ${channels}`, 'Thông báo')
     } else if (successCount > 0) {
-      toast.warning(`Đã gửi thành công ${successCount}/${targetCustomers.length} khách hàng. Thất bại: ${failCount}.`)
+      showNotification(`Đã gửi thành công ${successCount}/${targetCustomers.length} khách hàng. Thất bại: ${failCount}.`, 'warning')
       logActivity('Gửi hàng loạt', `Gửi thông báo ${successCount}/${targetCustomers.length} thành công, thất bại ${failCount} qua ${channels}`, 'Thông báo')
     } else {
-      toast.error(`Gửi thất bại cho tất cả ${targetCustomers.length} khách hàng.`)
+      showNotification(`Gửi thất bại cho tất cả ${targetCustomers.length} khách hàng.`, 'error')
       logActivity('Gửi hàng loạt', `Thất bại khi gửi thông báo cho ${targetCustomers.length} khách hàng qua ${channels}`, 'Thông báo', 'Thất bại')
     }
     return
   }
 
-  // ── 2. GỬI TỪNG KHÁCH HÀNG (SINGLE SEND) ──
+  // ── 2. GỬI TỪNG KHÁCH HÀNG ──
   const khachName = selectedKhach.value?.hoTen || maKh.value || ''
   const channels = [sendViaGmail.value && 'Gmail', sendViaZalo.value && 'Zalo'].filter(Boolean).join(', ')
 
@@ -564,68 +608,12 @@ async function onSubmit() {
     const data = res.data
     const results = data.results ?? []
 
-    function isZaloOnlyHttpTest(r: { kenhGui: string; trangThai: number; chiTiet: string | null }) {
-      return (
-        r.kenhGui === 'ZALO' &&
-        r.trangThai === 1 &&
-        (r.chiTiet?.includes('HttpTest') || r.chiTiet?.toLowerCase().includes('httpbin'))
-      )
-    }
-
-    const gmailR = results.find((r) => r.kenhGui === 'GMAIL')
-    const zaloR = results.find((r) => r.kenhGui === 'ZALO')
-    const zaloSimulated = zaloR && isZaloOnlyHttpTest(zaloR)
-
     const allOk = results.length ? results.every((r) => r.trangThai === 1) : data.success
 
-    if (data.success && allOk && zaloSimulated && gmailR?.trangThai === 1) {
+    if (data.success && allOk) {
+      const detail = results.map(r => `${r.kenhGui}: OK${r.chiTiet ? ` — ${r.chiTiet}` : ''}`).join('\n')
       logActivity('Gửi thông báo', `Đã gửi thông báo thành công cho khách hàng ${khachName} qua kênh ${channels}`, 'Thông báo')
-      toast.success('Đã gửi Gmail thành công.')
-      toast.warning('Zalo: đang chế độ thử (HttpTest)', {
-        description:
-          'Tin không lên app Zalo. Server: Zalo:Mode=Zns + OA token + Zns:TemplateId, hoặc Mode=Personal + chạy bridge Node (MinhTamHair-ZaloPersonalBridge) và Personal:BaseUrl.',
-        duration: 12000,
-      })
-      addSentNotification({
-        maKh: selectedKhach.value?.maKh || maKh.value,
-        hoTen: khachName,
-        sdt: selectedKhach.value?.sdt || undefined,
-        email: selectedKhach.value?.email || undefined,
-        tieuDe: tieuDe.value.trim() || 'Không có tiêu đề',
-        noiDung: noiDung.value.trim() || 'Không có nội dung',
-        kenhGui: channels,
-        trangThai: 'success',
-        chiTiet: 'GMAIL: OK — ZALO: OK (HttpTest Simulated)',
-        mode: 'single'
-      })
-    } else if (data.success && allOk && zaloSimulated && !sendViaGmail.value) {
-      logActivity('Gửi thông báo', `Đã gửi thông báo thành công cho khách hàng ${khachName} qua kênh ${channels} (Simulated)`, 'Thông báo')
-      toast.warning('Zalo: chưa gửi thật (HttpTest)', {
-        description:
-          'Chỉ gọi URL thử (httpbin), không tin trên app. Gửi thật: Zns (OA + template) hoặc Personal (bridge zca-js + BaseUrl).',
-        duration: 12000,
-      })
-      addSentNotification({
-        maKh: selectedKhach.value?.maKh || maKh.value,
-        hoTen: khachName,
-        sdt: selectedKhach.value?.sdt || undefined,
-        email: selectedKhach.value?.email || undefined,
-        tieuDe: tieuDe.value.trim() || 'Không có tiêu đề',
-        noiDung: noiDung.value.trim() || 'Không có nội dung',
-        kenhGui: channels,
-        trangThai: 'success',
-        chiTiet: 'ZALO: OK (HttpTest Simulated)',
-        mode: 'single'
-      })
-    } else if (data.success && allOk) {
-      const detail = results
-        .map(
-          (r) =>
-            `${r.kenhGui}: ${r.trangThai === 1 ? 'OK' : 'lỗi'}${r.chiTiet ? ` — ${r.chiTiet}` : ''}`,
-        )
-        .join('\n')
-      logActivity('Gửi thông báo', `Đã gửi thông báo thành công cho khách hàng ${khachName} qua kênh ${channels}`, 'Thông báo')
-      toast.success(data.message || 'Đã gửi thông báo.', detail ? { description: detail } : undefined)
+      showNotification(data.message || 'Đã gửi thông báo thành công.', 'success')
       addSentNotification({
         maKh: selectedKhach.value?.maKh || maKh.value,
         hoTen: khachName,
@@ -639,14 +627,9 @@ async function onSubmit() {
         mode: 'single'
       })
     } else if (data.success) {
-      const detail = results
-        .map(
-          (r) =>
-            `${r.kenhGui}: ${r.trangThai === 1 ? 'OK' : 'lỗi'}${r.chiTiet ? ` — ${r.chiTiet}` : ''}`,
-        )
-        .join('\n')
+      const detail = results.map(r => `${r.kenhGui}: ${r.trangThai === 1 ? 'OK' : 'lỗi'}${r.chiTiet ? ` — ${r.chiTiet}` : ''}`).join('\n')
       logActivity('Gửi thông báo', `Đã gửi thông báo cho khách hàng ${khachName} qua kênh ${channels} (Một số kênh thất bại)`, 'Thông báo')
-      toast.warning(data.message || 'Một số kênh thất bại.', { description: detail })
+      showNotification(data.message || 'Một số kênh gửi thất bại.', 'warning')
       addSentNotification({
         maKh: selectedKhach.value?.maKh || maKh.value,
         hoTen: khachName,
@@ -660,14 +643,9 @@ async function onSubmit() {
         mode: 'single'
       })
     } else {
-      const detail = results
-        .map(
-          (r) =>
-            `${r.kenhGui}: ${r.trangThai === 1 ? 'OK' : 'lỗi'}${r.chiTiet ? ` — ${r.chiTiet}` : ''}`,
-        )
-        .join('\n')
+      const detail = results.map(r => `${r.kenhGui}: ${r.trangThai === 1 ? 'OK' : 'lỗi'}${r.chiTiet ? ` — ${r.chiTiet}` : ''}`).join('\n')
       logActivity('Gửi thông báo', `Thất bại khi gửi thông báo cho khách hàng ${khachName} qua kênh ${channels} - Lỗi: ${data.message || ''}`, 'Thông báo', 'Thất bại')
-      toast.error(data.message || 'Gửi thất bại.', detail ? { description: detail } : undefined)
+      showNotification(data.message || 'Gửi thất bại.', 'error')
       addSentNotification({
         maKh: selectedKhach.value?.maKh || maKh.value,
         hoTen: khachName,
@@ -685,14 +663,11 @@ async function onSubmit() {
     let errorMsg = 'Lỗi kết nối hoặc máy chủ.'
     if (axios.isAxiosError(e) && e.response?.status === 404) {
       errorMsg = 'Không tìm thấy khách hàng.'
-      toast.error(errorMsg)
     } else if (axios.isAxiosError(e) && e.response?.status === 400) {
       const msg = (e.response.data as { message?: string })?.message
       errorMsg = msg || 'Dữ liệu không hợp lệ.'
-      toast.error(errorMsg)
-    } else {
-      toast.error(errorMsg)
     }
+    showNotification(errorMsg, 'error')
     logActivity('Gửi thông báo', `Thất bại khi gửi thông báo cho khách hàng ${khachName} qua kênh ${channels} - Lỗi: ${errorMsg}`, 'Thông báo', 'Thất bại')
     addSentNotification({
       maKh: selectedKhach.value?.maKh || maKh.value,
@@ -739,7 +714,6 @@ function loadSentNotifications() {
     const stored = localStorage.getItem('lghair_sent_notifications')
     if (stored) {
       const parsed: SentNotificationItem[] = JSON.parse(stored)
-      // Xóa dữ liệu mẫu cũ (demo) nếu toàn bộ là fake data
       const hasRealData = parsed.some(item => !item.id.startsWith('demo-'))
       if (hasRealData) {
         sentNotifications.value = parsed
@@ -777,14 +751,14 @@ function clearSentHistory() {
   if (confirm('Bạn có chắc chắn muốn xóa toàn bộ lịch sử gửi thông báo?')) {
     sentNotifications.value = []
     localStorage.removeItem('lghair_sent_notifications')
-    toast.success('Đã xóa toàn bộ lịch sử tin nhắn.')
+    showNotification('Đã xóa toàn bộ lịch sử tin nhắn.', 'success')
   }
 }
 
 function deleteSentItem(id: string) {
   sentNotifications.value = sentNotifications.value.filter(item => item.id !== id)
   saveSentNotificationsToStorage()
-  toast.success('Đã xóa tin nhắn khỏi lịch sử.')
+  showNotification('Đã xóa tin nhắn khỏi lịch sử.', 'success')
 }
 
 function openDetailModal(item: SentNotificationItem) {
@@ -809,9 +783,7 @@ function resendMessage(item: SentNotificationItem) {
     }
   }
   
-  toast.success('Đã sao chép nội dung tin nhắn vào biểu mẫu!', {
-    description: 'Bạn có thể kiểm tra lại thông tin và bấm Gửi ngay ở trên.'
-  })
+  showNotification('Đã sao chép nội dung tin nhắn vào biểu mẫu!', 'success')
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
@@ -852,6 +824,20 @@ function formatTime(isoStr: string) {
   }
 }
 
+// ── QUICK TEMPLATES ──
+const fillTemplate = (type: 'nhac_lich' | 'chuc_mung' | 'khuyen_mai') => {
+  if (type === 'nhac_lich') {
+    tieuDe.value = 'Nhắc lịch hẹn dịch vụ tóc tại LG Hair Salon'
+    noiDung.value = `Kính chào Quý khách,\n\nLG Hair Salon xin nhắc lịch hẹn làm đẹp của bạn hôm nay. Vui lòng ghé salon đúng giờ để được phục vụ chu đáo nhất.\n\nHotline hỗ trợ: 0900.123.456\nTrân trọng!`
+  } else if (type === 'chuc_mung') {
+    tieuDe.value = '🎉 Chúc mừng sinh nhật Quý khách từ LG Hair Salon'
+    noiDung.value = `Thân gửi Quý khách,\n\nLG Hair Salon xin gửi lời chúc mừng sinh nhật tốt đẹp nhất đến bạn! Tặng bạn Voucher giảm 30% cho tất cả dịch vụ uốn/nhuộm trong tháng này.\n\nChúc bạn luôn rạng rỡ và tự tin!`
+  } else if (type === 'khuyen_mai') {
+    tieuDe.value = '🔥 Siêu Ưu Đãi Combo Uốn/Nhuộm Cao Cấp tại LG Hair'
+    noiDung.value = `Kính chào Quý khách,\n\nLG Hair Salon đang áp dụng chương trình ưu đãi đặc biệt: Combo Cắt + Uốn + Nhuộm cao cấp giảm giá chỉ từ 499k. Đặt lịch ngay hôm nay để nhận quà tặng hấp dẫn!`
+  }
+}
+
 onMounted(() => {
   loadKhachHang()
   loadZaloTrangThai()
@@ -865,639 +851,806 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-6xl space-y-5 px-1 sm:px-0">
-    <Toaster rich-colors position="top-right" />
-
-    <!-- ── HEADER ── -->
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <h1 class="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
-          <div class="flex size-9 items-center justify-center rounded-xl bg-primary/10 border border-primary/20 text-primary">
-            <Bell class="size-5" />
-          </div>
-          Gửi thông báo khách hàng
-        </h1>
-        <p class="text-muted-foreground text-sm mt-1 ml-11">Gửi tin nhắn chăm sóc khách hàng qua Gmail &amp; Zalo</p>
+  <v-container fluid class="pa-4 pa-md-6">
+    <!-- HIGH PRIORITY SNACKBAR -->
+    <v-snackbar
+      v-model="snackbar.show"
+      :color="snackbar.color"
+      location="top right"
+      :timeout="3500"
+      elevation="6"
+      style="z-index: 99999;"
+    >
+      <div class="d-flex align-center font-weight-bold">
+        <span>{{ snackbar.text }}</span>
       </div>
-      <button
-        type="button"
-        class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white shadow transition-all hover:opacity-90 active:scale-95 shrink-0 self-start sm:self-auto"
-        style="background: linear-gradient(135deg, #10b981, #059669);"
-        @click="openQrLoginModal"
-      >
-        <QrCode class="size-4" />
-        Đăng nhập Zalo (QR)
-      </button>
-    </div>
+      <template v-slot:actions>
+        <v-btn variant="text" icon density="comfortable" @click="snackbar.show = false">
+          <X class="w-4 h-4" />
+        </v-btn>
+      </template>
+    </v-snackbar>
 
-    <!-- ── FORM GỬI TIN (2 CỘT) ── -->
-    <form @submit.prevent="onSubmit" class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-
-      <!-- CỘT TRÁI (CHỌN ĐỐI TƯỢNG & XÁC NHẬN GỬI) -->
-      <div class="lg:col-span-5 space-y-4">
-        
-        <!-- BƯỚC 1: CHỌN ĐỐI TƯỢNG -->
-        <div class="rounded-2xl border border-border/80 bg-card shadow-sm overflow-hidden">
-          <div class="flex items-center gap-3 px-4 py-3 border-b border-border/60 bg-muted/30">
-            <span class="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-white text-[10px] font-bold">1</span>
-            <span class="font-semibold text-xs text-foreground">Đối tượng nhận tin</span>
-            <div class="ml-auto flex p-0.5 bg-muted rounded-lg border border-border/60 gap-0.5">
-              <button type="button" class="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-all" :class="sendMode === 'single' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'" @click="sendMode = 'single'">
-                <User class="size-3" /> 1 KH
-              </button>
-              <button type="button" class="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-all" :class="sendMode === 'bulk' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'" @click="sendMode = 'bulk'">
-                <Users class="size-3" /> Hàng loạt
-                <span v-if="selectedMaKhs.length > 0" class="ml-0.5 bg-primary text-white text-[9px] rounded-full px-1.5 font-bold">{{ selectedMaKhs.length }}</span>
-              </button>
-            </div>
-          </div>
-
-          <div class="p-4">
-            <!-- SINGLE MODE -->
-            <div v-if="sendMode === 'single'" class="space-y-3">
-              <Select v-model="maKh" :disabled="loadingList">
-                <SelectTrigger id="khach" class="border-input bg-background h-10 w-full px-3 text-xs font-normal shadow-sm">
-                  <span v-if="!maKh" class="text-muted-foreground">{{ loadingList ? 'Đang tải...' : 'Chọn khách hàng...' }}</span>
-                  <span v-else class="flex items-center gap-1.5 min-w-0 truncate">
-                    <span class="font-medium text-foreground truncate">{{ selectedKhach?.hoTen?.trim() || maKh }}</span>
-                    <span v-if="selectedKhach?.sdt" class="text-muted-foreground text-[10px] shrink-0">— {{ selectedKhach.sdt }}</span>
-                  </span>
-                </SelectTrigger>
-                <SelectContent class="max-h-[min(24rem,70vh)] rounded-xl border-border/80 shadow-xl">
-                  <SelectItem v-for="k in khachHangList" :key="k.maKh" :value="k.maKh" :text-value="khachTextValue(k)" class="cursor-pointer py-2 px-3 text-xs rounded-lg my-0.5">
-                    <div class="flex flex-col text-left">
-                      <div class="font-medium text-foreground flex items-center gap-1">
-                        <span>{{ k.hoTen?.trim() || 'Khách hàng' }}</span>
-                        <span class="text-[9px] px-1 py-0.2 rounded bg-muted font-mono text-muted-foreground">{{ k.maKh }}</span>
-                      </div>
-                      <div class="text-muted-foreground flex items-center gap-2 text-[10px] mt-0.5">
-                        <span class="flex items-center gap-0.5"><Phone class="size-2.5 text-emerald-600/80" />{{ k.sdt?.trim() || 'Chưa có SĐT' }}</span>
-                        <span class="flex items-center gap-0.5"><Mail class="size-2.5 text-blue-600/80" />{{ k.email?.trim() || 'Chưa có Email' }}</span>
-                      </div>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-
-
-              <transition enter-active-class="transition duration-200 ease-out" enter-from-class="opacity-0 scale-95" enter-to-class="opacity-100 scale-100">
-                <div v-if="selectedKhach" class="rounded-xl border border-border/60 bg-muted/20 p-3 space-y-2 text-xs">
-                  <div class="flex items-start justify-between gap-1.5">
-                    <div>
-                      <div class="font-semibold text-foreground text-xs">{{ selectedKhach.hoTen?.trim() || '—' }}</div>
-                      <div class="text-[10px] text-muted-foreground font-mono mt-0.5">{{ selectedKhach.maKh }}</div>
-                    </div>
-                    <div class="flex flex-col items-end text-[10px] text-muted-foreground gap-0.5">
-                      <span v-if="selectedKhach.sdt" class="flex items-center gap-0.5 font-mono"><Phone class="size-2.5 text-emerald-600" />{{ selectedKhach.sdt }}</span>
-                      <span v-if="selectedKhach.email" class="flex items-center gap-0.5"><AtSign class="size-2.5 text-blue-600" />{{ selectedKhach.email }}</span>
-                    </div>
-                  </div>
-                  <div class="flex items-center gap-2 pt-2 border-t border-border/40">
-                    <Button v-if="selectedKhach.sdt" type="button" variant="outline" size="sm" class="h-6 px-2 text-[10px] border-emerald-500/30 text-emerald-700 hover:bg-emerald-500/10 flex items-center gap-1 shrink-0" :disabled="getCheckResult(selectedKhach?.maKh)?.checking" @click="checkKhachZalo(selectedKhach)">
-                      <RefreshCw v-if="getCheckResult(selectedKhach?.maKh)?.checking" class="size-2.5 animate-spin" />
-                      <Smartphone v-else class="size-2.5" />
-                      Kiểm tra Zalo
-                    </Button>
-                    <span v-if="getCheckResult(selectedKhach?.maKh)?.checking" class="text-[10px] text-muted-foreground animate-pulse">Đang check...</span>
-                    <span v-else-if="getCheckResult(selectedKhach?.maKh)?.exists" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-700 font-semibold border border-emerald-500/20 text-[10px]">
-                      <img v-if="getCheckResult(selectedKhach?.maKh)?.user?.avatar" :src="getCheckResult(selectedKhach?.maKh)?.user?.avatar || undefined" class="size-3.5 rounded-full object-cover" />
-                      <CheckCircle2 v-else class="size-3 text-emerald-600" />
-                      {{ getCheckResult(selectedKhach?.maKh)?.user?.displayName || 'Có Zalo' }}
-                    </span>
-                    <span v-else-if="getCheckResult(selectedKhach?.maKh)?.exists === false" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-red-500/10 text-red-600 font-semibold border border-red-500/20 text-[10px]">
-                      <AlertCircle class="size-3 text-red-600" />Không Zalo
-                    </span>
-                  </div>
-                </div>
-              </transition>
-            </div>
-
-            <!-- BULK MODE -->
-            <div v-else class="space-y-3">
-              <div class="flex items-center gap-1.5">
-                <div class="relative flex-1">
-                  <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-                  <Input v-model="bulkSearchQuery" placeholder="Tìm kiếm nhanh..." class="pl-8 h-8 text-xs" />
-                </div>
-                <Button type="button" variant="outline" size="sm" class="h-8 px-2 text-[11px] shrink-0" @click="selectAllBulk">Tất cả</Button>
-                <Button type="button" variant="outline" size="sm" class="h-8 px-2 text-[11px] shrink-0" @click="deselectAllBulk">Bỏ</Button>
-              </div>
-
-              <!-- Action button check Zalo -->
-              <div class="flex items-center justify-between gap-2 text-[10px] text-muted-foreground border-b border-border/40 pb-2">
-                <div class="flex items-center gap-2">
-                  <span>Chọn: <strong class="text-primary">{{ selectedMaKhs.length }}</strong>/{{ khachHangList.length }}</span>
-                  <label class="inline-flex items-center gap-1 cursor-pointer select-none bg-muted px-1.5 py-0.5 rounded border hover:bg-muted/80">
-                    <input type="checkbox" v-model="sortByZalo" class="size-3 rounded text-primary focus:ring-primary/30 cursor-pointer" />
-                    <span class="text-[9px] font-semibold text-foreground">Xếp Zalo lên đầu</span>
-                  </label>
-                </div>
-                <Button type="button" variant="outline" size="sm" class="h-6 px-2 text-[10px] border-emerald-500/30 text-emerald-700 hover:bg-emerald-500/10 flex items-center gap-1" @click="checkBulkZaloPhones">
-                  <Smartphone class="size-2.5" />Rà Zalo ({{ selectedMaKhs.length }})
-                </Button>
-              </div>
-
-              <!-- List scrollable -->
-              <div class="max-h-60 overflow-y-auto rounded-xl border border-border/70 bg-background divide-y divide-border/40">
-                <div v-if="filteredKhachHangList.length === 0" class="p-4 text-center text-xs text-muted-foreground">Không tìm thấy.</div>
-                <div
-                  v-for="k in filteredKhachHangList" :key="k.maKh"
-                  class="flex items-center gap-2.5 px-2.5 py-2 hover:bg-muted/40 cursor-pointer select-none transition-colors"
-                  :class="selectedMaKhs.includes(k.maKh) ? 'bg-primary/5' : ''"
-                  @click="toggleSelectKhach(k.maKh)"
-                >
-                  <div class="flex size-4 shrink-0 items-center justify-center rounded border transition-colors" :class="selectedMaKhs.includes(k.maKh) ? 'bg-primary border-primary text-white' : 'border-input bg-background'">
-                    <CheckCircle2 v-if="selectedMaKhs.includes(k.maKh)" class="size-3" />
-                  </div>
-                  <div class="min-w-0 flex-1">
-                    <div class="flex items-center gap-1 text-xs">
-                      <span class="font-medium text-foreground truncate">{{ k.hoTen || 'Khách hàng' }}</span>
-                      <span class="text-[8px] font-mono text-muted-foreground bg-muted px-1 rounded shrink-0">{{ k.maKh }}</span>
-                    </div>
-                    <div class="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                      <span class="flex items-center gap-0.5"><Phone class="size-2 text-emerald-600" />{{ k.sdt || '—' }}</span>
-                    </div>
-                  </div>
-                  <!-- Zalo check status -->
-                  <div class="shrink-0" @click.stop>
-                    <Button v-if="!getCheckResult(k.maKh)" type="button" variant="ghost" size="icon" class="size-6 text-muted-foreground hover:text-emerald-600 hover:bg-emerald-500/10 rounded-lg" :disabled="!k.sdt" @click="checkKhachZalo(k)">
-                      <Smartphone class="size-3" />
-                    </Button>
-                    <span v-else class="flex items-center text-[10px]">
-                      <RefreshCw v-if="getCheckResult(k.maKh)?.checking" class="size-3 animate-spin text-muted-foreground" />
-                      <span v-else-if="getCheckResult(k.maKh)?.exists" class="px-1 py-0.2 rounded bg-emerald-500/10 text-emerald-700 border border-emerald-500/20 font-bold text-[8px]">Zalo</span>
-                      <span v-else class="px-1 py-0.2 rounded bg-red-500/10 text-red-600 text-[8px]">Không</span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- BƯỚC 3: KÊNH GỬI + NÚT GỬI -->
-        <div class="rounded-2xl border border-border/80 bg-card shadow-sm overflow-hidden">
-          <div class="flex items-center gap-3 px-4 py-3 border-b border-border/60 bg-muted/30">
-            <span class="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-white text-[10px] font-bold">3</span>
-            <span class="font-semibold text-xs text-foreground">Kênh gửi &amp; Xác nhận</span>
-          </div>
-          <div class="p-4 space-y-3">
-            <div class="flex flex-col gap-2">
-              <label class="flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all select-none text-xs" :class="sendViaGmail ? 'border-blue-500 bg-blue-500/5' : 'border-border/60 hover:bg-muted/30'">
-                <input v-model="sendViaGmail" type="checkbox" class="sr-only" />
-                <Mail class="size-4 text-blue-500 shrink-0" />
-                <div class="flex-1">
-                  <div class="font-semibold text-foreground">Gửi Gmail</div>
-                </div>
-                <div class="size-4 rounded-full border flex items-center justify-center shrink-0" :class="sendViaGmail ? 'border-blue-500 bg-blue-500 text-white' : 'border-input'">
-                  <CheckCircle2 v-if="sendViaGmail" class="size-3" />
-                </div>
-              </label>
-
-              <label class="flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all select-none text-xs" :class="sendViaZalo ? 'border-emerald-500 bg-emerald-500/5' : 'border-border/60 hover:bg-muted/30'">
-                <input v-model="sendViaZalo" type="checkbox" class="sr-only" />
-                <MessageSquare class="size-4 text-emerald-500 shrink-0" />
-                <div class="flex-1">
-                  <div class="font-semibold text-foreground">Gửi Zalo</div>
-                </div>
-                <div class="size-4 rounded-full border flex items-center justify-center shrink-0" :class="sendViaZalo ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-input'">
-                  <CheckCircle2 v-if="sendViaZalo" class="size-3" />
-                </div>
-              </label>
-            </div>
-
-            <p v-if="!sendViaGmail && !sendViaZalo" class="text-destructive text-[11px] font-medium flex items-center gap-1">
-              <AlertCircle class="size-3 shrink-0" />Chọn ít nhất một kênh.
-            </p>
-
-            <Button
-              type="submit"
-              :disabled="!canSubmit"
-              class="w-full h-11 font-bold text-sm rounded-xl text-white shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
-            >
-              <RefreshCw v-if="sending" class="size-4 animate-spin" />
-              <Send v-else class="size-4" />
-              <span>{{
-                sending
-                  ? (sendMode === 'bulk' ? 'Đang gửi...' : 'Đang gửi...')
-                  : sendMode === 'bulk'
-                    ? 'Gửi cho ' + selectedMaKhs.length + ' KH'
-                    : 'Gửi thông báo ngay'
-              }}</span>
-            </Button>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- CỘT PHẢI (SOẠN NỘI DUNG) -->
-      <div class="lg:col-span-7">
-        
-        <!-- BƯỚC 2: SOẠN NỘI DUNG TIN NHẮN -->
-        <div class="rounded-2xl border border-border/80 bg-card shadow-sm overflow-hidden h-full flex flex-col">
-          <div class="flex items-center gap-3 px-5 py-3.5 border-b border-border/60 bg-muted/30">
-            <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-white text-xs font-bold">2</span>
-            <span class="font-semibold text-sm text-foreground">Soạn nội dung thông báo</span>
-          </div>
-          <div class="p-5 space-y-4 flex-1 flex flex-col justify-between">
-            <div class="space-y-3">
-              <div>
-                <label for="tieu-de" class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Tiêu đề</label>
-                <Input id="tieu-de" v-model="tieuDe" class="h-10 bg-background text-xs" type="text" placeholder="Nhập tiêu đề thông báo..." autocomplete="off" />
-              </div>
-              <div class="flex flex-col flex-1">
-                <label for="noi-dung" class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Nội dung</label>
-                <textarea id="noi-dung" v-model="noiDung" rows="10" placeholder="Nhập nội dung gửi đến khách hàng..." class="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-primary/30 min-h-[220px] lg:min-h-[250px] w-full rounded-xl border p-3.5 text-xs shadow-sm transition-all focus-visible:ring-2 focus-visible:outline-none resize-none flex-1" />
-              </div>
-            </div>
-            <div class="text-right text-[10px] text-muted-foreground pt-1 border-t border-border/20 mt-3">
-              <span>{{ noiDung.length }} ký tự</span>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-    </form>
-
-    <!-- ── PANEL: KHÁCH HÀNG ĐẶT LỊCH ── -->
-    <div class="rounded-2xl border border-border/80 bg-card shadow-sm overflow-hidden">
-      <!-- Header -->
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-5 py-4 border-b border-border/60 bg-muted/20">
-        <div class="flex items-center gap-3">
-          <div class="flex size-8 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 border border-violet-500/20">
-            <CalendarDays class="size-4" />
-          </div>
+    <!-- ── HEADER BANNER CARD ── -->
+    <v-card elevation="2" rounded="2xl" class="pa-6 border mb-6">
+      <div class="d-flex flex-column flex-sm-row align-start align-sm-center justify-space-between gap-4">
+        <div class="d-flex align-center gap-4">
+          <v-avatar color="primary" size="56" rounded="xl" elevation="3">
+            <Bell class="w-7 h-7 text-white" />
+          </v-avatar>
           <div>
-            <div class="font-bold text-sm text-foreground flex items-center gap-2">
-              Khách hàng đặt lịch
-              <span class="rounded-full bg-violet-500/15 px-2 py-0.5 text-[11px] font-bold text-violet-700">{{ filteredDatLichList.length }}</span>
-            </div>
-            <div class="text-xs text-muted-foreground">Nhấn vào để soạn thông báo nhắc lịch nhanh</div>
+            <h1 class="text-h5 font-weight-bold mb-1">Gửi Thông Báo Khách Hàng</h1>
+            <p class="text-body-2 text-medium-emphasis mb-0">Gửi tin nhắn chăm sóc khách hàng tự động qua Email &amp; Zalo Chat</p>
           </div>
         </div>
-        <!-- Bộ lọc -->
-        <div class="flex items-center gap-2 flex-wrap">
-          <div class="flex items-center gap-1.5 bg-background border border-input rounded-lg px-2 h-8">
-            <CalendarDays class="size-3.5 text-muted-foreground shrink-0" />
-            <input
+
+        <v-btn
+          color="success"
+          variant="flat"
+          size="large"
+          rounded="xl"
+          class="text-none font-weight-bold shadow-xs px-6"
+          @click="openQrLoginModal"
+        >
+          <template v-slot:prepend>
+            <QrCode class="w-5 h-5 mr-2" />
+          </template>
+          Đăng Nhập Zalo (QR)
+        </v-btn>
+      </div>
+    </v-card>
+
+    <!-- ── ZALO TRẠNG THÁI ALERT BANNER ── -->
+    <v-card v-if="zaloTrangThai" border rounded="2xl" class="pa-5 mb-6">
+      <div class="d-flex flex-column flex-md-row align-start align-md-center justify-space-between gap-4">
+        <div class="d-flex align-center gap-4">
+          <v-avatar
+            :color="zaloTrangThai.personalLoggedIn ? 'success' : 'warning'"
+            size="44"
+            rounded="xl"
+          >
+            <Smartphone class="w-6 h-6 text-white" />
+          </v-avatar>
+          <div>
+            <div class="d-flex align-center gap-3 mb-1">
+              <span class="text-subtitle-1 font-weight-bold">Zalo Chat Personal Bridge (Cổng 3847):</span>
+              <v-chip
+                :color="zaloTrangThai.personalLoggedIn ? 'success' : 'warning'"
+                size="small"
+                variant="flat"
+                class="font-weight-black"
+              >
+                {{ zaloTrangThai.personalLoggedIn ? 'Đã Kết Nối' : 'Chưa Đăng Nhập' }}
+              </v-chip>
+            </div>
+            <p class="text-caption text-medium-emphasis mb-0" style="font-size: 12px;">
+              {{ zaloTrangThai.hint || 'Sẵn sàng gửi tin nhắn trực tiếp qua tài khoản Zalo cá nhân của Salon' }}
+            </p>
+          </div>
+        </div>
+
+        <v-btn
+          size="small"
+          variant="tonal"
+          color="primary"
+          rounded="lg"
+          class="text-none font-weight-bold px-4"
+          :loading="loadingZaloTrangThai"
+          @click="loadZaloTrangThai"
+        >
+          <template v-slot:prepend>
+            <RefreshCw class="w-4 h-4 mr-1" />
+          </template>
+          Làm Mới Trạng Thái
+        </v-btn>
+      </div>
+    </v-card>
+
+    <!-- ── MAIN FORM (2 CỘT VUETIFY VỚI GUTTER THOÁNG CÂN BẰNG) ── -->
+    <v-row class="align-stretch mb-8">
+
+      <!-- CỘT TRÁI: CHỌN ĐỐI TƯỢNG (VUETIFY COL 5) -->
+      <v-col cols="12" lg="5">
+        <v-card rounded="2xl" border elevation="2" class="fill-height d-flex flex-column pa-6 pa-md-7">
+          <div class="d-flex align-center gap-3 border-b pb-4 mb-6">
+            <v-avatar color="primary-lighten-5" size="36" rounded="lg">
+              <Users class="w-5 h-5 text-primary" />
+            </v-avatar>
+            <h2 class="text-subtitle-1 font-weight-bold mb-0">Bước 1: Chọn Đối Tượng Nhận Tin</h2>
+          </div>
+
+          <!-- Mode Toggle Buttons -->
+          <v-btn-toggle
+            v-model="sendMode"
+            mandatory
+            color="primary"
+            rounded="xl"
+            density="comfortable"
+            class="w-100 border mb-6"
+          >
+            <v-btn value="single" class="flex-grow-1 text-none font-weight-bold py-2">
+              <User class="w-4 h-4 mr-2" />
+              Gửi 1 Khách Hàng
+            </v-btn>
+            <v-btn value="bulk" class="flex-grow-1 text-none font-weight-bold py-2">
+              <Users class="w-4 h-4 mr-2" />
+              Gửi Hàng Loạt ({{ selectedMaKhs.length }})
+            </v-btn>
+          </v-btn-toggle>
+
+          <!-- ── SINGLE MODE SELECTOR ── -->
+          <div v-if="sendMode === 'single'" class="mb-6 space-y-6">
+            <div class="mb-4">
+              <label class="text-caption font-weight-bold text-medium-emphasis mb-2 d-block">Chọn Khách Hàng Nhận Tin:</label>
+              <v-autocomplete
+                v-model="maKh"
+                :items="khachHangList"
+                item-title="hoTen"
+                item-value="maKh"
+                placeholder="-- Chọn hoặc tìm kiếm khách hàng --"
+                variant="outlined"
+                density="comfortable"
+                rounded="xl"
+                hide-details
+                clearable
+              >
+                <template v-slot:item="{ props, item }">
+                  <v-list-item v-bind="props" :title="item.raw.hoTen || item.raw.maKh" :subtitle="item.raw.sdt || item.raw.email || ''"></v-list-item>
+                </template>
+              </v-autocomplete>
+            </div>
+
+            <!-- Customer Details Card Box -->
+            <v-card v-if="selectedKhach" rounded="2xl" border class="pa-5 bg-surface space-y-4 shadow-xs">
+              <div class="d-flex align-center justify-space-between mb-2">
+                <div class="d-flex align-center gap-3">
+                  <v-avatar :color="getAvatarColor(selectedKhach.hoTen || selectedKhach.maKh)" size="46" rounded="xl" class="text-white font-weight-bold shadow-xs">
+                    {{ selectedKhach.hoTen?.charAt(0)?.toUpperCase() || 'K' }}
+                  </v-avatar>
+                  <div>
+                    <div class="text-subtitle-1 font-weight-bold leading-tight">{{ selectedKhach.hoTen || 'Khách hàng' }}</div>
+                    <div class="text-caption text-medium-emphasis font-mono mt-1" style="font-size: 11px;">Mã: {{ selectedKhach.maKh }}</div>
+                  </div>
+                </div>
+
+                <v-btn
+                  size="small"
+                  color="success"
+                  variant="tonal"
+                  rounded="lg"
+                  class="text-none font-weight-bold px-3"
+                  @click="checkKhachZalo(selectedKhach)"
+                >
+                  Rà Zalo
+                </v-btn>
+              </div>
+
+              <v-divider class="my-4"></v-divider>
+
+              <div class="text-body-2 space-y-3 text-medium-emphasis my-3">
+                <div class="d-flex align-center gap-2">
+                  <Phone class="w-4 h-4 text-primary me-1" />
+                  <span>SĐT: <strong class="text-high-emphasis ms-1">{{ selectedKhach.sdt || 'Chưa có SĐT' }}</strong></span>
+                </div>
+                <div class="d-flex align-center gap-2">
+                  <Mail class="w-4 h-4 text-primary me-1" />
+                  <span>Email: <strong class="text-high-emphasis ms-1">{{ selectedKhach.email || 'Chưa có Email' }}</strong></span>
+                </div>
+              </div>
+
+              <!-- Zalo Check Badge -->
+              <div v-if="getCheckResult(selectedKhach.maKh)" class="pt-3 border-t">
+                <v-chip
+                  v-if="getCheckResult(selectedKhach.maKh)?.exists"
+                  color="success"
+                  size="small"
+                  variant="flat"
+                  class="font-weight-bold py-1 px-3"
+                >
+                  ✓ Đã có Zalo: {{ getCheckResult(selectedKhach.maKh)?.user?.displayName }}
+                </v-chip>
+                <v-chip
+                  v-else-if="!getCheckResult(selectedKhach.maKh)?.checking"
+                  color="warning"
+                  size="small"
+                  variant="tonal"
+                  class="font-weight-bold py-1 px-3"
+                >
+                  ✗ Chưa có / Chặn Zalo
+                </v-chip>
+              </div>
+            </v-card>
+          </div>
+
+          <!-- ── BULK MODE SELECTOR ── -->
+          <div v-else class="mb-6 flex-grow-1 d-flex flex-column">
+            <!-- Search Input Wrapper -->
+            <div class="mb-4">
+              <label class="text-caption font-weight-bold text-medium-emphasis mb-1.5 d-block">Tìm Kiếm Khách Hàng:</label>
+              <v-text-field
+                v-model="bulkSearchQuery"
+                placeholder="Tìm theo tên, SĐT, email..."
+                variant="outlined"
+                density="comfortable"
+                hide-details
+                rounded="xl"
+              >
+                <template v-slot:prepend-inner>
+                  <Search class="w-4 h-4 text-medium-emphasis me-2" />
+                </template>
+              </v-text-field>
+            </div>
+
+            <!-- Zalo Bulk Action Card -->
+            <v-card variant="flat" border rounded="xl" class="pa-4 mb-4" style="background-color: rgba(var(--v-theme-on-surface), 0.03);">
+              <!-- Top Row: Zalo Actions & Sort Switch -->
+              <div class="d-flex align-center justify-space-between flex-wrap gap-3 pb-3 border-b">
+                <div class="d-flex align-center gap-2.5 flex-wrap">
+                  <v-btn
+                    size="small"
+                    color="success"
+                    variant="flat"
+                    rounded="lg"
+                    height="36"
+                    class="text-none font-weight-bold px-3"
+                    :loading="isBulkCheckingZalo"
+                    @click="checkBulkZalo"
+                  >
+                    <template v-slot:prepend>
+                      <Smartphone class="w-4 h-4 mr-1" />
+                    </template>
+                    {{
+                      isBulkCheckingZalo
+                        ? `Đang rà (${bulkCheckProgress.current}/${bulkCheckProgress.total})...`
+                        : 'Rà Zalo Đồng Loạt'
+                    }}
+                  </v-btn>
+
+                  <v-btn
+                    size="small"
+                    color="success"
+                    variant="tonal"
+                    rounded="lg"
+                    height="36"
+                    class="text-none font-weight-bold px-3"
+                    @click="selectOnlyZaloUsers"
+                    title="Chỉ chọn những khách hàng đã rà thấy Zalo"
+                  >
+                    <template v-slot:prepend>
+                      <CheckCircle2 class="w-4 h-4 mr-1" />
+                    </template>
+                    Chỉ chọn có Zalo
+                  </v-btn>
+                </div>
+
+                <div class="d-flex align-center gap-2">
+                  <v-switch
+                    v-model="sortByZalo"
+                    color="success"
+                    density="compact"
+                    hide-details
+                    inset
+                    class="ma-0 pa-0"
+                  >
+                    <template v-slot:label>
+                      <span class="text-caption font-weight-semibold text-medium-emphasis ps-1">Ưu tiên có Zalo</span>
+                    </template>
+                  </v-switch>
+                </div>
+              </div>
+
+              <!-- Bottom Row: Selection Controls -->
+              <div class="d-flex align-center justify-space-between pt-3 px-0.5">
+                <div class="d-flex align-center gap-2">
+                  <v-btn size="small" variant="text" color="primary" rounded="md" class="text-none font-weight-bold px-2.5" @click="selectAllBulk">
+                    Chọn tất cả
+                  </v-btn>
+                  <span class="text-caption text-medium-emphasis opacity-60">|</span>
+                  <v-btn size="small" variant="text" color="grey-darken-1" rounded="md" class="text-none font-weight-bold px-2.5" @click="deselectAllBulk">
+                    Bỏ chọn
+                  </v-btn>
+                </div>
+                <v-chip color="primary" size="small" variant="flat" class="font-weight-black px-3">
+                  Đã chọn {{ selectedMaKhs.length }}/{{ filteredKhachHangList.length }}
+                </v-chip>
+              </div>
+            </v-card>
+
+            <!-- Scrollable Cards List with Spaced Out Item Cards -->
+            <v-sheet
+              border
+              rounded="2xl"
+              class="flex-grow-1 overflow-y-auto pa-3 d-flex flex-column"
+              style="max-height: 300px; min-height: 200px; gap: 10px; background-color: rgba(var(--v-theme-on-surface), 0.02);"
+            >
+              <v-card
+                v-for="k in filteredKhachHangList"
+                :key="k.maKh"
+                variant="flat"
+                rounded="xl"
+                class="pa-3 cursor-pointer border relative transition-all"
+                :class="[
+                  selectedMaKhs.includes(k.maKh)
+                    ? 'border-primary'
+                    : ''
+                ]"
+                :style="
+                  selectedMaKhs.includes(k.maKh)
+                    ? 'background-color: rgba(var(--v-theme-on-surface), 0.08);'
+                    : 'background-color: rgba(var(--v-theme-on-surface), 0.03);'
+                "
+                @click="toggleSelectKhach(k.maKh)"
+              >
+                <div class="d-flex align-center justify-space-between gap-2">
+                  <div class="d-flex align-center gap-3 min-w-0">
+                    <v-checkbox
+                      :model-value="selectedMaKhs.includes(k.maKh)"
+                      density="compact"
+                      hide-details
+                      color="primary"
+                      class="me-1 shrink-0"
+                      @click.stop="toggleSelectKhach(k.maKh)"
+                    ></v-checkbox>
+                    <v-avatar size="32" color="primary" variant="tonal" class="text-caption font-weight-bold shrink-0">
+                      {{ (k.hoTen?.charAt(0) || k.maKh?.charAt(0) || 'K').toUpperCase() }}
+                    </v-avatar>
+                    <div class="min-w-0">
+                      <div class="text-subtitle-2 font-weight-bold leading-tight truncate">{{ k.hoTen || k.maKh }}</div>
+                      <div class="text-caption text-medium-emphasis font-mono" style="font-size: 11px;">{{ k.sdt || 'Chưa có SĐT' }}</div>
+                    </div>
+                  </div>
+
+                  <!-- Zalo Check Badge per Item -->
+                  <div class="shrink-0 d-flex align-center gap-1">
+                    <v-chip
+                      v-if="getCheckResult(k.maKh)?.exists"
+                      color="success"
+                      size="x-small"
+                      variant="flat"
+                      class="font-weight-bold"
+                    >
+                      ✓ Zalo: {{ getCheckResult(k.maKh)?.user?.displayName || 'Khả dụng' }}
+                    </v-chip>
+                    <v-chip
+                      v-else-if="getCheckResult(k.maKh)?.checking"
+                      color="primary"
+                      size="x-small"
+                      variant="tonal"
+                    >
+                      <v-progress-circular indeterminate size="10" width="2" class="mr-1"></v-progress-circular>
+                      Đang rà...
+                    </v-chip>
+                    <v-chip
+                      v-else-if="getCheckResult(k.maKh) && !getCheckResult(k.maKh)?.exists"
+                      color="grey"
+                      size="x-small"
+                      variant="tonal"
+                    >
+                      Không có Zalo
+                    </v-chip>
+                    <v-btn
+                      v-else-if="k.sdt"
+                      size="x-small"
+                      variant="tonal"
+                      color="success"
+                      rounded="md"
+                      class="text-none font-weight-bold px-2"
+                      @click.stop="checkKhachZalo(k)"
+                    >
+                      Rà Zalo
+                    </v-btn>
+                  </div>
+                </div>
+              </v-card>
+            </v-sheet>
+          </div>
+
+          <!-- KÊNH GỬI & NÚT GỬI -->
+          <v-card variant="flat" border rounded="xl" class="pa-4 mb-6" style="background-color: rgba(var(--v-theme-on-surface), 0.03);">
+            <div class="text-subtitle-2 font-weight-bold mb-3">Kênh Thông Báo Nổi Bật:</div>
+            
+            <div class="d-flex flex-column gap-2">
+              <v-switch
+                v-model="sendViaGmail"
+                color="primary"
+                hide-details
+                density="comfortable"
+              >
+                <template v-slot:label>
+                  <div class="d-flex align-center gap-2 font-weight-bold text-body-2">
+                    <Mail class="w-4 h-4 text-primary" />
+                    <span>Gửi qua Email / Gmail</span>
+                  </div>
+                </template>
+              </v-switch>
+
+              <v-switch
+                v-model="sendViaZalo"
+                color="success"
+                hide-details
+                density="comfortable"
+              >
+                <template v-slot:label>
+                  <div class="d-flex align-center gap-2 font-weight-bold text-body-2">
+                    <Smartphone class="w-4 h-4 text-success" />
+                    <span>Gửi qua Zalo Chat (Cá nhân/OA)</span>
+                  </div>
+                </template>
+              </v-switch>
+            </div>
+          </v-card>
+
+          <v-btn
+            color="primary"
+            size="x-large"
+            rounded="xl"
+            block
+            elevation="3"
+            class="text-none font-weight-bold text-subtitle-1 mt-auto"
+            :disabled="!canSubmit"
+            :loading="sending"
+            @click="onSubmit"
+          >
+            <template v-slot:prepend>
+              <Send class="w-5 h-5 mr-2" />
+            </template>
+            {{ sending ? 'Đang Gửi...' : 'Gửi Thông Báo Ngay' }}
+          </v-btn>
+        </v-card>
+      </v-col>
+
+      <!-- CỘT PHẢI: NỘI DUNG THÔNG BÁO (VUETIFY COL 7) -->
+      <v-col cols="12" lg="7">
+        <v-card rounded="2xl" border elevation="2" class="fill-height d-flex flex-column pa-6 pa-md-7">
+          <div class="d-flex align-center gap-3 border-b pb-4 mb-6">
+            <v-avatar color="primary-lighten-5" size="36" rounded="lg">
+              <FileText class="w-5 h-5 text-primary" />
+            </v-avatar>
+            <h2 class="text-subtitle-1 font-weight-bold mb-0">Bước 2: Soạn Nội Dung Tin Nhắn</h2>
+          </div>
+
+          <!-- Quick Templates Chips -->
+          <div class="mb-6 space-y-2">
+            <span class="text-caption font-weight-bold text-medium-emphasis uppercase d-block mb-1">Mẫu Tin Nhắn Gợi Ý:</span>
+            <div class="d-flex align-center gap-2 flex-wrap">
+              <v-chip color="primary" variant="tonal" size="small" class="font-weight-bold cursor-pointer py-1" @click="fillTemplate('nhac_lich')">
+                📅 Nhắc Lịch Hẹn
+              </v-chip>
+              <v-chip color="success" variant="tonal" size="small" class="font-weight-bold cursor-pointer py-1" @click="fillTemplate('chuc_mung')">
+                🎉 Sinh Nhật KH
+              </v-chip>
+              <v-chip color="warning" variant="tonal" size="small" class="font-weight-bold cursor-pointer py-1" @click="fillTemplate('khuyen_mai')">
+                🔥 Khuyến Mãi Hot
+              </v-chip>
+            </div>
+          </div>
+
+          <!-- Form Text Fields -->
+          <div class="space-y-6 flex-grow-1 d-flex flex-column">
+            <div>
+              <label class="text-caption font-weight-bold text-medium-emphasis mb-2 d-block">Tiêu Đề Thông Báo:</label>
+              <v-text-field
+                v-model="tieuDe"
+                placeholder="Nhập tiêu đề thông báo..."
+                variant="outlined"
+                density="comfortable"
+                rounded="xl"
+                hide-details
+              ></v-text-field>
+            </div>
+
+            <div class="flex-grow-1 d-flex flex-column">
+              <label class="text-caption font-weight-bold text-medium-emphasis mb-2 d-block">Nội Dung Chi Tiết Tin Nhắn:</label>
+              <v-textarea
+                v-model="noiDung"
+                placeholder="Nhập nội dung chi tiết gửi cho khách hàng..."
+                variant="outlined"
+                rounded="2xl"
+                rows="8"
+                hide-details
+                class="flex-grow-1"
+              ></v-textarea>
+            </div>
+          </div>
+        </v-card>
+      </v-col>
+    </v-row>
+
+    <!-- ── BOTTOM TABS SECTION: (1) LỊCH ĐẶT HẸN & (2) LỊCH SỬ TIN NHẮN ── -->
+    <v-card rounded="2xl" border elevation="2" class="pa-6 pa-md-7 mt-8">
+      <div class="d-flex align-center justify-space-between border-b pb-4 mb-6">
+        <v-btn-toggle v-model="activeBottomTab" mandatory color="primary" rounded="xl" density="comfortable">
+          <v-btn value="datlich" class="text-none font-weight-bold px-4 py-2">
+            <CalendarDays class="w-4 h-4 mr-2" />
+            Lịch Đặt Hẹn Khách ({{ filteredDatLichList.length }})
+          </v-btn>
+          <v-btn value="lichsu" class="text-none font-weight-bold px-4 py-2">
+            <History class="w-4 h-4 mr-2" />
+            Lịch Sử Gửi Thông Báo ({{ filteredSentNotifications.length }})
+          </v-btn>
+        </v-btn-toggle>
+
+        <v-btn v-if="activeBottomTab === 'lichsu'" color="error" variant="tonal" size="small" rounded="lg" class="text-none font-weight-bold px-4" @click="clearSentHistory">
+          Xóa Lịch Sử
+        </v-btn>
+      </div>
+
+      <!-- TAB 1: LỊCH ĐẶT HẸN KHÁCH HÀNG -->
+      <div v-if="activeBottomTab === 'datlich'" class="space-y-6">
+        <!-- Controls -->
+        <div class="d-flex flex-column flex-sm-row align-center justify-space-between gap-4 mb-4">
+          <div class="d-flex align-center gap-3 w-100 sm:w-auto">
+            <v-text-field
               v-model="datLichNgayFilter"
               type="date"
-              class="h-full text-xs bg-transparent outline-none text-foreground w-[120px]"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="xl"
+              style="min-width: 170px;"
               @change="loadKhachHangDatLich"
-            />
+            ></v-text-field>
+
+            <v-select
+              v-model="datLichTrangThaiFilter"
+              :items="[
+                { title: 'Tất cả trạng thái', value: 'all' },
+                { title: 'Chờ xác nhận', value: '0' },
+                { title: 'Đã xác nhận', value: '1' },
+                { title: 'Hoàn thành', value: '2' }
+              ]"
+              item-title="title"
+              item-value="value"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="xl"
+              style="min-width: 180px;"
+            ></v-select>
           </div>
-          <select
-            v-model="datLichTrangThaiFilter"
-            class="h-8 px-2 rounded-lg border border-input bg-background text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer"
-            @change="loadKhachHangDatLich"
+
+          <v-text-field
+            v-model="datLichSearch"
+            placeholder="Tìm tên, SĐT..."
+            variant="outlined"
+            density="compact"
+            hide-details
+            rounded="xl"
+            style="min-width: 220px;"
           >
-            <option value="all">Tất cả trạng thái</option>
-            <option value="0">Chờ xác nhận</option>
-            <option value="1">Xác nhận</option>
-            <option value="2">Hoàn thành</option>
-            <option value="3">Đã hủy</option>
-          </select>
-          <div class="relative">
-            <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-            <input v-model="datLichSearch" type="text" placeholder="Tìm khách..." class="h-8 w-32 pl-8 pr-3 rounded-lg border border-input bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/40" />
-          </div>
-          <button
-            type="button"
-            class="h-8 px-3 rounded-lg border border-violet-500/30 text-violet-700 text-xs font-medium hover:bg-violet-500/10 transition-colors flex items-center gap-1.5"
-            :disabled="loadingDatLich"
-            @click="loadKhachHangDatLich"
-          >
-            <RefreshCw class="size-3.5" :class="{ 'animate-spin': loadingDatLich }" />
-            Làm mới
-          </button>
+            <template v-slot:prepend-inner>
+              <Search class="w-4 h-4 text-medium-emphasis" />
+            </template>
+          </v-text-field>
         </div>
-      </div>
 
-      <!-- Loading -->
-      <div v-if="loadingDatLich" class="flex items-center justify-center py-12 gap-3 text-muted-foreground">
-        <RefreshCw class="size-5 animate-spin text-violet-500" />
-        <span class="text-sm">Đang tải danh sách lịch đặt...</span>
-      </div>
-
-      <!-- Empty -->
-      <div v-else-if="filteredDatLichList.length === 0" class="flex flex-col items-center justify-center py-14 gap-3">
-        <div class="flex size-14 items-center justify-center rounded-2xl bg-muted/40 border border-border/60">
-          <CalendarDays class="size-7 text-muted-foreground/40" />
-        </div>
-        <p class="text-sm font-semibold text-foreground">Không có lịch đặt nào</p>
-        <p class="text-xs text-muted-foreground max-w-xs text-center">Trong khoảng thời gian từ ngày đã chọn đến 7 ngày tới, không có lịch hẹn.</p>
-      </div>
-
-      <!-- Table -->
-      <div v-else class="overflow-x-auto">
-        <table class="w-full text-left border-collapse text-xs">
-          <thead>
-            <tr class="border-b border-border/60 bg-muted/30 text-muted-foreground text-[11px] uppercase font-bold">
-              <th class="py-2.5 px-4 w-[130px]">Ngày hẹn</th>
-              <th class="py-2.5 px-4 w-[100px]">Giờ</th>
-              <th class="py-2.5 px-4 min-w-[160px]">Khách hàng</th>
-              <th class="py-2.5 px-4 w-[120px]">Trạng thái</th>
-              <th class="py-2.5 px-4 w-[110px]">Dự kiến</th>
-              <th class="py-2.5 px-4 text-right w-[180px]">Thao tác</th>
+        <!-- Table -->
+        <v-table class="bg-transparent" border rounded="xl">
+          <thead :class="isDark ? 'bg-grey-darken-3' : 'bg-grey-lighten-4'">
+            <tr>
+              <th class="font-weight-bold text-subtitle-2 py-3 px-4">Khách Hàng</th>
+              <th class="font-weight-bold text-subtitle-2 py-3 px-4">SĐT</th>
+              <th class="font-weight-bold text-subtitle-2 py-3 px-4">Ngày Hẹn</th>
+              <th class="font-weight-bold text-subtitle-2 py-3 px-4">Trạng Thái</th>
+              <th class="font-weight-bold text-subtitle-2 py-3 px-4 text-end">Hành Động</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-border/40">
-            <tr
-              v-for="item in filteredDatLichList"
-              :key="item.maLd"
-              class="hover:bg-violet-500/5 transition-colors"
-            >
-              <!-- Ngày hẹn -->
-              <td class="py-2.5 px-4">
-                <div class="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-                  <CalendarDays class="size-3.5 text-violet-500 shrink-0" />
-                  {{ formatNgayVN(item.ngayHen) }}
-                </div>
+          <tbody>
+            <tr v-if="loadingDatLich">
+              <td colspan="5" class="text-center py-8">
+                <v-progress-circular indeterminate color="primary" size="32"></v-progress-circular>
               </td>
-              <!-- Giờ -->
-              <td class="py-2.5 px-4">
-                <div class="flex items-center gap-1 text-xs font-mono text-foreground">
-                  <Clock class="size-3 text-violet-400 shrink-0" />
-                  <span>{{ item.gioBatDau || '—' }}</span>
-                  <span v-if="item.gioKetThuc" class="text-muted-foreground">→ {{ item.gioKetThuc }}</span>
-                </div>
+            </tr>
+            <tr v-else-if="filteredDatLichList.length === 0">
+              <td colspan="5" class="text-center py-8 text-caption font-weight-bold text-medium-emphasis">
+                Không tìm thấy lịch hẹn phù hợp
               </td>
-              <!-- Khách hàng -->
-              <td class="py-2.5 px-4 max-w-[200px]">
-                <div class="font-semibold text-foreground text-xs truncate" :title="item.hoTen || 'Khách hàng'">{{ item.hoTen || 'Khách hàng' }}</div>
-                <div class="flex flex-col gap-0.5 text-[10px] text-muted-foreground mt-0.5">
-                  <span v-if="item.sdt" class="flex items-center gap-0.5"><Phone class="size-2.5 text-emerald-600 shrink-0" />{{ item.sdt }}</span>
-                  <span v-if="item.email" class="flex items-center gap-0.5 truncate" :title="item.email"><Mail class="size-2.5 text-blue-600 shrink-0" /><span class="truncate">{{ item.email }}</span></span>
-                </div>
+            </tr>
+            <tr v-for="item in filteredDatLichList" :key="item.maLd">
+              <td class="font-weight-bold px-4 py-3">{{ item.hoTen || item.maKh }}</td>
+              <td class="font-mono text-caption px-4 py-3">{{ item.sdt || '—' }}</td>
+              <td class="text-caption font-weight-medium px-4 py-3">
+                {{ formatNgayVN(item.ngayHen) }} {{ item.gioBatDau ? `(${item.gioBatDau})` : '' }}
               </td>
-              <!-- Trạng thái -->
-              <td class="py-2.5 px-4">
-                <span
-                  class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border"
-                  :class="getTrangThaiDatLich(item.trangThai).cls"
-                >
+              <td class="px-4 py-3">
+                <v-chip :color="getTrangThaiDatLich(item.trangThai).color" size="x-small" variant="flat" class="font-weight-black">
                   {{ getTrangThaiDatLich(item.trangThai).label }}
-                </span>
+                </v-chip>
               </td>
-              <!-- Dự kiến -->
-              <td class="py-2.5 px-4 text-xs font-mono text-muted-foreground">
-                {{ item.tongTienDuKien ? item.tongTienDuKien.toLocaleString('vi-VN') + '₫' : '—' }}
-              </td>
-              <!-- Thao tác -->
-              <td class="py-2.5 px-4 text-right whitespace-nowrap">
-                <div class="flex items-center justify-end gap-1.5">
-                  <button
-                    type="button"
-                    class="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg border border-violet-500/40 text-violet-700 bg-violet-500/5 hover:bg-violet-500/15 text-[11px] font-semibold transition-colors"
-                    @click="selectDatLichKhach(item)"
-                    title="Soạn thông báo nhắc lịch cho khách này"
-                  >
-                    <Send class="size-3" />Nhắc lịch
-                  </button>
-                  <button
-                    type="button"
-                    class="inline-flex items-center gap-1.5 h-7 px-2 rounded-lg border border-blue-500/40 text-blue-700 bg-blue-500/5 hover:bg-blue-500/15 text-[11px] font-semibold transition-colors"
-                    @click="selectBulkDatLich(item)"
-                    title="Thêm vào danh sách gửi hàng loạt"
-                  >
-                    <UserCheck class="size-3" />+ Hàng loạt
-                  </button>
-                </div>
+              <td class="text-end px-4 py-3">
+                <v-btn color="primary" size="small" variant="tonal" rounded="lg" class="text-none font-weight-bold px-4" @click="selectDatLichKhach(item)">
+                  Chọn Gửi Tin
+                </v-btn>
               </td>
             </tr>
           </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- LỊCH SỬ TIN NHẮN ĐÃ GỬI -->
-    <div class="rounded-2xl border border-border/80 bg-card shadow-sm overflow-hidden">
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-5 py-4 border-b border-border/60 bg-muted/20">
-        <div class="flex items-center gap-3">
-          <div class="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary border border-primary/20">
-            <History class="size-4" />
-          </div>
-          <div>
-            <div class="font-bold text-sm text-foreground flex items-center gap-2">
-              Lịch sử tin nhắn đã gửi
-              <span class="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-bold text-primary">{{ sentNotifications.length }}</span>
-            </div>
-            <div class="text-xs text-muted-foreground">Kết quả thực tế — thành công, thất bại và lý do chi tiết</div>
-          </div>
-        </div>
-        <div class="flex items-center gap-2 flex-wrap">
-          <div class="relative">
-            <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-            <input v-model="historySearch" type="text" placeholder="Tìm kiếm..." class="h-8 w-40 pl-8 pr-3 rounded-lg border border-input bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/40" />
-          </div>
-          <select v-model="historyStatusFilter" class="h-8 px-2 rounded-lg border border-input bg-background text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer">
-            <option value="all">Tất cả trạng thái</option>
-            <option value="success">Thành công</option>
-            <option value="partial">Một phần</option>
-            <option value="error">Thất bại</option>
-          </select>
-          <select v-model="historyChannelFilter" class="h-8 px-2 rounded-lg border border-input bg-background text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer">
-            <option value="all">Tất cả kênh</option>
-            <option value="Zalo">Zalo</option>
-            <option value="Gmail">Gmail</option>
-          </select>
-          <button v-if="sentNotifications.length > 0" type="button" class="h-8 px-3 rounded-lg border border-destructive/30 text-destructive text-xs font-medium hover:bg-destructive/10 transition-colors flex items-center gap-1.5" @click="clearSentHistory">
-            <Trash2 class="size-3.5" />Xóa tất cả
-          </button>
-        </div>
+        </v-table>
       </div>
 
-      <div v-if="filteredSentNotifications.length === 0" class="flex flex-col items-center justify-center py-16 gap-3 text-center">
-        <div class="flex size-14 items-center justify-center rounded-2xl bg-muted/40 border border-border/60">
-          <History class="size-7 text-muted-foreground/40" />
-        </div>
-        <div>
-          <p class="text-sm font-semibold text-foreground">{{ sentNotifications.length === 0 ? 'Chưa có lịch sử gửi tin' : 'Không có kết quả phù hợp' }}</p>
-          <p class="text-xs text-muted-foreground mt-1 max-w-xs">{{ sentNotifications.length === 0 ? 'Sau khi gửi, hệ thống tự ghi lại kết quả thực tế từng lần gửi vào đây.' : 'Thử thay đổi bộ lọc hoặc từ khóa.' }}</p>
-        </div>
-      </div>
+      <!-- TAB 2: LỊCH SỬ GỬI THÔNG BÁO -->
+      <div v-else class="space-y-6">
+        <!-- Controls -->
+        <div class="d-flex flex-column flex-sm-row align-center justify-space-between gap-4 mb-4">
+          <div class="d-flex align-center gap-3 w-100 sm:w-auto">
+            <v-select
+              v-model="historyStatusFilter"
+              :items="[
+                { title: 'Tất cả kết quả', value: 'all' },
+                { title: 'Thành công', value: 'success' },
+                { title: 'Một số thất bại', value: 'partial' },
+                { title: 'Thất bại', value: 'error' }
+              ]"
+              item-title="title"
+              item-value="value"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="xl"
+              style="min-width: 180px;"
+            ></v-select>
 
-      <div v-else class="overflow-x-auto">
-        <table class="w-full text-left border-collapse text-xs">
-          <thead>
-            <tr class="border-b border-border/60 bg-muted/30 text-muted-foreground text-[11px] uppercase font-bold">
-              <th class="py-2.5 px-4 w-[120px]">Thời gian</th>
-              <th class="py-2.5 px-4 min-w-[150px]">Khách hàng</th>
-              <th class="py-2.5 px-4 w-[80px]">Kênh</th>
-              <th class="py-2.5 px-4 min-w-[160px]">Nội dung</th>
-              <th class="py-2.5 px-4 w-[110px]">Trạng thái</th>
-              <th class="py-2.5 px-4 min-w-[180px]">Kết quả / Lý do lỗi</th>
-              <th class="py-2.5 px-4 text-right w-[120px]">Thao tác</th>
+            <v-select
+              v-model="historyChannelFilter"
+              :items="[
+                { title: 'Tất cả kênh', value: 'all' },
+                { title: 'Kênh Zalo', value: 'Zalo' },
+                { title: 'Kênh Gmail', value: 'Gmail' }
+              ]"
+              item-title="title"
+              item-value="value"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="xl"
+              style="min-width: 180px;"
+            ></v-select>
+          </div>
+
+          <v-text-field
+            v-model="historySearch"
+            placeholder="Tìm người nhận, nội dung..."
+            variant="outlined"
+            density="compact"
+            hide-details
+            rounded="xl"
+            style="min-width: 220px;"
+          >
+            <template v-slot:prepend-inner>
+              <Search class="w-4 h-4 text-medium-emphasis" />
+            </template>
+          </v-text-field>
+        </div>
+
+        <!-- History Table -->
+        <v-table class="bg-transparent" border rounded="xl">
+          <thead :class="isDark ? 'bg-grey-darken-3' : 'bg-grey-lighten-4'">
+            <tr>
+              <th class="font-weight-bold text-subtitle-2 py-3 px-4">Thời Gian</th>
+              <th class="font-weight-bold text-subtitle-2 py-3 px-4">Người Nhận</th>
+              <th class="font-weight-bold text-subtitle-2 py-3 px-4">Kênh Gửi</th>
+              <th class="font-weight-bold text-subtitle-2 py-3 px-4">Tiêu Đề</th>
+              <th class="font-weight-bold text-subtitle-2 py-3 px-4">Trạng Thái</th>
+              <th class="font-weight-bold text-subtitle-2 py-3 px-4 text-end">Thao Tác</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-border/40">
-            <tr v-for="item in filteredSentNotifications" :key="item.id" class="hover:bg-muted/20 transition-colors">
-              <td class="py-2.5 px-4 font-mono text-[11px] text-muted-foreground whitespace-nowrap">
-                <div class="flex items-center gap-1"><Clock class="size-3 shrink-0" />{{ formatTime(item.timestamp) }}</div>
+          <tbody>
+            <tr v-if="filteredSentNotifications.length === 0">
+              <td colspan="6" class="text-center py-8 text-caption font-weight-bold text-medium-emphasis">
+                Chưa có lịch sử gửi thông báo nào
               </td>
-              <td class="py-2.5 px-4">
-                <div class="font-semibold text-foreground flex items-center gap-1">
-                  {{ item.hoTen }}
-                  <span v-if="item.mode === 'bulk'" class="px-1.5 rounded bg-purple-500/10 text-purple-600 text-[10px] font-bold border border-purple-500/20">Loạt</span>
-                </div>
-                <div v-if="item.sdt" class="text-muted-foreground text-[11px] flex items-center gap-0.5 mt-0.5"><Phone class="size-2.5" />{{ item.sdt }}</div>
+            </tr>
+            <tr v-for="item in filteredSentNotifications" :key="item.id">
+              <td class="text-caption font-mono px-4 py-3">{{ formatTime(item.timestamp) }}</td>
+              <td class="font-weight-bold px-4 py-3">{{ item.hoTen }}</td>
+              <td class="px-4 py-3">
+                <v-chip color="info" size="x-small" variant="tonal" class="font-weight-bold me-1">
+                  {{ item.kenhGui }}
+                </v-chip>
               </td>
-              <td class="py-2.5 px-4 whitespace-nowrap">
-                <div class="flex flex-col gap-0.5">
-                  <span v-if="item.kenhGui.includes('Zalo')" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 border border-emerald-500/20 font-semibold text-[10px]"><MessageSquare class="size-2.5" />Zalo</span>
-                  <span v-if="item.kenhGui.includes('Gmail')" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-700 border border-blue-500/20 font-semibold text-[10px]"><Mail class="size-2.5" />Gmail</span>
-                </div>
+              <td class="text-caption font-weight-medium max-w-xs text-truncate px-4 py-3">{{ item.tieuDe }}</td>
+              <td class="px-4 py-3">
+                <v-chip
+                  :color="item.trangThai === 'success' ? 'success' : (item.trangThai === 'partial' ? 'warning' : 'error')"
+                  size="x-small"
+                  variant="flat"
+                  class="font-weight-black"
+                >
+                  {{ item.trangThai === 'success' ? 'Thành công' : (item.trangThai === 'partial' ? 'Từng phần' : 'Thất bại') }}
+                </v-chip>
               </td>
-              <td class="py-2.5 px-4 max-w-[180px]">
-                <div class="font-semibold text-foreground truncate text-[11px]" :title="item.tieuDe">{{ item.tieuDe }}</div>
-                <div class="text-muted-foreground text-[11px] truncate mt-0.5" :title="item.noiDung">{{ item.noiDung }}</div>
-              </td>
-              <td class="py-2.5 px-4 whitespace-nowrap">
-                <span v-if="item.trangThai === 'success'" class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-700 font-bold text-[11px] border border-emerald-500/30"><CheckCircle class="size-3" />Thành công</span>
-                <span v-else-if="item.trangThai === 'partial'" class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/15 text-amber-700 font-bold text-[11px] border border-amber-500/30"><AlertCircle class="size-3" />Một phần</span>
-                <span v-else class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-500/15 text-red-700 font-bold text-[11px] border border-red-500/30"><XCircle class="size-3" />Thất bại</span>
-              </td>
-              <td class="py-2.5 px-4 max-w-[200px]">
-                <div class="text-[11px] truncate font-mono" :class="item.trangThai === 'error' ? 'text-red-600' : item.trangThai === 'partial' ? 'text-amber-700' : 'text-emerald-700'" :title="item.chiTiet">{{ item.chiTiet }}</div>
-              </td>
-              <td class="py-2.5 px-4 text-right whitespace-nowrap">
-                <div class="flex items-center justify-end gap-1">
-                  <Button type="button" variant="outline" size="sm" class="h-7 px-2 text-[11px] hover:bg-primary/10 hover:text-primary" @click="openDetailModal(item)">
-                    <Eye class="size-3 mr-1" />Chi tiết
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" class="h-7 w-7 p-0 hover:bg-emerald-500/10 hover:text-emerald-700" title="Gửi lại" @click="resendMessage(item)">
-                    <RotateCcw class="size-3" />
-                  </Button>
-                  <button type="button" class="h-7 w-7 flex items-center justify-center text-muted-foreground hover:text-red-600 transition-colors rounded" title="Xóa" @click="deleteSentItem(item.id)">
-                    <Trash2 class="size-3.5" />
-                  </button>
-                </div>
+              <td class="text-end px-4 py-3">
+                <v-btn icon size="small" variant="text" color="primary" @click="openDetailModal(item)">
+                  <Eye class="w-4 h-4" />
+                </v-btn>
+                <v-btn icon size="small" variant="text" color="success" @click="resendMessage(item)">
+                  <RotateCcw class="w-4 h-4" />
+                </v-btn>
+                <v-btn icon size="small" variant="text" color="error" @click="deleteSentItem(item.id)">
+                  <Trash2 class="w-4 h-4" />
+                </v-btn>
               </td>
             </tr>
           </tbody>
-        </table>
+        </v-table>
       </div>
-    </div>
+    </v-card>
 
-    <Dialog :open="detailModalOpen" @update:open="(val) => !val && (detailModalOpen = false)">
-      <DialogContent class="w-[calc(100vw-2rem)] max-w-3xl rounded-2xl p-0 border border-border/80 shadow-2xl overflow-hidden">
-        <DialogHeader class="border-b border-border/40 pb-3 mb-0 px-6 pt-6">
-          <DialogTitle class="flex items-center gap-2 text-base font-bold text-foreground tracking-tight">
-            <div class="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary border border-primary/20">
-              <FileText class="size-4" />
-            </div>
-            Chi tiết tin nhắn đã gửi
-          </DialogTitle>
-          <DialogDescription v-if="selectedDetailItem" class="text-[11px] text-muted-foreground mt-1 flex items-center gap-1 font-mono">
-            <Clock class="size-3" /> Gửi lúc: {{ formatTime(selectedDetailItem.timestamp) }}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div v-if="selectedDetailItem" class="space-y-4 text-xs px-6 pb-6 pt-4 max-h-[80vh] overflow-y-auto">
-          <!-- Người nhận & Kênh gửi -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl bg-muted/30 border border-border/40">
-            <div class="space-y-1 min-w-0">
-              <span class="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Khách hàng nhận</span>
-              <div class="font-bold text-foreground text-sm flex items-center gap-1 flex-wrap">
-                <span class="truncate">{{ selectedDetailItem.hoTen }}</span>
-                <span v-if="selectedDetailItem.mode === 'bulk'" class="px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-700 text-[9px] font-bold border border-purple-500/20 shrink-0">Hàng loạt</span>
-              </div>
-              <div class="text-muted-foreground text-[10px] space-y-0.5 mt-1">
-                <div v-if="selectedDetailItem.sdt" class="flex items-center gap-1"><Phone class="size-3 text-emerald-600 shrink-0" /> {{ selectedDetailItem.sdt }}</div>
-                <div v-if="selectedDetailItem.email" class="flex items-center gap-1 min-w-0"><Mail class="size-3 text-blue-600 shrink-0" /> <span class="truncate">{{ selectedDetailItem.email }}</span></div>
-              </div>
-            </div>
-            <div class="space-y-1">
-              <span class="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Kênh &amp; Trạng thái</span>
-              <div class="flex items-center gap-1.5 flex-wrap">
-                <span v-if="selectedDetailItem.kenhGui.includes('Zalo')" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 border border-emerald-500/20 font-bold text-[9px]">
-                  <MessageSquare class="size-2.5" /> Zalo
-                </span>
-                <span v-if="selectedDetailItem.kenhGui.includes('Gmail')" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-700 border border-blue-500/20 font-bold text-[9px]">
-                  <Mail class="size-2.5" /> Gmail
-                </span>
-              </div>
-              <div class="pt-1.5">
-                <span v-if="selectedDetailItem.trangThai === 'success'" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-700 font-bold text-[10px] border border-emerald-500/30">
-                  <CheckCircle2 class="size-3" /> Thành công
-                </span>
-                <span v-else-if="selectedDetailItem.trangThai === 'partial'" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-700 font-bold text-[10px] border border-amber-500/30">
-                  <AlertCircle class="size-3" /> Một phần
-                </span>
-                <span v-else class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-red-500/15 text-red-700 font-bold text-[10px] border border-red-500/30">
-                  <XCircle class="size-3" /> Thất bại
-                </span>
-              </div>
-            </div>
+    <!-- ── ZALO QR LOGIN MODAL (VUETIFY DIALOG) ── -->
+    <v-dialog v-model="qrModalOpen" max-width="450px" @click:outside="closeQrLoginModal">
+      <v-card rounded="2xl" class="pa-6 text-center space-y-4">
+        <div class="d-flex align-center justify-space-between border-b pb-3">
+          <div class="d-flex align-center gap-2">
+            <QrCode class="w-5 h-5 text-success" />
+            <h3 class="text-subtitle-1 font-weight-bold mb-0">Đăng Nhập Zalo Chat (QR)</h3>
           </div>
-
-          <!-- Tiêu đề -->
-          <div class="space-y-1">
-            <span class="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Tiêu đề tin nhắn</span>
-            <div class="p-3 rounded-lg border border-border/80 bg-background font-semibold text-foreground text-xs shadow-inner break-words">
-              {{ selectedDetailItem.tieuDe || '(Không có tiêu đề)' }}
-            </div>
-          </div>
-
-          <!-- Nội dung -->
-          <div class="space-y-1">
-            <span class="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Nội dung tin nhắn</span>
-            <div class="p-3 rounded-lg border border-border/80 bg-background font-mono text-xs whitespace-pre-wrap break-words max-h-48 overflow-y-auto leading-relaxed shadow-inner">
-              {{ selectedDetailItem.noiDung || '(Nội dung trống)' }}
-            </div>
-          </div>
-
-          <!-- Chi tiết kết quả xử lý từ hệ thống -->
-          <div class="space-y-1">
-            <span class="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Chi tiết từ hệ thống</span>
-            <div class="p-3 rounded-lg border font-mono text-[11px] leading-relaxed flex items-start gap-2 shadow-sm"
-              :class="selectedDetailItem.trangThai === 'success' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700' : selectedDetailItem.trangThai === 'partial' ? 'bg-amber-500/10 border-amber-500/30 text-amber-700' : 'bg-red-500/10 border-red-500/30 text-red-700'">
-              <AlertCircle class="size-4 shrink-0 mt-0.5" />
-              <span class="break-words min-w-0 flex-1">{{ selectedDetailItem.chiTiet }}</span>
-            </div>
-          </div>
-
-          <!-- Hành động -->
-          <div class="flex justify-end gap-2 pt-3 border-t border-border/40">
-            <Button type="button" variant="outline" size="sm" class="h-9 px-4 text-xs font-semibold" @click="detailModalOpen = false">Đóng</Button>
-            <Button type="button" size="sm" class="h-9 px-4 text-xs font-semibold bg-primary text-primary-foreground flex items-center gap-1.5 hover:bg-primary/90" @click="resendMessage(selectedDetailItem); detailModalOpen = false">
-              <RotateCcw class="size-3.5" /> Soạn lại tin này
-            </Button>
-          </div>
+          <v-btn variant="text" icon density="comfortable" @click="closeQrLoginModal">
+            <X class="w-4 h-4" />
+          </v-btn>
         </div>
-      </DialogContent>
-    </Dialog>
 
-    <!-- Modal QR Login -->
-    <Dialog :open="qrModalOpen" @update:open="(val) => !val && closeQrLoginModal()">
-      <DialogContent class="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle class="flex items-center gap-2 text-xl font-bold"><QrCode class="size-6 text-emerald-600" />Đăng nhập Zalo (Bridge)</DialogTitle>
-          <DialogDescription>Quét mã QR bằng ứng dụng Zalo trên điện thoại để kết nối gửi tin.</DialogDescription>
-        </DialogHeader>
-        <div class="flex flex-col items-center justify-center p-6 space-y-4 min-h-[280px]">
-          <div v-if="qrLoginState.status === 'generating'" class="flex flex-col items-center gap-3 text-muted-foreground">
-            <RefreshCw class="size-8 animate-spin text-primary" /><p class="text-sm font-medium">Đang khởi tạo mã QR...</p>
-          </div>
-          <div v-else-if="qrLoginState.status === 'waiting_scan' && qrLoginState.qrDataUrl" class="flex flex-col items-center gap-3">
-            <div class="p-3 bg-white rounded-2xl border shadow-lg"><img :src="qrLoginState.qrDataUrl" alt="QR" class="size-56 object-contain" /></div>
-            <p class="text-xs text-muted-foreground text-center animate-pulse">Mở Zalo &gt; Quét QR &gt; Đồng ý đăng nhập</p>
-          </div>
-          <div v-else-if="qrLoginState.status === 'scanned'" class="flex flex-col items-center gap-3 text-emerald-600">
-            <CheckCircle2 class="size-12 animate-bounce" /><p class="text-base font-semibold text-center">Đã quét! Vui lòng xác nhận trên điện thoại.</p>
-          </div>
-          <div v-else-if="qrLoginState.status === 'logged_in' || qrLoginState.loggedIn" class="flex flex-col items-center gap-3 text-emerald-600">
-            <CheckCircle2 class="size-12" /><p class="text-lg font-bold text-center">Đăng nhập Zalo thành công!</p>
-          </div>
-          <div v-else-if="qrLoginState.status === 'expired'" class="flex flex-col items-center gap-3 text-amber-600">
-            <AlertCircle class="size-12" /><p class="text-sm font-medium">Mã QR đã hết hạn.</p><Button size="sm" @click="startQrLogin">Tạo mã QR mới</Button>
-          </div>
-          <div v-else class="flex flex-col items-center gap-3 text-destructive">
-            <AlertCircle class="size-12" /><p class="text-sm font-medium text-center">{{ qrLoginState.error || 'Có lỗi xảy ra khi tạo mã QR' }}</p><Button size="sm" variant="outline" @click="startQrLogin">Thử lại</Button>
-          </div>
+        <div v-if="qrLoginState.status === 'generating'" class="py-10">
+          <v-progress-circular indeterminate color="success" size="40" class="mb-3"></v-progress-circular>
+          <div class="text-caption font-weight-bold text-medium-emphasis">Đang khởi tạo mã QR từ Zalo Bridge...</div>
         </div>
-      </DialogContent>
-    </Dialog>
-  </div>
+
+        <div v-else-if="qrLoginState.qrDataUrl" class="py-4 space-y-3">
+          <v-sheet border rounded="xl" class="pa-3 d-inline-block">
+            <img :src="qrLoginState.qrDataUrl" alt="Zalo QR Code" class="w-56 h-56 rounded-lg" />
+          </v-sheet>
+          <p class="text-caption text-medium-emphasis">Dùng ứng dụng Zalo trên điện thoại để quét mã QR</p>
+        </div>
+
+        <div v-else-if="qrLoginState.error" class="py-6 text-error font-weight-bold text-caption">
+          {{ qrLoginState.error }}
+        </div>
+      </v-card>
+    </v-dialog>
+
+    <!-- ── DETAIL MODAL (VUETIFY DIALOG) ── -->
+    <v-dialog v-model="detailModalOpen" max-width="560px">
+      <v-card v-if="selectedDetailItem" rounded="2xl" class="pa-6 space-y-4">
+        <div class="d-flex align-center justify-space-between border-b pb-3">
+          <h3 class="text-subtitle-1 font-weight-bold mb-0">Chi Tiết Thông Báo</h3>
+          <v-btn variant="text" icon density="comfortable" @click="detailModalOpen = false">
+            <X class="w-4 h-4" />
+          </v-btn>
+        </div>
+
+        <div class="space-y-3 text-body-2">
+          <div><strong>Người nhận:</strong> {{ selectedDetailItem.hoTen }}</div>
+          <div><strong>Kênh gửi:</strong> {{ selectedDetailItem.kenhGui }}</div>
+          <div><strong>Tiêu đề:</strong> {{ selectedDetailItem.tieuDe }}</div>
+          <div><strong>Nội dung:</strong></div>
+          <v-sheet rounded="lg" border class="pa-3 bg-surface text-caption font-mono">
+            {{ selectedDetailItem.noiDung }}
+          </v-sheet>
+          <div><strong>Chi tiết phản hồi:</strong> {{ selectedDetailItem.chiTiet }}</div>
+        </div>
+
+        <div class="d-flex justify-end border-t pt-4">
+          <v-btn variant="flat" color="primary" rounded="lg" class="text-none font-weight-bold" @click="detailModalOpen = false">
+            Đóng
+          </v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
+  </v-container>
 </template>
+
+<style scoped>
+/* Enforce uniform, elegant 20px rounded corners across ALL Vuetify cards */
+:deep(.v-card),
+:deep(.v-sheet.v-card),
+.v-card {
+  border-radius: 20px !important;
+}
+
+:deep(.v-card.rounded-xl),
+:deep(.v-sheet.rounded-xl) {
+  border-radius: 16px !important;
+}
+
+:deep(.v-card.rounded-lg) {
+  border-radius: 12px !important;
+}
+</style>
