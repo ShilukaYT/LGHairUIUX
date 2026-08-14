@@ -1,728 +1,785 @@
-<script setup>
-import { ref, computed, reactive, onMounted, onUnmounted, watch } from "vue";
-import { useTheme } from "vuetify";
-import axios from "axios";
-import Swal from "sweetalert2";
-import { logActivity } from "@/utils/activityLogger";
+<script setup lang="ts">
+import { ref, computed, reactive, onMounted, watch } from 'vue'
+import { useTheme } from 'vuetify'
+import axios from 'axios'
+import { logActivity } from '@/utils/activityLogger'
+import { useCustomizerStore } from '@/stores/customizer'
 import {
-  Search,
-  Plus,
-  Edit3,
-  Trash2,
-  X,
-  Award,
-  Users,
-  DollarSign,
-  ShieldCheck,
-  AlertCircle,
-  CheckCircle2,
-  Briefcase,
-  Layers,
-  Filter,
-  RefreshCw,
-  RotateCcw
-} from "lucide-vue-next";
+  Search, Plus, Edit3, Trash2, X, Check,
+  RotateCcw, AlertCircle, Briefcase, Layers,
+  ShieldCheck, Users, Award, DollarSign, Scissors,
+  Sparkles, CheckCircle2
+} from 'lucide-vue-next'
 
-const API = import.meta.env.VITE_API_URL || "https://localhost:7196";
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
+const API_URL = API + '/api/LoaiNhanVien'
 
-// ── THEME SYNC: Đồng bộ Vuetify dark/light → Tailwind dark class ──
-const theme = useTheme();
+// ── THEME SYNC ──
+const theme = useTheme()
+const customizer = useCustomizerStore()
+
+const isDark = computed(() => {
+  const vTheme = theme.global.name.value
+  const cTheme = customizer.actTheme
+  return vTheme === 'dark' || cTheme === 'dark' || document.documentElement.classList.contains('dark')
+})
+
 watch(
-  () => theme.global.name.value,
-  (val) => {
-    if (val === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
+  [() => theme.global.name.value, () => customizer.actTheme],
+  ([vTheme, cTheme]) => {
+    const current = vTheme || cTheme
+    if (current === 'dark') document.documentElement.classList.add('dark')
+    else document.documentElement.classList.remove('dark')
   },
   { immediate: true }
-);
+)
 
-// ── DATA ──────────────────────────────────────────────────────────
-const chucVus = ref([]);
-const loading = ref(false);
-const saving = ref(false);
+// ── DATA INTERFACES & STATE ──
+export interface ChucVuItem {
+  maLoaiNv: string
+  tenLoai: string
+  luong: number
+  moTa?: string | null
+  duocDatLich?: boolean
+  trangThai?: number
+  soNhanVien?: number
+}
 
-async function loadData() {
-  loading.value = true;
+const dataList = ref<ChucVuItem[]>([])
+const searchQuery = ref('')
+const filterStatus = ref<string>('')
+const isLoading = ref(false)
+const isSubmitting = ref(false)
+const showFormModal = ref(false)
+const showDeleteModal = ref(false)
+const dialogMode = ref<'create' | 'edit'>('create')
+const selectedItemToDelete = ref<ChucVuItem | null>(null)
+
+// ── HIGH-PRIORITY NOTIFICATION SYSTEM (SNACKBAR) ──
+const snackbar = reactive({
+  show: false,
+  text: '',
+  color: 'success',
+})
+
+const showNotification = (msg: string, type: 'success' | 'error' | 'warning' | 'info' = 'success') => {
+  snackbar.text = msg
+  snackbar.color = type === 'success' ? 'success' : type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'info'
+  snackbar.show = true
+}
+
+const form = reactive({
+  maLoaiNv: '',
+  tenLoai: '',
+  luong: 5000000,
+  moTa: '',
+  duocDatLich: false,
+  trangThai: 1,
+})
+
+const errors = reactive({ tenLoai: '', luong: '' })
+const curPage = ref(1)
+const PER_PAGE = 8
+
+// ── FETCH DATA ──
+const fetchData = async () => {
   try {
-    const res = await axios.get(`${API}/api/LoaiNhanVien`, {
+    isLoading.value = true
+    const res = await axios.get<ChucVuItem[]>(API_URL, {
       params: {
-        keyword: search.value || null,
-        trangThai: filterStatus.value === "" ? null : filterStatus.value,
+        keyword: searchQuery.value || null,
+        trangThai: filterStatus.value === '' ? null : filterStatus.value,
       },
-    });
-    chucVus.value = res.data;
-  } catch (error) {
-    console.error("Lỗi tải danh sách chức vụ:", error);
-    Swal.fire({
-      icon: "error",
-      title: "Lỗi tải dữ liệu",
-      text: error.response?.data?.message || "Không thể tải danh sách chức vụ từ hệ thống.",
-      confirmButtonColor: "#9d804e",
-      background: document.documentElement.classList.contains("dark") ? "#1e293b" : "#ffffff",
-      color: document.documentElement.classList.contains("dark") ? "#f8fafc" : "#1e293b",
-    });
+      withCredentials: true,
+    })
+    dataList.value = Array.isArray(res.data) ? res.data : []
+  } catch (error: any) {
+    console.error('Lỗi fetch:', error)
+    showNotification(error.response?.data?.message || 'Lỗi khi lấy dữ liệu chức vụ!', 'error')
   } finally {
-    loading.value = false;
+    isLoading.value = false
   }
 }
 
-// ── STATE ──────────────────────────────────────────────────────────
-const search = ref("");
-const filterStatus = ref("");
-const curPage = ref(1);
-const PER_PAGE = 10;
-const editingId = ref(null);
+onMounted(() => {
+  fetchData()
+})
 
-const modal = reactive({ open: false, mode: "create", title: "Thêm Chức Vụ Mới" });
-const form = reactive({
-  maLoaiNv: "",
-  tenLoai: "",
-  luong: 0,
-  moTa: "",
-  duocDatLich: false,
-  trangThai: 1,
-});
-const errors = reactive({ tenLoai: "", luong: "" });
-
-// ── COMPUTED ───────────────────────────────────────────────────────
+// ── COMPUTED ──
 const filteredData = computed(() => {
-  const q = search.value.toLowerCase().trim();
-  return chucVus.value.filter((d) => {
+  const q = searchQuery.value.toLowerCase().trim()
+  return dataList.value.filter((d) => {
     const matchQ =
       !q ||
       (d.tenLoai && d.tenLoai.toLowerCase().includes(q)) ||
-      (d.maLoaiNv && d.maLoaiNv.toLowerCase().includes(q));
+      (d.maLoaiNv && d.maLoaiNv.toLowerCase().includes(q))
     const matchS =
-      filterStatus.value === "" || String(d.trangThai) === filterStatus.value;
-    return matchQ && matchS;
-  });
-});
+      filterStatus.value === '' || String(d.trangThai) === filterStatus.value
+    return matchQ && matchS
+  })
+})
 
-const totalPages = computed(() =>
-  Math.ceil(filteredData.value.length / PER_PAGE) || 1
-);
+const totalPages = computed(() => Math.ceil(filteredData.value.length / PER_PAGE) || 1)
 
 const pageData = computed(() => {
-  const s = (curPage.value - 1) * PER_PAGE;
-  return filteredData.value.slice(s, s + PER_PAGE);
-});
+  const s = (curPage.value - 1) * PER_PAGE
+  return filteredData.value.slice(s, s + PER_PAGE)
+})
 
-const visiblePages = computed(() => {
-  const pages = [];
-  const total = totalPages.value;
-  const current = curPage.value;
-  let start = Math.max(1, current - 2);
-  let end = Math.min(total, current + 2);
+const statTotal = computed(() => dataList.value.length)
+const statActive = computed(() => dataList.value.filter((x) => x.trangThai === 1).length)
+const statInactive = computed(() => dataList.value.filter((x) => x.trangThai === 0).length)
+const statTotalStaff = computed(() => dataList.value.reduce((acc, curr) => acc + (curr.soNhanVien || 0), 0))
 
-  if (end - start + 1 < 5) {
-    if (start === 1) end = Math.min(total, start + 4);
-    else if (end === total) start = Math.max(1, end - 4);
-  }
+watch([searchQuery, filterStatus], () => {
+  curPage.value = 1
+})
 
-  for (let i = start; i <= end; i++) {
-    if (i >= 1 && i <= total) pages.push(i);
-  }
-  return pages;
-});
-
-const statTotal = computed(() => chucVus.value.length);
-const statActive = computed(() => chucVus.value.filter((d) => d.trangThai === 1).length);
-const statInactive = computed(() => chucVus.value.filter((d) => d.trangThai === 0).length);
-const statTotalStaff = computed(() => chucVus.value.reduce((acc, curr) => acc + (curr.soNhanVien || 0), 0));
-
-watch([search, filterStatus], () => {
-  curPage.value = 1;
-});
-
-// ── FORMATTER ──────────────────────────────────────────────────────
-const formatVND = (val) => {
-  return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(val || 0);
-};
-
-// ── FORM VALIDATION & ACTIONS ──────────────────────────────────────
-function openCreateModal() {
-  editingId.value = null;
-  modal.mode = "create";
-  modal.title = "Thêm Chức Vụ Mới";
-  Object.assign(form, {
-    maLoaiNv: "",
-    tenLoai: "",
-    luong: 5000000,
-    moTa: "",
-    duocDatLich: false,
-    trangThai: 1,
-  });
-  errors.tenLoai = "";
-  errors.luong = "";
-  modal.open = true;
+// ── FORMATTERS ──
+const formatVND = (val?: number) => {
+  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val || 0)
 }
 
-function openEditModal(item) {
-  editingId.value = item.maLoaiNv;
-  modal.mode = "edit";
-  modal.title = `Cập Nhật Chức Vụ: ${item.tenLoai}`;
+const getStatusChipProps = (status?: number) => {
+  if (status === 1) return { label: 'Hoạt động', color: 'success' }
+  return { label: 'Khóa / Tạm dừng', color: 'error' }
+}
+
+// ── ACTIONS ──
+const openCreateDialog = () => {
+  dialogMode.value = 'create'
+  Object.assign(form, {
+    maLoaiNv: '',
+    tenLoai: '',
+    luong: 5000000,
+    moTa: '',
+    duocDatLich: false,
+    trangThai: 1,
+  })
+  errors.tenLoai = ''
+  errors.luong = ''
+  showFormModal.value = true
+}
+
+const openEditDialog = (item: ChucVuItem) => {
+  dialogMode.value = 'edit'
   Object.assign(form, {
     maLoaiNv: item.maLoaiNv,
     tenLoai: item.tenLoai,
     luong: item.luong || 0,
-    moTa: item.moTa || "",
+    moTa: item.moTa || '',
     duocDatLich: item.duocDatLich || false,
     trangThai: item.trangThai ?? 1,
-  });
-  errors.tenLoai = "";
-  errors.luong = "";
-  modal.open = true;
+  })
+  errors.tenLoai = ''
+  errors.luong = ''
+  showFormModal.value = true
 }
 
-function closeModal() {
-  modal.open = false;
+const openDeleteConfirm = (item: ChucVuItem) => {
+  selectedItemToDelete.value = item
+  showDeleteModal.value = true
 }
 
-function validateForm() {
-  let valid = true;
-  errors.tenLoai = "";
-  errors.luong = "";
+const validateForm = () => {
+  let valid = true
+  errors.tenLoai = ''
+  errors.luong = ''
 
   if (!form.tenLoai || !form.tenLoai.trim()) {
-    errors.tenLoai = "Vui lòng nhập tên chức vụ";
-    valid = false;
+    errors.tenLoai = 'Vui lòng nhập tên chức vụ'
+    valid = false
   }
   if (form.luong === null || form.luong === undefined || form.luong < 0) {
-    errors.luong = "Lương cơ bản không hợp lệ (phải >= 0)";
-    valid = false;
+    errors.luong = 'Lương cơ bản không hợp lệ (phải >= 0)'
+    valid = false
   }
-  return valid;
+  return valid
 }
 
-async function saveChucVu() {
-  if (!validateForm()) return;
-  saving.value = true;
-
+const saveForm = async () => {
+  if (!validateForm() || isSubmitting.value) return
   try {
-    if (modal.mode === "create") {
-      const res = await axios.post(`${API}/api/LoaiNhanVien`, form);
-      Swal.fire({
-        icon: "success",
-        title: "Thành công!",
-        text: res.data.message || "Đã thêm chức vụ mới.",
-        timer: 2000,
-        showConfirmButton: false,
-        background: document.documentElement.classList.contains("dark") ? "#1e293b" : "#ffffff",
-        color: document.documentElement.classList.contains("dark") ? "#f8fafc" : "#1e293b",
-      });
-      logActivity("Thêm chức vụ", `Đã thêm chức vụ mới: ${form.tenLoai} - Lương: ${formatVND(form.luong)}`, "Nhân sự");
+    isSubmitting.value = true
+    let res
+    if (dialogMode.value === 'edit') {
+      res = await axios.put(`${API_URL}/${form.maLoaiNv}`, form, { withCredentials: true })
+      logActivity('Cập nhật chức vụ', `Đã cập nhật chức vụ ${form.tenLoai}`, 'Nhân sự')
     } else {
-      const res = await axios.put(`${API}/api/LoaiNhanVien/${editingId.value}`, form);
-      Swal.fire({
-        icon: "success",
-        title: "Cập nhật thành công!",
-        text: res.data.message || "Đã lưu thay đổi chức vụ.",
-        timer: 2000,
-        showConfirmButton: false,
-        background: document.documentElement.classList.contains("dark") ? "#1e293b" : "#ffffff",
-        color: document.documentElement.classList.contains("dark") ? "#f8fafc" : "#1e293b",
-      });
-      logActivity("Cập nhật chức vụ", `Đã cập nhật chức vụ: ${form.tenLoai} - Lương: ${formatVND(form.luong)}`, "Nhân sự");
+      res = await axios.post(API_URL, form, { withCredentials: true })
+      logActivity('Thêm chức vụ', `Đã tạo chức vụ mới: ${form.tenLoai}`, 'Nhân sự')
     }
-    await loadData();
-    closeModal();
-  } catch (error) {
-    const msg = error.response?.data?.message || "Đã có lỗi xảy ra khi lưu!";
-    Swal.fire({
-      icon: "error",
-      title: "Thất bại",
-      text: msg,
-      confirmButtonColor: "#9d804e",
-      background: document.documentElement.classList.contains("dark") ? "#1e293b" : "#ffffff",
-      color: document.documentElement.classList.contains("dark") ? "#f8fafc" : "#1e293b",
-    });
-    logActivity(
-      modal.mode === "create" ? "Thêm chức vụ" : "Cập nhật chức vụ",
-      `Thất bại khi ${modal.mode === "create" ? "thêm" : "cập nhật"} chức vụ ${form.tenLoai}: ${msg}`,
-      "Nhân sự",
-      "Thất bại"
-    );
+
+    showFormModal.value = false
+    showNotification(res.data?.message || 'Lưu chức vụ thành công!', 'success')
+    fetchData()
+  } catch (error: any) {
+    console.error('Lỗi save:', error)
+    const errorMsg = error.response?.data?.message || 'Lưu chức vụ thất bại!'
+    showNotification(errorMsg, 'error')
   } finally {
-    saving.value = false;
+    isSubmitting.value = false
   }
 }
 
-async function deleteChucVu(item) {
-  const isDark = document.documentElement.classList.contains("dark");
-  const result = await Swal.fire({
-    title: "Xác nhận xóa?",
-    html: `Bạn có chắc chắn muốn xóa chức vụ <b>"${item.tenLoai}"</b>?<br><small class="text-rose-500">Lưu ý: Không thể xóa nếu đang có nhân viên giữ chức vụ này.</small>`,
-    icon: "warning",
-    showCancelButton: true,
-    confirmButtonColor: "#ef4444",
-    cancelButtonColor: "#64748b",
-    confirmButtonText: "Xóa ngay",
-    cancelButtonText: "Hủy bỏ",
-    background: isDark ? "#1e293b" : "#ffffff",
-    color: isDark ? "#f8fafc" : "#1e293b",
-  });
-
-  if (result.isConfirmed) {
-    try {
-      const res = await axios.delete(`${API}/api/LoaiNhanVien/${item.maLoaiNv}`);
-      Swal.fire({
-        icon: "success",
-        title: "Đã xóa!",
-        text: res.data.message || "Chức vụ đã được xóa thành công.",
-        timer: 2000,
-        showConfirmButton: false,
-        background: isDark ? "#1e293b" : "#ffffff",
-        color: isDark ? "#f8fafc" : "#1e293b",
-      });
-      logActivity("Xóa chức vụ", `Đã xóa chức vụ: ${item.tenLoai} (Mã: ${item.maLoaiNv})`, "Nhân sự");
-      await loadData();
-    } catch (error) {
-      const msg = error.response?.data?.message || "Không thể xóa chức vụ này!";
-      Swal.fire({
-        icon: "error",
-        title: "Không thể xóa",
-        text: msg,
-        confirmButtonColor: "#9d804e",
-        background: isDark ? "#1e293b" : "#ffffff",
-        color: isDark ? "#f8fafc" : "#1e293b",
-      });
-      logActivity("Xóa chức vụ", `Thất bại khi xóa chức vụ ${item.tenLoai}: ${msg}`, "Nhân sự", "Thất bại");
-    }
+const confirmDelete = async () => {
+  if (!selectedItemToDelete.value || isSubmitting.value) return
+  try {
+    isSubmitting.value = true
+    const res = await axios.delete(`${API_URL}/${selectedItemToDelete.value.maLoaiNv}`, { withCredentials: true })
+    logActivity('Xóa chức vụ', `Đã xóa chức vụ ${selectedItemToDelete.value.tenLoai}`, 'Nhân sự')
+    showDeleteModal.value = false
+    showNotification(res.data?.message || 'Đã xóa chức vụ thành công!', 'success')
+    fetchData()
+  } catch (error: any) {
+    console.error('Lỗi delete:', error)
+    const errorMsg = error.response?.data?.message || 'Không thể xóa chức vụ này!'
+    showNotification(errorMsg, 'error')
+  } finally {
+    isSubmitting.value = false
+    selectedItemToDelete.value = null
   }
 }
-
-onMounted(async () => {
-  await loadData();
-  const wrapper = document.querySelector(".page-wrapper");
-  if (wrapper) {
-    wrapper.classList.add("full-width-layout");
-  }
-});
-
-onUnmounted(() => {
-  const wrapper = document.querySelector(".page-wrapper");
-  if (wrapper) {
-    wrapper.classList.remove("full-width-layout");
-  }
-});
 </script>
 
 <template>
-  <v-container fluid class="pa-6 fill-height align-start font-sans select-none" style="min-height: 100vh;">
-    <v-card width="100%" elevation="2" rounded="xl" class="d-flex flex-column w-full bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-slate-800 dark:text-slate-100 transition-colors">
-      <!-- ── HEADER ── -->
-      <div class="d-flex flex-column flex-lg-row align-lg-center justify-space-between pa-6 px-6 py-5 border-b border-slate-100 dark:border-slate-800 gap-4">
+  <v-container fluid class="pa-6">
+    <!-- ═══════ HIGH-PRIORITY SNACKBAR NOTIFICATION ═══════ -->
+    <v-snackbar
+      v-model="snackbar.show"
+      :color="snackbar.color"
+      location="top right"
+      elevation="24"
+      :timeout="3500"
+      style="z-index: 99999 !important;"
+    >
+      <div class="d-flex align-center gap-3">
+        <Check v-if="snackbar.color === 'success'" class="w-5 h-5 shrink-0" />
+        <AlertCircle v-else-if="snackbar.color === 'error' || snackbar.color === 'warning'" class="w-5 h-5 shrink-0" />
+        <Briefcase v-else class="w-5 h-5 shrink-0" />
+        <span class="text-subtitle-2 font-weight-medium">{{ snackbar.text }}</span>
+      </div>
+      <template v-slot:actions>
+        <v-btn variant="text" icon density="compact" @click="snackbar.show = false">
+          <X class="w-4 h-4" />
+        </v-btn>
+      </template>
+    </v-snackbar>
+
+    <!-- ═══════ HEADER CARD (MATCHING SALE.VUE) ═══════ -->
+    <v-card elevation="2" rounded="xl" class="pa-6 mb-6">
+      <div class="d-flex flex-column flex-lg-row align-lg-center justify-space-between gap-4">
         <div>
-          <h2 class="text-h5 font-weight-bold mb-1 text-slate-900 dark:text-white flex items-center gap-2">
-            <Briefcase class="w-6 h-6 text-sky-600 dark:text-sky-500 shrink-0" />
-            <span>Quản Lý Chức Vụ & Lương Cơ Bản</span>
+          <h2 class="text-h5 font-weight-bold text-slate-900 dark:text-white d-flex align-center gap-2 mb-1">
+            <Briefcase class="w-6 h-6 text-primary shrink-0" />
+            <span>Quản Lý Chức Vụ &amp; Lương Cơ Bản</span>
           </h2>
-          <div class="text-subtitle-2 text-medium-emphasis dark:text-slate-400">
-            Thiết lập chức vụ, định mức lương cơ bản và phân quyền cho nhân sự trong hệ thống salon
-          </div>
+          <p class="text-subtitle-2 text-medium-emphasis mb-0">
+            Cấu hình danh mục chức vụ, định mức lương cơ bản và phân quyền dịch vụ cho nhân sự
+          </p>
         </div>
 
-        <div class="d-flex align-center gap-3 flex-wrap">
-          <div class="relative w-full sm:w-72 md:w-80">
-            <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500 shrink-0" />
-            <input
-              v-model="search"
-              type="text"
-              placeholder="Tìm kiếm chức vụ..."
-              class="w-full h-11 pl-10 pr-4 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-medium text-slate-900 dark:text-white outline-none focus:border-sky-500 dark:focus:border-sky-400 shadow-sm transition-all"
-            />
-          </div>
+        <div class="d-flex align-center gap-3 flex-grow-1 justify-lg-end flex-wrap">
+          <v-text-field
+            v-model="searchQuery"
+            placeholder="Tìm kiếm mã hoặc tên chức vụ..."
+            variant="outlined"
+            density="compact"
+            hide-details
+            clearable
+            class="flex-grow-1"
+            style="max-width: 350px; width: 100%; min-width: 220px;"
+          >
+            <template v-slot:prepend-inner>
+              <Search class="w-4 h-4 text-slate-400 mr-1 shrink-0" />
+            </template>
+          </v-text-field>
 
-          <div class="d-flex align-center gap-2 text-caption font-weight-bold text-medium-emphasis dark:text-slate-400">
-            <span class="whitespace-nowrap">TRẠNG THÁI:</span>
-            <select
-              v-model="filterStatus"
-              class="h-11 px-3 rounded-xl border-2 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm font-bold text-slate-800 dark:text-white outline-none cursor-pointer shadow-sm transition-all"
-            >
-              <option value="" class="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">Tất cả</option>
-              <option value="1" class="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">Hoạt động</option>
-              <option value="0" class="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200">Khóa</option>
-            </select>
-          </div>
+          <v-select
+            v-model="filterStatus"
+            :items="[
+              { title: 'Tất cả trạng thái', value: '' },
+              { title: '🟢 Hoạt động', value: '1' },
+              { title: '🔴 Khóa / Tạm dừng', value: '0' }
+            ]"
+            item-title="title"
+            item-value="value"
+            variant="outlined"
+            density="compact"
+            hide-details
+            style="max-width: 190px; min-width: 170px;"
+          ></v-select>
 
-          <v-btn variant="outlined" color="grey-darken-1" size="44" rounded="xl" :loading="loading" @click="loadData" title="Tải lại">
-            <RotateCcw class="w-5 h-5" />
+          <v-btn
+            variant="outlined"
+            color="grey-darken-1"
+            height="40"
+            width="40"
+            icon
+            rounded="xl"
+            :loading="isLoading"
+            @click="fetchData"
+            title="Tải lại"
+          >
+            <RotateCcw class="w-5 h-5 text-slate-600 dark:text-slate-300" />
           </v-btn>
 
-          <v-btn color="primary" variant="flat" rounded="xl" height="44" class="text-none font-weight-bold whitespace-nowrap px-5" @click="openCreateModal">
-            <template v-slot:prepend><Plus class="w-4 h-4 mr-1 shrink-0" /></template>
-            Thêm chức vụ
+          <v-btn
+            color="primary"
+            height="40"
+            rounded="xl"
+            elevation="2"
+            class="text-none font-weight-bold px-5"
+            @click="openCreateDialog"
+          >
+            <template v-slot:prepend>
+              <Plus class="w-4 h-4 mr-1 shrink-0" />
+            </template>
+            Thêm Chức Vụ
           </v-btn>
-        </div>
-      </div>
-
-      <!-- ── STATS CARDS ── -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 pa-6 px-6 py-5 pb-2">
-        <!-- Card 1 -->
-        <div class="bg-white dark:bg-slate-800/80 pa-5 px-6 py-5 rounded-2xl border border-slate-100 dark:border-slate-700/60 shadow-sm flex items-center justify-between relative overflow-hidden group hover:shadow-md transition-all">
-          <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-sky-50 dark:bg-sky-900/20 rounded-full group-hover:scale-110 transition-transform"></div>
-          <div class="relative z-10 pl-1">
-            <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-400 mb-1">Tổng Chức Vụ</p>
-            <h3 class="text-3xl font-extrabold text-slate-800 dark:text-white">{{ statTotal }}</h3>
-            <p class="text-xs text-sky-600 dark:text-sky-400 font-medium mt-2 flex items-center gap-1">
-              <Layers class="w-3.5 h-3.5 shrink-0" /> <span>Danh mục chức vụ</span>
-            </p>
-          </div>
-          <div class="w-12 h-12 rounded-xl bg-sky-100 dark:bg-sky-900/40 text-sky-600 dark:text-sky-400 flex items-center justify-center relative z-10 shrink-0">
-            <Briefcase class="w-6 h-6" />
-          </div>
-        </div>
-
-        <!-- Card 2 -->
-        <div class="bg-white dark:bg-slate-800/80 pa-5 px-6 py-5 rounded-2xl border border-slate-100 dark:border-slate-700/60 shadow-sm flex items-center justify-between relative overflow-hidden group hover:shadow-md transition-all">
-          <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-emerald-50 dark:bg-emerald-900/20 rounded-full group-hover:scale-110 transition-transform"></div>
-          <div class="relative z-10 pl-1">
-            <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-400 mb-1">Đang Hoạt Động</p>
-            <h3 class="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400">{{ statActive }}</h3>
-            <p class="text-xs text-emerald-600 dark:text-emerald-400 font-medium mt-2 flex items-center gap-1">
-              <CheckCircle2 class="w-3.5 h-3.5 shrink-0" /> <span>Khả dụng xếp ca</span>
-            </p>
-          </div>
-          <div class="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center relative z-10 shrink-0">
-            <ShieldCheck class="w-6 h-6" />
-          </div>
-        </div>
-
-        <!-- Card 3 -->
-        <div class="bg-white dark:bg-slate-800/80 pa-5 px-6 py-5 rounded-2xl border border-slate-100 dark:border-slate-700/60 shadow-sm flex items-center justify-between relative overflow-hidden group hover:shadow-md transition-all">
-          <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-rose-50 dark:bg-rose-900/20 rounded-full group-hover:scale-110 transition-transform"></div>
-          <div class="relative z-10 pl-1">
-            <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-400 mb-1">Khóa / Tạm Dừng</p>
-            <h3 class="text-3xl font-extrabold text-rose-600 dark:text-rose-400">{{ statInactive }}</h3>
-            <p class="text-xs text-rose-500 dark:text-rose-400 font-medium mt-2 flex items-center gap-1">
-              <AlertCircle class="w-3.5 h-3.5 shrink-0" /> <span>Ngừng phân công</span>
-            </p>
-          </div>
-          <div class="w-12 h-12 rounded-xl bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 flex items-center justify-center relative z-10 shrink-0">
-            <X class="w-6 h-6" />
-          </div>
-        </div>
-
-        <!-- Card 4 -->
-        <div class="bg-white dark:bg-slate-800/80 pa-5 px-6 py-5 rounded-2xl border border-slate-100 dark:border-slate-700/60 shadow-sm flex items-center justify-between relative overflow-hidden group hover:shadow-md transition-all">
-          <div class="absolute -right-6 -bottom-6 w-24 h-24 bg-blue-50 dark:bg-blue-900/20 rounded-full group-hover:scale-110 transition-transform"></div>
-          <div class="relative z-10 pl-1">
-            <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-400 mb-1">Tổng Nhân Sự</p>
-            <h3 class="text-3xl font-extrabold text-blue-600 dark:text-blue-400">{{ statTotalStaff }}</h3>
-            <p class="text-xs text-blue-600 dark:text-blue-400 font-medium mt-2 flex items-center gap-1">
-              <Users class="w-3.5 h-3.5 shrink-0" /> <span>Đang làm tại salon</span>
-            </p>
-          </div>
-          <div class="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center relative z-10 shrink-0">
-            <Award class="w-6 h-6" />
-          </div>
-        </div>
-      </div>
-
-      <!-- ── DATA TABLE ── -->
-      <div class="flex-1 overflow-x-auto w-full pa-6 px-6 py-4">
-        <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 transition-colors">
-          <table class="w-full text-left border-collapse">
-            <thead>
-              <tr class="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-wider">
-                <th class="py-4 px-6 pa-4">Mã Chức Vụ</th>
-                <th class="py-4 px-6 pa-4">Tên Chức Vụ</th>
-                <th class="py-4 px-6 pa-4">Lương Cơ Bản</th>
-                <th class="py-4 px-6 pa-4 text-center">Phân Loại</th>
-                <th class="py-4 px-6 pa-4 text-center">Nhân Sự</th>
-                <th class="py-4 px-6 pa-4 text-center">Trạng Thái</th>
-                <th class="py-4 px-6 pa-4 text-right">Thao Tác</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-sm font-medium text-slate-700 dark:text-slate-200">
-              <tr v-if="loading">
-                <td colspan="7" class="py-12 pa-8 text-center text-slate-400 dark:text-slate-500">
-                  <div class="flex flex-col items-center justify-center gap-2">
-                    <RefreshCw class="w-6 h-6 animate-spin text-sky-600 dark:text-sky-500" />
-                    <span>Đang tải danh sách chức vụ...</span>
-                  </div>
-                </td>
-              </tr>
-              <tr v-else-if="pageData.length === 0">
-                <td colspan="7" class="py-12 pa-8 text-center text-slate-400 dark:text-slate-500">
-                  Không tìm thấy chức vụ nào phù hợp.
-                </td>
-              </tr>
-              <tr
-                v-else
-                v-for="item in pageData"
-                :key="item.maLoaiNv"
-                class="hover:bg-sky-50/30 dark:hover:bg-slate-800/50 transition-colors group"
-              >
-                <td class="py-4 px-6 pa-4 font-mono text-xs whitespace-nowrap">
-                  <span class="bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md font-semibold text-slate-700 dark:text-slate-300">
-                    {{ item.maLoaiNv }}
-                  </span>
-                </td>
-                <td class="py-4 px-6 pa-4">
-                  <div class="font-bold text-slate-900 dark:text-white text-base">{{ item.tenLoai }}</div>
-                  <div v-if="item.moTa" class="text-xs text-slate-400 dark:text-slate-400 font-normal mt-0.5 line-clamp-1">
-                    {{ item.moTa }}
-                  </div>
-                </td>
-                <td class="py-4 px-6 pa-4 whitespace-nowrap">
-                  <div class="font-bold text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-sky-900/30 inline-flex items-center px-3 py-1 rounded-lg border border-sky-200/50 dark:border-sky-700/50">
-                    {{ formatVND(item.luong) }}
-                  </div>
-                </td>
-                <td class="py-4 px-6 pa-4 text-center whitespace-nowrap">
-                  <span
-                    v-if="item.duocDatLich"
-                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700/50"
-                  >
-                    <Award class="w-3.5 h-3.5 shrink-0" /> <span>Thợ dịch vụ (Được đặt lịch)</span>
-                  </span>
-                  <span
-                    v-else
-                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
-                  >
-                    Nhân viên nội bộ
-                  </span>
-                </td>
-                <td class="py-4 px-6 pa-4 text-center">
-                  <span class="inline-flex items-center justify-center min-w-[32px] px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold text-xs border border-blue-200 dark:border-blue-700/50">
-                    {{ item.soNhanVien || 0 }}
-                  </span>
-                </td>
-                <td class="py-4 px-6 pa-4 text-center whitespace-nowrap">
-                  <span
-                    v-if="item.trangThai === 1"
-                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700/50"
-                  >
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span> <span>Hoạt động</span>
-                  </span>
-                  <span
-                    v-else
-                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-700/50"
-                  >
-                    <span class="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0"></span> <span>Khóa</span>
-                  </span>
-                </td>
-                <td class="py-4 px-6 pa-4 text-right whitespace-nowrap">
-                  <div class="flex items-center justify-end gap-2">
-                    <button
-                      @click="openEditModal(item)"
-                      class="p-2 text-slate-400 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-sky-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
-                      title="Chỉnh sửa chức vụ"
-                    >
-                      <Edit3 class="w-4 h-4" />
-                    </button>
-                    <button
-                      @click="deleteChucVu(item)"
-                      class="p-2 text-slate-400 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-slate-800 rounded-xl transition-colors"
-                      title="Xóa chức vụ"
-                    >
-                      <Trash2 class="w-4 h-4" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- ── PAGINATION ── -->
-        <div
-          v-if="totalPages > 1"
-          class="flex items-center justify-between px-6 py-4 pa-4 mt-4 border border-slate-100 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-800/30"
-        >
-          <span class="text-xs text-slate-500 dark:text-slate-400">
-            Hiển thị trang <b class="text-slate-800 dark:text-white">{{ curPage }}</b> / <b>{{ totalPages }}</b>
-            ({{ filteredData.length }} chức vụ)
-          </span>
-          <div class="flex items-center gap-1">
-            <button
-              @click="curPage > 1 && curPage--"
-              :disabled="curPage === 1"
-              class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
-              Trước
-            </button>
-            <button
-              v-for="p in visiblePages"
-              :key="p"
-              @click="curPage = p"
-              :class="[
-                'w-8 h-8 rounded-lg text-xs font-semibold transition-all flex items-center justify-center',
-                curPage === p
-                  ? 'bg-sky-600 text-white shadow-md shadow-sky-600/20'
-                  : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
-              ]"
-            >
-              {{ p }}
-            </button>
-            <button
-              @click="curPage < totalPages && curPage++"
-              :disabled="curPage === totalPages"
-              class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
-              Sau
-            </button>
-          </div>
         </div>
       </div>
     </v-card>
 
-  </v-container>
+    <!-- ═══════ STATS CARDS (MATCHING SALE.VUE) ═══════ -->
+    <v-row class="mb-6">
+      <!-- Card 1: Tổng -->
+      <v-col cols="12" sm="6" md="3">
+        <v-card elevation="2" rounded="xl" class="pa-5 relative overflow-hidden h-100">
+          <div class="d-flex align-center justify-space-between">
+            <div>
+              <p class="text-caption font-weight-bold uppercase text-medium-emphasis mb-1">Tổng Chức Vụ</p>
+              <h3 class="text-h4 font-weight-black">{{ statTotal }}</h3>
+              <p class="text-caption text-primary font-weight-medium mt-2 d-flex align-center gap-1 mb-0">
+                <Layers class="w-3.5 h-3.5" /> <span>Danh mục chức danh</span>
+              </p>
+            </div>
+            <v-avatar color="primary" variant="tonal" size="52" rounded="xl">
+              <Briefcase class="w-6 h-6" />
+            </v-avatar>
+          </div>
+        </v-card>
+      </v-col>
 
-  <!-- ── MODAL ADD / EDIT (Teleport ra body để tránh stacking context của v-card) ── -->
-  <Teleport to="body">
-    <div
-      v-if="modal.open"
-      class="fixed inset-0 flex items-center justify-center bg-slate-900/70 dark:bg-slate-950/85 backdrop-blur-sm p-4 animate-fadeIn"
-      style="z-index: 9999;"
-      @click.self="closeModal"
-    >
-      <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-100 dark:border-slate-800 text-slate-800 dark:text-slate-100 transition-colors">
-        <!-- Modal Header -->
-        <div class="px-6 py-5 pa-6 bg-gradient-to-r from-sky-600 to-sky-700 text-white flex items-center justify-between">
-          <h3 class="text-lg font-bold flex items-center gap-2">
-            <Briefcase class="w-5 h-5 shrink-0" />
-            <span>{{ modal.title }}</span>
-          </h3>
-          <button
-            @click="closeModal"
-            class="p-1 rounded-lg hover:bg-white/10 transition-colors text-white"
-          >
+      <!-- Card 2: Đang hoạt động -->
+      <v-col cols="12" sm="6" md="3">
+        <v-card elevation="2" rounded="xl" class="pa-5 relative overflow-hidden h-100">
+          <div class="d-flex align-center justify-space-between">
+            <div>
+              <p class="text-caption font-weight-bold uppercase text-medium-emphasis mb-1">Đang Hoạt Động</p>
+              <h3 class="text-h4 font-weight-black text-success">{{ statActive }}</h3>
+              <p class="text-caption text-success font-weight-medium mt-2 d-flex align-center gap-1 mb-0">
+                <Check class="w-3.5 h-3.5" /> <span>Khả dụng phân công</span>
+              </p>
+            </div>
+            <v-avatar color="success" variant="tonal" size="52" rounded="xl">
+              <ShieldCheck class="w-6 h-6" />
+            </v-avatar>
+          </div>
+        </v-card>
+      </v-col>
+
+      <!-- Card 3: Khóa / Tạm dừng -->
+      <v-col cols="12" sm="6" md="3">
+        <v-card elevation="2" rounded="xl" class="pa-5 relative overflow-hidden h-100">
+          <div class="d-flex align-center justify-space-between">
+            <div>
+              <p class="text-caption font-weight-bold uppercase text-medium-emphasis mb-1">Khóa / Tạm Dừng</p>
+              <h3 class="text-h4 font-weight-black">{{ statInactive }}</h3>
+              <p class="text-caption text-error font-weight-medium mt-2 d-flex align-center gap-1 mb-0">
+                <AlertCircle class="w-3.5 h-3.5" /> <span>Ngừng xếp lịch</span>
+              </p>
+            </div>
+            <v-avatar color="error" variant="tonal" size="52" rounded="xl">
+              <X class="w-6 h-6" />
+            </v-avatar>
+          </div>
+        </v-card>
+      </v-col>
+
+      <!-- Card 4: Tổng Nhân Sự -->
+      <v-col cols="12" sm="6" md="3">
+        <v-card elevation="2" rounded="xl" class="pa-5 relative overflow-hidden h-100">
+          <div class="d-flex align-center justify-space-between">
+            <div>
+              <p class="text-caption font-weight-bold uppercase text-medium-emphasis mb-1">Tổng Nhân Sự</p>
+              <h3 class="text-h4 font-weight-black text-info">{{ statTotalStaff }}</h3>
+              <p class="text-caption text-info font-weight-medium mt-2 d-flex align-center gap-1 mb-0">
+                <Users class="w-3.5 h-3.5" /> <span>Đang làm tại salon</span>
+              </p>
+            </div>
+            <v-avatar color="info" variant="tonal" size="52" rounded="xl">
+              <Award class="w-6 h-6" />
+            </v-avatar>
+          </div>
+        </v-card>
+      </v-col>
+    </v-row>
+
+    <!-- ═══════ DATA TABLE CARD (MATCHING SALE.VUE) ═══════ -->
+    <v-card elevation="2" rounded="xl" class="pa-6">
+      <v-table class="rounded-xl border" hover>
+        <thead>
+          <tr class="border-b" style="background-color: rgba(var(--v-theme-on-surface), 0.04);">
+            <th class="font-weight-bold text-caption uppercase text-left py-3" style="width: 14%;">Mã Chức Vụ</th>
+            <th class="font-weight-bold text-caption uppercase text-left py-3" style="width: 26%;">Tên Chức Vụ &amp; Mô Tả</th>
+            <th class="font-weight-bold text-caption uppercase text-left py-3" style="width: 18%;">Lương Cơ Bản</th>
+            <th class="font-weight-bold text-caption uppercase text-center py-3" style="width: 18%;">Phân Loại</th>
+            <th class="font-weight-bold text-caption uppercase text-center py-3" style="width: 10%;">Nhân Sự</th>
+            <th class="font-weight-bold text-caption uppercase text-left py-3" style="width: 14%;">Trạng Thái</th>
+            <th class="font-weight-bold text-caption uppercase text-right py-3" style="width: 10%;">Thao Tác</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Loading -->
+          <tr v-if="isLoading">
+            <td colspan="7" class="text-center py-8">
+              <v-progress-circular indeterminate color="primary" size="36" class="mb-2"></v-progress-circular>
+              <div class="text-caption text-medium-emphasis">Đang tải dữ liệu chức vụ...</div>
+            </td>
+          </tr>
+
+          <!-- Empty -->
+          <tr v-else-if="filteredData.length === 0">
+            <td colspan="7" class="text-center py-10">
+              <v-avatar color="grey-lighten-4" size="56" class="mb-3">
+                <Briefcase class="w-7 h-7 text-grey" />
+              </v-avatar>
+              <div class="text-subtitle-2 font-weight-bold text-medium-emphasis">Không tìm thấy chức vụ nào</div>
+            </td>
+          </tr>
+
+          <!-- Data Rows -->
+          <tr v-else v-for="item in pageData" :key="item.maLoaiNv" class="hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors">
+            <td class="py-4">
+              <v-chip color="grey-darken-3" variant="flat" size="small" class="font-weight-bold font-mono">
+                {{ item.maLoaiNv }}
+              </v-chip>
+            </td>
+
+            <td class="py-4">
+              <div class="font-weight-bold text-subtitle-2 text-slate-900 dark:text-white leading-tight">
+                {{ item.tenLoai }}
+              </div>
+              <div v-if="item.moTa" class="text-caption text-medium-emphasis mt-0.5 line-clamp-1">
+                {{ item.moTa }}
+              </div>
+            </td>
+
+            <td class="py-4">
+              <v-chip color="primary" variant="tonal" size="small" class="font-weight-black">
+                {{ formatVND(item.luong) }}
+              </v-chip>
+            </td>
+
+            <td class="py-4 text-center">
+              <v-chip
+                v-if="item.duocDatLich"
+                color="purple"
+                variant="tonal"
+                size="small"
+                class="font-weight-bold"
+              >
+                <template v-slot:prepend>
+                  <Scissors class="w-3.5 h-3.5 mr-1" />
+                </template>
+                Thợ làm tóc (Được đặt lịch)
+              </v-chip>
+              <v-chip v-else color="grey" variant="tonal" size="small" class="font-weight-medium">
+                Nhân viên nội bộ
+              </v-chip>
+            </td>
+
+            <td class="py-4 text-center">
+              <v-chip color="info" variant="tonal" size="small" class="font-weight-black">
+                {{ item.soNhanVien || 0 }} NV
+              </v-chip>
+            </td>
+
+            <td class="py-4">
+              <v-chip
+                :color="getStatusChipProps(item.trangThai).color"
+                variant="flat"
+                size="small"
+                class="font-weight-bold"
+              >
+                <template v-slot:prepend>
+                  <Sparkles v-if="item.trangThai === 1" class="w-3.5 h-3.5 mr-1" />
+                  <X v-else class="w-3.5 h-3.5 mr-1" />
+                </template>
+                {{ getStatusChipProps(item.trangThai).label }}
+              </v-chip>
+            </td>
+
+            <td class="py-4 text-right">
+              <div class="d-flex align-center justify-end gap-1">
+                <v-btn
+                  icon
+                  variant="text"
+                  color="warning"
+                  size="small"
+                  @click="openEditDialog(item)"
+                  title="Chỉnh sửa"
+                >
+                  <Edit3 class="w-4 h-4" />
+                </v-btn>
+                <v-btn
+                  icon
+                  variant="text"
+                  color="error"
+                  size="small"
+                  @click="openDeleteConfirm(item)"
+                  title="Xóa"
+                >
+                  <Trash2 class="w-4 h-4" />
+                </v-btn>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </v-table>
+
+      <!-- Pagination footer (Matching sale.vue) -->
+      <div class="d-flex flex-column flex-sm-row align-center justify-space-between mt-4 px-2 gap-3">
+        <span class="text-caption text-medium-emphasis font-weight-semibold">
+          Hiển thị {{ pageData.length }} / {{ filteredData.length }} chức vụ
+        </span>
+        <v-pagination
+          v-if="totalPages > 1"
+          v-model="curPage"
+          :length="totalPages"
+          rounded="xl"
+          active-color="primary"
+          density="compact"
+          :total-visible="5"
+        ></v-pagination>
+      </div>
+    </v-card>
+
+    <!-- ═══════ MODAL: TẠO / CHỈNH SỬA CHỨC VỤ (MATCHING SALE.VUE) ═══════ -->
+    <v-dialog v-model="showFormModal" max-width="600px" persistent scrollable>
+      <v-card rounded="xl">
+        <!-- Dialog Header -->
+        <v-card-title class="pa-6 pb-4 d-flex align-center justify-space-between border-b">
+          <div class="d-flex align-center gap-3">
+            <v-avatar :color="dialogMode === 'create' ? 'primary' : 'warning'" size="42" rounded="lg" elevation="2">
+              <Plus v-if="dialogMode === 'create'" class="w-5 h-5 text-white" />
+              <Edit3 v-else class="w-5 h-5 text-white" />
+            </v-avatar>
+            <div>
+              <h3 class="text-h6 font-weight-bold mb-0">
+                {{ dialogMode === 'create' ? 'Thêm Chức Vụ Mới' : 'Cập Nhật Chức Vụ' }}
+              </h3>
+              <p class="text-caption text-medium-emphasis mb-0">
+                Thiết lập thông tin chức danh và định mức lương
+              </p>
+            </div>
+          </div>
+          <v-btn icon variant="text" density="comfortable" @click="showFormModal = false">
             <X class="w-5 h-5" />
-          </button>
-        </div>
+          </v-btn>
+        </v-card-title>
 
-        <!-- Modal Body -->
-        <div class="p-6 pa-6 space-y-5">
-          <!-- Mã chức vụ -->
-          <div>
-            <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-2">
-              Mã Chức Vụ <span class="text-xs font-normal text-slate-400 dark:text-slate-400">(Tùy chọn)</span>
-            </label>
-            <input
-              v-model="form.maLoaiNv"
-              :disabled="modal.mode === 'edit'"
-              type="text"
-              class="w-full h-12 px-4 bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-600 rounded-xl text-base font-mono font-bold text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:border-sky-500 dark:focus:border-sky-400 shadow-sm disabled:opacity-50 disabled:bg-slate-100 dark:disabled:bg-slate-800/50 uppercase transition-all"
-            />
-            <p v-if="modal.mode === 'create'" class="text-xs text-slate-500 dark:text-slate-400 mt-1.5 font-medium">
-              💡 Để trống nếu muốn hệ thống tự động tạo mã (VD: LNV01, LNV02...)
-            </p>
-            <p v-if="modal.mode === 'edit'" class="text-xs text-slate-400 dark:text-slate-500 mt-1.5 font-medium">
-              * Mã chức vụ là định danh duy nhất không thể thay đổi sau khi tạo.
-            </p>
-          </div>
+        <!-- Dialog Body -->
+        <v-card-text class="pa-6">
+          <v-form @submit.prevent="saveForm">
+            <!-- Mã chức vụ -->
+            <div class="mb-4">
+              <label class="text-caption font-weight-bold text-medium-emphasis mb-1 d-block">
+                Mã Chức Vụ <span class="font-weight-normal text-medium-emphasis">(Tùy chọn)</span>:
+              </label>
+              <v-text-field
+                v-model="form.maLoaiNv"
+                :disabled="dialogMode === 'edit'"
+                placeholder="VD: LNV01 (Để trống nếu muốn tự động sinh mã)"
+                variant="outlined"
+                density="comfortable"
+                rounded="lg"
+                hide-details
+              ></v-text-field>
+              <p v-if="dialogMode === 'create'" class="text-caption text-medium-emphasis mt-1">
+                💡 Để trống nếu muốn hệ thống tự động sinh mã
+              </p>
+            </div>
 
-          <!-- Tên chức vụ -->
-          <div>
-            <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-2">
-              Tên Chức Vụ <span class="text-rose-500">*</span>
-            </label>
-            <input
-              v-model="form.tenLoai"
-              type="text"
-              :class="errors.tenLoai ? 'border-rose-500 dark:border-rose-500 ring-2 ring-rose-500/20' : 'border-slate-300 dark:border-slate-600 focus:border-sky-500 dark:focus:border-sky-400'"
-              class="w-full h-12 px-4 bg-white dark:bg-slate-800 border-2 rounded-xl text-base font-bold text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:ring-2 shadow-sm transition-all"
-            />
-            <p v-if="errors.tenLoai" class="text-xs text-rose-500 mt-1.5 font-bold">{{ errors.tenLoai }}</p>
-          </div>
+            <!-- Tên chức vụ -->
+            <div class="mb-4">
+              <label class="text-caption font-weight-bold text-medium-emphasis mb-1 d-block">
+                Tên Chức Vụ <span class="text-error">*</span>:
+              </label>
+              <v-text-field
+                v-model="form.tenLoai"
+                placeholder="Nhập tên chức vụ (VD: Stylist chính, Thợ phụ...)"
+                variant="outlined"
+                density="comfortable"
+                rounded="lg"
+                hide-details
+                :error-messages="errors.tenLoai"
+              ></v-text-field>
+              <p v-if="errors.tenLoai" class="text-caption text-error font-weight-bold mt-1">{{ errors.tenLoai }}</p>
+            </div>
 
-          <!-- Lương cơ bản -->
-          <div>
-            <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-2">
-              Lương Cơ Bản (VNĐ) <span class="text-rose-500">*</span>
-            </label>
-            <div class="relative">
-              <input
+            <!-- Lương cơ bản -->
+            <div class="mb-4">
+              <label class="text-caption font-weight-bold text-medium-emphasis mb-1 d-block">
+                Lương Cơ Bản (VNĐ) <span class="text-error">*</span>:
+              </label>
+              <v-text-field
                 v-model.number="form.luong"
                 type="number"
                 min="0"
                 step="500000"
-                :class="errors.luong ? 'border-rose-500 dark:border-rose-500 ring-2 ring-rose-500/20' : 'border-slate-300 dark:border-slate-600 focus:border-sky-500 dark:focus:border-sky-400'"
-                class="w-full h-12 pl-4 pr-16 bg-white dark:bg-slate-800 border-2 rounded-xl text-lg font-extrabold text-sky-600 dark:text-sky-400 focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:ring-2 shadow-sm transition-all"
-              />
-              <span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-extrabold text-slate-400 dark:text-slate-400">VNĐ</span>
-            </div>
-            <p v-if="errors.luong" class="text-xs text-rose-500 mt-1.5 font-bold">{{ errors.luong }}</p>
-            <p class="text-xs text-emerald-600 dark:text-emerald-400 font-bold mt-1.5 flex items-center gap-1">
-              <DollarSign class="w-4 h-4 shrink-0" /> <span>Hiển thị: {{ formatVND(form.luong) }}</span>
-            </p>
-          </div>
-
-          <!-- Mô tả -->
-          <div>
-            <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-2">
-              Mô Tả Công Việc
-            </label>
-            <textarea
-              v-model="form.moTa"
-              rows="3"
-              class="w-full p-4 bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-600 rounded-xl text-base font-medium text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:border-sky-500 dark:focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 shadow-sm transition-all resize-none"
-            ></textarea>
-          </div>
-
-          <!-- Phân loại thợ & Trạng thái -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-            <!-- Được đặt lịch -->
-            <div class="p-4 pa-4 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border-2 border-slate-300 dark:border-slate-600 flex items-center justify-between shadow-sm">
-              <div>
-                <span class="block text-sm font-bold text-slate-800 dark:text-white">Được Đặt Lịch</span>
-                <span class="text-xs text-slate-500 dark:text-slate-400">Dành cho thợ làm tóc</span>
+                placeholder="Nhập định mức lương cơ bản..."
+                variant="outlined"
+                density="comfortable"
+                rounded="lg"
+                hide-details
+                :error-messages="errors.luong"
+              ></v-text-field>
+              <p v-if="errors.luong" class="text-caption text-error font-weight-bold mt-1">{{ errors.luong }}</p>
+              <div class="text-caption text-success font-weight-bold mt-1 d-flex align-center gap-1">
+                <DollarSign class="w-4 h-4" />
+                <span>Định dạng hiển thị: {{ formatVND(form.luong) }}</span>
               </div>
-              <label class="relative inline-flex items-center cursor-pointer">
-                <input type="checkbox" v-model="form.duocDatLich" class="sr-only peer" />
-                <div class="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+            </div>
+
+            <!-- Mô tả công việc -->
+            <div class="mb-4">
+              <label class="text-caption font-weight-bold text-medium-emphasis mb-1 d-block">
+                Mô Tả Nhiệm Vụ Công Việc:
               </label>
+              <v-textarea
+                v-model="form.moTa"
+                placeholder="Nhập tóm tắt mô tả công việc..."
+                variant="outlined"
+                rounded="lg"
+                rows="3"
+                hide-details
+              ></v-textarea>
             </div>
 
-            <!-- Trạng thái -->
-            <div class="p-4 pa-4 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border-2 border-slate-300 dark:border-slate-600 shadow-sm">
-              <span class="block text-sm font-bold text-slate-800 dark:text-white mb-2">Trạng Thái</span>
-              <select
-                v-model="form.trangThai"
-                class="w-full h-10 px-3 bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-600 rounded-xl text-sm font-bold text-slate-900 dark:text-white focus:outline-none focus:border-sky-500 dark:focus:border-sky-400 shadow-sm transition-all"
+            <!-- Tùy chọn phân loại & Trạng thái -->
+            <v-card variant="flat" border rounded="lg" class="pa-4" style="background-color: rgba(var(--v-theme-on-surface), 0.03);">
+              <v-switch
+                v-model="form.duocDatLich"
+                :true-value="true"
+                :false-value="false"
+                color="primary"
+                hide-details
+                density="comfortable"
+                inset
               >
-                <option :value="1">🟢 Hoạt động</option>
-                <option :value="0">🔴 Khóa / Tạm dừng</option>
-              </select>
-            </div>
-          </div>
-        </div>
+                <template v-slot:label>
+                  <div class="d-flex align-center justify-space-between w-100 font-weight-bold text-body-2">
+                    <span>Được Đặt Lịch Hẹn (Dành cho thợ làm tóc)</span>
+                  </div>
+                </template>
+              </v-switch>
 
-        <!-- Modal Footer -->
-        <div class="px-6 py-4 pa-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
-          <button
-            @click="closeModal"
-            type="button"
-            class="px-5 py-2.5 rounded-xl font-bold text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              <v-divider class="my-3"></v-divider>
+
+              <div>
+                <label class="text-caption font-weight-bold text-medium-emphasis mb-1 d-block">Trạng Thái Chức Vụ:</label>
+                <v-select
+                  v-model="form.trangThai"
+                  :items="[
+                    { title: 'Hoạt động', value: 1 },
+                    { title: 'Khóa / Tạm dừng', value: 0 }
+                  ]"
+                  item-title="title"
+                  item-value="value"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                  hide-details
+                ></v-select>
+              </div>
+            </v-card>
+          </v-form>
+        </v-card-text>
+
+        <!-- Dialog Actions -->
+        <v-card-actions class="pa-6 pt-4 border-t d-flex justify-end gap-3">
+          <v-btn
+            variant="outlined"
+            color="grey-darken-1"
+            rounded="lg"
+            class="text-none font-weight-bold px-5"
+            @click="showFormModal = false"
           >
             Hủy Bỏ
-          </button>
-          <button
-            @click="saveChucVu"
-            :disabled="saving"
-            type="button"
-            class="inline-flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-sky-600 to-sky-700 hover:from-sky-700 hover:to-sky-800 text-white font-bold text-sm rounded-xl shadow-md shadow-sky-600/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          </v-btn>
+          <v-btn
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            class="text-none font-weight-bold px-6"
+            :loading="isSubmitting"
+            @click="saveForm"
           >
-            <RefreshCw v-if="saving" class="w-4 h-4 animate-spin shrink-0" />
-            <span>{{ saving ? "Đang lưu..." : "Lưu Chức Vụ" }}</span>
-          </button>
+            {{ dialogMode === 'create' ? 'Lưu Chức Vụ' : 'Cập Nhật' }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- ═══════ MODAL: XÁC NHẬN XÓA (MATCHING SALE.VUE) ═══════ -->
+    <v-dialog v-model="showDeleteModal" max-width="450px" persistent>
+      <v-card rounded="xl" class="pa-6 text-center">
+        <div class="d-flex justify-center mb-4">
+          <v-avatar color="error-lighten-4" size="64" rounded="circle">
+            <Trash2 class="w-8 h-8 text-error" />
+          </v-avatar>
         </div>
-      </div>
-    </div>
-  </Teleport>
+        <h3 class="text-h6 font-weight-bold mb-2">Xác nhận xóa chức vụ?</h3>
+        <p class="text-body-2 text-medium-emphasis mb-6">
+          Bạn có chắc chắn muốn xóa chức vụ <strong>"{{ selectedItemToDelete?.tenLoai }}"</strong>?
+          <br />
+          <span class="text-error text-caption font-weight-bold">
+            Lưu ý: Không thể xóa nếu đang có nhân viên giữ chức vụ này.
+          </span>
+        </p>
+
+        <div class="d-flex align-center justify-center gap-3">
+          <v-btn
+            variant="outlined"
+            color="grey-darken-1"
+            rounded="lg"
+            class="text-none font-weight-bold px-5"
+            @click="showDeleteModal = false"
+          >
+            Hủy Bỏ
+          </v-btn>
+          <v-btn
+            color="error"
+            variant="flat"
+            rounded="lg"
+            class="text-none font-weight-bold px-6"
+            :loading="isSubmitting"
+            @click="confirmDelete"
+          >
+            Xóa Ngay
+          </v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
+  </v-container>
 </template>
 
 <style scoped>
-@keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
+:global(body.v-theme--dark), 
+:global(.v-theme--dark .v-main),
+:global(.v-theme--dark .v-application) {
+  background-color: #141416 !important;
 }
-.animate-fadeIn {
-  animation: fadeIn 0.15s ease-out forwards;
+
+/* Ensure Vuetify 3 Switch track has clear, vivid color when toggled ON */
+:deep(.v-switch .v-selection-control--dirty .v-switch__track) {
+  background-color: rgb(var(--v-theme-primary)) !important;
+  opacity: 1 !important;
+}
+
+:deep(.v-switch .v-selection-control--dirty .v-switch__thumb) {
+  background-color: #ffffff !important;
 }
 </style>

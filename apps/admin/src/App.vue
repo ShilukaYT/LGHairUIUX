@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { onMounted, watch } from 'vue';
 import { RouterView } from 'vue-router'
 import { useCustomizerStore } from '@/stores/customizer';
 import { useTheme } from 'vuetify';
@@ -11,10 +11,33 @@ import { useTheme } from 'vuetify';
 const customizer = useCustomizerStore();
 const theme = useTheme();
 
+function applyThemeMode(themeName: string) {
+  const isDark = themeName === 'dark';
+  theme.global.name.value = themeName;
+  if (isDark) {
+    document.documentElement.classList.add('dark');
+    document.body.classList.add('dark');
+    document.documentElement.setAttribute('data-theme', 'dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+    document.body.classList.remove('dark');
+    document.documentElement.removeAttribute('data-theme');
+  }
+}
+
+watch(
+  () => customizer.actTheme,
+  (val) => {
+    if (val) {
+      applyThemeMode(val);
+    }
+  },
+  { immediate: true }
+);
+
 onMounted(() => {
   const currentThemeSelection = localStorage.getItem('theme_selection') || 'system';
   
-  // Set default if not exists
   if (!localStorage.getItem('theme_selection')) {
     localStorage.setItem('theme_selection', 'system');
   }
@@ -27,14 +50,14 @@ onMounted(() => {
   }
   
   customizer.SET_THEME(initialTheme);
-  theme.global.name.value = initialTheme;
+  applyThemeMode(initialTheme);
 
   // Listen for system changes if system theme is selected
   mediaQuery.addEventListener('change', (e) => {
     if (localStorage.getItem('theme_selection') === 'system') {
       const newTheme = e.matches ? 'dark' : 'light';
       customizer.SET_THEME(newTheme);
-      theme.global.name.value = newTheme;
+      applyThemeMode(newTheme);
     }
   });
 });
