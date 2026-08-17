@@ -1404,7 +1404,7 @@ onMounted(async () => {
           <!-- FORM ADD MODE -->
           <template v-else>
             <v-row>
-              <v-col cols="12" sm="6">
+              <!-- <v-col cols="12" sm="6">
                 <div class="mb-1 text-caption font-weight-bold text-medium-emphasis">Mã phiếu nhập</div>
                 <v-text-field
                   variant="outlined"
@@ -1429,7 +1429,7 @@ onMounted(async () => {
                   persistent-hint
                   :error-messages="pnErrors.ngayNhap"
                 ></v-text-field>
-              </v-col>
+              </v-col> -->
               <v-col cols="12" sm="6">
                 <div class="mb-1 text-caption font-weight-bold text-medium-emphasis">Nhà cung cấp</div>
                 <v-select

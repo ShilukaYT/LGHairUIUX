@@ -308,8 +308,11 @@ watch(
               {{ product.moTa }}
             </p>
 
-            <!-- CHỌN BIẾN THỂ (kiểu LV: "Kích cỡ") -->
-            <div class="mb-6" v-if="product.bienThes?.length > 0">
+            <!-- CHỌN BIẾN THỂ (kiểu LV: "Kích cỡ")
+                 Chỉ hiển thị khi sản phẩm có TỪ 2 biến thể trở lên.
+                 Sản phẩm chỉ có 1 biến thể (biến thể mặc định) đã được auto-select
+                 ở fetchProduct() nên không cần bắt khách "chọn" gì cả — giống Shopify. -->
+            <div class="mb-6" v-if="product.bienThes?.length > 1">
               <div class="flex items-baseline justify-between text-[12px] uppercase tracking-[0.08em] text-neutral-700 mb-3">
                 <span>Kích cỡ</span>
                 <span class="normal-case tracking-normal text-black font-medium" v-if="selectedBienThe">{{ selectedBienThe.tenBienThe }}</span>
@@ -334,7 +337,7 @@ watch(
                 </button>
               </div>
 
-              <p class="text-[11px] text-neutral-400 mt-3 flex items-center gap-1.5" v-if="!selectedBienThe && product.bienThes?.length > 1">
+              <p class="text-[11px] text-neutral-400 mt-3 flex items-center gap-1.5" v-if="!selectedBienThe">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="flex-shrink-0">
                   <circle cx="12" cy="12" r="10"/>
                   <line x1="12" y1="16" x2="12" y2="12"/>

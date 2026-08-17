@@ -1913,7 +1913,7 @@ onMounted(async () => {
           <!-- ── FORM DV ── -->
           <v-form v-else-if="modal.mode === 'formDV'" @submit.prevent="saveItem">
             <v-row dense>
-              <v-col cols="12" sm="6" v-if="editingId">
+              <!-- <v-col cols="12" sm="6" v-if="editingId">
                 <v-text-field
                   v-model="form.maDV"
                   label="Mã dịch vụ"
@@ -1936,7 +1936,7 @@ onMounted(async () => {
                   hint="Mã dịch vụ sẽ được hệ thống tự động cấp khi lưu."
                   persistent-hint
                 ></v-text-field>
-              </v-col>
+              </v-col> -->
               <v-col cols="12" sm="6">
                 <v-select
                   v-model="form.maDM"
@@ -2085,7 +2085,7 @@ onMounted(async () => {
           <!-- ── FORM COMBO ── -->
           <v-form v-else-if="modal.mode === 'formCombo'" @submit.prevent="saveItem">
             <v-row dense>
-              <v-col cols="12" sm="6">
+              <!-- <v-col cols="12" sm="6">
                 <v-text-field
                   :model-value="editingId ? form.maCB : 'Tự động sinh mã'"
                   label="Mã combo"
@@ -2097,7 +2097,7 @@ onMounted(async () => {
                   hint="Mã combo được hệ thống tự động sinh (CB01, CB02, ...)"
                   persistent-hint
                 ></v-text-field>
-              </v-col>
+              </v-col> -->
               <v-col cols="12" sm="6">
                 <v-text-field
                   v-model="form.tenCombo"

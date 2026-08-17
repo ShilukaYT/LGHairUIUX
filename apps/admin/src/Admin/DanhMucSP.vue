@@ -733,7 +733,7 @@ onMounted(loadData);
           <!-- FORM MODE -->
           <v-form v-else @submit.prevent="saveDM">
             <!-- Mã danh mục: tự động sinh (DMSP01, DMSP02, ...), không cho nhập tay -->
-            <div v-if="!editingId" class="mb-4">
+            <!-- <div v-if="!editingId" class="mb-4">
               <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Mã danh mục</div>
               <v-text-field
                 model-value="Sẽ được tự động tạo (DMSP01, DMSP02, ...)"
@@ -748,7 +748,7 @@ onMounted(loadData);
                 variant="outlined" density="comfortable" rounded="lg"
                 readonly disabled
               ></v-text-field>
-            </div>
+            </div> -->
 
             <!-- Tên danh mục -->
             <div class="mb-4">

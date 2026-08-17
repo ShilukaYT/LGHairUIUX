@@ -783,21 +783,27 @@ onMounted(loadData)
               </div>
             </div>
 
-            <!-- Mã danh mục -->
-            <div class="mb-4">
-              <label class="text-caption font-weight-bold text-medium-emphasis mb-1 d-block">
-                MÃ DANH MỤC <span class="font-weight-normal text-medium-emphasis">(Tự động sinh)</span>
-              </label>
-              <v-text-field
-                :model-value="editingId ? form.maDM : 'Hệ thống tự động sinh mã (DM01, DM02...)'"
-                variant="outlined"
-                density="comfortable"
-                rounded="lg"
-                readonly
-                disabled
-                hide-details
-              ></v-text-field>
-            </div>
+              <!-- <v-col cols="12" sm="6">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Mã danh mục</div>
+                <v-text-field
+                  :model-value="editingId ? form.maDM : 'Tự động sinh mã'"
+                  variant="outlined" density="comfortable" rounded="lg"
+                  readonly
+                  disabled
+                  hint="Mã danh mục được hệ thống tự động sinh (DM01, DM02, ...)"
+                  persistent-hint
+                ></v-text-field>
+              </v-col> -->
+              <v-col cols="12" sm="6">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Tên danh mục *</div>
+                <v-text-field
+                  v-model="form.tenDanhMuc"
+                  variant="outlined" density="comfortable" rounded="lg"
+                  placeholder="VD: Cắt tóc" maxlength="100"
+                  :error-messages="errors.tenDanhMuc"
+                  @update:model-value="errors.tenDanhMuc = ''"
+                ></v-text-field>
+              </v-col>
 
             <!-- Tên danh mục -->
             <div class="mb-4">

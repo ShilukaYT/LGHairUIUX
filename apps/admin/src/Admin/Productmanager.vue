@@ -38,7 +38,6 @@ const sanPhams = ref([]);
 const bienThes = ref([]);
 const danhMucSPs = ref([]);
 const thuongHieus = ref([]);
-const expandedProducts = ref({});
 const expandedRows = ref([]);
 const isLoading = ref(false);
 
@@ -68,9 +67,16 @@ const spForm = reactive({
   _newAvatarFile: null,
   _newGalleryFiles: [],    // [{ file, preview }]
   _deleteGalleryIds: [],   // maHa cần xóa
+
+  // ── Biến thể đầu tiên (chỉ dùng khi TẠO MỚI sản phẩm) ──
+  _btTenBienThe: "", _btGiaBan: "", _btSoLuong: 0, _btPhanTramHoaHong: "",
+  _btHinhAnhDaiDien: "", _btNewAvatarFile: null,
+  _btNewGalleryFiles: [], // [{ file, preview }]
 });
 const spImgInput = ref(null);
 const spGalleryInput = ref(null);
+const spBtImgInput = ref(null);
+const spBtGalleryInput = ref(null);
 
 // BT modal
 const btModal = reactive({ open: false, mode: "", title: "" });
@@ -88,7 +94,7 @@ const btImgInput = ref(null);
 const btGalleryInput = ref(null);
 
 // ══ VALIDATION ═════════════════════════════════════════════════════
-const spErrors = reactive({ tenSP: "", maDanhMuc: "" });
+const spErrors = reactive({ tenSP: "", maDanhMuc: "", btTenBienThe: "", btGiaBan: "", btSoLuong: "", btPhanTramHoaHong: "" });
 const btErrors = reactive({ tenBienThe: "", giaBan: "", soLuong: "", phanTramHoaHong: "", ghiChu: "" });
 
 function clearSpErrors() { Object.keys(spErrors).forEach(k => spErrors[k] = ""); }
@@ -100,6 +106,21 @@ function validateSP() {
   else if (spForm.tenSP.trim().length < 2) { spErrors.tenSP = "Tên tối thiểu 2 ký tự."; ok = false; }
   else if (spForm.tenSP.trim().length > 150) { spErrors.tenSP = "Tên tối đa 150 ký tự."; ok = false; }
   if (!spForm.maDanhMuc) { spErrors.maDanhMuc = "Vui lòng chọn danh mục."; ok = false; }
+
+  // Giá & tồn kho chỉ bắt buộc khi TẠO MỚI sản phẩm — sửa sản phẩm thì không đụng tới ở đây.
+  // "Phân loại" (tên biến thể) để trống là hợp lệ — submit sẽ tự điền "Mặc định".
+  if (!editingSpId.value) {
+    const gia = Number(spForm._btGiaBan);
+    if (spForm._btGiaBan === "" || isNaN(gia)) { spErrors.btGiaBan = "Giá bán không được để trống."; ok = false; }
+    else if (gia <= 0) { spErrors.btGiaBan = "Giá phải lớn hơn 0."; ok = false; }
+    else if (gia > 100_000_000) { spErrors.btGiaBan = "Giá tối đa 100.000.000₫."; ok = false; }
+    const sl = Number(spForm._btSoLuong);
+    if (isNaN(sl) || sl < 0) { spErrors.btSoLuong = "Số lượng phải ≥ 0."; ok = false; }
+    if (spForm._btPhanTramHoaHong !== "" && spForm._btPhanTramHoaHong != null) {
+      const h = Number(spForm._btPhanTramHoaHong);
+      if (isNaN(h) || h < 0 || h > 100) { spErrors.btPhanTramHoaHong = "Hoa hồng 0–100%."; ok = false; }
+    }
+  }
   return ok;
 }
 
@@ -165,6 +186,33 @@ function markDeleteSPGallery(maHa) {
   spGallery[editingSpId.value] = spGallery[editingSpId.value].filter(h => h.maHa !== maHa);
   spForm._deleteGalleryIds.push(maHa);
 }
+
+// ── Ảnh cho biến thể đầu tiên (chỉ dùng lúc tạo mới sản phẩm) ──
+async function onSPBtAvatarChange(e) {
+  const file = e.target.files[0]; if (!file) return;
+  try {
+    const src = await readFileAsPreview(file);
+    spForm._btHinhAnhDaiDien = src;
+    spForm._btNewAvatarFile = file;
+  } catch (err) {
+    showToast(err === "too_large" ? "File vượt quá 5MB!" : "File không phải ảnh!", "error");
+  }
+  e.target.value = "";
+}
+
+async function onSPBtGalleryChange(e) {
+  for (const file of Array.from(e.target.files)) {
+    try {
+      const src = await readFileAsPreview(file);
+      spForm._btNewGalleryFiles.push({ file, preview: src });
+    } catch (err) {
+      showToast(err === "too_large" ? `${file.name} vượt quá 5MB!` : `${file.name} không phải ảnh!`, "error");
+    }
+  }
+  e.target.value = "";
+}
+
+function removeSPBtNewGallery(idx) { spForm._btNewGalleryFiles.splice(idx, 1); }
 
 async function onBTAvatarChange(e) {
   const file = e.target.files[0]; if (!file) return;
@@ -300,8 +348,10 @@ const getTHName = id => thuongHieus.value.find(x => x.maTh === id)?.tenThuongHie
 function getBTOfSP(maSP) { return bienThes.value.filter(bt => bt.maSanPham === maSP); }
 function isExpanded(maSP) { return expandedRows.value.includes(maSP); }
 function onToggleExpand(maSP) {
-  if (isExpanded(maSP) && !expandedProducts.value[maSP]) {
-    expandedProducts.value[maSP] = true;
+  // Luôn load lại biến thể mỗi lần mở expand — không dùng cờ "đã từng load" để skip,
+  // vì dữ liệu biến thể (ảnh, giá, tồn kho...) có thể đã đổi kể từ lần expand trước đó
+  // (VD: vừa tạo/sửa biến thể xong), và bảng cần phản ánh đúng dữ liệu mới nhất từ server.
+  if (isExpanded(maSP)) {
     loadBienThe(maSP);
   }
 }
@@ -319,6 +369,10 @@ function resetSpForm() {
     maSP: "", tenSP: "", maDanhMuc: danhMucSPs.value[0]?.maDMSP ?? "",
     maTH: "", hinhAnhDaiDien: "", trangThai: 1,
     _newAvatarFile: null, _newGalleryFiles: [], _deleteGalleryIds: [],
+    // Để trống, không ép "Mặc định" cứng ở đây — placeholder đã gợi ý sẵn,
+    // và lúc submit nếu vẫn để trống thì tự điền "Mặc định" (xem saveSP()).
+    _btTenBienThe: "", _btGiaBan: "", _btSoLuong: 0, _btPhanTramHoaHong: "",
+    _btHinhAnhDaiDien: "", _btNewAvatarFile: null, _btNewGalleryFiles: [],
   });
 }
 
@@ -371,19 +425,33 @@ async function saveSP() {
       logActivity("Cập nhật sản phẩm", `Đã cập nhật sản phẩm ${spForm.tenSP} (Mã: ${editingSpId.value})`, "Sản phẩm");
       showToast("Cập nhật sản phẩm thành công!");
     } else {
+      // Tạo mới: gộp luôn giá/tồn kho ban đầu vào cùng 1 request (atomic ở backend),
+      // lưu phía sau vào 1 biến thể mặc định. Nếu người dùng không đặt tên phân loại
+      // riêng thì dùng "Mặc định" — không bắt buộc phải gõ.
+      const nv = getCurrentNhanVien();
+      fd.append("TenBienThe", spForm._btTenBienThe.trim() || "Mặc định");
+      fd.append("GiaBan", spForm._btGiaBan);
+      fd.append("SoLuong", spForm._btSoLuong ?? 0);
+      fd.append("PhanTramHoaHong", spForm._btPhanTramHoaHong || 0);
+      if (nv?.maNv) fd.append("MaNv", nv.maNv);
+      if (spForm._btNewAvatarFile) fd.append("BienTheFile", spForm._btNewAvatarFile);
+      for (const g of spForm._btNewGalleryFiles)
+        fd.append("BienTheGalleryFiles", g.file);
+
       const res = await axios.post(`${API}/api/QuanLySanPham`, fd, { headers: { "Content-Type": "multipart/form-data" } });
-      logActivity("Thêm sản phẩm", `Đã thêm sản phẩm mới ${spForm.tenSP} (Mã: ${res.data?.maSp || ""})`, "Sản phẩm");
-      showToast("Thêm sản phẩm thành công!");
+      logActivity("Thêm sản phẩm", `Đã thêm sản phẩm mới ${spForm.tenSP} kèm biến thể ${spForm._btTenBienThe} (Mã SP: ${res.data?.maSp || ""}, Mã BT: ${res.data?.maBienThe || ""})`, "Sản phẩm");
+      showToast("Thêm sản phẩm và biến thể thành công!");
     }
     closeSpModal(); await loadSanPham();
   } catch (err) {
+    const apiMsg = err?.response?.data?.message;
     logActivity(
       editingSpId.value ? "Cập nhật sản phẩm" : "Thêm sản phẩm",
-      `Thất bại khi ${editingSpId.value ? 'cập nhật' : 'thêm'} sản phẩm ${spForm.tenSP} - Lỗi: ${err.message || ''}`,
+      `Thất bại khi ${editingSpId.value ? 'cập nhật' : 'thêm'} sản phẩm ${spForm.tenSP} - Lỗi: ${apiMsg || err.message || ''}`,
       "Sản phẩm",
       "Thất bại"
     );
-    showToast("Lỗi khi lưu sản phẩm!", "error");
+    showToast(apiMsg || "Lỗi khi lưu sản phẩm!", "error");
   } finally {
     saving.value = false;
   }
@@ -975,6 +1043,101 @@ onMounted(async () => {
               <input ref="spGalleryInput" type="file" accept="image/*" multiple style="display:none" @change="onSPGalleryChange" />
               <div class="text-caption text-medium-emphasis mt-1">Tối đa 10 ảnh, mỗi ảnh ≤ 5MB</div>
             </div>
+
+            <!-- Giá & tồn kho ban đầu — bắt buộc khi TẠO MỚI, vì sản phẩm chỉ là thông tin chung,
+                 đơn vị thực sự bán được là biến thể. Về mặt UI không nhắc chữ "biến thể" để tránh
+                 gây khó hiểu cho người dùng; phía sau vẫn lưu vào 1 biến thể mặc định như bình thường. -->
+            <template v-if="!editingSpId">
+              <v-divider class="my-5"></v-divider>
+              <div class="text-subtitle-1 font-weight-bold mb-1">Giá bán & Tồn kho</div>
+              <div class="text-caption text-medium-emphasis mb-4">
+                Bạn có thể thêm các loại/phân loại khác (màu, dung tích...) sau khi lưu sản phẩm.
+              </div>
+
+              <v-row>
+                <v-col cols="12" sm="6">
+                  <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Giá bán *</div>
+                  <v-text-field
+                    v-model="spForm._btGiaBan"
+                    type="number" variant="outlined" density="comfortable" rounded="lg"
+                    placeholder="0" suffix="₫"
+                    :error-messages="spErrors.btGiaBan"
+                  ></v-text-field>
+                </v-col>
+                <v-col cols="12" sm="6">
+                  <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Số lượng tồn</div>
+                  <v-text-field
+                    v-model="spForm._btSoLuong"
+                    type="number" variant="outlined" density="comfortable" rounded="lg"
+                    placeholder="0"
+                    :error-messages="spErrors.btSoLuong"
+                  ></v-text-field>
+                </v-col>
+                <v-col cols="12" sm="6">
+                  <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">% Hoa hồng</div>
+                  <v-text-field
+                    v-model="spForm._btPhanTramHoaHong"
+                    type="number" variant="outlined" density="comfortable" rounded="lg"
+                    placeholder="0" suffix="%"
+                    :error-messages="spErrors.btPhanTramHoaHong"
+                  ></v-text-field>
+                </v-col>
+                <v-col cols="12" sm="6">
+                  <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Màu/Dung tích (nếu có)</div>
+                  <v-text-field
+                    v-model="spForm._btTenBienThe"
+                    variant="outlined" density="comfortable" rounded="lg"
+                    placeholder="Để trống nếu chỉ bán 1 loại"
+                    :error-messages="spErrors.btTenBienThe"
+                  ></v-text-field>
+                </v-col>
+              </v-row>
+
+              <!-- Ảnh riêng cho biến thể đầu tiên -->
+              <div class="mt-2">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Ảnh riêng (tùy chọn, mặc định dùng ảnh sản phẩm)</div>
+                <div
+                  class="upload-zone"
+                  @dragover.prevent
+                  @drop.prevent="async (e) => { const f = e.dataTransfer.files[0]; if (f) { try { spForm._btHinhAnhDaiDien = await readFileAsPreview(f); spForm._btNewAvatarFile = f; } catch {} } }"
+                  @click="spBtImgInput?.click()"
+                >
+                  <div v-if="!spForm._btHinhAnhDaiDien" class="upload-placeholder">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                    </svg>
+                    <span>Kéo thả hoặc nhấn để chọn ảnh</span>
+                    <span class="text-caption text-medium-emphasis">PNG, JPG tối đa 5MB</span>
+                  </div>
+                  <div v-else class="upload-preview-single">
+                    <v-img :src="spForm._btHinhAnhDaiDien" width="90" height="90" cover rounded="lg" class="border"></v-img>
+                    <v-btn icon size="x-small" color="error" class="remove-single-img" @click.stop="spForm._btHinhAnhDaiDien = ''; spForm._btNewAvatarFile = null">
+                      <X class="w-3 h-3" />
+                    </v-btn>
+                  </div>
+                </div>
+                <input ref="spBtImgInput" type="file" accept="image/*" style="display:none" @change="onSPBtAvatarChange" />
+              </div>
+
+              <!-- Gallery ảnh biến thể đầu tiên -->
+              <div class="mt-4">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Gallery ảnh phụ</div>
+                <div v-if="spForm._btNewGalleryFiles.length" class="d-flex flex-wrap gap-2 mb-2">
+                  <div v-for="(g, idx) in spForm._btNewGalleryFiles" :key="idx" class="gallery-edit-item gallery-new-item">
+                    <v-img :src="g.preview" width="72" height="72" cover rounded="lg" class="border"></v-img>
+                    <v-btn icon size="x-small" color="error" class="gallery-delete-btn" @click="removeSPBtNewGallery(idx)">
+                      <X class="w-3 h-3" />
+                    </v-btn>
+                  </div>
+                </div>
+                <v-btn variant="outlined" rounded="lg" size="small" class="text-none" @click="spBtGalleryInput?.click()">
+                  <template v-slot:prepend><Plus class="w-4 h-4" /></template>
+                  Thêm ảnh phụ
+                </v-btn>
+                <input ref="spBtGalleryInput" type="file" accept="image/*" multiple style="display:none" @change="onSPBtGalleryChange" />
+                <div class="text-caption text-medium-emphasis mt-1">Tối đa 10 ảnh, mỗi ảnh ≤ 5MB</div>
+              </div>
+            </template>
           </v-form>
         </v-card-text>
 
