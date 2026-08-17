@@ -616,7 +616,7 @@ onMounted(loadData);
                 </div>
               </v-col>
 
-              <v-col cols="12" sm="6">
+              <!-- <v-col cols="12" sm="6">
                 <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Mã danh mục</div>
                 <v-text-field
                   :model-value="editingId ? form.maDM : 'Tự động sinh mã'"
@@ -626,7 +626,7 @@ onMounted(loadData);
                   hint="Mã danh mục được hệ thống tự động sinh (DM01, DM02, ...)"
                   persistent-hint
                 ></v-text-field>
-              </v-col>
+              </v-col> -->
               <v-col cols="12" sm="6">
                 <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Tên danh mục *</div>
                 <v-text-field
