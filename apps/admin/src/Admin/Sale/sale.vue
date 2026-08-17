@@ -384,7 +384,7 @@ const getAvailableServices = (currentIndex: number | string) => {
     <v-card elevation="2" rounded="xl" class="pa-6 mb-6">
       <div class="d-flex flex-column flex-lg-row align-lg-center justify-space-between gap-4">
         <div>
-          <h2 class="text-h5 font-weight-bold text-slate-900 dark:text-white d-flex align-center gap-2 mb-1">
+          <h2 class="text-h5 font-weight-bold d-flex align-center gap-2 mb-1">
             <Zap class="w-6 h-6 text-rose-500 shrink-0" />
             <span>Quản Lý Flash Sale & Khuyến Mãi</span>
           </h2>
@@ -401,11 +401,12 @@ const getAvailableServices = (currentIndex: number | string) => {
             density="compact"
             hide-details
             clearable
+            rounded="lg"
             class="flex-grow-1"
             style="max-width: 450px; width: 100%; min-width: 240px;"
           >
             <template v-slot:prepend-inner>
-              <Search class="w-4 h-4 text-slate-400 mr-1 shrink-0" />
+              <Search class="w-4 h-4 text-medium-emphasis mr-1 shrink-0" />
             </template>
           </v-text-field>
 
@@ -420,7 +421,7 @@ const getAvailableServices = (currentIndex: number | string) => {
             @click="fetchData"
             title="Tải lại"
           >
-            <RotateCcw class="w-5 h-5 text-slate-600 dark:text-slate-300" />
+            <RotateCcw class="w-5 h-5" />
           </v-btn>
 
           <v-btn
@@ -448,7 +449,7 @@ const getAvailableServices = (currentIndex: number | string) => {
           <div class="d-flex align-center justify-space-between">
             <div>
               <p class="text-caption font-weight-bold uppercase text-medium-emphasis mb-1">Tổng Chiến Dịch</p>
-              <h3 class="text-h4 font-weight-black text-slate-800 dark:text-white">{{ statTotal }}</h3>
+              <h3 class="text-h4 font-weight-black">{{ statTotal }}</h3>
               <p class="text-caption text-rose-600 font-weight-medium mt-2 d-flex align-center gap-1 mb-0">
                 <Tag class="w-3.5 h-3.5" /> <span>Tất cả Flash Sale</span>
               </p>
@@ -466,7 +467,7 @@ const getAvailableServices = (currentIndex: number | string) => {
           <div class="d-flex align-center justify-space-between">
             <div>
               <p class="text-caption font-weight-bold uppercase text-medium-emphasis mb-1">Đang Diễn Ra</p>
-              <h3 class="text-h4 font-weight-black text-slate-800 dark:text-white">{{ statActive }}</h3>
+              <h3 class="text-h4 font-weight-black">{{ statActive }}</h3>
               <p class="text-caption text-emerald-600 font-weight-medium mt-2 d-flex align-center gap-1 mb-0">
                 <Check class="w-3.5 h-3.5" /> <span>Đang hoạt động</span>
               </p>
@@ -484,7 +485,7 @@ const getAvailableServices = (currentIndex: number | string) => {
           <div class="d-flex align-center justify-space-between">
             <div>
               <p class="text-caption font-weight-bold uppercase text-medium-emphasis mb-1">Sắp Diễn Ra</p>
-              <h3 class="text-h4 font-weight-black text-slate-800 dark:text-white">{{ statUpcoming }}</h3>
+              <h3 class="text-h4 font-weight-black">{{ statUpcoming }}</h3>
               <p class="text-caption text-amber-600 font-weight-medium mt-2 d-flex align-center gap-1 mb-0">
                 <Clock class="w-3.5 h-3.5" /> <span>Chờ kích hoạt</span>
               </p>
@@ -502,7 +503,7 @@ const getAvailableServices = (currentIndex: number | string) => {
           <div class="d-flex align-center justify-space-between">
             <div>
               <p class="text-caption font-weight-bold uppercase text-medium-emphasis mb-1">Đã Kết Thúc</p>
-              <h3 class="text-h4 font-weight-black text-slate-800 dark:text-white">{{ statEnded }}</h3>
+              <h3 class="text-h4 font-weight-black">{{ statEnded }}</h3>
               <p class="text-caption text-grey-darken-1 font-weight-medium mt-2 d-flex align-center gap-1 mb-0">
                 <X class="w-3.5 h-3.5" /> <span>Đã hoàn thành</span>
               </p>
@@ -517,15 +518,15 @@ const getAvailableServices = (currentIndex: number | string) => {
 
     <!-- ═══════ DATA TABLE CARD ═══════ -->
     <v-card elevation="2" rounded="xl" class="pa-6">
-      <v-table class="rounded-xl border">
+      <v-table hover class="rounded-xl border">
         <thead>
-          <tr class="bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700">
-            <th class="font-weight-bold text-caption uppercase text-left py-3 text-slate-700 dark:text-slate-200">Mã Sale</th>
-            <th class="font-weight-bold text-caption uppercase text-left py-3 text-slate-700 dark:text-slate-200">Ngày bắt đầu</th>
-            <th class="font-weight-bold text-caption uppercase text-left py-3 text-slate-700 dark:text-slate-200">Ngày kết thúc</th>
-            <th class="font-weight-bold text-caption uppercase text-center py-3 text-slate-700 dark:text-slate-200">Tổng DV</th>
-            <th class="font-weight-bold text-caption uppercase text-left py-3 text-slate-700 dark:text-slate-200">Trạng thái</th>
-            <th class="font-weight-bold text-caption uppercase text-right py-3 text-slate-700 dark:text-slate-200">Thao tác</th>
+          <tr style="background-color: rgba(var(--v-theme-on-surface), 0.04);">
+            <th class="font-weight-bold text-caption uppercase text-left py-3.5">MÃ SALE</th>
+            <th class="font-weight-bold text-caption uppercase text-left py-3.5">NGÀY BẮT ĐẦU</th>
+            <th class="font-weight-bold text-caption uppercase text-left py-3.5">NGÀY KẾT THÚC</th>
+            <th class="font-weight-bold text-caption uppercase text-center py-3.5">TỔNG DV</th>
+            <th class="font-weight-bold text-caption uppercase text-left py-3.5">TRẠNG THÁI</th>
+            <th class="font-weight-bold text-caption uppercase text-right py-3.5">THAO TÁC</th>
           </tr>
         </thead>
         <tbody>
@@ -548,22 +549,22 @@ const getAvailableServices = (currentIndex: number | string) => {
           </tr>
 
           <!-- Data Rows -->
-          <tr v-else v-for="item in filteredData" :key="item.maFL" class="hover:bg-rose-50/20 transition-colors">
+          <tr v-else v-for="item in filteredData" :key="item.maFL">
             <td class="py-4">
-              <v-chip color="grey-darken-3" variant="flat" size="small" class="font-weight-bold">
+              <span class="text-caption font-weight-bold font-mono pa-1 px-2.5 rounded" style="background-color: rgba(var(--v-theme-on-surface), 0.06);">
                 {{ item.maFL }}
-              </v-chip>
+              </span>
             </td>
             <td class="py-4">
               <div class="d-flex align-center gap-2">
-                <Calendar class="w-4 h-4 text-grey shrink-0" />
-                <span class="text-body-2 font-weight-medium">{{ formatDate(item.ngayBatDau) }}</span>
+                <Calendar class="w-4 h-4 text-primary shrink-0" />
+                <span class="text-body-2 font-weight-medium font-mono">{{ formatDate(item.ngayBatDau) }}</span>
               </div>
             </td>
             <td class="py-4">
               <div class="d-flex align-center gap-2">
-                <Calendar class="w-4 h-4 text-grey shrink-0" />
-                <span class="text-body-2 font-weight-medium">{{ formatDate(item.ngayKetThuc) }}</span>
+                <Calendar class="w-4 h-4 text-primary shrink-0" />
+                <span class="text-body-2 font-weight-medium font-mono">{{ formatDate(item.ngayKetThuc) }}</span>
               </div>
             </td>
             <td class="py-4 text-center">
@@ -574,9 +575,9 @@ const getAvailableServices = (currentIndex: number | string) => {
             <td class="py-4">
               <v-chip
                 :color="getStatusChipProps(item.trangThai).color"
-                variant="flat"
+                variant="tonal"
                 size="small"
-                class="font-weight-bold"
+                class="font-weight-bold px-3"
               >
                 <template v-slot:prepend>
                   <Sparkles v-if="item.trangThai === 1" class="w-3.5 h-3.5 mr-1" />
@@ -591,7 +592,7 @@ const getAvailableServices = (currentIndex: number | string) => {
                 <v-btn
                   icon
                   variant="text"
-                  color="warning"
+                  color="primary"
                   size="small"
                   @click="openEditDialog(item)"
                   title="Chỉnh sửa"
@@ -623,7 +624,7 @@ const getAvailableServices = (currentIndex: number | string) => {
 
     <!-- ═══════ MODAL: TẠO / CHỈNH SỬA FLASH SALE ═══════ -->
     <v-dialog v-model="showFormModal" max-width="950px" persistent scrollable>
-      <v-card rounded="xl">
+      <v-card rounded="2xl">
         <!-- Dialog Header -->
         <v-card-title class="pa-6 pb-4 d-flex align-center justify-space-between border-b">
           <div class="d-flex align-center gap-3">
@@ -649,7 +650,7 @@ const getAvailableServices = (currentIndex: number | string) => {
         <v-card-text class="pa-6">
           <v-form @submit.prevent="saveForm">
             <!-- Trạng thái (Edit mode only) -->
-            <div v-if="dialogMode === 'edit'" class="mb-5 pa-4 bg-slate-50 dark:bg-slate-800 rounded-xl border">
+            <div v-if="dialogMode === 'edit'" class="mb-5 pa-4 rounded-xl border" style="background-color: rgba(var(--v-theme-on-surface), 0.03);">
               <div class="text-caption font-weight-bold uppercase text-medium-emphasis mb-2">Trạng thái chiến dịch</div>
               <v-btn-toggle
                 v-model="currentItem.trangThai"
@@ -723,11 +724,11 @@ const getAvailableServices = (currentIndex: number | string) => {
 
               <v-table density="compact" class="border rounded-xl">
                 <thead>
-                  <tr class="bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700">
-                    <th class="text-caption font-weight-bold uppercase py-2 text-slate-700 dark:text-slate-200" style="width: 40%;">Dịch vụ / Combo</th>
-                    <th class="text-caption font-weight-bold uppercase py-2 text-slate-700 dark:text-slate-200" style="width: 20%;">Giá gốc</th>
-                    <th class="text-caption font-weight-bold uppercase py-2 text-slate-700 dark:text-slate-200" style="width: 20%;">Giá sau giảm</th>
-                    <th class="text-caption font-weight-bold uppercase text-center py-2 text-slate-700 dark:text-slate-200" style="width: 12%;">% Giảm</th>
+                  <tr style="background-color: rgba(var(--v-theme-on-surface), 0.04);">
+                    <th class="text-caption font-weight-bold uppercase py-2" style="width: 40%;">Dịch vụ / Combo</th>
+                    <th class="text-caption font-weight-bold uppercase py-2" style="width: 20%;">Giá gốc</th>
+                    <th class="text-caption font-weight-bold uppercase py-2" style="width: 20%;">Giá sau giảm</th>
+                    <th class="text-caption font-weight-bold uppercase text-center py-2" style="width: 12%;">% Giảm</th>
                     <th class="py-2" style="width: 8%;"></th>
                   </tr>
                 </thead>
@@ -851,14 +852,14 @@ const getAvailableServices = (currentIndex: number | string) => {
 
     <!-- ═══════ MODAL: XÁC NHẬN XÓA ═══════ -->
     <v-dialog v-model="showDeleteModal" max-width="450px" persistent>
-      <v-card rounded="xl" class="pa-6 text-center">
+      <v-card rounded="2xl" class="pa-6 text-center">
         <v-avatar color="rose-lighten-5" size="64" class="mx-auto mb-4">
           <AlertCircle class="w-8 h-8 text-rose-500" />
         </v-avatar>
         <h3 class="text-h6 font-weight-bold mb-2">Xác nhận xóa Flash Sale?</h3>
         <p class="text-body-2 text-medium-emphasis mb-6">
           Hành động này không thể hoàn tác. Dữ liệu của
-          <strong class="text-slate-900 dark:text-white">{{ currentItem.maFL }}</strong>
+          <strong class="text-high-emphasis font-weight-bold">{{ currentItem.maFL }}</strong>
           và toàn bộ dịch vụ đi kèm sẽ bị xóa vĩnh viễn.
         </p>
 

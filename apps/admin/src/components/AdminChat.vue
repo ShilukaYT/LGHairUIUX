@@ -1,368 +1,77 @@
-<template>
-  <div class="flex h-[calc(100vh-150px)] min-h-[450px] w-full rounded-2xl border border-solid border-slate-200 bg-white shadow-sm overflow-hidden text-xs">
-
-    <!-- ══════════════════════════════════════════
-         CỘT TRÁI: DANH SÁCH PHÒNG CHAT
-    ══════════════════════════════════════════ -->
-    <div class="w-80 min-w-[320px] bg-slate-50/70 border-r border-solid border-slate-200 flex flex-col shadow-xs h-full overflow-hidden">
-
-      <!-- Header cột trái & Thanh tìm kiếm -->
-      <div class="px-5 py-4 border-b border-solid border-slate-200/80 bg-white space-y-3.5 flex-shrink-0">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-xl bg-[#9d804e]/10 text-[#8c734b] flex items-center justify-center shadow-xs">
-              <svg class="w-5 h-5 text-[#8c734b]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-3 3-3-3z"/>
-              </svg>
-            </div>
-            <div>
-              <h1 class="text-slate-800 font-bold text-sm tracking-wide">Hỗ Trợ Khách Hàng</h1>
-              <p class="text-slate-400 text-[10px] font-medium uppercase tracking-wider">Live Chat 1:1</p>
-            </div>
-          </div>
-          <button
-            @click="toggleManageMode"
-            :class="[
-              'px-2.5 py-1 rounded-lg text-[10px] font-bold border border-solid cursor-pointer transition-all duration-200',
-              isManageMode
-                ? 'bg-slate-200 text-slate-700 border-slate-300'
-                : 'bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100'
-            ]"
-          >
-            {{ isManageMode ? 'Hủy' : 'Quản lý' }}
-          </button>
-        </div>
-
-        <!-- Tìm kiếm phòng -->
-        <div class="relative">
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="Tìm kiếm khách hàng..."
-            class="w-full h-10 pl-9 pr-4 rounded-xl border border-solid border-slate-200 bg-slate-50 text-xs text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#8c734b] focus:bg-white focus:ring-2 focus:ring-[#8c734b]/10"
-          />
-          <svg class="w-4 h-4 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-        </div>
-
-        <!-- Badge tổng phòng Active -->
-        <div class="flex items-center justify-between text-xs font-semibold text-slate-500 bg-slate-50/50 px-3 py-2 rounded-xl border border-solid border-slate-100">
-          <span>Khách hàng đang đợi:</span>
-          <span class="bg-[#8c734b] text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
-            {{ activeRooms.length }}
-          </span>
-        </div>
-      </div>
-
-      <!-- Danh sách phòng chat (scroll) -->
-      <div class="flex-1 overflow-y-auto custom-scroll p-3 space-y-2">
-        <!-- Thanh công cụ quản lý khi bật chế độ xóa -->
-        <div v-if="isManageMode" class="flex items-center justify-between text-xs px-3 py-2 bg-slate-100 rounded-xl border border-solid border-slate-200 mb-2">
-          <label class="flex items-center gap-2 cursor-pointer font-bold text-slate-700">
-            <input
-              type="checkbox"
-              :checked="isAllSelected"
-              @change="toggleSelectAll"
-              class="w-3.5 h-3.5 rounded border-slate-300 text-[#8c734b] focus:ring-[#8c734b] cursor-pointer"
-            />
-            Chọn tất cả
-          </label>
-          
-          <button
-            @click="deleteSelectedRooms"
-            :disabled="selectedRoomIds.length === 0"
-            :style="{
-              backgroundColor: selectedRoomIds.length > 0 ? '#dc2626' : '#cbd5e1',
-              color: 'white',
-              cursor: selectedRoomIds.length > 0 ? 'pointer' : 'not-allowed',
-              opacity: selectedRoomIds.length > 0 ? '1' : '0.5'
-            }"
-            class="px-3 py-1.5 rounded-lg text-[10px] font-bold border-none flex items-center gap-1 transition-all duration-200"
-          >
-            <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-            <span class="text-white">Xóa ({{ selectedRoomIds.length }})</span>
-          </button>
-        </div>
-
-        <div v-if="loadingRooms" class="flex items-center justify-center py-12">
-          <div class="w-6 h-6 border-2 border-solid border-[#8c734b] border-t-transparent rounded-full animate-spin"></div>
-        </div>
-
-        <div v-else-if="filteredRooms.length === 0" class="text-center py-12 px-4">
-          <div class="w-12 h-12 bg-white border border-solid border-slate-200 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-xs">
-            <svg class="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
-            </svg>
-          </div>
-          <p class="text-slate-400 text-xs font-medium">Chưa có cuộc trò chuyện nào</p>
-        </div>
-
-        <!-- Room item -->
-        <div
-          v-for="room in filteredRooms"
-          :key="room.id"
-          @click="isManageMode ? handleRoomCheckboxToggle(room.id) : selectRoom(room)"
-          :class="[
-            'group flex items-center gap-3 px-4 py-3.5 cursor-pointer rounded-xl transition-all duration-200 border border-solid relative select-none',
-            selectedRoom?.id === room.id
-              ? 'bg-[#8c734b]/10 border-[#8c734b]/20 shadow-xs'
-              : 'bg-white hover:bg-slate-50 border-slate-100 hover:border-slate-200',
-            isManageMode ? 'pl-12' : ''
-          ]"
-        >
-          <!-- Checkbox chọn phòng khi ở chế độ Quản lý -->
-          <div v-if="isManageMode" class="absolute left-4 top-1/2 -translate-y-1/2 z-10">
-            <input
-              type="checkbox"
-              :value="room.id"
-              v-model="selectedRoomIds"
-              @click.stop
-              class="w-4 h-4 rounded border-slate-300 text-[#8c734b] focus:ring-[#8c734b] cursor-pointer"
-            />
-          </div>
-
-          <!-- Avatar -->
-          <div class="relative flex-shrink-0">
-            <div :class="['w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shadow-xs', getAvatarBg(room.customerName)]">
-              {{ room.customerName?.charAt(0)?.toUpperCase() || '?' }}
-            </div>
-            <!-- Dot trạng thái -->
-            <span
-              v-if="room.status === 'Active'"
-              class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border border-solid border-white bg-emerald-500 animate-pulse"
-            ></span>
-          </div>
-
-          <!-- Thông tin room -->
-          <div class="flex-1 min-w-0">
-            <div class="flex items-center justify-between mb-1">
-              <span class="text-slate-800 text-xs font-bold truncate group-hover:text-[#8c734b] transition-colors duration-150">{{ room.customerName }}</span>
-              <span class="text-slate-400 text-[9px] font-semibold flex-shrink-0 ml-1">
-                {{ formatTime(room.updatedAt) }}
-              </span>
-            </div>
-            <p v-if="room.isCustomerTyping" class="text-emerald-600 text-[11px] truncate font-semibold animate-pulse">
-              Đang nhập...
-            </p>
-            <p v-else class="text-slate-500 text-[11px] truncate font-medium">
-              {{ room.lastMessage || 'Bắt đầu cuộc trò chuyện...' }}
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ══════════════════════════════════════════
-         CỘT PHẢI: KHUNG CHAT CHI TIẾT
-    ══════════════════════════════════════════ -->
-    <div class="flex-1 flex flex-col bg-slate-50/30 min-w-0 h-full min-h-0 overflow-hidden">
-
-      <!-- Trạng thái chưa chọn phòng -->
-      <div v-if="!selectedRoom" class="flex-1 flex flex-col items-center justify-center bg-slate-50/40 p-6 text-center">
-        <div class="w-16 h-16 bg-white border border-solid border-slate-200/80 rounded-2xl flex items-center justify-center mb-4 shadow-sm text-[#8c734b]">
-          <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
-              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
-          </svg>
-        </div>
-        <h2 class="text-slate-800 text-sm font-bold tracking-wide">Chọn một cuộc trò chuyện</h2>
-        <p class="text-slate-400 text-xs mt-1">Chọn khách hàng từ danh sách bên trái để bắt đầu hỗ trợ tư vấn</p>
-      </div>
-
-      <!-- Khung chat khi đã chọn phòng -->
-      <template v-else>
-
-        <!-- Header chat -->
-        <div class="px-6 py-4 border-b border-solid border-slate-200 bg-white flex items-center justify-between flex-shrink-0 shadow-xs z-10">
-          <div class="flex items-center gap-3">
-            <div :class="['w-10 h-10 rounded-xl flex items-center justify-center font-bold shadow-xs', getAvatarBg(selectedRoom.customerName)]">
-              {{ selectedRoom.customerName?.charAt(0)?.toUpperCase() }}
-            </div>
-            <div>
-              <h2 class="text-slate-800 font-bold text-sm flex items-center gap-2">
-                <span>{{ selectedRoom.customerName }}</span>
-                <span v-if="selectedRoom.isCustomerTyping" class="text-emerald-600 text-[10px] font-semibold animate-pulse bg-emerald-50 px-2 py-0.5 rounded-full border border-solid border-emerald-200">
-                  đang soạn tin...
-                </span>
-              </h2>
-              <div class="flex items-center gap-1.5 mt-0.5">
-                <span :class="['w-2 h-2 rounded-full', selectedRoom.status === 'Active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400']"></span>
-                <span :class="['text-xs font-semibold', selectedRoom.status === 'Active' ? 'text-emerald-600' : 'text-slate-500']">
-                  {{ selectedRoom.status === 'Active' ? 'Đang hoạt động' : 'Đã đóng' }}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Nút đóng/mở phòng -->
-          <button
-            @click="handleToggleStatus"
-            :disabled="togglingStatus"
-            :class="[
-              'px-4 py-2 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-2 shadow-xs border border-solid cursor-pointer',
-              selectedRoom.status === 'Active'
-                ? 'bg-rose-50 text-rose-600 hover:bg-rose-100 border-rose-200 hover:border-rose-300'
-                : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200 hover:border-emerald-300'
-            ]"
-          >
-            <span v-if="togglingStatus" class="w-3.5 h-3.5 border border-solid border-current border-t-transparent rounded-full animate-spin"></span>
-            {{ selectedRoom.status === 'Active' ? 'Đóng phòng' : 'Mở lại' }}
-          </button>
-        </div>
-
-        <!-- Vùng hiển thị tin nhắn -->
-        <div ref="messagesContainer" class="flex-1 overflow-y-auto px-6 py-5 space-y-4 bg-slate-50/50 custom-scroll shadow-inner">
-          <div v-if="loadingMessages" class="flex items-center justify-center py-8">
-            <div class="w-6 h-6 border-2 border-solid border-[#8c734b] border-t-transparent rounded-full animate-spin"></div>
-          </div>
-
-          <div v-else-if="messages.length === 0" class="text-center py-12">
-            <p class="text-slate-400 text-xs font-medium">Chưa có tin nhắn nào trong cuộc hội thoại này</p>
-          </div>
-
-          <!-- Từng tin nhắn -->
-          <div
-            v-for="msg in messages"
-            :key="msg.id"
-            :class="['flex items-start gap-3', msg.senderRole === 'Staff' ? 'justify-end' : 'justify-start']"
-          >
-            <!-- Avatar khách hàng (bên trái) -->
-            <div v-if="msg.senderRole === 'Customer'"
-              :class="['w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5', getAvatarBg(selectedRoom.customerName)]">
-              {{ selectedRoom.customerName?.charAt(0)?.toUpperCase() }}
-            </div>
-
-            <!-- Bubble tin nhắn -->
-            <div :class="['max-w-[65%] flex flex-col', msg.senderRole === 'Staff' ? 'items-end' : 'items-start']">
-              <div :class="[
-                'px-4 py-2.5 rounded-2xl text-xs leading-relaxed shadow-xs border border-solid',
-                msg.senderRole === 'Staff'
-                  ? 'bg-[#9d804e] border-[#9d804e] text-white rounded-tr-xs'
-                  : 'bg-white border-slate-200 text-slate-800 rounded-tl-xs'
-              ]">
-                {{ msg.content }}
-              </div>
-
-              <!-- Timestamp hiển thị giờ gửi -->
-              <p class="text-[9px] font-semibold mt-1 px-1 text-slate-400">
-                {{ formatTimestamp(msg.timestamp) }}
-              </p>
-            </div>
-
-            <!-- Avatar nhân viên (bên phải) -->
-            <div v-if="msg.senderRole === 'Staff'"
-              class="w-8 h-8 rounded-xl bg-[#8c734b] text-white shadow-xs flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">
-              NV
-            </div>
-          </div>
-        </div>
-
-        <!-- Ô nhập tin nhắn -->
-        <div class="px-6 py-4 border-t border-solid border-slate-200 bg-white flex-shrink-0 shadow-xs z-10">
-          <div v-if="selectedRoom.status === 'Closed'" class="text-center py-1.5">
-            <p class="text-slate-400 text-xs font-semibold">Phòng chat đã đóng. Hãy mở lại để tiếp tục nhắn tin.</p>
-          </div>
-          <div v-else class="space-y-3">
-            <!-- Vùng gợi ý trả lời nhanh -->
-            <div class="flex flex-nowrap gap-2 items-center overflow-x-auto custom-scroll py-1 select-none">
-              <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mr-1 shrink-0">Gợi ý trả lời:</span>
-              <button
-                v-for="(suggestion, idx) in currentSuggestions"
-                :key="idx"
-                @click="applySuggestion(suggestion.text)"
-                style="background-color: #faf8f5 !important; color: #8c734b !important; border: 1px solid #e6d7b8 !important; cursor: pointer !important; padding: 6px 12px !important; border-radius: 9999px !important; line-height: 1.2 !important; box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important; display: inline-flex !important; align-items: center !important; gap: 6px !important;"
-                class="text-[10px] font-semibold hover:bg-[#8c734b]/5 hover:border-[#8c734b] transition-all duration-150"
-              >
-                <!-- Icon tương ứng -->
-                <span style="display: flex; align-items: center;">
-                  <svg v-if="suggestion.type === 'greet'" class="w-3.5 h-3.5 text-[#8c734b]" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #8c734b !important;">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                  </svg>
-                  <svg v-else-if="suggestion.type === 'price'" class="w-3.5 h-3.5 text-[#8c734b]" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #8c734b !important;">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/>
-                  </svg>
-                  <svg v-else-if="suggestion.type === 'hours'" class="w-3.5 h-3.5 text-[#8c734b]" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #8c734b !important;">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                  </svg>
-                  <svg v-else-if="suggestion.type === 'book'" class="w-3.5 h-3.5 text-[#8c734b]" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #8c734b !important;">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                  </svg>
-                  <svg v-else-if="suggestion.type === 'thanks'" class="w-3.5 h-3.5 text-[#8c734b]" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #8c734b !important;">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/>
-                  </svg>
-                  <svg v-else class="w-3.5 h-3.5 text-[#8c734b]" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: #8c734b !important;">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 01-2 2h0a2 2 0 01-2-2v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
-                  </svg>
-                </span>
-                <span>{{ suggestion.text }}</span>
-              </button>
-            </div>
-
-            <!-- Khung nhập -->
-            <div class="flex items-center gap-3">
-              <input
-                v-model="newMessage"
-                @keydown.enter="handleSend"
-                type="text"
-                placeholder="Nhập tin nhắn..."
-                class="h-11 flex-1 rounded-xl border border-solid border-slate-200 bg-slate-50 px-4 text-xs text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#8c734b] focus:bg-white focus:ring-2 focus:ring-[#8c734b]/10"
-              />
-              <button
-                @click="handleSend"
-                :disabled="!newMessage.trim() || sending"
-                style="background-color: #9d804e !important; color: white !important; border: none !important; cursor: pointer !important; display: flex !important; align-items: center !important; justify-content: center !important;"
-                class="w-11 h-11 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl flex items-center justify-center transition-all duration-200 flex-shrink-0 shadow-md shadow-[#9d804e]/20"
-              >
-                <span v-if="sending" class="w-4 h-4 border-2 border-solid border-white border-t-transparent rounded-full animate-spin"></span>
-                <svg v-else class="w-4.5 h-4.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color: white !important;">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-
-      </template>
-    </div>
-  </div>
-</template>
-
-<script setup>
-import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
+<script setup lang="ts">
+import { ref, computed, watch, nextTick, onUnmounted, reactive } from 'vue'
 import { collection, query, where, orderBy, onSnapshot, doc, deleteDoc } from 'firebase/firestore'
+// @ts-ignore
 import { db } from '@/firebase.js'
+// @ts-ignore
 import { sendMessage, toggleRoomStatus } from '@/services/chatService.js'
 import { logActivity } from '@/utils/activityLogger'
+import { useTheme } from 'vuetify'
+import { useCustomizerStore } from '@/stores/customizer'
+import {
+  MessageSquare, Search, Trash2, Send, X, Clock,
+  Smile, DollarSign, Calendar, Heart, Power, MessageCircle
+} from 'lucide-vue-next'
 
-// ── State ──────────────────────────────────────────────
-const allRooms        = ref([])
-const messages        = ref([])
-const selectedRoom    = ref(null)
-const newMessage      = ref('')
-const loadingRooms    = ref(true)
+// ── THEME SYNC ──
+const theme = useTheme()
+const customizer = useCustomizerStore()
+
+const isDark = computed(() => {
+  const vTheme = theme.global.name.value
+  const cTheme = customizer.actTheme
+  return vTheme === 'dark' || cTheme === 'dark' || document.documentElement.classList.contains('dark')
+})
+
+watch(
+  [() => theme.global.name.value, () => customizer.actTheme],
+  ([vTheme, cTheme]) => {
+    const current = vTheme || cTheme
+    if (current === 'dark') {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  },
+  { immediate: true }
+)
+
+// ── HIGH PRIORITY NOTIFICATION SNACKBAR ──
+const snackbar = reactive({
+  show: false,
+  text: '',
+  color: 'success'
+})
+
+const showNotification = (text: string, color: 'success' | 'error' | 'warning' | 'info' = 'success') => {
+  snackbar.text = text
+  snackbar.color = color
+  snackbar.show = true
+}
+
+// ── STATE ──
+const allRooms = ref<any[]>([])
+const messages = ref<any[]>([])
+const selectedRoom = ref<any>(null)
+const newMessage = ref('')
+const loadingRooms = ref(true)
 const loadingMessages = ref(false)
-const sending         = ref(false)
-const togglingStatus  = ref(false)
-const messagesContainer = ref(null)
-const searchQuery     = ref('')
+const sending = ref(false)
+const togglingStatus = ref(false)
+const messagesContainer = ref<HTMLElement | null>(null)
+const searchQuery = ref('')
 
-const isManageMode     = ref(false)
-const selectedRoomIds  = ref([])
+const isManageMode = ref(false)
+const selectedRoomIds = ref<string[]>([])
+const isDeleteConfirmOpen = ref(false)
 
-
-
-// ── Actions for Manage Mode ────────────────────────────
+// ── MANAGE MODE ACTIONS ──
 const toggleManageMode = () => {
   isManageMode.value = !isManageMode.value
   selectedRoomIds.value = []
 }
 
-const handleRoomCheckboxToggle = (roomId) => {
+const handleRoomCheckboxToggle = (roomId: string) => {
   const index = selectedRoomIds.value.indexOf(roomId)
   if (index > -1) {
     selectedRoomIds.value.splice(index, 1)
@@ -374,21 +83,24 @@ const handleRoomCheckboxToggle = (roomId) => {
 const isAllSelected = computed(() => {
   const rooms = filteredRooms.value
   if (rooms.length === 0) return false
-  return rooms.every(r => selectedRoomIds.value.includes(r.id))
+  return rooms.every((r) => selectedRoomIds.value.includes(r.id))
 })
 
 const toggleSelectAll = () => {
   if (isAllSelected.value) {
     selectedRoomIds.value = []
   } else {
-    selectedRoomIds.value = filteredRooms.value.map(r => r.id)
+    selectedRoomIds.value = filteredRooms.value.map((r) => r.id)
   }
 }
 
-const deleteSelectedRooms = async () => {
+const confirmDeleteSelectedRooms = () => {
   if (selectedRoomIds.value.length === 0) return
-  if (!confirm(`Bạn có chắc chắn muốn xóa ${selectedRoomIds.value.length} cuộc hội thoại đã chọn?`)) return
+  isDeleteConfirmOpen.value = true
+}
 
+const executeDeleteSelectedRooms = async () => {
+  isDeleteConfirmOpen.value = false
   const idsToDelete = [...selectedRoomIds.value]
   selectedRoomIds.value = []
 
@@ -399,24 +111,24 @@ const deleteSelectedRooms = async () => {
       }
       await deleteDoc(doc(db, 'ChatRooms', id))
     }
-    logActivity("Xóa phòng chat", `Đã xóa ${idsToDelete.length} cuộc hội thoại chat hỗ trợ khách hàng`, "Hỗ trợ khách hàng");
+    logActivity('Xóa phòng chat', `Đã xóa ${idsToDelete.length} cuộc hội thoại chat hỗ trợ khách hàng`, 'Hỗ trợ khách hàng')
+    showNotification(`Đã xóa ${idsToDelete.length} cuộc hội thoại thành công.`, 'success')
     isManageMode.value = false
-  } catch (err) {
-    logActivity("Xóa phòng chat", `Thất bại khi xóa các cuộc trò chuyện - Lỗi: ${err.message || ''}`, "Hỗ trợ khách hàng", "Thất bại");
+  } catch (err: any) {
+    logActivity('Xóa phòng chat', `Thất bại khi xóa các cuộc trò chuyện - Lỗi: ${err.message || ''}`, 'Hỗ trợ khách hàng', 'Thất bại')
     console.error('Lỗi khi xóa các cuộc trò chuyện:', err)
-    alert('Đã xảy ra lỗi khi xóa cuộc trò chuyện.')
+    showNotification('Đã xảy ra lỗi khi xóa cuộc trò chuyện.', 'error')
   }
 }
 
-// Danh sách nhân viên đang online lấy từ sessionStorage
+// Staff Info
 const staffUser = JSON.parse(sessionStorage.getItem('adminUser') || sessionStorage.getItem('staffUser') || '{}')
 const staffName = staffUser?.hoTen || staffUser?.tenNhanVien || 'Nhân viên'
 
-// ── Computed ───────────────────────────────────────────
-// Chỉ hiển thị phòng Active ở cột trái, sắp xếp mới nhất lên trên
+// ── COMPUTED ──
 const activeRooms = computed(() =>
   allRooms.value
-    .filter(r => r.status === 'Active')
+    .filter((r) => r.status === 'Active')
     .sort((a, b) => {
       const ta = a.updatedAt?.seconds ?? 0
       const tb = b.updatedAt?.seconds ?? 0
@@ -424,43 +136,40 @@ const activeRooms = computed(() =>
     })
 )
 
-// Tìm kiếm phòng theo tên khách hàng hoặc tin nhắn gần nhất
 const filteredRooms = computed(() => {
   const rooms = activeRooms.value
   if (!searchQuery.value.trim()) return rooms
   const q = searchQuery.value.toLowerCase().trim()
-  return rooms.filter(r =>
-    r.customerName?.toLowerCase().includes(q) ||
-    r.lastMessage?.toLowerCase().includes(q)
+  return rooms.filter(
+    (r) => r.customerName?.toLowerCase().includes(q) || r.lastMessage?.toLowerCase().includes(q)
   )
 })
 
-// ── Lắng nghe Collection ChatRooms (Real-time) ─────────
-let unsubscribeRooms = null
+// ── FIRESTORE LISTENERS ──
+let unsubscribeRooms: any = null
 
 const listenToRooms = () => {
-  const q = query(
-    collection(db, 'ChatRooms'),
-    where('status', '==', 'Active')
-  )
+  const q = query(collection(db, 'ChatRooms'), where('status', '==', 'Active'))
 
-  unsubscribeRooms = onSnapshot(q, (snapshot) => {
-    allRooms.value = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }))
-    loadingRooms.value = false
-  }, (error) => {
-    console.error('[Chat] Lỗi lắng nghe phòng chat:', error)
-    loadingRooms.value = false
-  })
+  unsubscribeRooms = onSnapshot(
+    q,
+    (snapshot) => {
+      allRooms.value = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      loadingRooms.value = false
+    },
+    (error) => {
+      console.error('[Chat] Lỗi lắng nghe phòng chat:', error)
+      loadingRooms.value = false
+    }
+  )
 }
 
-// ── Lắng nghe Sub-collection Messages (Real-time) ─────
-let unsubscribeMessages = null
+let unsubscribeMessages: any = null
 
-const listenToMessages = (roomId) => {
-  // Hủy listener cũ nếu có
+const listenToMessages = (roomId: string) => {
   if (unsubscribeMessages) {
     unsubscribeMessages()
     unsubscribeMessages = null
@@ -469,26 +178,27 @@ const listenToMessages = (roomId) => {
   loadingMessages.value = true
   messages.value = []
 
-  const q = query(
-    collection(db, 'ChatRooms', roomId, 'Messages'),
-    orderBy('timestamp', 'asc')
-  )
+  const q = query(collection(db, 'ChatRooms', roomId, 'Messages'), orderBy('timestamp', 'asc'))
 
-  unsubscribeMessages = onSnapshot(q, (snapshot) => {
-    messages.value = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }))
-    loadingMessages.value = false
-    scrollToBottom()
-  }, (error) => {
-    console.error('[Chat] Lỗi lắng nghe tin nhắn:', error)
-    loadingMessages.value = false
-  })
+  unsubscribeMessages = onSnapshot(
+    q,
+    (snapshot) => {
+      messages.value = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      loadingMessages.value = false
+      scrollToBottom()
+    },
+    (error) => {
+      console.error('[Chat] Lỗi lắng nghe tin nhắn:', error)
+      loadingMessages.value = false
+    }
+  )
 }
 
-// ── Actions ────────────────────────────────────────────
-const selectRoom = (room) => {
+// ── ACTIONS ──
+const selectRoom = (room: any) => {
   selectedRoom.value = room
   listenToMessages(room.id)
 }
@@ -499,15 +209,16 @@ const handleSend = async () => {
 
   sending.value = true
   const msgContent = content
-  newMessage.value = '' // Clear ngay để UX mượt
+  newMessage.value = ''
 
   try {
     await sendMessage(selectedRoom.value.id, 'Staff', staffName, msgContent)
-    logActivity("Gửi tin nhắn hỗ trợ", `Đã gửi tin nhắn hỗ trợ cho khách hàng ${selectedRoom.value.customerName}`, "Hỗ trợ khách hàng");
-  } catch (err) {
-    logActivity("Gửi tin nhắn hỗ trợ", `Thất bại khi gửi tin nhắn cho khách hàng ${selectedRoom.value.customerName} - Lỗi: ${err.message || ''}`, "Hỗ trợ khách hàng", "Thất bại");
+    logActivity('Gửi tin nhắn hỗ trợ', `Đã gửi tin nhắn hỗ trợ cho khách hàng ${selectedRoom.value.customerName}`, 'Hỗ trợ khách hàng')
+  } catch (err: any) {
+    logActivity('Gửi tin nhắn hỗ trợ', `Thất bại khi gửi tin nhắn cho khách hàng ${selectedRoom.value.customerName} - Lỗi: ${err.message || ''}`, 'Hỗ trợ khách hàng', 'Thất bại')
     console.error('[Chat] Lỗi gửi tin:', err)
-    newMessage.value = msgContent // Restore nếu lỗi
+    newMessage.value = msgContent
+    showNotification('Không thể gửi tin nhắn. Vui lòng thử lại.', 'error')
   } finally {
     sending.value = false
   }
@@ -521,21 +232,22 @@ const handleToggleStatus = async () => {
 
   try {
     await toggleRoomStatus(selectedRoom.value.id, newStatus)
-    const actionLabel = newStatus === 'Closed' ? 'Đóng' : 'Mở lại';
-    logActivity("Thay đổi trạng thái phòng chat", `Đã ${actionLabel} phòng chat của khách hàng ${selectedRoom.value.customerName}`, "Hỗ trợ khách hàng");
-    // Firestore onSnapshot sẽ tự cập nhật selectedRoom
+    const actionLabel = newStatus === 'Closed' ? 'Đóng' : 'Mở lại'
+    logActivity('Thay đổi trạng thái phòng chat', `Đã ${actionLabel} phòng chat của khách hàng ${selectedRoom.value.customerName}`, 'Hỗ trợ khách hàng')
+    showNotification(`Đã ${actionLabel.toLowerCase()} cuộc trò chuyện thành công.`, 'success')
     if (newStatus === 'Closed') {
-      selectedRoom.value = null // Reset về màn hình chờ
+      selectedRoom.value = null
     }
-  } catch (err) {
-    logActivity("Thay đổi trạng thái phòng chat", `Thất bại khi thay đổi trạng thái phòng chat của ${selectedRoom.value.customerName} sang ${newStatus} - Lỗi: ${err.message || ''}`, "Hỗ trợ khách hàng", "Thất bại");
+  } catch (err: any) {
+    logActivity('Thay đổi trạng thái phòng chat', `Thất bại khi thay đổi trạng thái phòng chat của ${selectedRoom.value.customerName} - Lỗi: ${err.message || ''}`, 'Hỗ trợ khách hàng', 'Thất bại')
     console.error('[Chat] Lỗi đổi trạng thái:', err)
+    showNotification('Không thể thay đổi trạng thái phòng chat.', 'error')
   } finally {
     togglingStatus.value = false
   }
 }
 
-// ── Helpers ────────────────────────────────────────────
+// ── HELPERS ──
 const scrollToBottom = () => {
   nextTick(() => {
     if (messagesContainer.value) {
@@ -544,43 +256,35 @@ const scrollToBottom = () => {
   })
 }
 
-const formatTime = (timestamp) => {
+const formatTime = (timestamp: any) => {
   if (!timestamp) return ''
   const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000)
   const now = new Date()
-  const diff = now - date
+  const diff = now.getTime() - date.getTime()
 
   if (diff < 60000) return 'Vừa xong'
-  if (diff < 3600000) return `${Math.floor(diff / 60000)} phút`
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}p`
   if (diff < 86400000) return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
   return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })
 }
 
-const formatTimestamp = (timestamp) => {
+const formatTimestamp = (timestamp: any) => {
   if (!timestamp) return ''
   const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp.seconds * 1000)
   return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
 }
 
-// Hàm lấy class nền avatar ngẫu nhiên dựa trên tên khách
-function getAvatarBg(name) {
-  if (!name) return 'bg-[#8c734b]/10 text-[#8c734b]'
-  const colors = [
-    'bg-[#9d804e]/10 text-[#8c734b] border border-solid border-[#9d804e]/20',
-    'bg-[#8c734b]/10 text-[#8c734b] border border-solid border-[#8c734b]/20',
-    'bg-blue-50 text-blue-600 border border-solid border-blue-100',
-    'bg-indigo-50 text-indigo-600 border border-solid border-indigo-100',
-    'bg-purple-50 text-purple-600 border border-solid border-purple-100',
-    'bg-rose-50 text-rose-600 border border-solid border-rose-100',
-  ]
+function getAvatarColor(name?: string): string {
+  if (!name) return 'primary'
+  const colors = ['primary', 'secondary', 'info', 'success', 'warning', 'indigo', 'purple']
   let sum = 0
   for (let i = 0; i < name.length; i++) {
     sum += name.charCodeAt(i)
   }
-  return colors[sum % colors.length]
+  return colors[sum % colors.length] || 'primary'
 }
 
-// ── Gợi ý trả lời tư vấn ──────────────────────────────
+// ── QUICK REPLY SUGGESTIONS ──
 const defaultSuggestions = [
   { text: 'Dạ LG Hair xin chào anh/chị, em có thể giúp gì cho mình ạ?', type: 'greet' },
   { text: 'Dạ bên em mở cửa từ 8:00 đến 21:00 hàng ngày ạ.', type: 'hours' },
@@ -592,7 +296,6 @@ const currentSuggestions = computed(() => {
     return defaultSuggestions
   }
 
-  // Lấy tin nhắn cuối cùng
   const lastMsg = messages.value[messages.value.length - 1]
   if (lastMsg.senderRole !== 'Customer') {
     return defaultSuggestions
@@ -643,22 +346,25 @@ const currentSuggestions = computed(() => {
   return defaultSuggestions
 })
 
-const applySuggestion = (text) => {
+const applySuggestion = (text: string) => {
   newMessage.value = text
 }
 
-// Khi selectedRoom thay đổi từ bên ngoài (Firestore cập nhật), đồng bộ lại
-watch(allRooms, (rooms) => {
-  if (selectedRoom.value) {
-    const updated = rooms.find(r => r.id === selectedRoom.value.id)
-    if (updated) selectedRoom.value = updated
-  }
-}, { deep: true })
+watch(
+  allRooms,
+  (rooms) => {
+    if (selectedRoom.value) {
+      const updated = rooms.find((r) => r.id === selectedRoom.value.id)
+      if (updated) selectedRoom.value = updated
+    }
+  },
+  { deep: true }
+)
 
-// Tự động scroll khi có tin mới
-watch(messages, () => { scrollToBottom() })
+watch(messages, () => {
+  scrollToBottom()
+})
 
-// ── Lifecycle ──────────────────────────────────────────
 listenToRooms()
 
 onUnmounted(() => {
@@ -667,21 +373,477 @@ onUnmounted(() => {
 })
 </script>
 
+<template>
+  <v-container fluid class="pa-4 pa-md-6">
+    <!-- HIGH PRIORITY SNACKBAR -->
+    <v-snackbar
+      v-model="snackbar.show"
+      :color="snackbar.color"
+      location="top right"
+      :timeout="3500"
+      elevation="6"
+      style="z-index: 99999;"
+    >
+      <div class="d-flex align-center font-weight-bold">
+        <span>{{ snackbar.text }}</span>
+      </div>
+      <template v-slot:actions>
+        <v-btn variant="text" icon density="comfortable" @click="snackbar.show = false">
+          <X class="w-4 h-4" />
+        </v-btn>
+      </template>
+    </v-snackbar>
+
+    <!-- DELETE CONFIRM DIALOG -->
+    <v-dialog v-model="isDeleteConfirmOpen" max-width="440px">
+      <v-card rounded="xl" class="pa-6">
+        <div class="d-flex align-center gap-3 mb-4">
+          <v-avatar color="error-lighten-5" size="48" rounded="lg">
+            <Trash2 class="w-6 h-6 text-error" />
+          </v-avatar>
+          <div>
+            <h3 class="text-h6 font-weight-bold mb-0">Xác Nhận Xóa</h3>
+            <p class="text-caption text-medium-emphasis mb-0">Hành động này không thể hoàn tác</p>
+          </div>
+        </div>
+
+        <p class="text-body-2 mb-6">
+          Bạn có chắc chắn muốn xóa <strong>{{ selectedRoomIds.length }}</strong> cuộc hội thoại đã chọn?
+        </p>
+
+        <div class="d-flex justify-end gap-2">
+          <v-btn variant="outlined" rounded="lg" class="text-none font-weight-bold" @click="isDeleteConfirmOpen = false">
+            Hủy bỏ
+          </v-btn>
+          <v-btn color="error" variant="flat" rounded="lg" class="text-none font-weight-bold" @click="executeDeleteSelectedRooms">
+            Xóa Ngay
+          </v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
+
+    <!-- ═══════ 100% VUETIFY 3 MAIN CHAT CARD ═══════ -->
+    <v-card
+      elevation="3"
+      rounded="2xl"
+      class="border overflow-hidden"
+      style="height: calc(100vh - 150px); min-height: 560px;"
+    >
+      <v-row no-gutters class="fill-height">
+
+        <!-- ══════════════════════════════════════════
+             CỘT TRÁI: DANH SÁCH PHÒNG CHAT (VUETIFY)
+        ══════════════════════════════════════════ -->
+        <v-col cols="12" md="4" lg="3" class="border-r fill-height d-flex flex-column bg-surface">
+          
+          <!-- Header Cột Trái -->
+          <div class="pa-4 border-b shrink-0">
+            <div class="d-flex align-center justify-space-between mb-4">
+              <div class="d-flex align-center gap-3">
+                <v-avatar color="primary" size="44" rounded="lg" elevation="2">
+                  <MessageSquare class="w-5 h-5 text-white" />
+                </v-avatar>
+                <div>
+                  <h2 class="text-subtitle-1 font-weight-bold" style="line-height: 1.3; margin-bottom: 6px !important;">Hỗ Trợ Khách Hàng</h2>
+                  <div class="text-caption text-primary font-weight-bold uppercase tracking-wider" style="font-size: 11px; line-height: 1.2;">Live Chat 1:1</div>
+                </div>
+              </div>
+
+              <v-btn
+                size="small"
+                :color="isManageMode ? 'grey' : 'error'"
+                variant="tonal"
+                rounded="lg"
+                class="text-none font-weight-bold"
+                @click="toggleManageMode"
+              >
+                {{ isManageMode ? 'Hủy' : 'Quản lý' }}
+              </v-btn>
+            </div>
+
+            <!-- Tìm kiếm khách hàng -->
+            <div class="mb-3">
+              <v-text-field
+                v-model="searchQuery"
+                placeholder="Tìm kiếm khách hàng..."
+                variant="outlined"
+                density="compact"
+                hide-details
+                rounded="xl"
+                clearable
+              >
+                <template v-slot:prepend-inner>
+                  <Search class="w-4 h-4 text-medium-emphasis" />
+                </template>
+              </v-text-field>
+            </div>
+
+            <!-- Count Badge -->
+            <v-sheet rounded="lg" border class="d-flex align-center justify-space-between px-3 py-2 text-caption font-weight-bold text-medium-emphasis mt-3">
+              <span>Khách hàng đang đợi:</span>
+              <v-chip color="primary" size="x-small" variant="flat" class="font-weight-black">
+                {{ activeRooms.length }}
+              </v-chip>
+            </v-sheet>
+          </div>
+
+          <!-- Room List -->
+          <div class="flex-grow-1 overflow-y-auto pa-2 space-y-1">
+            <!-- Manage Mode Toolbar -->
+            <v-sheet v-if="isManageMode" rounded="lg" border class="d-flex align-center justify-space-between pa-2 mb-2">
+              <v-checkbox
+                :model-value="isAllSelected"
+                label="Chọn tất cả"
+                density="compact"
+                hide-details
+                color="primary"
+                class="font-weight-bold"
+                @update:model-value="toggleSelectAll"
+              ></v-checkbox>
+
+              <v-btn
+                color="error"
+                size="small"
+                variant="flat"
+                rounded="lg"
+                class="text-none font-weight-bold"
+                :disabled="selectedRoomIds.length === 0"
+                @click="confirmDeleteSelectedRooms"
+              >
+                <template v-slot:prepend>
+                  <Trash2 class="w-3.5 h-3.5 mr-1" />
+                </template>
+                Xóa ({{ selectedRoomIds.length }})
+              </v-btn>
+            </v-sheet>
+
+            <!-- Loading -->
+            <div v-if="loadingRooms" class="text-center py-10">
+              <v-progress-circular indeterminate color="primary" size="32"></v-progress-circular>
+            </div>
+
+            <!-- Empty Rooms -->
+            <div v-else-if="filteredRooms.length === 0" class="text-center py-12 px-4">
+              <v-avatar color="grey-lighten-4" size="48" class="mb-3">
+                <MessageCircle class="w-6 h-6 text-medium-emphasis" />
+              </v-avatar>
+              <div class="text-caption font-weight-bold text-medium-emphasis">Chưa có cuộc trò chuyện nào</div>
+            </div>
+
+            <!-- Room Cards -->
+            <template v-else>
+              <v-card
+                v-for="room in filteredRooms"
+                :key="room.id"
+                variant="flat"
+                rounded="xl"
+                class="pa-3 cursor-pointer transition-all mb-2 relative room-card"
+                :class="[
+                  isDark ? 'room-card-dark' : 'room-card-light',
+                  selectedRoom?.id === room.id ? (isDark ? 'room-card-active-dark' : 'room-card-active-light') : ''
+                ]"
+                @click="isManageMode ? handleRoomCheckboxToggle(room.id) : selectRoom(room)"
+              >
+                <div class="d-flex align-center gap-3">
+                  <v-checkbox
+                    v-if="isManageMode"
+                    :value="room.id"
+                    v-model="selectedRoomIds"
+                    density="compact"
+                    hide-details
+                    color="primary"
+                    @click.stop
+                  ></v-checkbox>
+
+                  <div class="position-relative shrink-0">
+                    <v-avatar :color="getAvatarColor(room.customerName)" size="42" rounded="lg" class="font-weight-bold text-white shadow-xs">
+                      {{ room.customerName?.charAt(0)?.toUpperCase() || '?' }}
+                    </v-avatar>
+                    <span
+                      v-if="room.status === 'Active'"
+                      class="position-absolute bottom-0 right-0 w-3 h-3 rounded-circle bg-success border-2 border-white"
+                    ></span>
+                  </div>
+
+                  <div class="flex-grow-1 min-w-0">
+                    <div class="d-flex align-center justify-space-between mb-1">
+                      <span class="text-subtitle-2 font-weight-bold text-truncate room-card-title">
+                        {{ room.customerName }}
+                      </span>
+                      <div class="d-flex align-center gap-1">
+                        <v-chip
+                          v-if="selectedRoom?.id === room.id"
+                          color="warning"
+                          size="x-small"
+                          variant="flat"
+                          class="font-weight-black px-1.5"
+                          style="height: 16px; font-size: 9px;"
+                        >
+                          Đang chọn
+                        </v-chip>
+                        <span class="text-caption font-mono ml-1 room-card-sub" style="font-size: 10px;">{{ formatTime(room.updatedAt) }}</span>
+                      </div>
+                    </div>
+
+                    <p v-if="room.isCustomerTyping" class="text-caption text-success font-weight-bold mb-0 text-truncate animate-pulse">
+                      Đang nhập...
+                    </p>
+                    <p v-else class="text-caption mb-0 text-truncate room-card-sub">
+                      {{ room.lastMessage || 'Bắt đầu cuộc trò chuyện...' }}
+                    </p>
+                  </div>
+                </div>
+              </v-card>
+            </template>
+          </div>
+        </v-col>
+
+        <!-- ══════════════════════════════════════════
+             CỘT PHẢI: KHUNG CHAT CHI TIẾT (VUETIFY)
+        ══════════════════════════════════════════ -->
+        <v-col cols="12" md="8" lg="9" class="fill-height d-flex flex-column bg-grey-lighten-5 dark:bg-grey-darken-4">
+          
+          <!-- Empty State -->
+          <div v-if="!selectedRoom" class="flex-grow-1 d-flex flex-column align-center justify-center pa-8 text-center">
+            <v-avatar color="primary-lighten-5" size="72" class="mb-4">
+              <MessageSquare class="w-10 h-10 text-primary" />
+            </v-avatar>
+            <h2 class="text-h6 font-weight-bold mb-1">Chọn một cuộc trò chuyện</h2>
+            <p class="text-body-2 text-medium-emphasis mb-0" style="max-width: 360px;">
+              Chọn khách hàng từ danh sách bên trái để bắt đầu hỗ trợ tư vấn trực tuyến.
+            </p>
+          </div>
+
+          <!-- Active Chat Window -->
+          <template v-else>
+            <!-- Chat Header Toolbar -->
+            <v-toolbar color="surface" border="bottom" class="px-4">
+              <div class="d-flex align-center gap-3">
+                <v-avatar :color="getAvatarColor(selectedRoom.customerName)" size="42" rounded="lg" class="font-weight-bold text-white shadow-xs">
+                  {{ selectedRoom.customerName?.charAt(0)?.toUpperCase() }}
+                </v-avatar>
+                <div>
+                  <div class="text-subtitle-1 font-weight-bold d-flex align-center gap-2">
+                    <span>{{ selectedRoom.customerName }}</span>
+                    <v-chip v-if="selectedRoom.isCustomerTyping" color="success" size="x-small" variant="flat" class="font-weight-bold">
+                      đang soạn tin...
+                    </v-chip>
+                  </div>
+                  <div class="d-flex align-center gap-1">
+                    <span :class="['w-2 h-2 rounded-circle me-1', selectedRoom.status === 'Active' ? 'bg-success' : 'bg-grey']"></span>
+                    <span class="text-caption font-weight-bold" :class="selectedRoom.status === 'Active' ? 'text-success' : 'text-medium-emphasis'">
+                      {{ selectedRoom.status === 'Active' ? 'Đang hoạt động' : 'Đã đóng' }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <v-spacer></v-spacer>
+
+              <v-btn
+                :color="selectedRoom.status === 'Active' ? 'error' : 'success'"
+                variant="tonal"
+                size="small"
+                rounded="lg"
+                class="text-none font-weight-bold"
+                :loading="togglingStatus"
+                @click="handleToggleStatus"
+              >
+                <template v-slot:prepend>
+                  <Power class="w-4 h-4 mr-1" />
+                </template>
+                {{ selectedRoom.status === 'Active' ? 'Đóng phòng' : 'Mở lại' }}
+              </v-btn>
+            </v-toolbar>
+
+            <!-- Messages Scroll Area -->
+            <div ref="messagesContainer" class="flex-grow-1 overflow-y-auto pa-6 space-y-4">
+              <div v-if="loadingMessages" class="text-center py-12">
+                <v-progress-circular indeterminate color="primary" size="36"></v-progress-circular>
+              </div>
+
+              <div v-else-if="messages.length === 0" class="text-center py-16">
+                <v-avatar color="grey-lighten-4" size="48" class="mb-2">
+                  <MessageSquare class="w-6 h-6 text-medium-emphasis" />
+                </v-avatar>
+                <div class="text-caption text-medium-emphasis font-weight-bold">Chưa có tin nhắn nào trong cuộc hội thoại này</div>
+              </div>
+
+              <!-- Chat Bubbles -->
+              <template v-else>
+                <div
+                  v-for="msg in messages"
+                  :key="msg.id"
+                  class="d-flex align-start gap-3 mb-4"
+                  :class="msg.senderRole === 'Staff' ? 'justify-end' : 'justify-start'"
+                >
+                  <!-- Customer Avatar (Left) -->
+                  <v-avatar
+                    v-if="msg.senderRole === 'Customer'"
+                    :color="getAvatarColor(selectedRoom.customerName)"
+                    size="36"
+                    rounded="lg"
+                    class="font-weight-bold text-white me-2 mt-1 shadow-xs"
+                  >
+                    {{ selectedRoom.customerName?.charAt(0)?.toUpperCase() }}
+                  </v-avatar>
+
+                  <!-- Message Bubble -->
+                  <div class="d-flex flex-column" :class="msg.senderRole === 'Staff' ? 'align-end' : 'align-start'" style="max-width: 72%;">
+                    <v-sheet
+                      elevation="1"
+                      rounded="xl"
+                      class="pa-3 text-body-2 font-weight-medium border"
+                      :color="msg.senderRole === 'Staff' ? 'primary' : 'surface'"
+                      :class="msg.senderRole === 'Staff' ? 'text-white' : 'text-high-emphasis'"
+                    >
+                      {{ msg.content }}
+                    </v-sheet>
+                    <span class="text-caption text-medium-emphasis font-mono mt-1 px-1" style="font-size: 11px;">
+                      {{ formatTimestamp(msg.timestamp) }}
+                    </span>
+                  </div>
+
+                  <!-- Staff Avatar (Right) -->
+                  <v-avatar
+                    v-if="msg.senderRole === 'Staff'"
+                    color="primary-darken-1"
+                    size="36"
+                    rounded="lg"
+                    class="font-weight-bold text-white ms-2 mt-1 shadow-xs"
+                  >
+                    NV
+                  </v-avatar>
+                </div>
+              </template>
+            </div>
+
+            <!-- Footer: Quick Reply & Input Toolbar -->
+            <v-sheet color="surface" border="top" class="pa-4">
+              <div v-if="selectedRoom.status === 'Closed'" class="text-center py-2">
+                <span class="text-caption font-weight-bold text-medium-emphasis">
+                  Phòng chat đã đóng. Hãy mở lại để tiếp tục nhắn tin.
+                </span>
+              </div>
+
+              <div v-else class="space-y-3">
+                <!-- Quick Response Chips Group -->
+                <div class="d-flex align-center gap-2 overflow-x-auto pb-2">
+                  <span class="text-caption font-weight-bold text-medium-emphasis uppercase me-1 shrink-0">Gợi ý trả lời:</span>
+                  <v-chip
+                    v-for="(suggestion, idx) in currentSuggestions"
+                    :key="idx"
+                    color="primary"
+                    variant="tonal"
+                    size="small"
+                    class="font-weight-bold cursor-pointer me-1 shrink-0"
+                    @click="applySuggestion(suggestion.text)"
+                  >
+                    <template v-slot:prepend>
+                      <Smile v-if="suggestion.type === 'greet'" class="w-3.5 h-3.5 mr-1" />
+                      <DollarSign v-else-if="suggestion.type === 'price'" class="w-3.5 h-3.5 mr-1" />
+                      <Clock v-else-if="suggestion.type === 'hours'" class="w-3.5 h-3.5 mr-1" />
+                      <Calendar v-else-if="suggestion.type === 'book'" class="w-3.5 h-3.5 mr-1" />
+                      <Heart v-else-if="suggestion.type === 'thanks'" class="w-3.5 h-3.5 mr-1" />
+                      <MessageSquare v-else class="w-3.5 h-3.5 mr-1" />
+                    </template>
+                    {{ suggestion.text }}
+                  </v-chip>
+                </div>
+
+                <!-- Input Text Field & Send Button -->
+                <div class="d-flex align-center gap-3">
+                  <v-text-field
+                    v-model="newMessage"
+                    placeholder="Nhập tin nhắn..."
+                    variant="outlined"
+                    density="compact"
+                    hide-details
+                    rounded="xl"
+                    @keydown.enter="handleSend"
+                  ></v-text-field>
+
+                  <v-btn
+                    color="primary"
+                    icon
+                    elevation="3"
+                    size="large"
+                    :disabled="!newMessage.trim() || sending"
+                    :loading="sending"
+                    @click="handleSend"
+                  >
+                    <Send class="w-5 h-5" />
+                  </v-btn>
+                </div>
+              </div>
+            </v-sheet>
+
+          </template>
+        </v-col>
+      </v-row>
+    </v-card>
+  </v-container>
+</template>
+
 <style scoped>
-.custom-scroll::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+:global(body.v-theme--dark), 
+:global(.v-theme--dark .v-main),
+:global(.v-theme--dark .v-application) {
+  background-color: #141416 !important;
 }
-.custom-scroll::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 99px;
+
+/* Base Transition */
+.room-card {
+  transition: all 0.2s ease-in-out;
 }
-.custom-scroll::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 99px;
-  border: 1px solid #f1f5f9;
+
+/* ── LIGHT MODE ROOM CARDS ── */
+.room-card-light {
+  background-color: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
 }
-.custom-scroll::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+.room-card-light .room-card-title {
+  color: #0f172a !important;
+}
+.room-card-light .room-card-sub {
+  color: #64748b !important;
+}
+
+.room-card-active-light {
+  background-color: #fff8e6 !important;
+  border: 1.5px solid #d97706 !important;
+  border-left: 6px solid #d97706 !important;
+  box-shadow: 0 4px 14px rgba(217, 119, 6, 0.18) !important;
+}
+.room-card-active-light .room-card-title {
+  color: #b45309 !important;
+}
+.room-card-active-light .room-card-sub {
+  color: #475569 !important;
+}
+
+/* ── DARK MODE ROOM CARDS ── */
+.room-card-dark {
+  background-color: #1e1e24 !important;
+  border: 1px solid #334155 !important;
+}
+.room-card-dark .room-card-title {
+  color: #f8fafc !important;
+}
+.room-card-dark .room-card-sub {
+  color: #94a3b8 !important;
+}
+
+.room-card-active-dark {
+  background-color: #2b2214 !important;
+  border: 2px solid #f59e0b !important;
+  border-left: 6px solid #f59e0b !important;
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.25) !important;
+}
+.room-card-active-dark .room-card-title {
+  color: #fbbf24 !important;
+}
+.room-card-active-dark .room-card-sub {
+  color: #e2e8f0 !important;
 }
 </style>
