@@ -1,3 +1,4 @@
+
 if (window.location.hostname === '127.0.0.1' || window.location.port === '3000') {
   let newUrl = window.location.href;
   if (window.location.hostname === '127.0.0.1') {
@@ -17,11 +18,13 @@ import router from './router'
 import './styles/index.css'
 import vue3GoogleLogin from 'vue3-google-login'
 import axios from 'axios'
+import { setupPerformanceBooster } from '../../../packages/shared/src';
 import { useAuthStore } from './stores/useAuthStore'
 
 // Cấu hình axios gửi và nhận cookie mặc định cho mọi request
 axios.defaults.withCredentials = true
 
+setupPerformanceBooster(axios);
 // Interceptor bắt mọi lỗi trả về từ API, nếu phát hiện tài khoản bị khóa thì hiện modal hỗ trợ toàn cục
 axios.interceptors.response.use(
   (response) => response,

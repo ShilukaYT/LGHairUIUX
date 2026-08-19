@@ -26,12 +26,12 @@ const cartAxios = axios.create({
 
 // Interceptor: Tự động gắn X-Guest-Id và Token (nếu có) vào mọi Request
 cartAxios.interceptors.request.use((config) => {
-    config.headers['X-Guest-Id'] = getGuestId();
+    config.headers.set('X-Guest-Id', getGuestId());
     
     // Nếu có token đăng nhập, gắn vào Header Authorization (Sửa lại tên key 'token' nếu dự án bạn dùng tên khác)
     const token = localStorage.getItem('token'); 
     if (token) {
-        config.headers['Authorization'] = `Bearer ${token}`;
+        config.headers.set('Authorization', `Bearer ${token}`);
     }
     
     return config;
@@ -58,6 +58,7 @@ export const getCartDB = async (maKH: string | null = null) => {
             tenItem: item.ten || item.tenItem || 'Không rõ tên',
             // Giữ lại field gốc để tương thích
             ten: item.ten,
+            duration: item.duration || item.thoiGianLam || item.thoiGianThucHien || item.thoiGian || 30,
         }));
     } catch (error) {
         console.error("Lỗi lấy giỏ hàng từ API:", error);
@@ -86,8 +87,18 @@ export const addToCartDB = async (item: any, maKH: string | null = null) => {
                 soLuong: item.soLuong || 1
             });
         }
-    } catch (error) {
+    } catch (error: any) {
         console.error("Lỗi thêm item vào API:", error);
+        if (error.response && error.response.status === 400 && error.response.data && error.response.data.message) {
+            import('sweetalert2').then((Swal) => {
+                Swal.default.fire({
+                    icon: 'error',
+                    title: 'Lỗi',
+                    text: error.response.data.message,
+                    confirmButtonColor: '#000'
+                });
+            });
+        }
     }
 };
 
@@ -101,8 +112,19 @@ export const updateCartItemDB = async (item: any) => {
             loai: loaiBackend,
             soLuong: item.soLuong
         });
-    } catch (error) {
+    } catch (error: any) {
         console.error("Lỗi cập nhật số lượng API:", error);
+        if (error.response && error.response.status === 400 && error.response.data && error.response.data.message) {
+            import('sweetalert2').then((Swal) => {
+                Swal.default.fire({
+                    icon: 'error',
+                    title: 'Vượt quá số lượng',
+                    text: error.response.data.message,
+                    confirmButtonColor: '#000'
+                });
+            });
+        }
+        throw error; // Ném lỗi để Frontend Cart.vue biết và không cộng số lượng ảo
     }
 };
 

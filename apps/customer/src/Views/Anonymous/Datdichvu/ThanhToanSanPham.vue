@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import axios from 'axios';
 import Swal from 'sweetalert2';
@@ -87,6 +87,7 @@ const searchQuery = ref('');
 const showProductDropdown = ref(false);
 const searchResults = ref<any[]>([]);
 let searchTimeout: any = null;
+let stockPollingTimer: any = null;
 
 const loadProductsWithVariants = async (keyword: string = '') => {
     try {
@@ -118,6 +119,17 @@ const addProduct = (sp: any, bt: any) => {
 
     if (existingProduct) {
         // Cộng dồn số lượng nếu đã có trong giỏ
+        if (existingProduct.soLuong >= bt.soLuongTon) {
+            import('sweetalert2').then((Swal) => {
+                Swal.default.fire({
+                    icon: 'warning',
+                    title: 'Vượt quá số lượng',
+                    text: `Chỉ còn ${bt.soLuongTon} sản phẩm trong kho!`,
+                    confirmButtonColor: '#000'
+                });
+            });
+            return;
+        }
         existingProduct.soLuong++;
     } else {
         // Thêm mới nếu chưa có
@@ -126,7 +138,8 @@ const addProduct = (sp: any, bt: any) => {
             tenItem: `${sp.tenSp} - ${bt.tenBienThe}`,
             gia: bt.giaBan,
             hinhAnh: bt.hinhAnhDaiDien || bt.hinhAnh || sp.hinhAnhDaiDien,
-            soLuong: 1
+            soLuong: 1,
+            soLuongTon: bt.soLuongTon
         });
     }
 
@@ -139,14 +152,44 @@ const removeProduct = (id: string | number) => {
     productItems.value = productItems.value.filter(p => p.id !== id);
 };
 
-const increaseQuantity = (item: any) => item.soLuong++;
+const increaseQuantity = (item: any) => {
+    if (item.soLuongTon !== undefined && item.soLuong >= item.soLuongTon) {
+        import('sweetalert2').then((Swal) => {
+            Swal.default.fire({
+                icon: 'warning',
+                title: 'Vượt quá số lượng',
+                text: `Chỉ còn ${item.soLuongTon} sản phẩm trong kho!`,
+                confirmButtonColor: '#000'
+            });
+        });
+        return;
+    }
+    item.soLuong++;
+};
+
 const decreaseQuantity = (item: any) => {
     if (item.soLuong > 1) item.soLuong--;
 };
+
 const validateQuantity = (item: any) => {
-    if (typeof item.soLuong !== 'number' || isNaN(item.soLuong) || item.soLuong < 1) {
-        item.soLuong = 1;
+    let newQty = Number(item.soLuong);
+    if (isNaN(newQty) || newQty < 1) {
+        newQty = 1;
     }
+
+    if (item.soLuongTon !== undefined && newQty > item.soLuongTon) {
+        newQty = item.soLuongTon;
+        import('sweetalert2').then((Swal) => {
+            Swal.default.fire({
+                icon: 'warning',
+                title: 'Vượt quá số lượng',
+                text: `Chỉ còn ${item.soLuongTon} sản phẩm trong kho!`,
+                confirmButtonColor: '#000'
+            });
+        });
+    }
+
+    item.soLuong = newQty;
 };
 const filteredProducts = computed(() => {
     const query = searchQuery.value.toLowerCase().trim();
@@ -311,9 +354,6 @@ const remainCOD = computed(() => {
 // ==========================================
 // KHỞI TẠO DỮ LIỆU
 // ==========================================
-// ==========================================
-// KHỞI TẠO DỮ LIỆU
-// ==========================================
 onMounted(async () => {
     // 1. Nhận hàng từ Giỏ hàng Sidebar
     const checkoutRaw = localStorage.getItem("checkoutData");
@@ -333,14 +373,42 @@ onMounted(async () => {
 
     // 3. Load danh sách sản phẩm mặc định ban đầu
     await loadProductsWithVariants('');
-    
+      
+    // 4. Polling 15s cập nhật tồn kho để nhảy số tự động
+    stockPollingTimer = setInterval(async () => {
+        try {
+            const res = await axios.get(`${API}/api/ThanhToanSanPham/search-products-variants`, {
+                params: { keyword: '' }
+            });
+            if (res.data && res.data.success) {
+                const allFreshProducts = res.data.data;
+                // Cập nhật tồn kho cho các item đang ở trang Thanh Toán
+                productItems.value.forEach(p => {
+                    for (const sp of allFreshProducts) {
+                        const bt = sp.bienthes?.find((b: any) => b.maBienThe === p.id);
+                        if (bt) {
+                            p.soLuongTon = bt.soLuongTon;
+                            // Ép số lượng nhảy lùi nếu kho bị hụt
+                            if (p.soLuongTon !== undefined && p.soLuong > p.soLuongTon) {
+                                p.soLuong = p.soLuongTon;
+                            }
+                            break;
+                        }
+                    }
+                });
+            }
+        } catch (e) {
+            // Im lặng bỏ qua
+        }
+    }, 15000);
+});
+
+onUnmounted(() => {
+    if (stockPollingTimer) clearInterval(stockPollingTimer);
 });
 
 // ==========================================
 // XỬ LÝ THANH TOÁN
-// ==========================================
-// ==========================================
-// XỬ LÝ ĐẶT HÀNG & THANH TOÁN
 // ==========================================
 const handleCheckout = async () => {
     // 1. Validate dữ liệu cơ bản
@@ -426,7 +494,38 @@ const handleCheckout = async () => {
         }
     } catch (error: any) {
         console.error("Error creating order:", error);
-        Swal.fire({ title: 'Lỗi', text: error.response?.data?.message || "Có lỗi xảy ra khi lưu đơn hàng! Vui lòng thử lại.", icon: 'error', confirmButtonColor: '#d4af37' });
+        const errData = error.response?.data;
+
+        const isOutOfStock = errData && (
+            errData.errorCode === 'PRODUCT_OUT_OF_STOCK' ||
+            (typeof errData.message === 'string' && (
+                errData.message.toLowerCase().includes('tồn kho') ||
+                errData.message.toLowerCase().includes('hết hàng') ||
+                errData.message.toLowerCase().includes('không đủ số lượng') ||
+                errData.message.toLowerCase().includes('vượt quá số lượng')
+            ))
+        );
+
+        if (isOutOfStock) {
+            const result = await Swal.fire({
+                title: 'Sản phẩm đã hết hàng!',
+                text: `${errData.message || 'Sản phẩm trong giỏ hàng hiện đã hết hàng.'}\n\nBạn có muốn quay lại trang sản phẩm để tiếp tục mua sắm không?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#000',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Quay lại mua sắm',
+                cancelButtonText: 'Hủy'
+            });
+
+            if (result.isConfirmed) {
+                router.push({ name: 'shop' });
+            }
+            // Nếu bấm "Hủy" (hoặc đóng dialog) -> ở lại trang thanh toán hiện tại
+            return;
+        }
+
+        Swal.fire({ title: 'Lỗi', text: errData?.message || "Có lỗi xảy ra khi lưu đơn hàng! Vui lòng thử lại.", icon: 'error', confirmButtonColor: '#d4af37' });
     } finally {
     }
 };
@@ -675,12 +774,17 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
                                             <div class="item-info flex-grow-1">
                                                 <span class="n font-bold d-block text-truncate" style="max-width: 170px;">{{ p.tenItem }}</span>
                                                 <div class="p text-black font-bold mt-1">{{ formatMoney(p.gia) }}</div>
+                                                <div v-if="p.soLuongTon !== undefined" class="mt-1">
+                                                    <span class="text-[10px] font-bold uppercase tracking-widest px-2 py-1 bg-gray-100 text-gray-600 rounded">
+                                                        Còn lại: {{ p.soLuongTon }}
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
 
                                         <div class="quantity-pill ms-auto me-3">
                                             <button @click="decreaseQuantity(p)" class="qty-btn"><i class="fas fa-minus"></i></button>
-                                            <input type="number" v-model.number="p.soLuong" min="1" class="qty-input" @input="validateQuantity(p)" />
+                                            <input type="number" v-model.number="p.soLuong" min="1" class="qty-input hide-arrows" @change="validateQuantity(p)" @blur="validateQuantity(p)" />
                                             <button @click="increaseQuantity(p)" class="qty-btn"><i class="fas fa-plus"></i></button>
                                         </div>
 
