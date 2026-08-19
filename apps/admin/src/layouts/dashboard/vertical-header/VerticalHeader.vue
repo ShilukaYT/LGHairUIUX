@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { useCustomizerStore } from '../../../stores/customizer';
 // icons
 import { MenuFoldOutlined, SearchOutlined } from '@ant-design/icons-vue';
@@ -12,11 +13,17 @@ import { useTheme } from 'vuetify';
 
 const customizer = useCustomizerStore();
 const theme = useTheme();
+const route = useRoute();
 
 const userName = ref('User');
 const isAdmin = ref(false);
 const currentUserMaNv = ref('');
 const userAvatar = ref('');
+const isProfileMenuOpen = ref(false);
+
+watch(() => route.fullPath, () => {
+  isProfileMenuOpen.value = false;
+});
 
 const loadUserFromStorage = () => {
   const adminStr = sessionStorage.getItem('adminUser');
@@ -65,8 +72,8 @@ onUnmounted(() => {
 
 function toggleTheme() {
   const newTheme = customizer.actTheme === 'dark' ? 'light' : 'dark';
-  localStorage.setItem('theme_selection', newTheme);
   customizer.SET_THEME(newTheme);
+  theme.global.name.value = newTheme;
 }
 </script>
 
@@ -155,7 +162,7 @@ function toggleTheme() {
     <!-- ---------------------------------------------- -->
     <!-- User Profile -->
     <!-- ---------------------------------------------- -->
-    <v-menu :close-on-content-click="false" offset="8, 0">
+    <v-menu v-model="isProfileMenuOpen" :close-on-content-click="false" offset="8, 0">
       <template v-slot:activator="{ props }">
         <v-btn class="profileBtn" variant="text" rounded="sm" v-bind="props">
           <div class="d-flex align-center">
@@ -167,7 +174,7 @@ function toggleTheme() {
         </v-btn>
       </template>
       <v-sheet rounded="md" width="290">
-        <ProfileDD />
+        <ProfileDD @close="isProfileMenuOpen = false" />
       </v-sheet>
     </v-menu>
   </v-app-bar>

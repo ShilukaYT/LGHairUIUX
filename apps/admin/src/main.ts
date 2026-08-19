@@ -19,6 +19,9 @@ import '@fontsource/inter/400.css';
 import '@fontsource/inter/500.css';
 import '@fontsource/inter/600.css';
 import '@fontsource/inter/700.css';
+// Dòng 22:
+import { setupPerformanceBooster } from '../../../packages/shared/src';
+
 
 const app = createApp(App)
 
@@ -28,7 +31,7 @@ app.use(vue3GoogleLogin, {
 
 // 1. Luôn cho phép gửi Cookie
 axios.defaults.withCredentials = true;
-
+setupPerformanceBooster(axios); // 👈 Thêm dòng này để kích hoạt
 const API = import.meta.env.VITE_API_URL || 'https://localhost:7196';
 
 // 1.5. Trạm gác chặn các Request gửi đi (Gắn Token vào Header)
@@ -44,7 +47,7 @@ axios.interceptors.request.use(
     }
 
     if (token && token !== 'undefined') {
-      config.headers['Authorization'] = `Bearer ${token}`;
+      config.headers.set('Authorization', `Bearer ${token}`);
     }
 
     return config;
@@ -100,7 +103,7 @@ axios.interceptors.response.use(
               localStorage.setItem('userToken', newAccessToken);
               sessionStorage.setItem('userToken', newAccessToken);
             }
-            originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
+            originalRequest.headers.set('Authorization', `Bearer ${newAccessToken}`);
           }
         }
         

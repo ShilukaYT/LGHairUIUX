@@ -46,15 +46,10 @@
               </button>
             </div>
 
-            <!-- Table Header (hidden on mobile) — Sản phẩm có cột Số lượng, Dịch vụ thì không -->
-            <div v-if="activeTab === 'product'" class="hidden md:grid grid-cols-[3fr_1fr_1fr_auto] gap-6 border-b border-gray-200 pb-4 mb-6 text-xs font-bold uppercase tracking-widest text-gray-500">
-              <span>Sản phẩm</span>
-              <span class="text-center">Số lượng</span>
-              <span class="text-right">Giá</span>
-              <span class="w-10"></span>
-            </div>
-            <div v-else class="hidden md:grid grid-cols-[3fr_1fr_auto] gap-6 border-b border-gray-200 pb-4 mb-6 text-xs font-bold uppercase tracking-widest text-gray-500">
-              <span>Dịch vụ</span>
+            <!-- Table Header (hidden on mobile) -->
+            <div class="hidden md:grid grid-cols-[3fr_1fr_1fr_auto] gap-6 border-b border-gray-200 pb-4 mb-6 text-xs font-bold uppercase tracking-widest text-gray-500">
+              <span>{{ activeTab === 'service' ? 'Dịch vụ' : 'Sản phẩm' }}</span>
+              <span class="text-center">{{ activeTab === 'service' ? 'Thời lượng' : 'Số lượng' }}</span>
               <span class="text-right">Giá</span>
               <span class="w-10"></span>
             </div>
@@ -65,8 +60,7 @@
                  Chưa có {{ activeTab === 'service' ? 'dịch vụ' : 'sản phẩm' }} nào trong mục này.
               </div>
               <div v-for="item in (activeTab === 'service' ? serviceItems : productItems)" :key="item.id"
-                class="flex flex-col md:grid gap-6 items-center border border-gray-100 md:border-none md:border-b p-4 md:p-0 md:py-6 rounded-lg md:rounded-none bg-white hover:bg-gray-50 transition-colors group"
-                :class="item.type === 'SANPHAM' ? 'md:grid-cols-[3fr_1fr_1fr_auto]' : 'md:grid-cols-[3fr_1fr_auto]'"
+                class="flex flex-col md:grid gap-6 items-center border border-gray-100 md:border-none md:border-b p-4 md:p-0 md:py-6 rounded-lg md:rounded-none bg-white hover:bg-gray-50 transition-colors group md:grid-cols-[3fr_1fr_1fr_auto]"
               >
                 <!-- Info -->
                 <div class="flex items-center gap-6 w-full">
@@ -77,7 +71,10 @@
                     <h3 class="font-heading text-base md:text-lg font-bold text-gray-900 mb-1 cursor-pointer hover:text-gray-600 transition-colors line-clamp-2">{{ item.tenItem }}</h3>
                     <p class="text-xs uppercase tracking-widest text-gray-500 font-medium mb-2">
                         <span v-if="item.type === 'SANPHAM'">Sản phẩm</span>
-                        <span v-else>Dịch vụ &middot; {{ item.duration || 30 }} phút</span>
+                        <span v-else class="inline-flex items-center gap-1.5 text-gray-600">
+                            <Clock :size="13" class="text-gray-400" />
+                            Dịch vụ &middot; {{ item.duration || 30 }} phút
+                        </span>
                     </p>
                     <div class="md:hidden flex items-center gap-2 mt-2">
                         <span v-if="item.giaGoc && item.giaGoc > item.gia" class="text-xs text-gray-400 line-through">
@@ -85,24 +82,50 @@
                         </span>
                         <p class="text-lg font-bold text-black">{{ formatMoney(item.gia) }}</p>
                     </div>
+                    <!-- Chỉ hiển thị Còn lại (Tồn kho) cho Sản phẩm -->
+                    <div v-if="item.type === 'SANPHAM' && item.soLuongTon !== undefined" class="mt-1">
+                        <span class="text-[11px] font-bold uppercase tracking-widest px-2 py-1 bg-gray-100 text-gray-600 rounded">
+                            Còn lại: {{ item.soLuongTon }}
+                        </span>
+                    </div>
                   </div>
                 </div>
 
-                <!-- Số lượng — CHỈ SẢN PHẨM (mobile) -->
-                <div v-if="item.type === 'SANPHAM'" class="md:hidden w-full flex justify-between items-center border-t border-gray-100 pt-4 mt-2">
-                  <span class="text-xs font-bold uppercase tracking-widest text-gray-500">Số lượng</span>
+                <!-- Cột giữa (Desktop): Thời lượng cho Dịch vụ HOẶC Số lượng (+/-) cho Sản phẩm -->
+                <div v-if="item.type !== 'SANPHAM'" class="hidden md:flex justify-center items-center w-full">
+                  <div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 text-gray-800 text-xs font-semibold tracking-wider border border-gray-200">
+                    <Clock :size="14" class="text-gray-500" />
+                    <span>{{ item.duration || 30 }} phút</span>
+                  </div>
+                </div>
+                <div v-else class="hidden md:flex justify-center w-full">
                   <div class="flex items-center border-2 border-gray-200 rounded-md bg-white">
                     <button @click="decreaseQuantity(item)" class="w-10 h-10 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors"><Minus :size="16" /></button>
-                    <span class="w-10 text-center font-bold text-sm">{{ item.soLuong || 1 }}</span>
+                    <input 
+                      type="number" 
+                      v-model.number="item.soLuong" 
+                      @change="onQuantityChange(item)"
+                      @blur="onQuantityBlur(item)"
+                      class="w-10 text-center font-bold text-sm outline-none bg-transparent hide-arrows" 
+                      min="1"
+                    />
                     <button @click="increaseQuantity(item)" class="w-10 h-10 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors"><Plus :size="16" /></button>
                   </div>
                 </div>
 
-                <!-- Số lượng — CHỈ SẢN PHẨM (desktop) -->
-                <div v-if="item.type === 'SANPHAM'" class="hidden md:flex justify-center w-full">
+                <!-- Số lượng (mobile - CHỈ hiển thị cho Sản phẩm) -->
+                <div v-if="item.type === 'SANPHAM'" class="md:hidden w-full flex justify-between items-center border-t border-gray-100 pt-4 mt-2">
+                  <span class="text-xs font-bold uppercase tracking-widest text-gray-500">Số lượng</span>
                   <div class="flex items-center border-2 border-gray-200 rounded-md bg-white">
                     <button @click="decreaseQuantity(item)" class="w-10 h-10 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors"><Minus :size="16" /></button>
-                    <span class="w-10 text-center font-bold text-sm">{{ item.soLuong || 1 }}</span>
+                    <input 
+                      type="number" 
+                      v-model.number="item.soLuong" 
+                      @change="onQuantityChange(item)"
+                      @blur="onQuantityBlur(item)"
+                      class="w-10 text-center font-bold text-sm outline-none bg-transparent hide-arrows" 
+                      min="1"
+                    />
                     <button @click="increaseQuantity(item)" class="w-10 h-10 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors"><Plus :size="16" /></button>
                   </div>
                 </div>
@@ -112,7 +135,9 @@
                   <span v-if="item.giaGoc && item.giaGoc > item.gia" class="text-xs text-gray-400 line-through mb-1">
                     {{ formatMoney((item.giaGoc || 0) * (item.type === 'SANPHAM' ? (item.soLuong || 1) : 1)) }}
                   </span>
-                  <span class="text-lg font-bold text-black">{{ formatMoney((item.gia || 0) * (item.type === 'SANPHAM' ? (item.soLuong || 1) : 1)) }}</span>
+                  <span class="text-lg font-bold text-black">
+                    {{ formatMoney((item.gia || 0) * (item.type === 'SANPHAM' ? (item.soLuong || 1) : 1)) }}
+                  </span>
                 </div>
 
                 <!-- Xóa (desktop) -->
@@ -146,13 +171,27 @@
             <h2 class="font-heading text-2xl font-bold uppercase tracking-widest mb-6 border-b-2 border-gray-100 pb-4 text-black">Tổng Đơn Hàng</h2>
             
             <div class="flex flex-col gap-5 text-base mb-8">
-              <div v-if="totalService > 0" class="flex justify-between items-center">
-                <span class="text-gray-600 font-medium">Tổng dịch vụ</span>
-                <span class="font-bold">{{ formatMoney(totalService) }}</span>
+              <!-- Mục dịch vụ -->
+              <div v-if="totalService > 0" class="flex flex-col gap-2 pb-4 border-b border-gray-100">
+                <div class="flex justify-between items-center">
+                  <span class="text-gray-600 font-medium">Tổng dịch vụ ({{ serviceItems.length }})</span>
+                  <span class="font-bold text-gray-900">{{ formatMoney(totalService) }}</span>
+                </div>
+                <div class="flex justify-between items-center text-xs text-gray-500 pt-1">
+                  <span class="flex items-center gap-1.5">
+                    <Clock :size="14" class="text-gray-400" />
+                    Tổng thời gian dự kiến
+                  </span>
+                  <span class="font-bold text-gray-900 bg-gray-100 px-2.5 py-1 rounded border border-gray-200">
+                    {{ totalServiceDuration }} phút
+                  </span>
+                </div>
               </div>
+
+              <!-- Mục sản phẩm -->
               <div v-if="totalProduct > 0" class="flex justify-between items-center">
                 <span class="text-gray-600 font-medium">Tổng sản phẩm</span>
-                <span class="font-bold">{{ formatMoney(totalProduct) }}</span>
+                <span class="font-bold text-gray-900">{{ formatMoney(totalProduct) }}</span>
               </div>
               <div v-if="totalSavings > 0" class="flex justify-between items-center">
                 <span class="text-green-600 font-medium">Tiết kiệm được (Flash Sale)</span>
@@ -191,8 +230,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
-import { X, Minus, Plus, ArrowRight } from 'lucide-vue-next';
+import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
+import { X, Minus, Plus, ArrowRight, Clock } from 'lucide-vue-next';
 import {
     getCartDB,
     removeFromCartDB,
@@ -221,6 +260,7 @@ interface CartItem {
     createdAt: number;
     duration?: number;
     soLuong?: number;
+    soLuongTon?: number;
 }
 
 const emit = defineEmits(["close", "checkout"]);
@@ -231,28 +271,54 @@ const activeTab = ref<"service" | "product">("service");
 
 const defaultImage = "/images/no-image.png";
 const isModalOpen = ref(false);
+let stockPollingTimer: any = null;
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:1337'; // Or whatever default
+const API = import.meta.env.VITE_API_URL || 'http://localhost:1337';
 
 const getImageUrl = (url: string | undefined | null) => {
     if (!url) return defaultImage;
     if (url.startsWith('http')) return url;
-    if (url.startsWith('/images/') && !url.includes('upload')) return url; // Tạm giữ ảnh cục bộ public/images
+    if (url.startsWith('/images/') && !url.includes('upload')) return url;
     return `${API}${url.startsWith('/') ? '' : '/'}${url}`;
 };
+
 const loadCart = async () => {
     const maKH = getCustomerInfo().maKH;
     cartItems.value = await getCartDB(maKH);
 };
 
-onMounted(() => {
+onMounted(async () => {
     // Tự động mở giỏ hàng khi người dùng truy cập vào trang /cart
     isOpen.value = true;
-    loadCart();
+    await loadCart();
+    
+    // Polling 15 giây để tự động cập nhật số lượng tồn kho
+    stockPollingTimer = setInterval(async () => {
+        try {
+            const maKH = getCustomerInfo().maKH;
+            const data = await getCartDB(maKH);
+            if (data && Array.isArray(data)) {
+                data.forEach((serverItem: any) => {
+                    const localItem = cartItems.value.find(i => i.id === serverItem.id);
+                    if (localItem && serverItem.soLuongTon !== undefined) {
+                        localItem.soLuongTon = serverItem.soLuongTon;
+                        if (localItem.soLuong && localItem.soLuongTon !== undefined && localItem.soLuong > localItem.soLuongTon) {
+                            localItem.soLuong = localItem.soLuongTon;
+                        }
+                    }
+                });
+            }
+        } catch (error) {
+            // Im lặng bỏ qua lỗi polling
+        }
+    }, 15000);
+});
+
+onUnmounted(() => {
+    if (stockPollingTimer) clearInterval(stockPollingTimer);
 });
 
 const isProduct = (item: CartItem) => {
-    // Chỉ dựa vào type từ database để phân biệt
     return item.type === "SANPHAM";
 };
 const isService = (item: CartItem) => {
@@ -270,11 +336,15 @@ const productItems = computed(() => {
 const hasService = computed(() => serviceItems.value.length > 0);
 const hasProduct = computed(() => productItems.value.length > 0);
 
-
-
 const totalService = computed(() => {
     return serviceItems.value.reduce((sum, item) => {
-        return sum + Number(item.gia || 0) * Number(item.soLuong || 1);
+        return sum + Number(item.gia || 0);
+    }, 0);
+});
+
+const totalServiceDuration = computed(() => {
+    return serviceItems.value.reduce((sum, item) => {
+        return sum + (Number(item.duration) || 30);
     }, 0);
 });
 
@@ -288,10 +358,9 @@ const totalAmount = computed(() => {
     return totalService.value + totalProduct.value;
 });
 
-// Tổng giá gốc (trước khuyến mãi) — dùng để hiển thị số tiền tiết kiệm được (giống CartSidebar.vue cũ)
 const totalOriginalService = computed(() => {
     return serviceItems.value.reduce((sum, item) => {
-        return sum + Number(item.giaGoc || item.gia || 0) * Number(item.soLuong || 1);
+        return sum + Number(item.giaGoc || item.gia || 0);
     }, 0);
 });
 
@@ -319,16 +388,33 @@ const formatMoney = (money: number) => {
 };
 
 const removeItem = async (item: CartItem) => {
-    // ✅ Truyền type để tránh request thừa tìm kiếm loại
     const backendLoai = item.type === 'SANPHAM' ? 'BIENTHE' : (item.type || 'DICHVU');
     await removeFromCartDB(item.id, backendLoai);
     await loadCart();
 };
 
 const increaseQuantity = async (item: CartItem) => {
+    if (item.type === 'SANPHAM' && item.soLuongTon !== undefined) {
+        if (Number(item.soLuong || 1) >= item.soLuongTon) {
+            import('sweetalert2').then((Swal) => {
+                Swal.default.fire({
+                    icon: 'warning',
+                    title: 'Vượt quá số lượng',
+                    text: `Sản phẩm này chỉ còn ${item.soLuongTon} sản phẩm trong kho!`,
+                    confirmButtonColor: '#000'
+                });
+            });
+            return;
+        }
+    }
+
     item.soLuong = Number(item.soLuong || 1) + 1;
-    await updateCartItemDB(item as any);
-    await loadCart();
+    try {
+        await updateCartItemDB(item as any);
+    } catch (error) {
+        // Backend sẽ hiện Popup báo lỗi, ở đây ta chỉ cần tải lại dữ liệu thực tế
+        await loadCart();
+    } 
 };
 
 const decreaseQuantity = async (item: CartItem) => {
@@ -340,8 +426,45 @@ const decreaseQuantity = async (item: CartItem) => {
     }
 
     item.soLuong = currentQuantity - 1;
-    await updateCartItemDB(item as any);
-    await loadCart();
+    try {
+        await updateCartItemDB(item as any);
+    } catch (error) {
+        await loadCart();
+    }
+};
+
+const onQuantityChange = async (item: CartItem) => {
+    let newQty = Number(item.soLuong);
+    if (isNaN(newQty) || newQty < 1) {
+        newQty = 1;
+    }
+    
+    // Kiểm tra số lượng tồn kho
+    if (item.soLuongTon !== undefined && newQty > item.soLuongTon) {
+        newQty = item.soLuongTon;
+        import('sweetalert2').then((Swal) => {
+            Swal.default.fire({
+                icon: 'warning',
+                title: 'Vượt quá số lượng',
+                text: `Chỉ còn ${item.soLuongTon} trong kho!`,
+                confirmButtonColor: '#000'
+            });
+        });
+    }
+
+    item.soLuong = newQty;
+    try {
+        await updateCartItemDB(item as any);
+    } catch (error) {
+        await loadCart();
+    }
+};
+
+const onQuantityBlur = (item: CartItem) => {
+    if (!item.soLuong || item.soLuong < 1) {
+        item.soLuong = 1;
+        onQuantityChange(item);
+    }
 };
 
 const clearCart = async () => {
@@ -481,5 +604,15 @@ defineExpose({
 /* Optional minimal styles. Most are handled by Tailwind classes */
 .font-heading {
   font-family: 'Inter', sans-serif; /* or your designated heading font */
+}
+
+/* Ẩn mũi tên của input type number */
+.hide-arrows::-webkit-inner-spin-button, 
+.hide-arrows::-webkit-outer-spin-button { 
+  -webkit-appearance: none; 
+  margin: 0; 
+}
+.hide-arrows {
+    -moz-appearance: textfield;
 }
 </style>
