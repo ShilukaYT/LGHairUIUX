@@ -146,9 +146,14 @@ const headers = [
       <!-- Bảng đối soát -->
       <v-card width="100%" elevation="2" rounded="xl">
         <v-card-title class="d-flex flex-column flex-md-row align-md-center justify-space-between pa-6">
-          <div>
-            <h2 class="text-h5 font-weight-bold mb-1">Đối Soát Hóa Đơn Dịch Vụ</h2>
-            <div class="text-subtitle-2 text-medium-emphasis">{{ doiSoatTotal }} kết quả</div>
+          <div class="d-flex align-center gap-3">
+            <v-avatar color="primary" variant="tonal" size="48" rounded="lg">
+              <Receipt class="w-6 h-6 text-primary" />
+            </v-avatar>
+            <div>
+              <h2 class="text-h5 font-weight-bold mb-1">Đối Soát Hóa Đơn Dịch Vụ</h2>
+              <div class="text-subtitle-2 text-medium-emphasis">{{ doiSoatTotal }} kết quả</div>
+            </div>
           </div>
 
           <div class="d-flex align-center gap-3 mt-4 mt-md-0 flex-wrap">

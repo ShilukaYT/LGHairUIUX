@@ -367,7 +367,7 @@ onMounted(() => fetchIncomeData())
             <!-- Header Thẻ Doanh Thu -->
             <div class="d-flex justify-space-between align-center mb-6 position-relative z-index-2">
               <span class="text-subtitle-2 font-weight-black text-success letter-spacing-1">
-                LGHAIR
+                LGHAIR SALON
               </span>
               <v-chip
                 color="success"

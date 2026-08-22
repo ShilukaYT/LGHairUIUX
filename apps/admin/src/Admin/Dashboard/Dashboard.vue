@@ -22,6 +22,7 @@ import {
   RotateCcw, 
   TrendingUp, 
   Trophy, 
+  LayoutDashboard,
   Users, 
   ShoppingBag, 
   Scissors, 
@@ -387,88 +388,111 @@ onMounted(() => {
 <template>
   <v-container fluid class="pa-5">
 
-    <!-- ── Tiêu đề ──────────────────────────────────────────────────────── -->
-    <div class="mb-6">
-      <h1 class="text-h5 font-weight-bold">Tổng quan Salon</h1>
-      <p class="text-body-2 text-medium-emphasis mt-1">Báo cáo hiệu suất kinh doanh theo khoảng thời gian</p>
-    </div>
+    <!-- ═══════ HEADER CARD ═══════ -->
+    <v-card elevation="2" rounded="xl" class="pa-6 mb-6">
+      <div class="d-flex flex-column flex-md-row align-md-center justify-space-between gap-4">
+        <div class="d-flex align-center gap-3">
+          <v-avatar color="primary" variant="tonal" size="48" rounded="lg">
+            <LayoutDashboard class="w-6 h-6 text-primary" />
+          </v-avatar>
+          <div>
+            <h1 class="text-h5 font-weight-bold mb-1">Tổng Quan Salon</h1>
+            <p class="text-subtitle-2 text-medium-emphasis mb-0">
+              Báo cáo hiệu suất kinh doanh, doanh thu và xếp hạng theo khoảng thời gian
+            </p>
+          </div>
+        </div>
 
-    <!-- ── Bộ lọc ────────────────────────────────────────────────────────── -->
-    <v-card elevation="0" border class="mb-6">
-      <v-card-text class="pa-4">
-        <v-row align="center" dense>
-          <v-col cols="12" sm="3">
-            <v-text-field
-              v-model="startDate"
-              label="Từ ngày"
-              type="date"
-              variant="outlined"
-              density="comfortable"
-              hide-details
-              color="primary"
-            >
-              <template #prepend-inner>
-                <Calendar class="w-4 h-4 text-slate-400 mr-1" />
-              </template>
-            </v-text-field>
-          </v-col>
-          <v-col cols="12" sm="3">
-            <v-text-field
-              v-model="endDate"
-              label="Đến ngày"
-              type="date"
-              variant="outlined"
-              density="comfortable"
-              hide-details
-              color="primary"
-            >
-              <template #prepend-inner>
-                <Calendar class="w-4 h-4 text-slate-400 mr-1" />
-              </template>
-            </v-text-field>
-          </v-col>
-          <v-col cols="12" sm="4">
-            <v-text-field
-              v-model="searchMaHd"
-              label="Tìm theo mã hóa đơn"
-              variant="outlined"
-              density="comfortable"
-              hide-details
-              clearable
-              placeholder="VD: SP001, HD002..."
-              color="primary"
-              @keyup.enter="fetchAdminData"
-            >
-              <template #prepend-inner>
-                <Search class="w-4 h-4 text-slate-400 mr-1" />
-              </template>
-            </v-text-field>
-          </v-col>
-          <v-col cols="12" sm="2" class="d-flex align-center gap-2">
-            <v-btn
-              color="primary"
-              variant="elevated"
-              :loading="loading"
-              @click="fetchAdminData"
-              style="flex: 1; height: 44px;"
-            >
-              <template #prepend>
-                <Filter class="w-4 h-4" />
-              </template>
-              Lọc
-            </v-btn>
-            <v-btn
-              variant="tonal"
-              icon
-              @click="resetFilter"
-              :title="'Đặt lại'"
-              style="width: 44px; height: 44px; min-width: 44px;"
-            >
-              <RotateCcw class="w-5 h-5" />
-            </v-btn>
-          </v-col>
-        </v-row>
-      </v-card-text>
+        <div class="d-flex align-center gap-2 flex-wrap">
+          <v-btn
+            variant="outlined"
+            color="grey-darken-1"
+            height="40"
+            rounded="lg"
+            class="text-none font-weight-bold"
+            :loading="loading"
+            @click="() => { fetchAdminData(); fetchTopYeuThich(); }"
+          >
+            <template v-slot:prepend><RotateCcw class="w-4 h-4 mr-1" /></template>
+            Làm mới
+          </v-btn>
+        </div>
+      </div>
+    </v-card>
+
+    <!-- ═══════ FILTERS CARD ═══════ -->
+    <v-card variant="outlined" rounded="xl" class="pa-4 mb-6 bg-surface">
+      <div class="d-flex flex-column flex-md-row align-md-center justify-space-between gap-3 flex-wrap">
+        <div class="d-flex align-center gap-3 flex-wrap flex-grow-1">
+          <!-- Từ ngày -->
+          <v-text-field
+            v-model="startDate"
+            label="Từ ngày"
+            type="date"
+            variant="outlined"
+            density="compact"
+            hide-details
+            rounded="lg"
+            style="width: 160px;"
+          ></v-text-field>
+
+          <!-- Đến ngày -->
+          <v-text-field
+            v-model="endDate"
+            label="Đến ngày"
+            type="date"
+            variant="outlined"
+            density="compact"
+            hide-details
+            rounded="lg"
+            style="width: 160px;"
+          ></v-text-field>
+
+          <!-- Tìm mã HD -->
+          <v-text-field
+            v-model="searchMaHd"
+            placeholder="Tìm theo mã hóa đơn (VD: SP001, HD002)..."
+            variant="outlined"
+            density="compact"
+            hide-details
+            clearable
+            rounded="lg"
+            style="min-width: 280px; max-width: 420px;"
+            @keyup.enter="fetchAdminData"
+          >
+            <template v-slot:prepend-inner>
+              <Search class="w-4 h-4 text-medium-emphasis mr-1 shrink-0" />
+            </template>
+          </v-text-field>
+
+          <v-btn
+            color="primary"
+            variant="flat"
+            height="40"
+            rounded="lg"
+            class="text-none font-weight-bold px-4"
+            :loading="loading"
+            @click="fetchAdminData"
+          >
+            <template v-slot:prepend>
+              <Filter class="w-4 h-4 mr-1 shrink-0" />
+            </template>
+            Lọc Dữ Liệu
+          </v-btn>
+        </div>
+
+        <v-btn
+          variant="text"
+          color="primary"
+          rounded="lg"
+          class="text-none font-weight-bold"
+          height="40"
+          @click="resetFilter"
+        >
+          <template v-slot:prepend><RotateCcw class="w-4 h-4 mr-1" /></template>
+          Đặt lại lọc
+        </v-btn>
+      </div>
     </v-card>
 
     <!-- ── Loading / Error ─────────────────────────────────────────────────── -->
@@ -705,15 +729,15 @@ onMounted(() => {
               <p class="mt-3 text-body-2">Không có hóa đơn dịch vụ nào</p>
             </div>
 
-            <v-table v-else fixed-header hover>
+            <v-table v-else fixed-header hover class="border rounded-xl">
               <thead>
-                <tr>
-                  <th class="text-left">Mã HĐ</th>
-                  <th class="text-left">Khách hàng</th>
-                  <th class="text-left">Ngày tạo</th>
-                  <th class="text-right">Tổng tiền</th>
-                  <th class="text-right">Thành tiền</th>
-                  <th class="text-center">Trạng thái</th>
+                <tr class="border-b" style="background-color: rgba(var(--v-theme-on-surface), 0.04);">
+                  <th class="text-left font-weight-bold text-caption text-uppercase py-3">Mã HĐ</th>
+                  <th class="text-left font-weight-bold text-caption text-uppercase py-3">Khách hàng</th>
+                  <th class="text-left font-weight-bold text-caption text-uppercase py-3">Ngày tạo</th>
+                  <th class="text-right font-weight-bold text-caption text-uppercase py-3">Tổng tiền</th>
+                  <th class="text-right font-weight-bold text-caption text-uppercase py-3">Thành tiền</th>
+                  <th class="text-center font-weight-bold text-caption text-uppercase py-3">Trạng thái</th>
                 </tr>
               </thead>
               <tbody>
@@ -752,16 +776,16 @@ onMounted(() => {
               <p class="mt-3 text-body-2">Không có hóa đơn sản phẩm nào</p>
             </div>
 
-            <v-table v-else fixed-header hover>
+            <v-table v-else fixed-header hover class="border rounded-xl">
               <thead>
-                <tr>
-                  <th class="text-left">Mã HĐ</th>
-                  <th class="text-left">Khách hàng</th>
-                  <th class="text-left">Ngày tạo</th>
-                  <th class="text-left">Chi tiết</th>
-                  <th class="text-right">Tổng tiền</th>
-                  <th class="text-right">Thành tiền</th>
-                  <th class="text-center">Trạng thái</th>
+                <tr class="border-b" style="background-color: rgba(var(--v-theme-on-surface), 0.04);">
+                  <th class="text-left font-weight-bold text-caption text-uppercase py-3">Mã HĐ</th>
+                  <th class="text-left font-weight-bold text-caption text-uppercase py-3">Khách hàng</th>
+                  <th class="text-left font-weight-bold text-caption text-uppercase py-3">Ngày tạo</th>
+                  <th class="text-left font-weight-bold text-caption text-uppercase py-3">Chi tiết</th>
+                  <th class="text-right font-weight-bold text-caption text-uppercase py-3">Tổng tiền</th>
+                  <th class="text-right font-weight-bold text-caption text-uppercase py-3">Thành tiền</th>
+                  <th class="text-center font-weight-bold text-caption text-uppercase py-3">Trạng thái</th>
                 </tr>
               </thead>
               <tbody>
@@ -813,177 +837,169 @@ onMounted(() => {
     </template>
   </v-container>
 
-  <!-- Detail Modal & Thermal Receipt Print Template (Đồng bộ 100% với HoaDon.vue) -->
-  <Teleport to="body">
-    <div 
-      v-if="isModalOpen && selectedHd" 
-      class="fixed inset-0 z-[2500] flex items-center justify-center p-4 md:p-6 lg:p-8 bg-slate-950/80 backdrop-blur-md transition-all print:p-0 print:bg-white print:static print:inset-auto"
-      @click="isModalOpen = false"
-    >
-      <div 
-        class="act-modal-container relative w-full max-w-4xl rounded-2xl border shadow-2xl overflow-hidden flex flex-col transition-all duration-300 print:shadow-none print:border-none print:max-w-full print:w-full print:bg-white"
-        :class="isDarkMode ? 'bg-[#1b1b28] border-slate-700/80 text-slate-100' : 'bg-white border-slate-200 text-slate-800'"
-        @click.stop
-      >
-        <!-- Modal Header -->
-        <div class="px-8 md:px-12 py-5 border-b flex items-center justify-between relative overflow-hidden bg-gradient-to-r from-sky-600 via-blue-700 to-indigo-800 text-white print:hidden">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white shadow-md flex-shrink-0">
-              <Receipt class="w-5 h-5" />
-            </div>
-            <div>
-              <h3 class="font-extrabold text-base md:text-lg text-white tracking-wide">
-                HÓA ĐƠN CHI TIẾT
-              </h3>
-              <p class="text-xs text-sky-100 font-mono opacity-90">
-                Mã hóa đơn: #{{ selectedHd.maHd }}
-              </p>
-            </div>
-          </div>
-
-          <div class="flex items-center gap-3">
-            <button 
-              @click="printInvoice" 
-              class="h-9 px-4 text-xs font-extrabold bg-white/20 hover:bg-white/30 text-white rounded-lg border border-white/30 flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
-            >
-              <Printer class="w-4 h-4" /> In Hóa Đơn (Máy in POS)
-            </button>
-            <button 
-              @click="isModalOpen = false" 
-              class="w-9 h-9 rounded-lg bg-white/15 hover:bg-white/25 border border-white/20 flex items-center justify-center text-white transition-all cursor-pointer"
-            >
-              <X class="w-5 h-5" />
-            </button>
+  <!-- ═══════ MODAL: CHI TIẾT HÓA ĐƠN ═══════ -->
+  <v-dialog v-model="isModalOpen" max-width="850px" persistent scrollable>
+    <v-card v-if="selectedHd" rounded="xl">
+      <!-- Dialog Header -->
+      <v-card-title class="pa-6 pb-4 d-flex align-center justify-space-between border-b bg-primary text-white">
+        <div class="d-flex align-center gap-3">
+          <v-avatar color="white" variant="tonal" size="42" rounded="lg">
+            <Receipt class="w-5 h-5 text-white" />
+          </v-avatar>
+          <div>
+            <h3 class="text-h6 font-weight-bold text-white mb-0">
+              HÓA ĐƠN CHI TIẾT
+            </h3>
+            <p class="text-caption text-white opacity-80 mb-0 font-mono">
+              Mã hóa đơn: #{{ selectedHd.maHd }}
+            </p>
           </div>
         </div>
 
-        <!-- Modal Body -->
-        <div class="p-6 md:p-10 flex flex-col items-center justify-center max-h-[80vh] overflow-y-auto custom-scrollbar print:max-h-none print:p-0 print:overflow-visible">
-          
-          <div id="invoice-print" class="w-full max-w-3xl mx-auto px-4 md:px-8 py-2 flex flex-col gap-6 print:max-w-full print:px-0 print:py-0 print:gap-2.5">
-            
-            <!-- Header Tiêu Đề Salon -->
-            <div class="text-center border-b pb-4 print:border-b print:border-black print:pb-1.5">
-              <h1 class="text-2xl print:text-base font-black uppercase tracking-wider text-sky-500 print:text-black mb-1">MINH TÂM HAIR SALON</h1>
-              <p class="text-xs font-medium print:text-[10px] print:text-black" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">Địa chỉ: 123 Đường ABC, Quận X, TP. HCM</p>
-              <p class="text-xs font-extrabold text-sky-600 print:text-[10px] print:text-black mt-0.5">Hotline: 0123.456.789</p>
-            </div>
-
-            <!-- Tiêu đề Phiếu thanh toán khi in máy in thực tế -->
-            <div class="hidden print:block text-center font-extrabold text-xs uppercase tracking-wider border-b border-dashed border-black pb-1.5">
-              PHIẾU THANH TOÁN HÓA ĐƠN
-            </div>
-
-            <!-- Invoice Info Cards Grid -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-5 rounded-xl border print:hidden" :class="isDarkMode ? 'bg-[#242436] border-slate-700/80' : 'bg-slate-50 border-slate-200'">
-              
-              <div class="flex flex-col gap-1.5 text-left items-start overflow-hidden px-2">
-                <span class="text-[11px] font-extrabold uppercase tracking-wider opacity-75 whitespace-nowrap" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">MÃ HÓA ĐƠN</span>
-                <span class="text-xs md:text-sm font-extrabold font-mono text-sky-500 whitespace-nowrap">#{{ selectedHd.maHd }}</span>
-              </div>
-
-              <div class="flex flex-col gap-1.5 text-left items-start overflow-hidden px-2">
-                <span class="text-[11px] font-extrabold uppercase tracking-wider opacity-75 whitespace-nowrap" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">NGÀY TẠO</span>
-                <span class="text-xs font-bold font-mono whitespace-nowrap" :class="isDarkMode ? 'text-slate-200' : 'text-slate-800'">{{ new Date(selectedHd.ngayTao).toLocaleString('vi-VN') }}</span>
-              </div>
-
-              <div class="flex flex-col gap-1.5 text-left items-start overflow-hidden px-2">
-                <span class="text-[11px] font-extrabold uppercase tracking-wider opacity-75 whitespace-nowrap" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">KHÁCH HÀNG</span>
-                <span class="text-xs md:text-sm font-black truncate w-full" :class="isDarkMode ? 'text-white' : 'text-slate-900'">{{ selectedHd.tenKh || selectedHd.khachHang || 'Khách vãng lai' }}</span>
-              </div>
-
-              <div class="flex flex-col gap-1.5 text-left items-start overflow-hidden px-2">
-                <span class="text-[11px] font-extrabold uppercase tracking-wider opacity-75 whitespace-nowrap" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">THU NGÂN</span>
-                <span class="text-xs font-bold truncate w-full" :class="isDarkMode ? 'text-slate-200' : 'text-slate-800'">{{ selectedHd.tenThuNgan || 'Hệ thống' }}</span>
-              </div>
-
-            </div>
-
-            <!-- Khung thông tin hóa đơn DÀNH RIÊNG CHO MÁY IN POS -->
-            <div class="hidden print:flex flex-col gap-1 text-[11px] border-b border-dashed border-black pb-2 font-mono">
-              <div class="flex justify-between"><span>Mã hóa đơn:</span> <strong>#{{ selectedHd.maHd }}</strong></div>
-              <div class="flex justify-between"><span>Ngày tạo:</span> <span>{{ new Date(selectedHd.ngayTao).toLocaleString('vi-VN') }}</span></div>
-              <div class="flex justify-between"><span>Khách hàng:</span> <strong>{{ selectedHd.tenKh || selectedHd.khachHang || 'Khách vãng lai' }}</strong></div>
-              <div class="flex justify-between"><span>Thu ngân:</span> <span>{{ selectedHd.tenThuNgan || 'Hệ thống' }}</span></div>
-            </div>
-
-            <!-- Invoice Items Table -->
-            <div class="overflow-x-auto rounded-xl border print:border-none print:rounded-none print:overflow-visible print:w-full" :class="isDarkMode ? 'border-slate-700/80' : 'border-slate-200'">
-              <table class="w-full text-left text-xs md:text-sm border-collapse min-w-[550px] print:min-w-0 print:w-full print:text-[10px] print:table-fixed">
-                <thead>
-                  <tr :class="[isDarkMode ? 'bg-[#252536] text-slate-200 border-b border-slate-700/80' : 'bg-slate-100 text-slate-700 border-b border-slate-200', 'print:bg-transparent print:text-black print:border-t print:border-b print:border-dashed print:border-black']">
-                    <th class="py-3.5 px-6 font-extrabold uppercase print:py-1 print:px-0 print:w-[50%] print:text-left">Tên Sản phẩm / Dịch vụ</th>
-                    <th class="py-3.5 px-6 font-extrabold uppercase text-center w-20 print:w-[15%] print:py-1 print:px-0 print:text-center">SL</th>
-                    <th class="py-3.5 px-6 font-extrabold uppercase print:py-1 print:px-0 print:hidden">Ghi chú</th>
-                    <th class="py-3.5 px-6 font-extrabold uppercase text-right print:w-[35%] print:py-1 print:px-0 print:text-right">Thành tiền</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y print:divide-y-0" :class="isDarkMode ? 'divide-slate-800' : 'divide-slate-100'">
-                  <tr 
-                    v-for="(item, index) in getInvoiceItems(selectedHd)" 
-                    :key="index"
-                    :class="[isDarkMode ? 'text-slate-200' : 'text-slate-800', 'print:text-black']"
-                  >
-                    <td class="py-4 px-6 font-bold print:py-1 print:px-0 print:font-normal print:w-[50%] print:break-words text-left" :class="isDarkMode ? 'text-white' : 'text-slate-900'">
-                      {{ getItemName(item) }}
-                    </td>
-                    <td class="py-4 px-6 text-center font-bold font-mono print:py-1 print:px-0 print:font-normal print:w-[15%] print:text-center">
-                      {{ getItemQty(item) }}
-                    </td>
-                    <td class="py-4 px-6 print:hidden">
-                      <span class="inline-block px-2.5 py-0.5 rounded text-[10px] font-bold border" :class="isDarkMode ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-600 border-slate-200'">
-                        {{ selectedHd.maHd?.toUpperCase().startsWith('SP') || selectedHd.maHd?.toUpperCase().startsWith('HDSP') ? 'Sản phẩm' : (item.thoThucHien || 'Hệ thống') }}
-                      </span>
-                    </td>
-                    <td class="py-4 px-6 text-right font-black font-mono print:py-1 print:px-0 print:font-bold print:w-[35%] print:text-right" :class="isDarkMode ? 'text-sky-400' : 'text-slate-900'">
-                      {{ getItemPrice(item).toLocaleString() }}₫
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <!-- Total Revenue Footer -->
-            <div class="flex flex-col items-end gap-2 pt-5 px-2 border-t print:pt-2 print:border-t print:border-dashed print:border-black print:items-stretch" :class="isDarkMode ? 'border-slate-700/80' : 'border-slate-200'">
-              <div class="flex items-center justify-between w-full text-xs print:text-[11px]" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">
-                <span>Tạm tính gốc:</span>
-                <strong :class="isDarkMode ? 'text-slate-200' : 'text-slate-700'" class="print:text-black">{{ selectedHd.tongTien?.toLocaleString() }}₫</strong>
-              </div>
-              <div v-if="selectedHd.giamGiaVip" class="flex items-center justify-between w-full text-xs font-bold text-rose-500 print:text-[11px] print:text-black">
-                <span>Giảm giá VIP:</span>
-                <span>-{{ selectedHd.giamGiaVip }}%</span>
-              </div>
-              <div class="flex items-center justify-between w-full text-base md:text-lg font-bold print:text-xs print:pt-1 print:border-t print:border-black">
-                <span :class="isDarkMode ? 'text-slate-300' : 'text-slate-700'" class="print:text-black font-extrabold">TỔNG THANH TOÁN:</span>
-                <span class="font-black text-sky-500 font-mono text-lg md:text-xl print:text-black print:text-sm print:font-extrabold">{{ selectedHd.thanhTien?.toLocaleString() }}₫</span>
-              </div>
-            </div>
-
-            <!-- Lời cảm ơn dành riêng cho trang in hóa đơn máy in nhiệt POS K80 -->
-            <div class="hidden print:flex flex-col items-center justify-center text-center mt-3 pt-3 border-t border-dashed border-black gap-1">
-              <p class="text-[11px] font-bold">Cảm ơn Quý khách & Hẹn gặp lại!</p>
-              <p class="text-[9px]">Hotline CSKH: 0123.456.789 - Website: lghair.vn</p>
-            </div>
-
-          </div>
-        </div>
-
-        <!-- Modal Footer -->
-        <div 
-          class="px-8 md:px-12 py-4 border-t flex items-center justify-center print:hidden transition-colors"
-          :class="isDarkMode ? 'bg-[#242436] border-slate-700/80' : 'bg-slate-50 border-slate-200'"
-        >
-          <button 
-            @click="isModalOpen = false" 
-            class="act-modal-close-btn h-11 px-10 text-xs font-extrabold rounded-xl transition-all cursor-pointer shadow-md flex items-center justify-center"
+        <div class="d-flex align-center gap-2">
+          <v-btn
+            color="white"
+            variant="tonal"
+            height="36"
+            rounded="lg"
+            class="text-none font-weight-bold"
+            @click="printInvoice"
           >
-            <span>Đóng cửa sổ</span>
-          </button>
-        </div>
+            <template v-slot:prepend>
+              <Printer class="w-4 h-4 mr-1" />
+            </template>
+            In POS K80
+          </v-btn>
 
-      </div>
-    </div>
-  </Teleport>
+          <v-btn icon variant="text" density="comfortable" color="white" @click="isModalOpen = false">
+            <X class="w-5 h-5" />
+          </v-btn>
+        </div>
+      </v-card-title>
+
+      <!-- Dialog Body -->
+      <v-card-text class="pa-6">
+        <div id="invoice-print" class="w-100 max-w-3xl mx-auto px-2 py-2 d-flex flex-column gap-4">
+          <!-- Header Tiêu Đề Salon -->
+          <div class="text-center border-b pb-4 print:border-b print:border-black print:pb-1">
+            <h1 class="text-h5 font-weight-black uppercase text-primary print:text-black mb-1">
+              LGHAIR SALON
+            </h1>
+            <p class="text-caption text-medium-emphasis mb-0 print:text-black">
+              Địa chỉ: 123 Cư M'gar, Tỉnh Đắk Lắk
+            </p>
+            <p class="text-caption font-weight-bold text-primary print:text-black mb-0">
+              Hotline: 0123.456.789
+            </p>
+          </div>
+
+          <!-- Header Máy in POS khi In thực tế -->
+          <div class="hidden print:block text-center font-weight-bold text-caption text-uppercase border-b border-dashed border-black pb-2">
+            PHIẾU THANH TOÁN HÓA ĐƠN
+          </div>
+
+          <!-- Info Cards Grid (Desktop View) -->
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-xl border print:hidden" style="background-color: rgba(var(--v-theme-on-surface), 0.03);">
+            <div class="d-flex flex-column gap-1">
+              <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">MÃ HÓA ĐƠN</span>
+              <span class="text-body-2 font-weight-black font-mono text-primary">#{{ selectedHd.maHd }}</span>
+            </div>
+
+            <div class="d-flex flex-column gap-1">
+              <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">NGÀY TẠO</span>
+              <span class="text-body-2 font-weight-bold font-mono">{{ new Date(selectedHd.ngayTao).toLocaleString('vi-VN') }}</span>
+            </div>
+
+            <div class="d-flex flex-column gap-1">
+              <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">KHÁCH HÀNG</span>
+              <span class="text-body-2 font-weight-bold text-truncate">{{ selectedHd.tenKh || selectedHd.khachHang || 'Khách vãng lai' }}</span>
+            </div>
+
+            <div class="d-flex flex-column gap-1">
+              <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">THU NGÂN</span>
+              <span class="text-body-2 font-weight-bold text-truncate">{{ selectedHd.tenThuNgan || 'Hệ thống' }}</span>
+            </div>
+          </div>
+
+          <!-- Invoice Info print for POS -->
+          <div class="hidden print:flex flex-column gap-1 text-caption border-b border-dashed border-black pb-2 font-mono">
+            <div class="d-flex justify-space-between"><span>Mã hóa đơn:</span> <strong>#{{ selectedHd.maHd }}</strong></div>
+            <div class="d-flex justify-space-between"><span>Ngày tạo:</span> <span>{{ new Date(selectedHd.ngayTao).toLocaleString('vi-VN') }}</span></div>
+            <div class="d-flex justify-space-between"><span>Khách hàng:</span> <strong>{{ selectedHd.tenKh || selectedHd.khachHang || 'Khách vãng lai' }}</strong></div>
+            <div class="d-flex justify-space-between"><span>Thu ngân:</span> <span>{{ selectedHd.tenThuNgan || 'Hệ thống' }}</span></div>
+          </div>
+
+          <!-- Invoice Items Table -->
+          <v-table density="compact" class="border rounded-xl print:border-none" hover>
+            <thead>
+              <tr class="border-b print:bg-transparent print:border-t print:border-b print:border-dashed print:border-black" style="background-color: rgba(var(--v-theme-on-surface), 0.04);">
+                <th class="py-2.5 px-4 font-weight-bold text-caption text-uppercase text-left print:w-[50%]">Tên Sản phẩm / Dịch vụ</th>
+                <th class="py-2.5 px-4 font-weight-bold text-caption text-uppercase text-center w-20 print:w-[15%]">SL</th>
+                <th class="py-2.5 px-4 font-weight-bold text-caption text-uppercase text-left print:hidden">Ghi chú</th>
+                <th class="py-2.5 px-4 font-weight-bold text-caption text-uppercase text-right print:w-[35%]">Thành tiền</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr 
+                v-for="(item, index) in getInvoiceItems(selectedHd)" 
+                :key="index"
+              >
+                <td class="py-2.5 px-4 font-weight-bold print:py-1 print:px-0">
+                  {{ getItemName(item) }}
+                </td>
+                <td class="py-2.5 px-4 text-center font-mono font-weight-bold print:py-1 print:px-0">
+                  {{ getItemQty(item) }}
+                </td>
+                <td class="py-2.5 px-4 print:hidden">
+                  <v-chip size="x-small" variant="tonal" color="grey-darken-1" class="font-weight-bold">
+                    {{ selectedHd.maHd?.toUpperCase().startsWith('SP') || selectedHd.maHd?.toUpperCase().startsWith('HDSP') ? 'Sản phẩm' : (item.thoThucHien || 'Hệ thống') }}
+                  </v-chip>
+                </td>
+                <td class="py-2.5 px-4 text-right font-mono font-weight-bold text-primary print:py-1 print:px-0">
+                  {{ getItemPrice(item).toLocaleString() }}₫
+                </td>
+              </tr>
+            </tbody>
+          </v-table>
+
+          <!-- Total Revenue Footer -->
+          <div class="d-flex flex-column align-end gap-2 pt-4 px-2 border-t print:pt-2 print:border-t print:border-dashed print:border-black">
+            <div class="d-flex justify-space-between w-100 text-body-2">
+              <span class="text-medium-emphasis">Tạm tính gốc:</span>
+              <strong class="font-mono">{{ selectedHd.tongTien?.toLocaleString() }}₫</strong>
+            </div>
+            <div v-if="selectedHd.giamGiaVip" class="d-flex justify-space-between w-100 text-body-2 font-weight-bold text-error">
+              <span>Giảm giá VIP:</span>
+              <span>-{{ selectedHd.giamGiaVip }}%</span>
+            </div>
+            <div class="d-flex justify-space-between w-100 text-h6 font-weight-bold pt-1 border-t">
+              <span class="font-weight-black">TỔNG THANH TOÁN:</span>
+              <span class="font-weight-black font-mono text-primary text-h5">{{ selectedHd.thanhTien?.toLocaleString() }}₫</span>
+            </div>
+          </div>
+
+          <!-- Lời cảm ơn dành riêng cho trang in hóa đơn máy in nhiệt POS K80 -->
+          <div class="hidden print:flex flex-column align-center justify-center text-center mt-3 pt-3 border-t border-dashed border-black gap-1">
+            <p class="text-caption font-weight-bold mb-0">Cảm ơn Quý khách &amp; Hẹn gặp lại!</p>
+            <p class="text-caption text-medium-emphasis mb-0">Hotline CSKH: 0123.456.789 - Website: lghair.vn</p>
+          </div>
+        </div>
+      </v-card-text>
+
+      <!-- Modal Footer -->
+      <v-card-actions class="pa-4 px-6 border-t d-flex justify-end print:hidden">
+        <v-btn
+          variant="outlined"
+          color="grey-darken-1"
+          rounded="lg"
+          class="text-none font-weight-bold px-6"
+          @click="isModalOpen = false"
+        >
+          Đóng cửa sổ
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 
 <style scoped>

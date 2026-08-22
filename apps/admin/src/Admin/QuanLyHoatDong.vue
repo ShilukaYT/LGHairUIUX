@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch, reactive } from 'vue'
 import { 
   Search, 
   Trash2, 
@@ -8,66 +8,15 @@ import {
   Activity, 
   CheckCircle2, 
   XCircle, 
-  Filter, 
-  RefreshCw,
+  RotateCcw,
   Clock,
   User,
   ShieldAlert,
-  RotateCcw,
-  ChevronLeft,
-  ChevronRight,
   FileText,
-  SlidersHorizontal,
   Eye,
-  Info,
-  ArrowRight,
-  Sparkles,
   Layers,
-  Tag,
-  Check
+  ArrowRight
 } from 'lucide-vue-next'
-import Swal from 'sweetalert2'
-import { useTheme } from 'vuetify'
-
-// Helper for default date strings (YYYY-MM-DD)
-const getTodayDateStr = () => {
-  const now = new Date()
-  const y = now.getFullYear()
-  const m = (now.getMonth() + 1).toString().padStart(2, '0')
-  const d = now.getDate().toString().padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
-
-const getFirstDayOfMonthStr = () => {
-  const now = new Date()
-  const y = now.getFullYear()
-  const m = (now.getMonth() + 1).toString().padStart(2, '0')
-  return `${y}-${m}-01`
-}
-
-// ── Theme State Detection (Light / Dark Mode Sync) ──
-let isDarkMode = computed(() => false)
-try {
-  const vuetifyTheme = useTheme()
-  isDarkMode = computed(() => vuetifyTheme.global.name.value === 'dark')
-} catch (e) {
-  isDarkMode = computed(() => {
-    return localStorage.getItem('theme_selection') === 'dark'
-  })
-}
-
-// Watch theme change and update body background to prevent white bottom area
-watch(isDarkMode, (dark) => {
-  if (dark) {
-    document.body.style.backgroundColor = '#141416'
-  } else {
-    document.body.style.backgroundColor = ''
-  }
-}, { immediate: true })
-
-onUnmounted(() => {
-  document.body.style.backgroundColor = ''
-})
 
 interface ActivityLog {
   id: string;
@@ -84,6 +33,10 @@ const isLoading = ref(false)
 const searchQuery = ref('')
 const selectedModule = ref('')
 const selectedStatus = ref('')
+const startDate = ref('')
+const endDate = ref('')
+
+const rawLogs = ref<ActivityLog[]>([])
 
 // Modal Detail State
 const selectedLogDetail = ref<ActivityLog | null>(null)
@@ -99,6 +52,19 @@ const closeLogDetail = () => {
   selectedLogDetail.value = null
 }
 
+// Clear Dialog State
+const showClearDialog = ref(false)
+
+// Snackbar
+const snackbar = ref({
+  show: false,
+  text: '',
+  color: 'success'
+})
+const showSnackbar = (text: string, color = 'success') => {
+  snackbar.value = { show: true, text, color }
+}
+
 interface ParsedChangeItem {
   field: string;
   oldVal: string;
@@ -106,7 +72,7 @@ interface ParsedChangeItem {
   isDiff: boolean;
 }
 
-// Smart parser for ANY activity log detail text
+// Smart parser for activity log detail text
 const logDetailParsed = computed(() => {
   if (!selectedLogDetail.value?.details) {
     return { title: '', items: [] as ParsedChangeItem[] }
@@ -187,28 +153,37 @@ const logDetailParsed = computed(() => {
   }
 })
 
-// Initialize with default date strings (First day of month to today)
-const startDate = ref(getFirstDayOfMonthStr())
-const endDate = ref(getTodayDateStr())
-
-const rawLogs = ref<ActivityLog[]>([])
-
-// Module options (Removed 'Cấu hình Hệ thống')
-const moduleOptions = [
-  { value: '', label: 'Tất cả phân hệ' },
-  { value: 'Khách hàng', label: 'Quản lý Khách hàng' },
-  { value: 'Hóa đơn', label: 'Hóa đơn & Thanh toán' },
-  { value: 'Sản phẩm', label: 'Sản phẩm & Kho hàng' },
-  { value: 'Dịch vụ', label: 'Dịch vụ & Bảng giá' },
-  { value: 'Voucher', label: 'Khuyến mãi & Voucher' },
-  { value: 'Nhân sự', label: 'Nhân sự & Chức vụ' },
-  { value: 'Lương', label: 'Lương & Tiền thưởng' },
-  { value: 'Ca làm', label: 'Ca làm & Điểm danh' },
-  { value: 'Đánh giá', label: 'Đánh giá & Phản hồi' },
-  { value: 'Thông báo', label: 'Thông báo & Gửi Mail' },
-  { value: 'Nhà cung cấp', label: 'Nhà cung cấp & Nhập hàng' },
-  { value: 'Tài khoản', label: 'Tài khoản & Phân quyền' }
-]
+// Dynamic & comprehensive module options
+const moduleOptions = computed(() => {
+  const fromLogs = Array.from(new Set(rawLogs.value.map(l => (l.module || '').trim()).filter(Boolean)))
+  const defaults = [
+    'Hóa đơn',
+    'Khách hàng',
+    'Hỗ trợ khách hàng',
+    'Dịch vụ',
+    'Sản phẩm',
+    'Quản lý kho',
+    'Lương',
+    'Điểm danh',
+    'Ca làm',
+    'Đánh giá',
+    'Khuyến mãi',
+    'Voucher',
+    'Nhân sự',
+    'Kiểu & Màu tóc',
+    'Nhà cung cấp',
+    'Thông báo',
+    'Tài khoản',
+    'Check-in / Check-out',
+    'Đối soát',
+    'Danh mục'
+  ]
+  const allModules = Array.from(new Set([...fromLogs, ...defaults])).filter(Boolean).sort((a, b) => a.localeCompare(b, 'vi'))
+  return [
+    { value: '', label: 'Tất cả phân hệ' },
+    ...allModules.map(m => ({ value: m, label: m }))
+  ]
+})
 
 // Generate rich, structured dummy logs
 const generateDummyLogs = () => {
@@ -344,18 +319,7 @@ const stats = computed(() => {
   return { total, success, failed, today }
 })
 
-// Active filters count
-const activeFilterCount = computed(() => {
-  let count = 0
-  if (searchQuery.value.trim()) count++
-  if (selectedModule.value) count++
-  if (selectedStatus.value) count++
-  if (startDate.value !== getFirstDayOfMonthStr()) count++
-  if (endDate.value !== getTodayDateStr()) count++
-  return count
-})
-
-// Filtered and searched logs
+// Filtered and searched logs with precise, robust module matching
 const filteredLogs = computed(() => {
   return rawLogs.value.filter(log => {
     // Search filter
@@ -365,8 +329,30 @@ const filteredLogs = computed(() => {
       log.details.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
       log.role.toLowerCase().includes(searchQuery.value.toLowerCase())
 
-    // Module filter
-    const matchesModule = !selectedModule.value || log.module.toLowerCase().includes(selectedModule.value.toLowerCase()) || selectedModule.value.toLowerCase().includes(log.module.toLowerCase())
+    // Precise Module filter
+    let matchesModule = true
+    if (selectedModule.value) {
+      const sel = selectedModule.value.trim().toLowerCase()
+      const logMod = (log.module || '').trim().toLowerCase()
+
+      if (logMod === sel) {
+        matchesModule = true
+      } else if (sel === 'khách hàng') {
+        matchesModule = logMod === 'khách hàng' || logMod === 'quản lý khách hàng'
+      } else if (sel === 'hỗ trợ khách hàng') {
+        matchesModule = logMod === 'hỗ trợ khách hàng' || logMod.includes('hỗ trợ') || logMod.includes('chat')
+      } else if (sel === 'điểm danh') {
+        matchesModule = logMod === 'điểm danh'
+      } else if (sel === 'ca làm') {
+        matchesModule = logMod === 'ca làm' || logMod === 'ca làm việc'
+      } else if (sel === 'quản lý kho') {
+        matchesModule = logMod === 'quản lý kho' || logMod === 'kho'
+      } else if (sel === 'lương') {
+        matchesModule = logMod === 'lương' || logMod === 'bảng lương' || logMod === 'quản lý lương'
+      } else {
+        matchesModule = logMod.includes(sel) || sel.includes(logMod)
+      }
+    }
 
     // Status filter
     const matchesStatus = !selectedStatus.value || log.status === selectedStatus.value
@@ -376,19 +362,23 @@ const filteredLogs = computed(() => {
     if (startDate.value) {
       const start = new Date(startDate.value + 'T00:00:00')
       const logDate = new Date(log.timestamp)
-      matchesDate = matchesDate && logDate >= start
+      if (!isNaN(start.getTime()) && !isNaN(logDate.getTime())) {
+        matchesDate = matchesDate && logDate >= start
+      }
     }
     if (endDate.value) {
       const end = new Date(endDate.value + 'T23:59:59')
       const logDate = new Date(log.timestamp)
-      matchesDate = matchesDate && logDate <= end
+      if (!isNaN(end.getTime()) && !isNaN(logDate.getTime())) {
+        matchesDate = matchesDate && logDate <= end
+      }
     }
 
     return matchesSearch && matchesModule && matchesStatus && matchesDate
   })
 })
 
-// Pagination variables
+// Pagination
 const currentPage = ref(1)
 const perPage = ref(10)
 
@@ -400,34 +390,6 @@ const pagedLogs = computed(() => {
   const start = (currentPage.value - 1) * perPage.value
   return filteredLogs.value.slice(start, start + perPage.value)
 })
-
-const visiblePages = computed(() => {
-  const pages = []
-  const total = totalPages.value
-  const current = currentPage.value
-  
-  let start = Math.max(1, current - 2)
-  let end = Math.min(total, current + 2)
-  
-  if (end - start + 1 < 5) {
-    if (start === 1) {
-      end = Math.min(total, start + 4)
-    } else if (end === total) {
-      start = Math.max(1, end - 4)
-    }
-  }
-  
-  for (let i = start; i <= end; i++) {
-    if (i >= 1 && i <= total) pages.push(i)
-  }
-  return pages
-})
-
-const changePage = (page: number) => {
-  if (page >= 1 && page <= totalPages.value) {
-    currentPage.value = page
-  }
-}
 
 watch([searchQuery, selectedModule, selectedStatus, startDate, endDate], () => {
   currentPage.value = 1
@@ -446,77 +408,54 @@ const formatDate = (isoString: string) => {
   return `${d}/${m}/${y} ${h}:${min}:${sec}`
 }
 
-const getModuleBadgeClass = (module: string) => {
-  const modLower = module.toLowerCase()
-
-  if (isDarkMode.value) {
-    if (modLower.includes('nhân sự')) return 'bg-sky-950/80 text-sky-300 border-sky-800/70'
-    if (modLower.includes('lương')) return 'bg-emerald-950/80 text-emerald-300 border-emerald-800/70'
-    if (modLower.includes('tài khoản')) return 'bg-indigo-950/80 text-indigo-300 border-indigo-800/70'
-    if (modLower.includes('dịch vụ')) return 'bg-purple-950/80 text-purple-300 border-purple-800/70'
-    if (modLower.includes('ca làm') || modLower.includes('điểm danh')) return 'bg-blue-950/80 text-blue-300 border-blue-800/70'
-    if (modLower.includes('hóa đơn') || modLower.includes('thanh toán')) return 'bg-teal-950/80 text-teal-300 border-teal-800/70'
-    if (modLower.includes('khách hàng')) return 'bg-cyan-950/80 text-cyan-300 border-cyan-800/70'
-    if (modLower.includes('sản phẩm') || modLower.includes('kho')) return 'bg-amber-950/80 text-amber-300 border-amber-800/70'
-    if (modLower.includes('voucher') || modLower.includes('khuyến mãi')) return 'bg-rose-950/80 text-rose-300 border-rose-800/70'
-    if (modLower.includes('đánh giá')) return 'bg-yellow-950/80 text-yellow-300 border-yellow-800/70'
-    if (modLower.includes('thông báo')) return 'bg-violet-950/80 text-violet-300 border-violet-800/70'
-    if (modLower.includes('nhà cung cấp')) return 'bg-orange-950/80 text-orange-300 border-orange-800/70'
-    return 'bg-slate-800 text-slate-300 border-slate-700'
+const getInitials = (name: string) => {
+  if (!name) return 'AD'
+  const parts = name.trim().split(' ')
+  if (parts.length === 1 && parts[0]) {
+    return parts[0].substring(0, 2).toUpperCase()
   }
-
-  if (modLower.includes('nhân sự')) return 'bg-sky-100/80 text-sky-800 border-sky-300/70'
-  if (modLower.includes('lương')) return 'bg-emerald-100/80 text-emerald-800 border-emerald-300/70'
-  if (modLower.includes('tài khoản')) return 'bg-indigo-100/80 text-indigo-800 border-indigo-300/70'
-  if (modLower.includes('dịch vụ')) return 'bg-purple-100/80 text-purple-800 border-purple-300/70'
-  if (modLower.includes('ca làm') || modLower.includes('điểm danh')) return 'bg-blue-100/80 text-blue-800 border-blue-300/70'
-  if (modLower.includes('hóa đơn') || modLower.includes('thanh toán')) return 'bg-teal-100/80 text-teal-800 border-teal-300/70'
-  if (modLower.includes('khách hàng')) return 'bg-cyan-100/80 text-cyan-800 border-cyan-300/70'
-  if (modLower.includes('sản phẩm') || modLower.includes('kho')) return 'bg-amber-100/80 text-amber-800 border-amber-300/70'
-  if (modLower.includes('voucher') || modLower.includes('khuyến mãi')) return 'bg-rose-100/80 text-rose-800 border-rose-300/70'
-  if (modLower.includes('đánh giá')) return 'bg-yellow-100/80 text-yellow-800 border-yellow-300/70'
-  if (modLower.includes('thông báo')) return 'bg-violet-100/80 text-violet-800 border-violet-300/70'
-  if (modLower.includes('nhà cung cấp')) return 'bg-orange-100/80 text-orange-800 border-orange-300/70'
-  return 'bg-slate-100 text-slate-700 border-slate-200'
+  const first = parts[parts.length - 2]?.substring(0, 1) || ''
+  const second = parts[parts.length - 1]?.substring(0, 1) || ''
+  return (first + second).toUpperCase() || 'AD'
 }
 
-const clearLogs = () => {
-  Swal.fire({
-    title: 'Xác nhận dọn dẹp?',
-    text: 'Bạn có chắc chắn muốn xóa toàn bộ nhật ký hoạt động này không? Hành động này không thể hoàn tác.',
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonColor: '#0284c7',
-    cancelButtonColor: '#64748b',
-    confirmButtonText: 'Đồng ý xóa',
-    cancelButtonText: 'Hủy bỏ',
-    customClass: {
-      popup: 'rounded-xl',
-      confirmButton: 'rounded-lg px-5 py-2.5 font-bold',
-      cancelButton: 'rounded-lg px-5 py-2.5 font-bold'
-    }
-  }).then((result) => {
-    if (result.isConfirmed) {
-      rawLogs.value = []
-      localStorage.setItem('lghair_activities', '[]')
-      Swal.fire({
-        icon: 'success',
-        title: 'Đã xóa',
-        text: 'Đã dọn dẹp sạch nhật ký hoạt động.',
-        timer: 1500,
-        showConfirmButton: false,
-        customClass: { popup: 'rounded-xl' }
-      })
-    }
-  })
+const getModuleColor = (module: string) => {
+  const modLower = (module || '').toLowerCase().trim()
+  if (modLower === 'hỗ trợ khách hàng') return 'indigo'
+  if (modLower.includes('nhân sự') || modLower.includes('chức vụ')) return 'info'
+  if (modLower.includes('lương')) return 'success'
+  if (modLower.includes('tài khoản')) return 'primary'
+  if (modLower.includes('dịch vụ') || modLower.includes('combo')) return 'purple'
+  if (modLower === 'điểm danh') return 'cyan'
+  if (modLower.includes('ca làm')) return 'blue'
+  if (modLower.includes('hóa đơn') || modLower.includes('thanh toán')) return 'teal'
+  if (modLower === 'khách hàng') return 'light-blue'
+  if (modLower.includes('sản phẩm') || modLower.includes('kho')) return 'warning'
+  if (modLower.includes('voucher') || modLower.includes('khuyến mãi') || modLower.includes('sale')) return 'pink'
+  if (modLower.includes('đánh giá')) return 'amber'
+  if (modLower.includes('thông báo')) return 'deep-purple'
+  if (modLower.includes('nhà cung cấp')) return 'orange'
+  if (modLower.includes('kiểu') || modLower.includes('màu tóc')) return 'lime-darken-3'
+  if (modLower.includes('check-in') || modLower.includes('check-out')) return 'light-green-darken-2'
+  if (modLower.includes('đối soát')) return 'deep-orange'
+  if (modLower.includes('danh mục')) return 'brown'
+  return 'blue-grey'
+}
+
+// Clear all logs
+const handleConfirmClear = () => {
+  rawLogs.value = []
+  localStorage.setItem('lghair_activities', '[]')
+  showClearDialog.value = false
+  showSnackbar("Đã dọn sạch toàn bộ nhật ký hoạt động!", "success")
 }
 
 const resetFilters = () => {
   searchQuery.value = ''
   selectedModule.value = ''
   selectedStatus.value = ''
-  startDate.value = getFirstDayOfMonthStr()
-  endDate.value = getTodayDateStr()
+  startDate.value = ''
+  endDate.value = ''
   loadLogs()
 }
 
@@ -526,818 +465,526 @@ onMounted(() => {
 </script>
 
 <template>
-  <div 
-    class="activity-page min-h-screen w-full flex flex-col p-4 md:p-6 lg:p-8 font-sans antialiased relative transition-colors duration-300"
-    :class="isDarkMode ? 'bg-[#141416] text-slate-100' : 'bg-slate-50 text-slate-800'"
-  >
-    
-    <!-- Header Area -->
-    <div class="flex-shrink-0 w-full mb-6 z-10">
-      <div 
-        class="act-header-card flex flex-col lg:flex-row lg:items-center justify-between gap-6 rounded-xl border shadow-xs transition-colors duration-300"
-        :class="isDarkMode ? 'bg-[#1e1e2d] border-slate-700/80' : 'bg-white border-slate-200/90'"
-      >
-        <div class="flex items-center gap-5">
-          <div class="w-14 h-14 md:w-16 md:h-16 rounded-xl bg-gradient-to-br from-sky-500 via-sky-600 to-blue-700 flex items-center justify-center text-white shadow-md shadow-sky-500/25 flex-shrink-0">
-            <Activity class="w-7 h-7 md:w-8 md:h-8" />
-          </div>
-          <div>
-            <h1 
-              class="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-3"
-              :class="isDarkMode ? 'text-white' : 'text-slate-900'"
-            >
-              NHẬT KÝ HOẠT ĐỘNG
-              <span 
-                class="inline-flex items-center px-3 py-0.5 rounded-full text-xs font-extrabold border"
-                :class="isDarkMode ? 'bg-sky-950/80 text-sky-300 border-sky-800' : 'bg-sky-50 text-sky-700 border-sky-200'"
-              >
-                LGHair Admin
-              </span>
-            </h1>
-            <p class="text-xs md:text-sm mt-1 font-medium" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">
-              Theo dõi, truy vết và ghi nhận lịch sử thao tác hệ thống tự động
-            </p>
-          </div>
-        </div>
-
-        <div class="flex items-center gap-3">
-          <!-- Refresh Button (Icon-only) -->
-          <button 
-            @click="loadLogs" 
-            title="Làm mới dữ liệu"
-            class="w-11 h-11 rounded-lg border transition-all duration-200 cursor-pointer shadow-2xs flex items-center justify-center"
-            :class="isDarkMode ? 'bg-[#282836] border-slate-700 hover:border-slate-600 text-slate-200' : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300 hover:border-sky-400'"
-          >
-            <RefreshCw class="w-5 h-5 text-sky-500" :class="{ 'animate-spin': isLoading }" />
-          </button>
-          
-          <button 
-            @click="clearLogs" 
-            :disabled="rawLogs.length === 0"
-            class="h-11 px-5 text-xs font-bold rounded-lg border transition-all duration-200 cursor-pointer shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            :class="isDarkMode ? 'bg-rose-950/40 border-rose-800/80 text-rose-300 hover:bg-rose-900/50' : 'bg-rose-50 hover:bg-rose-100 text-rose-600 border-rose-200 hover:border-rose-300'"
-          >
-            <Trash2 class="w-4 h-4" />
-            <span>Dọn sạch nhật ký</span>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Quick Stats Cards -->
-    <div class="flex-shrink-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5 mb-6 z-10">
+  <v-container fluid class="pa-6 fill-height align-start" style="min-height: 100vh;">
+    <div class="d-flex flex-column gap-6 w-100">
       
-      <!-- Card 1: Today Logs -->
-      <div 
-        class="py-6 px-6 min-h-[115px] rounded-xl border shadow-2xs transition-all duration-200 flex items-center justify-between"
-        :class="isDarkMode ? 'bg-[#1e1e2d] border-slate-700/80' : 'bg-white border-slate-200/90 hover:border-sky-300'"
-      >
-        <div class="flex flex-col justify-center my-auto">
-          <p class="text-xs font-extrabold uppercase tracking-wider mb-2" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">HOẠT ĐỘNG HÔM NAY</p>
-          <div class="flex items-center gap-2.5">
-            <span class="text-3xl font-black font-mono tracking-tight leading-none" :class="isDarkMode ? 'text-white' : 'text-slate-900'">{{ stats.today }}</span>
-            <span class="text-xs font-bold px-2.5 py-1 rounded-md border" :class="isDarkMode ? 'bg-sky-950 text-sky-300 border-sky-800' : 'bg-sky-50 text-sky-700 border-sky-200'">bản ghi</span>
-          </div>
-        </div>
-        <div class="w-12 h-12 rounded-lg border flex items-center justify-center shadow-2xs flex-shrink-0 my-auto" :class="isDarkMode ? 'bg-sky-950/60 border-sky-800/80 text-sky-400' : 'bg-sky-50 border-sky-200 text-sky-600'">
-          <Clock class="w-6 h-6 stroke-[2.25px]" />
-        </div>
-      </div>
+      <!-- Snackbar -->
+      <v-snackbar v-model="snackbar.show" :color="snackbar.color" location="top right" :timeout="3000">
+        {{ snackbar.text }}
+        <template v-slot:actions>
+          <v-btn variant="text" icon density="compact" @click="snackbar.show = false">
+            <X class="w-4 h-4" />
+          </v-btn>
+        </template>
+      </v-snackbar>
 
-      <!-- Card 2: Total Logs -->
-      <div 
-        class="py-6 px-6 min-h-[115px] rounded-xl border shadow-2xs transition-all duration-200 flex items-center justify-between"
-        :class="isDarkMode ? 'bg-[#1e1e2d] border-slate-700/80' : 'bg-white border-slate-200/90 hover:border-blue-300'"
-      >
-        <div class="flex flex-col justify-center my-auto">
-          <p class="text-xs font-extrabold uppercase tracking-wider mb-2" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">TỔNG GHI NHẬN</p>
-          <div class="flex items-center gap-2.5">
-            <span class="text-3xl font-black text-sky-600 font-mono tracking-tight leading-none">{{ stats.total }}</span>
-            <span class="text-xs font-bold" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">thao tác</span>
-          </div>
-        </div>
-        <div class="w-12 h-12 rounded-lg border flex items-center justify-center shadow-2xs flex-shrink-0 my-auto" :class="isDarkMode ? 'bg-blue-950/60 border-blue-800/80 text-blue-400' : 'bg-blue-50 border-blue-200 text-blue-600'">
-          <Activity class="w-6 h-6 stroke-[2.25px]" />
-        </div>
-      </div>
-
-      <!-- Card 3: Success Logs -->
-      <div 
-        class="py-6 px-6 min-h-[115px] rounded-xl border shadow-2xs transition-all duration-200 flex items-center justify-between"
-        :class="isDarkMode ? 'bg-[#1e1e2d] border-slate-700/80' : 'bg-white border-slate-200/90 hover:border-emerald-300'"
-      >
-        <div class="flex flex-col justify-center my-auto">
-          <p class="text-xs font-extrabold uppercase tracking-wider mb-2" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">THÀNH CÔNG</p>
-          <div class="flex items-center gap-2.5">
-            <span class="text-3xl font-black text-emerald-600 font-mono tracking-tight leading-none">{{ stats.success }}</span>
-            <span class="text-xs font-bold px-2.5 py-1 rounded-md border" :class="isDarkMode ? 'bg-emerald-950 text-emerald-300 border-emerald-800' : 'bg-emerald-50 text-emerald-700 border-emerald-200'">bản ghi</span>
-          </div>
-        </div>
-        <div class="w-12 h-12 rounded-lg border flex items-center justify-center shadow-2xs flex-shrink-0 my-auto" :class="isDarkMode ? 'bg-emerald-950/60 border-emerald-800/80 text-emerald-400' : 'bg-emerald-50 border-emerald-200 text-emerald-600'">
-          <CheckCircle2 class="w-6 h-6 stroke-[2.25px]" />
-        </div>
-      </div>
-
-      <!-- Card 4: Failed Logs -->
-      <div 
-        class="py-6 px-6 min-h-[115px] rounded-xl border shadow-2xs transition-all duration-200 flex items-center justify-between"
-        :class="isDarkMode ? 'bg-[#1e1e2d] border-slate-700/80' : 'bg-white border-slate-200/90 hover:border-rose-300'"
-      >
-        <div class="flex flex-col justify-center my-auto">
-          <p class="text-xs font-extrabold uppercase tracking-wider mb-2" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">THẤT BẠI / CẢNH BÁO</p>
-          <div class="flex items-center gap-2.5">
-            <span class="text-3xl font-black text-rose-600 font-mono tracking-tight leading-none">{{ stats.failed }}</span>
-            <span class="text-xs font-bold px-2.5 py-1 rounded-md border" :class="isDarkMode ? 'bg-rose-950 text-rose-300 border-rose-800' : 'bg-rose-50 text-rose-700 border-rose-200'">sự cố</span>
-          </div>
-        </div>
-        <div class="w-12 h-12 rounded-lg border flex items-center justify-center shadow-2xs flex-shrink-0 my-auto" :class="isDarkMode ? 'bg-rose-950/60 border-rose-800/80 text-rose-400' : 'bg-rose-50 border-rose-200 text-rose-600'">
-          <ShieldAlert class="w-6 h-6 stroke-[2.25px]" />
-        </div>
-      </div>
-
-    </div>
-
-    <!-- Filters Block -->
-    <div 
-      class="act-filter-card flex-shrink-0 rounded-xl border shadow-xs mb-6 z-10 transition-colors duration-300"
-      :class="isDarkMode ? 'bg-[#1e1e2d] border-slate-700/80' : 'bg-white border-slate-200/90'"
-    >
-      <div class="flex flex-col gap-6">
-        
-        <!-- Filter Header -->
-        <div class="flex items-center justify-between border-b pb-4" :class="isDarkMode ? 'border-slate-700/80' : 'border-slate-150'">
-          <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-lg border flex items-center justify-center text-sky-600" :class="isDarkMode ? 'bg-sky-950/80 border-sky-800' : 'bg-sky-50 border-sky-200'">
-              <SlidersHorizontal class="w-4.5 h-4.5" />
-            </div>
-            <span class="text-xs md:text-sm font-extrabold uppercase tracking-wider" :class="isDarkMode ? 'text-slate-200' : 'text-slate-800'">Bộ lọc tìm kiếm nâng cao</span>
-            <span v-if="activeFilterCount > 0" class="px-3 py-0.5 text-xs font-extrabold bg-sky-600 text-white rounded-full">
-              Đang lọc ({{ activeFilterCount }})
-            </span>
-          </div>
-
-          <button 
-            v-if="activeFilterCount > 0"
-            @click="resetFilters" 
-            class="inline-flex items-center gap-1.5 text-xs font-bold text-sky-600 hover:text-sky-500 transition-colors cursor-pointer"
-          >
-            <RotateCcw class="w-3.5 h-3.5" /> Đặt lại tất cả
-          </button>
-        </div>
-        
-        <!-- Filter Controls Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 md:gap-6">
-          
-          <!-- Text Search Field -->
-          <div class="flex flex-col gap-2 md:col-span-2">
-            <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Tìm kiếm thông tin</label>
-            <div class="relative flex items-center">
-              <Search class="absolute left-4 w-4 h-4 pointer-events-none z-10" :class="isDarkMode ? 'text-slate-400' : 'text-slate-400'" />
-              <input 
-                v-model="searchQuery" 
-                placeholder="Nhập tên người thực hiện, nội dung thao tác, vai trò..." 
-                class="act-input act-input-styled w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
-                :class="isDarkMode ? 'dark-mode-input' : 'light-mode-input'"
-              >
-              <button v-if="searchQuery" @click="searchQuery = ''" class="absolute right-4 text-slate-400 hover:text-slate-600 p-1 rounded-md z-10">
-                <X class="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          <!-- Module Select Field -->
-          <div class="flex flex-col gap-2">
-            <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Phân hệ hoạt động</label>
-            <div class="relative flex items-center">
-              <select 
-                v-model="selectedModule" 
-                class="act-select act-select-styled w-full text-xs md:text-sm font-medium outline-none appearance-none cursor-pointer transition-all box-border"
-                :class="isDarkMode ? 'dark-mode-input' : 'light-mode-input'"
-              >
-                <option 
-                  v-for="opt in moduleOptions" 
-                  :key="opt.value" 
-                  :value="opt.value"
-                  :class="isDarkMode ? 'bg-[#2b2b36] text-white py-1.5' : 'text-slate-800 py-1.5'"
-                >
-                  {{ opt.label }}
-                </option>
-              </select>
-              <span class="pointer-events-none absolute right-4 text-xs text-sky-600 font-bold z-10">▼</span>
-            </div>
-          </div>
-
-          <!-- Status Select Field -->
-          <div class="flex flex-col gap-2">
-            <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Trạng thái kết quả</label>
-            <div class="relative flex items-center">
-              <select 
-                v-model="selectedStatus" 
-                class="act-select act-select-styled w-full text-xs md:text-sm font-medium outline-none appearance-none cursor-pointer transition-all box-border"
-                :class="isDarkMode ? 'dark-mode-input' : 'light-mode-input'"
-              >
-                <option value="" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'text-slate-800'">Tất cả trạng thái</option>
-                <option value="Thành công" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'text-slate-800'">Thành công</option>
-                <option value="Thất bại" :class="isDarkMode ? 'bg-[#2b2b36] text-white' : 'text-slate-800'">Thất bại / Cảnh báo</option>
-              </select>
-              <span class="pointer-events-none absolute right-4 text-xs text-sky-600 font-bold z-10">▼</span>
-            </div>
-          </div>
-
-          <!-- Start Date Field -->
-          <div class="flex flex-col gap-2">
-            <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Từ ngày</label>
-            <div class="relative flex items-center">
-              <input 
-                type="date" 
-                v-model="startDate" 
-                class="act-date-input act-date-styled w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
-                :class="isDarkMode ? 'dark-mode-input [color-scheme:dark]' : 'light-mode-input'"
-              >
-            </div>
-          </div>
-
-          <!-- End Date Field -->
-          <div class="flex flex-col gap-2">
-            <label class="text-[11px] font-extrabold uppercase tracking-wide" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">Đến ngày</label>
-            <div class="relative flex items-center">
-              <input 
-                type="date" 
-                v-model="endDate" 
-                class="act-date-input act-date-styled w-full text-xs md:text-sm font-medium outline-none transition-all box-border"
-                :class="isDarkMode ? 'dark-mode-input [color-scheme:dark]' : 'light-mode-input'"
-              >
-            </div>
-          </div>
-
-          <!-- Action Buttons Area -->
-          <div class="flex items-end justify-end md:col-span-2">
-            <button 
-              @click="resetFilters" 
-              class="act-reset-btn h-11 px-6 text-xs font-extrabold rounded-lg transition-all cursor-pointer shadow-xs flex items-center justify-center gap-2"
-            >
-              <RotateCcw class="w-4 h-4 stroke-[2.2px]" />
-              <span>Đặt lại bộ lọc</span>
-            </button>
-          </div>
-
-        </div>
-
-        <!-- Filter Counter Status -->
-        <div class="border-t pt-3 flex items-center justify-between text-xs font-medium" :class="isDarkMode ? 'border-slate-700/80 text-slate-150' : 'border-slate-150 text-slate-500'">
-          <div>
-            Hiển thị <span class="font-bold text-sky-600">{{ filteredLogs.length }}</span> / {{ rawLogs.length }} bản ghi trùng khớp
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Main Table Container -->
-    <div 
-      class="act-table-card flex-1 w-full rounded-xl border shadow-xs relative overflow-hidden flex flex-col z-10 min-h-[400px] transition-colors duration-300"
-      :class="isDarkMode ? 'bg-[#1e1e2d] border-slate-700/80' : 'bg-white border-slate-200/90'"
-    >
-      
-      <!-- Loader Overlay -->
-      <div 
-        v-if="isLoading" 
-        class="absolute inset-0 z-50 flex items-center justify-center transition-all"
-        :class="isDarkMode ? 'bg-[#141416]/90' : 'bg-white/90 backdrop-blur-xs'"
-      >
-        <div class="flex flex-col items-center gap-3 p-6 rounded-xl shadow-lg border" :class="isDarkMode ? 'bg-[#1e1e2d] border-slate-700' : 'bg-white border-sky-100'">
-          <div class="w-10 h-10 border-3 border-slate-200 border-t-sky-600 rounded-full animate-spin"></div>
-          <span class="text-xs font-extrabold text-sky-600 tracking-wider uppercase">Đang nạp dữ liệu nhật ký...</span>
-        </div>
-      </div>
-
-      <!-- Table Scroll Wrapper -->
-      <div class="flex-grow overflow-x-auto custom-scrollbar">
-        <table class="w-full text-left text-xs md:text-sm border-collapse min-w-[900px]">
-          <thead>
-            <tr :class="isDarkMode ? 'bg-[#252536] text-slate-200 border-b border-slate-700/80' : 'bg-slate-900 text-white'">
-              <th class="py-4 px-6 font-extrabold uppercase tracking-wider w-44 whitespace-nowrap">Thời Gian</th>
-              <th class="py-4 px-6 font-extrabold uppercase tracking-wider w-56 whitespace-nowrap">Người Thực Hiện</th>
-              <th class="py-4 px-6 font-extrabold uppercase tracking-wider w-48 whitespace-nowrap">Hành Động</th>
-              <th class="py-4 px-6 font-extrabold uppercase tracking-wider">Chi Tiết Thao Tác</th>
-              <th class="py-4 px-6 font-extrabold uppercase tracking-wider w-32 text-center whitespace-nowrap">Phân Hệ</th>
-              <th class="py-4 px-6 font-extrabold uppercase tracking-wider w-32 text-center whitespace-nowrap">Trạng Thái</th>
-              <th class="py-4 px-4 font-extrabold uppercase tracking-wider w-24 text-center whitespace-nowrap">Chi Tiết</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y" :class="isDarkMode ? 'divide-slate-800/80' : 'divide-slate-100'">
-            
-            <!-- Empty State -->
-            <tr v-if="!isLoading && pagedLogs.length === 0">
-              <td colspan="7" class="p-14 text-center text-slate-500">
-                <div class="flex flex-col items-center gap-3 max-w-md mx-auto">
-                  <div class="w-14 h-14 rounded-xl flex items-center justify-center text-sky-600 border shadow-2xs" :class="isDarkMode ? 'bg-sky-950/60 border-sky-800' : 'bg-sky-50 border-sky-100'">
-                    <FileText class="w-7 h-7 stroke-[1.5px]" />
-                  </div>
-                  <div>
-                    <h3 class="font-extrabold text-base mb-1" :class="isDarkMode ? 'text-white' : 'text-slate-800'">Không tìm thấy bản ghi phù hợp</h3>
-                    <p class="text-xs leading-relaxed" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">Không có nhật ký nào trùng khớp với từ khóa hoặc điều kiện bộ lọc của bạn.</p>
-                  </div>
-                  <button 
-                    @click="resetFilters" 
-                    class="mt-1 h-9 px-4 text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 rounded-lg transition-all shadow-2xs flex items-center gap-2 cursor-pointer"
-                  >
-                    <RotateCcw class="w-3.5 h-3.5" /> Đặt lại bộ lọc
-                  </button>
-                </div>
-              </td>
-            </tr>
-
-            <!-- Log Items Rows -->
-            <tr 
-              v-for="log in pagedLogs" 
-              :key="log.id"
-              @click="openLogDetail(log)"
-              class="transition-colors duration-150 group cursor-pointer"
-              :class="isDarkMode ? 'hover:bg-slate-800/70 text-slate-200' : 'hover:bg-sky-50/70 text-slate-700'"
-            >
-              <!-- Timestamp -->
-              <td class="py-4 px-6 font-medium font-mono text-xs whitespace-nowrap" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
-                <div class="flex items-center gap-2">
-                  <Clock class="w-3.5 h-3.5 text-sky-600 flex-shrink-0" />
-                  <span>{{ formatDate(log.timestamp) }}</span>
-                </div>
-              </td>
-
-              <!-- Actor -->
-              <td class="py-4 px-6">
-                <div class="flex items-center gap-3">
-                  <div 
-                    class="w-8 h-8 rounded-lg border flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-2xs"
-                    :class="isDarkMode ? 'bg-sky-950/80 border-sky-800 text-sky-300' : 'bg-sky-50 border-sky-200 text-sky-700'"
-                  >
-                    <User class="w-4 h-4" />
-                  </div>
-                  <div class="min-w-0">
-                    <div class="font-bold text-xs md:text-sm truncate" :class="isDarkMode ? 'text-white' : 'text-slate-800'">{{ log.username }}</div>
-                    <div class="text-[10px] font-bold uppercase tracking-wider truncate" :class="isDarkMode ? 'text-sky-400' : 'text-sky-700'">{{ log.role }}</div>
-                  </div>
-                </div>
-              </td>
-
-              <!-- Action -->
-              <td class="py-4 px-6 font-extrabold whitespace-nowrap">
-                <span 
-                  class="inline-block px-2.5 py-1 rounded-md border text-xs"
-                  :class="isDarkMode ? 'bg-[#2b2b36] border-slate-700 text-slate-200' : 'bg-slate-100 border-slate-200 text-slate-800'"
-                >
-                  {{ log.action }}
-                </span>
-              </td>
-
-              <!-- Details -->
-              <td class="py-4 px-6 leading-relaxed font-medium text-xs md:text-sm" :class="isDarkMode ? 'text-slate-300' : 'text-slate-600'">
-                <div class="line-clamp-2 hover:text-sky-600 transition-colors">
-                  {{ log.details }}
-                </div>
-              </td>
-
-              <!-- Module Badge -->
-              <td class="py-4 px-6 text-center whitespace-nowrap">
-                <span 
-                  class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border shadow-2xs"
-                  :class="getModuleBadgeClass(log.module)"
-                >
-                  {{ log.module }}
-                </span>
-              </td>
-
-              <!-- Status -->
-              <td class="py-4 px-6 text-center whitespace-nowrap">
-                <span 
-                  v-if="log.status === 'Thành công'" 
-                  class="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full border shadow-2xs"
-                  :class="isDarkMode ? 'text-emerald-300 bg-emerald-950/80 border-emerald-800/80' : 'text-emerald-700 bg-emerald-50 border-emerald-200'"
-                >
-                  <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  Thành công
-                </span>
-                <span 
-                  v-else 
-                  class="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-0.5 rounded-full border shadow-2xs"
-                  :class="isDarkMode ? 'text-rose-300 bg-rose-950/80 border-rose-800/80' : 'text-rose-700 bg-rose-50 border-rose-200'"
-                >
-                  <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-                  Thất bại
-                </span>
-              </td>
-
-              <!-- Action button -->
-              <td class="py-4 px-4 text-center whitespace-nowrap">
-                <button 
-                  @click.stop="openLogDetail(log)"
-                  title="Xem chi tiết thao tác"
-                  class="w-8 h-8 rounded-lg border flex items-center justify-center mx-auto transition-all cursor-pointer shadow-2xs"
-                  :class="isDarkMode ? 'bg-[#2b2b36] border-slate-700 hover:border-sky-500 text-sky-400' : 'bg-white border-slate-200 hover:border-sky-400 text-sky-600 hover:bg-sky-50'"
-                >
-                  <Eye class="w-4 h-4" />
-                </button>
-              </td>
-            </tr>
-
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Pagination Footer -->
-      <div 
-        v-if="totalPages > 1" 
-        class="flex-shrink-0 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 border-t"
-        :class="isDarkMode ? 'bg-[#252536] border-slate-700/80 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'"
-      >
-        <div class="text-xs font-bold">
-          Hiển thị trang <span class="text-sky-600">{{ currentPage }}</span> / {{ totalPages }} (Tổng {{ filteredLogs.length }} dòng)
-        </div>
-
-        <div class="flex items-center gap-2">
-          <button 
-            @click="changePage(currentPage - 1)" 
-            :disabled="currentPage === 1"
-            class="h-8 px-3 text-xs font-bold rounded-lg border disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-2xs flex items-center gap-1 cursor-pointer"
-            :class="isDarkMode ? 'bg-[#2b2b36] border-slate-700 text-slate-200 hover:border-slate-600' : 'bg-white border-slate-300 text-slate-700 hover:border-slate-400'"
-          >
-            <ChevronLeft class="w-3.5 h-3.5" />
-            <span class="hidden sm:inline">Trước</span>
-          </button>
-
-          <div class="flex items-center gap-1">
-            <button 
-              v-for="p in visiblePages" 
-              :key="p" 
-              @click="changePage(p)"
-              class="w-8 h-8 text-xs font-bold rounded-lg transition-all shadow-2xs flex items-center justify-center cursor-pointer"
-              :class="currentPage === p ? 'bg-sky-600 text-white font-extrabold shadow-sm' : (isDarkMode ? 'bg-[#2b2b36] text-slate-200 border border-slate-700 hover:border-slate-600' : 'bg-white text-slate-700 border border-slate-300 hover:border-slate-400')"
-            >
-              {{ p }}
-            </button>
-          </div>
-
-          <button 
-            @click="changePage(currentPage + 1)" 
-            :disabled="currentPage === totalPages"
-            class="h-8 px-3 text-xs font-bold rounded-lg border disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-2xs flex items-center gap-1 cursor-pointer"
-            :class="isDarkMode ? 'bg-[#2b2b36] border-slate-700 text-slate-200 hover:border-slate-600' : 'bg-white border-slate-300 text-slate-700 hover:border-slate-400'"
-          >
-            <span class="hidden sm:inline">Sau</span>
-            <ChevronRight class="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- ── Perfectly Balanced Activity Log Detail Modal (Enforced 44px side padding & Non-overlapping Old vs New diff layout) ── -->
-    <Teleport to="body">
-      <div 
-        v-if="showDetailModal && selectedLogDetail" 
-        class="fixed inset-0 z-[2500] flex items-center justify-center p-4 md:p-6 bg-slate-950/80 backdrop-blur-md transition-all"
-        @click="closeLogDetail"
-      >
-        <div 
-          class="act-modal-container relative w-full max-w-3xl rounded-xl border shadow-2xl overflow-hidden flex flex-col transition-all duration-300"
-          :class="isDarkMode ? 'bg-[#1b1b28] border-slate-700/80 text-slate-100' : 'bg-white border-slate-200 text-slate-800'"
-          @click.stop
-        >
-          
-          <!-- Premium Header (Enforced 44px side padding via Scoped CSS) -->
-          <div class="act-modal-header border-b flex items-center justify-between relative overflow-hidden bg-gradient-to-r from-sky-600 via-blue-700 to-indigo-800 text-white">
-            <div class="flex items-center gap-4 z-10">
-              <div class="w-11 h-11 rounded-lg bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white shadow-md flex-shrink-0">
-                <Sparkles class="w-5 h-5" />
+      <!-- ── HEADER BANNER CARD ── -->
+      <v-card width="100%" elevation="2" rounded="xl" class="pa-6">
+        <div class="d-flex flex-column flex-md-row align-md-center justify-space-between gap-4">
+          <div class="d-flex align-center gap-3">
+            <v-avatar color="primary" variant="tonal" size="48" rounded="lg">
+              <Activity class="w-6 h-6 text-primary" />
+            </v-avatar>
+            <div>
+              <div class="d-flex align-center gap-2">
+                <h2 class="text-h5 font-weight-bold mb-0">Nhật Ký Hoạt Động</h2>
+                <v-chip size="x-small" color="primary" variant="tonal" class="font-weight-bold">
+                  LGHair Admin
+                </v-chip>
               </div>
+              <div class="text-subtitle-2 text-medium-emphasis mt-1">
+                Theo dõi, truy vết và ghi nhận lịch sử thao tác hệ thống tự động
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex align-center gap-2 flex-wrap">
+            <v-btn
+              variant="outlined"
+              color="grey-darken-1"
+              rounded="lg"
+              class="text-none font-weight-bold"
+              height="40"
+              :loading="isLoading"
+              @click="loadLogs"
+            >
+              <template v-slot:prepend><RotateCcw class="w-4 h-4 mr-1" /></template>
+              Làm mới
+            </v-btn>
+
+            <v-btn
+              color="error"
+              variant="tonal"
+              rounded="lg"
+              class="text-none font-weight-bold"
+              height="40"
+              :disabled="rawLogs.length === 0"
+              @click="showClearDialog = true"
+            >
+              <template v-slot:prepend><Trash2 class="w-4 h-4 mr-1" /></template>
+              Dọn sạch nhật ký
+            </v-btn>
+          </div>
+        </div>
+      </v-card>
+
+      <!-- ── KPI STATS CARDS ── -->
+      <v-row dense>
+        <!-- Card 1: Today Logs -->
+        <v-col cols="12" sm="6" md="3">
+          <v-card elevation="1" rounded="xl" class="pa-5 border">
+            <div class="d-flex align-center justify-space-between">
               <div>
-                <h3 class="font-extrabold text-base md:text-lg text-white tracking-wide">
-                  CHI TIẾT NHẬT KÝ THAO TÁC
-                </h3>
-                <p class="text-xs text-sky-100 font-mono opacity-90">
-                  Mã bản ghi hệ thống: #{{ selectedLogDetail.id }}
-                </p>
+                <div class="text-caption font-weight-bold text-medium-emphasis text-uppercase">Hoạt động hôm nay</div>
+                <div class="d-flex align-baseline gap-2 mt-1">
+                  <span class="text-h4 font-weight-bold font-mono">{{ stats.today }}</span>
+                  <span class="text-caption text-medium-emphasis">bản ghi</span>
+                </div>
               </div>
+              <v-avatar color="primary" variant="tonal" size="48" rounded="lg">
+                <Activity class="w-6 h-6 text-primary" />
+              </v-avatar>
             </div>
+          </v-card>
+        </v-col>
 
-            <button 
-              @click="closeLogDetail" 
-              class="w-9 h-9 rounded-lg bg-white/15 hover:bg-white/25 border border-white/20 flex items-center justify-center text-white transition-all cursor-pointer z-10"
+        <!-- Card 2: Total Logs -->
+        <v-col cols="12" sm="6" md="3">
+          <v-card elevation="1" rounded="xl" class="pa-5 border">
+            <div class="d-flex align-center justify-space-between">
+              <div>
+                <div class="text-caption font-weight-bold text-medium-emphasis text-uppercase">Tổng số hoạt động</div>
+                <div class="d-flex align-baseline gap-2 mt-1">
+                  <span class="text-h4 font-weight-bold font-mono">{{ stats.total }}</span>
+                  <span class="text-caption text-medium-emphasis">thao tác</span>
+                </div>
+              </div>
+              <v-avatar color="info" variant="tonal" size="48" rounded="lg">
+                <FileText class="w-6 h-6 text-info" />
+              </v-avatar>
+            </div>
+          </v-card>
+        </v-col>
+
+        <!-- Card 3: Success Logs -->
+        <v-col cols="12" sm="6" md="3">
+          <v-card elevation="1" rounded="xl" class="pa-5 border">
+            <div class="d-flex align-center justify-space-between">
+              <div>
+                <div class="text-caption font-weight-bold text-medium-emphasis text-uppercase">Thành công</div>
+                <div class="d-flex align-baseline gap-2 mt-1">
+                  <span class="text-h4 font-weight-bold font-mono text-success">{{ stats.success }}</span>
+                  <span class="text-caption text-medium-emphasis">được duyệt</span>
+                </div>
+              </div>
+              <v-avatar color="success" variant="tonal" size="48" rounded="lg">
+                <CheckCircle2 class="w-6 h-6 text-success" />
+              </v-avatar>
+            </div>
+          </v-card>
+        </v-col>
+
+        <!-- Card 4: Failed Logs -->
+        <v-col cols="12" sm="6" md="3">
+          <v-card elevation="1" rounded="xl" class="pa-5 border">
+            <div class="d-flex align-center justify-space-between">
+              <div>
+                <div class="text-caption font-weight-bold text-medium-emphasis text-uppercase">Thất bại / Bị chặn</div>
+                <div class="d-flex align-baseline gap-2 mt-1">
+                  <span class="text-h4 font-weight-bold font-mono text-error">{{ stats.failed }}</span>
+                  <span class="text-caption text-medium-emphasis">cảnh báo</span>
+                </div>
+              </div>
+              <v-avatar color="error" variant="tonal" size="48" rounded="lg">
+                <ShieldAlert class="w-6 h-6 text-error" />
+              </v-avatar>
+            </div>
+          </v-card>
+        </v-col>
+      </v-row>
+
+      <!-- ── FILTERS & TOOLBAR ── -->
+      <v-card variant="outlined" rounded="xl" class="pa-4 bg-surface">
+        <div class="d-flex flex-column flex-md-row align-md-center justify-space-between gap-3 flex-wrap">
+          <div class="d-flex align-center gap-3 flex-wrap flex-grow-1">
+            <!-- Search -->
+            <v-text-field
+              v-model="searchQuery"
+              placeholder="Tìm theo người thực hiện, thao tác, chi tiết..."
+              variant="outlined"
+              density="compact"
+              hide-details
+              clearable
+              rounded="lg"
+              style="min-width: 280px; max-width: 360px;"
             >
-              <X class="w-5 h-5" />
-            </button>
+              <template v-slot:prepend-inner>
+                <Search class="w-4 h-4 text-medium-emphasis mr-1" />
+              </template>
+            </v-text-field>
+
+            <!-- Module Filter -->
+            <v-select
+              v-model="selectedModule"
+              :items="moduleOptions"
+              item-title="label"
+              item-value="value"
+              label="Phân hệ"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              style="min-width: 200px;"
+            ></v-select>
+
+            <!-- Status Filter -->
+            <v-select
+              v-model="selectedStatus"
+              :items="[
+                { label: 'Tất cả trạng thái', value: '' },
+                { label: 'Thành công', value: 'Thành công' },
+                { label: 'Thất bại', value: 'Thất bại' }
+              ]"
+              item-title="label"
+              item-value="value"
+              label="Trạng thái"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              style="width: 170px;"
+            ></v-select>
+
+            <!-- Date Range -->
+            <v-text-field
+              v-model="startDate"
+              type="date"
+              label="Từ ngày"
+              variant="outlined"
+              density="compact"
+              hide-details
+              clearable
+              rounded="lg"
+              style="width: 155px;"
+            ></v-text-field>
+
+            <v-text-field
+              v-model="endDate"
+              type="date"
+              label="Đến ngày"
+              variant="outlined"
+              density="compact"
+              hide-details
+              clearable
+              rounded="lg"
+              style="width: 155px;"
+            ></v-text-field>
           </div>
 
-          <!-- Body Content Scroll Area (Enforced 44px side padding via Scoped CSS) -->
-          <div class="act-modal-body flex flex-col gap-6 max-h-[78vh] overflow-y-auto custom-scrollbar">
-            
-            <!-- Metadata Cards Grid (Equal height cards) -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-              
-              <!-- Card 1: Performer -->
-              <div class="act-meta-card p-4 rounded-lg border flex flex-col justify-between" :class="isDarkMode ? 'bg-[#242436] border-slate-700/70' : 'bg-slate-50 border-slate-200'">
-                <div class="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider mb-2" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">
-                  <User class="w-4 h-4 text-sky-500" />
-                  <span>NGƯỜI THỰC HIỆN</span>
-                </div>
-                <div>
-                  <div class="font-black text-sm md:text-base leading-tight mb-1" :class="isDarkMode ? 'text-white' : 'text-slate-900'">
-                    {{ selectedLogDetail.username }}
-                  </div>
-                  <span class="inline-block px-2.5 py-0.5 rounded-md text-[10px] font-extrabold text-sky-600 border" :class="isDarkMode ? 'bg-sky-950/80 border-sky-800' : 'bg-sky-50 border-sky-200'">
-                    {{ selectedLogDetail.role }}
-                  </span>
-                </div>
-              </div>
-
-              <!-- Card 2: Module & Action -->
-              <div class="act-meta-card p-4 rounded-lg border flex flex-col justify-between" :class="isDarkMode ? 'bg-[#242436] border-slate-700/70' : 'bg-slate-50 border-slate-200'">
-                <div class="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider mb-2" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">
-                  <Layers class="w-4 h-4 text-blue-500" />
-                  <span>PHÂN HỆ & HÀNH ĐỘNG</span>
-                </div>
-                <div>
-                  <div class="font-extrabold text-sm mb-1.5" :class="isDarkMode ? 'text-white' : 'text-slate-900'">
-                    {{ selectedLogDetail.action }}
-                  </div>
-                  <span 
-                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border"
-                    :class="getModuleBadgeClass(selectedLogDetail.module)"
-                  >
-                    {{ selectedLogDetail.module }}
-                  </span>
-                </div>
-              </div>
-
-              <!-- Card 3: Status & Time -->
-              <div class="act-meta-card p-4 rounded-lg border flex flex-col justify-between" :class="isDarkMode ? 'bg-[#242436] border-slate-700/70' : 'bg-slate-50 border-slate-200'">
-                <div class="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider mb-2" :class="isDarkMode ? 'text-slate-400' : 'text-slate-500'">
-                  <Clock class="w-4 h-4 text-emerald-500" />
-                  <span>THỜI GIAN & KẾT QUẢ</span>
-                </div>
-                <div>
-                  <div class="font-bold font-mono text-xs mb-1.5" :class="isDarkMode ? 'text-slate-200' : 'text-slate-700'">
-                    {{ formatDate(selectedLogDetail.timestamp) }}
-                  </div>
-                  <span 
-                    v-if="selectedLogDetail.status === 'Thành công'"
-                    class="inline-flex items-center gap-1.5 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500 text-white shadow-2xs"
-                  >
-                    <CheckCircle2 class="w-3.5 h-3.5" /> THÀNH CÔNG
-                  </span>
-                  <span 
-                    v-else
-                    class="inline-flex items-center gap-1.5 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-rose-500 text-white shadow-2xs"
-                  >
-                    <XCircle class="w-3.5 h-3.5" /> THẤT BẠI
-                  </span>
-                </div>
-              </div>
-
-            </div>
-
-            <!-- Structured Field Changes Section -->
-            <div class="flex flex-col gap-4">
-              
-              <div class="flex items-center justify-between border-b pb-3" :class="isDarkMode ? 'border-slate-700/80' : 'border-slate-200'">
-                <label class="text-xs md:text-sm font-extrabold uppercase tracking-wider flex items-center gap-2" :class="isDarkMode ? 'text-sky-400' : 'text-sky-700'">
-                  <FileText class="w-4.5 h-4.5" />
-                  CHI TIẾT NỘI DUNG ĐÃ CHỈNH SỬA / THAY ĐỔI
-                </label>
-              </div>
-
-              <!-- Main Action Summary Title -->
-              <div class="p-4 px-5 rounded-lg border text-xs md:text-sm font-extrabold tracking-wide" :class="isDarkMode ? 'bg-[#252536] border-sky-900/60 text-sky-300' : 'bg-sky-50/80 border-sky-200 text-sky-900'">
-                {{ logDetailParsed.title }}
-              </div>
-
-              <!-- Structured Diff Items Cards (Clean 3-column non-overlapping layout: Old Box + Arrow Circle + New Box) -->
-              <div v-if="logDetailParsed.items.length > 0" class="flex flex-col gap-4">
-                <div 
-                  v-for="(item, idx) in logDetailParsed.items" 
-                  :key="idx"
-                  class="act-diff-card rounded-lg border transition-all"
-                  :class="isDarkMode ? 'bg-[#222233] border-slate-700/80' : 'bg-white border-slate-200 shadow-2xs'"
-                >
-                  <!-- Side-by-side Diff Row for modified fields -->
-                  <div v-if="item.isDiff" class="flex flex-col gap-3">
-                    <div class="text-xs font-black uppercase tracking-wider text-sky-500 flex items-center gap-2">
-                      <span class="w-2.5 h-2.5 rounded-full bg-sky-500"></span>
-                      TRƯỜNG DỮ LIỆU CHỈNH SỬA: {{ item.field }}
-                    </div>
-
-                    <!-- Clean 3-part layout (Old Box, Arrow Badge, New Box) without any overlap -->
-                    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                      
-                      <!-- Old Value Box -->
-                      <div class="flex-1 p-4 rounded-lg border flex flex-col gap-1" :class="isDarkMode ? 'bg-rose-950/30 border-rose-900/60 text-rose-300' : 'bg-rose-50/80 border-rose-200 text-rose-800'">
-                        <span class="text-[10px] font-extrabold uppercase tracking-wider opacity-75">GIÁ TRỊ CŨ (TRƯỚC SỬA)</span>
-                        <div class="font-mono text-xs font-bold break-all leading-normal">{{ item.oldVal }}</div>
-                      </div>
-
-                      <!-- Arrow Badge in Middle -->
-                      <div class="flex-shrink-0 flex items-center justify-center py-1 sm:py-0">
-                        <div class="w-8 h-8 rounded-full bg-sky-600 text-white flex items-center justify-center shadow-sm">
-                          <ArrowRight class="w-4 h-4" />
-                        </div>
-                      </div>
-
-                      <!-- New Value Box -->
-                      <div class="flex-1 p-4 rounded-lg border flex flex-col gap-1" :class="isDarkMode ? 'bg-emerald-950/30 border-emerald-900/60 text-emerald-300' : 'bg-emerald-50/80 border-emerald-200 text-emerald-800'">
-                        <span class="text-[10px] font-extrabold uppercase tracking-wider opacity-75">GIÁ TRỊ MỚI (ĐÃ CẬP NHẬT)</span>
-                        <div class="font-mono text-xs font-extrabold break-all leading-normal">{{ item.newVal }}</div>
-                      </div>
-
-                    </div>
-                  </div>
-
-                  <!-- Single Field Value Item -->
-                  <div v-else class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-1">
-                    <span class="text-xs font-extrabold uppercase tracking-wider" :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'">
-                      {{ item.field || 'Nội dung' }}:
-                    </span>
-                    <span class="text-xs md:text-sm font-bold font-mono px-3 py-1.5 rounded-lg border" :class="isDarkMode ? 'bg-[#1b1b28] border-slate-700 text-slate-200' : 'bg-slate-100 border-slate-200 text-slate-800'">
-                      {{ item.newVal }}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-
-          </div>
-
-          <!-- Modal Footer (Enforced 44px side padding via Scoped CSS) -->
-          <div 
-            class="act-modal-footer border-t flex items-center justify-end"
-            :class="isDarkMode ? 'bg-[#242436] border-slate-700/80' : 'bg-slate-50 border-slate-200'"
+          <v-btn
+            variant="text"
+            color="primary"
+            rounded="lg"
+            class="text-none font-weight-bold"
+            height="40"
+            @click="resetFilters"
           >
-            <button 
-              @click="closeLogDetail" 
-              class="act-modal-close-btn h-11 px-7 text-xs font-extrabold rounded-lg transition-all cursor-pointer flex items-center gap-2"
-            >
-              <Check class="w-4 h-4 stroke-[2.5px]" />
-              <span>Đóng cửa sổ</span>
-            </button>
+            <template v-slot:prepend><RotateCcw class="w-4 h-4 mr-1" /></template>
+            Đặt lại lọc
+          </v-btn>
+        </div>
+      </v-card>
+
+      <!-- ── LOGS DATA TABLE ── -->
+      <v-card variant="outlined" rounded="xl" class="overflow-hidden">
+        <div v-if="isLoading" class="d-flex justify-center align-center py-16">
+          <v-progress-circular indeterminate color="primary" size="48" />
+        </div>
+
+        <div v-else class="overflow-x-auto">
+          <v-table hover>
+            <thead>
+              <tr class="border-b" style="background-color: rgba(var(--v-theme-on-surface), 0.04);">
+                <th class="font-weight-bold text-caption text-left py-3" style="width: 170px;">THỜI GIAN</th>
+                <th class="font-weight-bold text-caption text-left py-3" style="width: 220px;">NGƯỜI THỰC HIỆN</th>
+                <th class="font-weight-bold text-caption text-left py-3" style="width: 160px;">PHÂN HỆ</th>
+                <th class="font-weight-bold text-caption text-left py-3" style="width: 220px;">THAO TÁC</th>
+                <th class="font-weight-bold text-caption text-left py-3" style="min-width: 260px;">CHI TIẾT VẮN TẮT</th>
+                <th class="font-weight-bold text-caption text-center py-3" style="width: 130px;">TRẠNG THÁI</th>
+                <th class="font-weight-bold text-caption text-center py-3" style="width: 100px;">HÀNH ĐỘNG</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="log in pagedLogs"
+                :key="log.id"
+                class="border-b cursor-pointer"
+                @click="openLogDetail(log)"
+              >
+                <!-- Timestamp -->
+                <td class="text-caption font-mono text-medium-emphasis">
+                  <div class="d-flex align-center gap-1.5">
+                    <Clock class="w-3.5 h-3.5 text-medium-emphasis" />
+                    {{ formatDate(log.timestamp) }}
+                  </div>
+                </td>
+
+                <!-- User & Role -->
+                <td>
+                  <div class="d-flex align-center gap-3">
+                    <v-avatar color="primary" variant="tonal" size="36" rounded="lg" class="font-weight-bold text-caption">
+                      {{ getInitials(log.username) }}
+                    </v-avatar>
+                    <div>
+                      <div class="font-weight-bold text-body-2">{{ log.username }}</div>
+                      <div class="text-caption text-medium-emphasis">{{ log.role }}</div>
+                    </div>
+                  </div>
+                </td>
+
+                <!-- Module -->
+                <td>
+                  <v-chip size="small" :color="getModuleColor(log.module)" variant="tonal" class="font-weight-bold text-caption">
+                    {{ log.module }}
+                  </v-chip>
+                </td>
+
+                <!-- Action -->
+                <td>
+                  <div class="font-weight-bold text-body-2">{{ log.action }}</div>
+                </td>
+
+                <!-- Short Details -->
+                <td>
+                  <div class="text-caption text-medium-emphasis text-truncate font-italic" style="max-width: 320px;" :title="log.details">
+                    {{ log.details.split('\n')[0] }}
+                  </div>
+                </td>
+
+                <!-- Status -->
+                <td class="text-center">
+                  <v-chip
+                    size="small"
+                    :color="log.status === 'Thành công' ? 'success' : 'error'"
+                    variant="tonal"
+                    class="font-weight-bold text-caption text-uppercase"
+                  >
+                    <template v-slot:prepend>
+                      <CheckCircle2 v-if="log.status === 'Thành công'" class="w-3.5 h-3.5 mr-1" />
+                      <XCircle v-else class="w-3.5 h-3.5 mr-1" />
+                    </template>
+                    {{ log.status }}
+                  </v-chip>
+                </td>
+
+                <!-- Actions -->
+                <td class="text-center" @click.stop>
+                  <v-btn
+                    variant="outlined"
+                    color="primary"
+                    size="small"
+                    rounded="lg"
+                    class="text-none font-weight-bold"
+                    @click="openLogDetail(log)"
+                  >
+                    Chi tiết
+                  </v-btn>
+                </td>
+              </tr>
+
+              <tr v-if="pagedLogs.length === 0">
+                <td colspan="7" class="text-center py-16 text-medium-emphasis">
+                  <Activity class="w-10 h-10 mx-auto mb-2 text-slate-300 opacity-50" />
+                  <div class="font-weight-bold text-body-2">Không tìm thấy nhật ký hoạt động nào phù hợp</div>
+                </td>
+              </tr>
+            </tbody>
+          </v-table>
+        </div>
+
+        <!-- Pagination -->
+        <v-divider></v-divider>
+        <div class="pa-4 d-flex align-center justify-space-between flex-wrap gap-2">
+          <div class="text-caption text-medium-emphasis">
+            Hiển thị <strong class="text-high-emphasis">{{ pagedLogs.length }}</strong> trên tổng số <strong class="text-high-emphasis">{{ filteredLogs.length }}</strong> hoạt động
+          </div>
+          <v-pagination
+            v-model="currentPage"
+            :length="totalPages"
+            :total-visible="5"
+            density="comfortable"
+            rounded="lg"
+            size="small"
+          ></v-pagination>
+        </div>
+      </v-card>
+
+      <!-- ── DETAIL DIALOG ── -->
+      <v-dialog v-model="showDetailModal" max-width="640px" scrollable>
+        <v-card v-if="selectedLogDetail" rounded="xl" class="overflow-hidden">
+          <!-- Header -->
+          <v-card-title class="pa-6 border-b d-flex align-center justify-space-between bg-surface">
+            <div class="d-flex align-center gap-3">
+              <v-avatar
+                :color="selectedLogDetail.status === 'Thành công' ? 'success' : 'error'"
+                variant="tonal"
+                size="44"
+                rounded="lg"
+              >
+                <component
+                  :is="selectedLogDetail.status === 'Thành công' ? CheckCircle2 : ShieldAlert"
+                  class="w-5 h-5"
+                />
+              </v-avatar>
+              <div>
+                <h3 class="text-h6 font-weight-bold mb-0">Chi Tiết Hoạt Động</h3>
+                <div class="text-caption font-mono text-medium-emphasis">ID: {{ selectedLogDetail.id }}</div>
+              </div>
+            </div>
+            <v-btn icon variant="text" density="comfortable" @click="closeLogDetail">
+              <X class="w-5 h-5" />
+            </v-btn>
+          </v-card-title>
+
+          <!-- Body -->
+          <v-card-text class="pa-6 d-flex flex-column gap-4">
+            <!-- Metadata Row -->
+            <v-row dense>
+              <v-col cols="12" sm="6">
+                <v-card variant="tonal" rounded="lg" class="pa-3">
+                  <div class="text-caption text-medium-emphasis font-weight-bold text-uppercase mb-1">Người thực hiện</div>
+                  <div class="font-weight-bold text-body-2">{{ selectedLogDetail.username }}</div>
+                  <div class="text-caption text-medium-emphasis">{{ selectedLogDetail.role }}</div>
+                </v-card>
+              </v-col>
+              <v-col cols="12" sm="6">
+                <v-card variant="tonal" rounded="lg" class="pa-3">
+                  <div class="text-caption text-medium-emphasis font-weight-bold text-uppercase mb-1">Thời gian ghi nhận</div>
+                  <div class="font-weight-bold text-body-2 font-mono">{{ formatDate(selectedLogDetail.timestamp) }}</div>
+                  <div class="mt-1">
+                    <v-chip size="x-small" :color="getModuleColor(selectedLogDetail.module)" variant="flat" class="font-weight-bold mr-1">
+                      {{ selectedLogDetail.module }}
+                    </v-chip>
+                    <v-chip size="x-small" :color="selectedLogDetail.status === 'Thành công' ? 'success' : 'error'" variant="flat" class="font-weight-bold">
+                      {{ selectedLogDetail.status }}
+                    </v-chip>
+                  </div>
+                </v-card>
+              </v-col>
+            </v-row>
+
+            <!-- Action Name -->
+            <div>
+              <div class="text-caption font-weight-bold text-medium-emphasis text-uppercase mb-1">Hành động</div>
+              <v-text-field
+                :model-value="selectedLogDetail.action"
+                variant="outlined"
+                density="compact"
+                readonly
+                rounded="lg"
+                hide-details
+              ></v-text-field>
+            </div>
+
+            <!-- Structured Changes / Details -->
+            <div>
+              <div class="text-caption font-weight-bold text-medium-emphasis text-uppercase mb-2">Chi tiết thay đổi</div>
+
+              <!-- If we have parsed diff items -->
+              <div v-if="logDetailParsed.items.length > 0" class="d-flex flex-column gap-2">
+                <div v-if="logDetailParsed.title" class="text-caption font-weight-bold text-high-emphasis mb-1">
+                  {{ logDetailParsed.title }}
+                </div>
+
+                <v-card
+                  v-for="(item, idx) in logDetailParsed.items"
+                  :key="idx"
+                  variant="outlined"
+                  rounded="lg"
+                  class="pa-3"
+                >
+                  <div class="d-flex align-center justify-space-between mb-1">
+                    <span class="text-caption font-weight-bold text-primary">{{ item.field }}</span>
+                  </div>
+
+                  <div v-if="item.isDiff" class="d-flex align-center gap-2 flex-wrap">
+                    <v-chip size="small" color="error" variant="tonal" class="text-caption text-decoration-line-through">
+                      {{ item.oldVal }}
+                    </v-chip>
+                    <ArrowRight class="w-4 h-4 text-medium-emphasis" />
+                    <v-chip size="small" color="success" variant="tonal" class="text-caption font-weight-bold">
+                      {{ item.newVal }}
+                    </v-chip>
+                  </div>
+                  <div v-else class="text-body-2 font-weight-medium">
+                    {{ item.newVal }}
+                  </div>
+                </v-card>
+              </div>
+
+              <!-- Fallback to plain textarea -->
+              <v-textarea
+                v-else
+                :model-value="selectedLogDetail.details"
+                variant="outlined"
+                density="compact"
+                readonly
+                rounded="lg"
+                rows="4"
+                hide-details
+              ></v-textarea>
+            </div>
+          </v-card-text>
+
+          <!-- Footer -->
+          <v-divider></v-divider>
+          <v-card-actions class="pa-4 justify-end">
+            <v-btn variant="outlined" rounded="lg" class="text-none font-weight-bold px-5" @click="closeLogDetail">
+              Đóng
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
+
+      <!-- ── CONFIRM CLEAR DIALOG ── -->
+      <v-dialog v-model="showClearDialog" max-width="440px">
+        <v-card rounded="xl" class="pa-6">
+          <div class="d-flex align-center gap-3 mb-4">
+            <v-avatar color="error" variant="tonal" size="48" rounded="lg">
+              <Trash2 class="w-6 h-6 text-error" />
+            </v-avatar>
+            <div>
+              <h3 class="text-h6 font-weight-bold mb-0">Xác Nhận Dọn Dẹp?</h3>
+              <p class="text-caption text-medium-emphasis mb-0">Hành động không thể hoàn tác</p>
+            </div>
           </div>
 
-        </div>
-      </div>
-    </Teleport>
+          <p class="text-body-2 mb-6 text-medium-emphasis">
+            Bạn có chắc chắn muốn xóa toàn bộ lịch sử nhật ký hoạt động này khỏi hệ thống không?
+          </p>
 
-  </div>
+          <div class="d-flex justify-end gap-2">
+            <v-btn
+              variant="outlined"
+              rounded="lg"
+              class="text-none font-weight-bold"
+              @click="showClearDialog = false"
+            >
+              Hủy bỏ
+            </v-btn>
+            <v-btn
+              color="error"
+              variant="flat"
+              rounded="lg"
+              class="text-none font-weight-bold text-white"
+              @click="handleConfirmClear"
+            >
+              Đồng ý xóa
+            </v-btn>
+          </div>
+        </v-card>
+      </v-dialog>
+
+    </div>
+  </v-container>
 </template>
-
-<style scoped>
-/* Enforce dark background on parent containers */
-:global(body.v-theme--dark), 
-:global(.v-theme--dark .v-main),
-:global(.v-theme--dark .v-application) {
-  background-color: #141416 !important;
-}
-
-/* Header & Filter Card Padding Enforced via Scoped CSS to override any Bootstrap/Vuetify defaults */
-.act-header-card {
-  padding: 1.75rem 2.25rem !important; /* 28px top/bottom, 36px left/right */
-}
-
-.act-filter-card {
-  padding: 2rem 2.75rem !important; /* 32px top/bottom, 44px left/right side padding */
-}
-
-/* Modal Side Padding Enforcement via Scoped CSS to guarantee 44px margins */
-.act-modal-container {
-  border-radius: 14px !important; /* Clean square-ish corners */
-  width: 92% !important;
-  max-width: 820px !important;
-}
-
-.act-modal-header {
-  padding-left: 2.75rem !important; /* 44px side padding */
-  padding-right: 2.75rem !important; /* 44px side padding */
-  padding-top: 1.5rem !important;
-  padding-bottom: 1.5rem !important;
-}
-
-.act-modal-body {
-  padding-left: 2.75rem !important; /* 44px side padding */
-  padding-right: 2.75rem !important; /* 44px side padding */
-  padding-top: 2rem !important;
-  padding-bottom: 2rem !important;
-}
-
-.act-modal-footer {
-  padding-left: 2.75rem !important; /* 44px side padding */
-  padding-right: 2.75rem !important; /* 44px side padding */
-  padding-top: 1.25rem !important;
-  padding-bottom: 1.25rem !important;
-}
-
-.act-diff-card {
-  padding-left: 1.75rem !important; /* 28px inside card */
-  padding-right: 1.75rem !important;
-  padding-top: 1.25rem !important;
-  padding-bottom: 1.25rem !important;
-}
-
-/* Close Button Styling - High contrast in both light & dark mode */
-.act-modal-close-btn {
-  background-color: #0284c7 !important;
-  color: #ffffff !important;
-  border: 1px solid #0284c7 !important;
-  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35) !important;
-  font-weight: 800 !important;
-  opacity: 1 !important;
-}
-
-.act-modal-close-btn:hover {
-  background-color: #0369a1 !important;
-  border-color: #0369a1 !important;
-  color: #ffffff !important;
-}
-
-.act-modal-close-btn * {
-  color: #ffffff !important;
-}
-
-/* Light Mode Input Styling - High Contrast & Clean Borders */
-.light-mode-input {
-  background-color: #f8fafc !important;
-  border: 1px solid #cbd5e1 !important;
-  color: #0f172a !important;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03) !important;
-}
-.light-mode-input:focus {
-  background-color: #ffffff !important;
-  border-color: #0284c7 !important;
-  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15) !important;
-}
-
-/* Dark Mode Input Styling */
-.dark-mode-input {
-  background-color: #2b2b36 !important;
-  border: 1px solid #475569 !important;
-  color: #ffffff !important;
-}
-.dark-mode-input:focus {
-  border-color: #38bdf8 !important;
-  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2) !important;
-}
-
-/* Input Padding & Dimensions Overriding Bootstrap/Global Resets */
-.act-input {
-  padding-left: 3.25rem !important; /* 52px left padding for search icon */
-  padding-right: 2.5rem !important;
-  height: 44px !important;
-  border-radius: 8px !important;
-  box-sizing: border-box !important;
-  font-size: 13px !important;
-}
-
-.act-select {
-  padding-left: 1.5rem !important; /* 24px left padding so dropdown text sits well away from left border */
-  padding-right: 3rem !important; /* 48px right padding for arrow */
-  height: 44px !important;
-  border-radius: 8px !important;
-  box-sizing: border-box !important;
-  font-size: 13px !important;
-}
-
-.act-date-input {
-  padding-left: 1.5rem !important; /* 24px left padding so date text sits well away from left border */
-  padding-right: 1.5rem !important;
-  height: 44px !important;
-  border-radius: 8px !important;
-  box-sizing: border-box !important;
-  font-size: 13px !important;
-}
-
-/* Reset button styling prominent in BOTH light & dark modes */
-.act-reset-btn {
-  background-color: #0284c7 !important;
-  color: #ffffff !important;
-  border: 1px solid #0284c7 !important;
-  border-radius: 8px !important;
-  font-weight: 700 !important;
-}
-
-.act-reset-btn:hover {
-  background-color: #0369a1 !important;
-  border-color: #0369a1 !important;
-}
-
-/* Custom styled scrollbars */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #0284c7;
-  border-radius: 4px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #0369a1;
-}
-</style>

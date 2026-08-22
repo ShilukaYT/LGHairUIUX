@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import axios from 'axios'
-import { Check, X, LogOut, CalendarDays, AlertTriangle, Clock, MessageSquare } from 'lucide-vue-next'
+import { Check, X, LogOut, CalendarDays, AlertTriangle, Clock, MessageSquare, History } from 'lucide-vue-next'
 
 const filterType = ref('all') // 'all', 'issues'
 const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
@@ -82,11 +82,15 @@ const historyMap = computed(() => {
 })
 
 const stats = computed(() => {
-  let v = 0, m = 0, x = 0, c = 0
+  let v = 0, m = 0, x = 0, c = 0, np = 0
   const todayStr = formatYYYYMMDD(currentDate.getFullYear(), currentDate.getMonth() + 1, currentDate.getDate())
 
   lichSuData.value.forEach(item => {
-    if (item.caLam === 'Chưa xếp' || item.caLam === 'Nghỉ lễ') return
+    if (item.caLam === 'Chưa xếp' || item.caLam === 'Nghỉ lễ' || item.trangThai === 7) return
+    if (item.caLam === 'Nghỉ phép' || item.trangThai === 4) {
+      np++
+      return
+    }
 
     const itemDateStr = item.ngayLamViec ? item.ngayLamViec.substring(0, 10) : ''
 
@@ -104,7 +108,7 @@ const stats = computed(() => {
       }
     }
   })
-  return { v, m, x, c }
+  return { v, m, x, c, np }
 })
 
 const getDaysInMonth = (year: number, month: number) => {
@@ -169,9 +173,14 @@ const calendarGrid = computed(() => {
   <v-container fluid class="pa-6 fill-height align-start" style="min-height: 100vh;">
     <v-card width="100%" elevation="2" rounded="xl" :loading="isLoading">
       <v-card-title class="pa-6 border-b d-flex flex-column flex-md-row align-md-center justify-space-between gap-4" style="white-space: normal;">
-        <div>
-          <h2 class="text-h5 font-weight-bold mb-1">Lịch Sử Điểm Danh</h2>
-          <div class="text-subtitle-2 text-medium-emphasis">Tra cứu điểm danh theo tháng của từng nhân viên</div>
+        <div class="d-flex align-center gap-3">
+          <v-avatar color="primary" variant="tonal" size="48" rounded="lg">
+            <History class="w-6 h-6 text-primary" />
+          </v-avatar>
+          <div>
+            <h2 class="text-h5 font-weight-bold mb-1">Lịch Sử Điểm Danh</h2>
+            <div class="text-subtitle-2 text-medium-emphasis">Tra cứu điểm danh theo tháng của từng nhân viên</div>
+          </div>
         </div>
         
         <div class="d-flex align-center gap-3 flex-wrap">
@@ -239,22 +248,27 @@ const calendarGrid = computed(() => {
         <div v-if="selectedNhanVien">
           <!-- Stats summary -->
           <div class="d-flex flex-wrap gap-4 mb-6">
-             <v-card class="flex-1 pa-4 text-center rounded-xl border bg-white cal-stat-card bg-gradient-to-br from-emerald-50 to-white" elevation="0" min-width="150">
+             <v-card class="flex-1 pa-4 text-center rounded-xl border bg-white cal-stat-card bg-gradient-to-br from-emerald-50 to-white" elevation="0" min-width="140">
                 <div class="d-flex align-center justify-center mb-1 text-success"><Check class="w-5 h-5 mr-1" /></div>
                 <div class="text-h4 font-weight-black text-success">{{ stats.v }}</div>
                 <div class="text-caption text-uppercase font-weight-bold text-emerald-700 mt-1">Có mặt</div>
              </v-card>
-             <v-card class="flex-1 pa-4 text-center rounded-xl border bg-white cal-stat-card bg-gradient-to-br from-amber-50 to-white" elevation="0" min-width="150">
+             <v-card class="flex-1 pa-4 text-center rounded-xl border bg-white cal-stat-card bg-gradient-to-br from-amber-50 to-white" elevation="0" min-width="140">
                 <div class="d-flex align-center justify-center mb-1 text-warning"><AlertTriangle class="w-5 h-5 mr-1" /></div>
                 <div class="text-h4 font-weight-black text-warning">{{ stats.m }}</div>
                 <div class="text-caption text-uppercase font-weight-bold text-amber-700 mt-1">Muộn / Rời sớm</div>
              </v-card>
-             <v-card class="flex-1 pa-4 text-center rounded-xl border bg-white cal-stat-card bg-gradient-to-br from-rose-50 to-white" elevation="0" min-width="150">
+             <v-card class="flex-1 pa-4 text-center rounded-xl border bg-white cal-stat-card bg-gradient-to-br from-purple-50 to-white" elevation="0" min-width="140">
+                <div class="d-flex align-center justify-center mb-1 text-purple"><CalendarDays class="w-5 h-5 mr-1" /></div>
+                <div class="text-h4 font-weight-black text-purple">{{ stats.np }}</div>
+                <div class="text-caption text-uppercase font-weight-bold text-purple-darken-2 mt-1">Nghỉ phép</div>
+             </v-card>
+             <v-card class="flex-1 pa-4 text-center rounded-xl border bg-white cal-stat-card bg-gradient-to-br from-rose-50 to-white" elevation="0" min-width="140">
                 <div class="d-flex align-center justify-center mb-1 text-error"><X class="w-5 h-5 mr-1" /></div>
                 <div class="text-h4 font-weight-black text-error">{{ stats.x }}</div>
                 <div class="text-caption text-uppercase font-weight-bold text-rose-700 mt-1">Vắng mặt</div>
              </v-card>
-             <v-card class="flex-1 pa-4 text-center rounded-xl border bg-white cal-stat-card bg-gradient-to-br from-slate-50 to-white" elevation="0" min-width="150">
+             <v-card class="flex-1 pa-4 text-center rounded-xl border bg-white cal-stat-card bg-gradient-to-br from-slate-50 to-white" elevation="0" min-width="140">
                 <div class="d-flex align-center justify-center mb-1 text-grey-darken-1"><Clock class="w-5 h-5 mr-1" /></div>
                 <div class="text-h4 font-weight-black text-grey-darken-1 cal-text-muted">{{ stats.c }}</div>
                 <div class="text-caption text-uppercase font-weight-bold text-slate-600 mt-1">Chưa ĐD</div>
@@ -298,7 +312,7 @@ const calendarGrid = computed(() => {
                     <span v-else class="w-8 h-8 inline-flex items-center justify-center">{{ day.date }}</span>
                   </div>
                   
-                  <div v-if="day.shift && day.shift.caLam !== 'Chưa xếp' && day.shift.caLam !== 'Nghỉ lễ' && day.shift.trangThai !== 7" class="flex-1 flex flex-col items-center justify-start gap-2 w-full px-1">
+                  <div v-if="day.shift && day.shift.caLam !== 'Chưa xếp' && day.shift.caLam !== 'Nghỉ lễ' && day.shift.caLam !== 'Nghỉ phép' && day.shift.trangThai !== 4 && day.shift.trangThai !== 7" class="flex-1 flex flex-col items-center justify-start gap-2 w-full px-1">
                     <div class="text-[11px] font-bold px-3 py-1 rounded-pill w-[85%] max-w-[120px] text-center truncate mx-auto"
                          :class="(day.shift.caLam || '').toLowerCase().includes('sáng') || (day.shift.caLam || '').toLowerCase().includes('chiều') ? 'bg-blue-50 text-blue-700 border border-blue-200 shadow-xs' : ((day.shift.caLam || '').toLowerCase().includes('tối') ? 'bg-purple-50 text-purple-700 border border-purple-200 shadow-xs' : 'bg-amber-50 text-amber-700 border border-amber-200 shadow-xs')">
                       {{ day.shift.caLam }}
@@ -323,6 +337,16 @@ const calendarGrid = computed(() => {
                     </div>
 
                     <div v-if="day.shift.ghiChu" class="text-[10px] text-rose-500 flex items-start gap-1 leading-tight px-1 max-w-full overflow-hidden mt-1 line-clamp-2">
+                      <MessageSquare class="w-3 h-3 flex-shrink-0 mt-0.5" />
+                      <span :title="day.shift.ghiChu">{{ day.shift.ghiChu }}</span>
+                    </div>
+                  </div>
+
+                  <div v-else-if="day.shift && (day.shift.caLam === 'Nghỉ phép' || day.shift.trangThai === 4)" class="flex-1 flex flex-col items-center justify-start gap-2 w-full px-1">
+                    <div class="text-[11px] font-bold px-3 py-1 rounded-pill w-[85%] max-w-[120px] text-center truncate mx-auto bg-purple text-white shadow-sm">
+                      Nghỉ phép
+                    </div>
+                    <div v-if="day.shift.ghiChu" class="text-[10px] text-purple flex items-start gap-1 leading-tight px-1 max-w-full overflow-hidden mt-1 line-clamp-2">
                       <MessageSquare class="w-3 h-3 flex-shrink-0 mt-0.5" />
                       <span :title="day.shift.ghiChu">{{ day.shift.ghiChu }}</span>
                     </div>

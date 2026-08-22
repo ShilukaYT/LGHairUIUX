@@ -440,11 +440,11 @@ onUnmounted(() => {
           <div class="pa-4 border-b shrink-0">
             <div class="d-flex align-center justify-space-between mb-4">
               <div class="d-flex align-center gap-3">
-                <v-avatar color="primary" size="44" rounded="lg" elevation="2">
-                  <MessageSquare class="w-5 h-5 text-white" />
+                <v-avatar color="primary" variant="tonal" size="48" rounded="lg">
+                  <MessageSquare class="w-6 h-6 text-primary" />
                 </v-avatar>
                 <div>
-                  <h2 class="text-subtitle-1 font-weight-bold" style="line-height: 1.3; margin-bottom: 6px !important;">Hỗ Trợ Khách Hàng</h2>
+                  <h2 class="text-subtitle-1 font-weight-bold mb-1" style="line-height: 1.3;">Hỗ Trợ Khách Hàng</h2>
                   <div class="text-caption text-primary font-weight-bold uppercase tracking-wider" style="font-size: 11px; line-height: 1.2;">Live Chat 1:1</div>
                 </div>
               </div>

@@ -874,13 +874,13 @@ onUnmounted(() => {
     <!-- ── HEADER BANNER CARD ── -->
     <v-card elevation="2" rounded="2xl" class="pa-6 border mb-6">
       <div class="d-flex flex-column flex-sm-row align-start align-sm-center justify-space-between gap-4">
-        <div class="d-flex align-center gap-4">
-          <v-avatar color="primary" size="56" rounded="xl" elevation="3">
-            <Bell class="w-7 h-7 text-white" />
+        <div class="d-flex align-center gap-3">
+          <v-avatar color="primary" variant="tonal" size="48" rounded="lg">
+            <Bell class="w-6 h-6 text-primary" />
           </v-avatar>
           <div>
             <h1 class="text-h5 font-weight-bold mb-1">Gửi Thông Báo Khách Hàng</h1>
-            <p class="text-body-2 text-medium-emphasis mb-0">Gửi tin nhắn chăm sóc khách hàng tự động qua Email &amp; Zalo Chat</p>
+            <p class="text-subtitle-2 text-medium-emphasis mb-0">Gửi tin nhắn chăm sóc khách hàng tự động qua Email &amp; Zalo Chat</p>
           </div>
         </div>
 

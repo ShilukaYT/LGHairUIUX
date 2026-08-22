@@ -4,7 +4,7 @@ import {
     Search, UserCheck, X, Clock, Users,
     Plus, Trash2, ChevronLeft, ChevronRight,
     Calendar as CalendarIcon, CheckCircle2, Phone,
-    Camera, Mail, Package
+    Camera, Mail, Package, RotateCcw
 } from 'lucide-vue-next'
 import axios from 'axios'
 import { toast } from 'vue-sonner'
@@ -151,6 +151,12 @@ const fetchData = async () => {
     }
 };
 
+const handleRefresh = async () => {
+    selectedAppointment.value = null;
+    await fetchData();
+    toast.success("Đã làm mới danh sách tiếp nhận check-in!");
+};
+
 const setSelectedAppointment = async (item: any) => {
     selectedAppointment.value = { ...item };
 
@@ -282,28 +288,50 @@ watch(filterDate, fetchData);
     <v-container fluid class="pa-6 font-sans">
         
         <!-- Header -->
-        <div class="d-flex align-center justify-space-between mb-6 flex-wrap gap-4">
-            <div>
-                <h1 class="text-h5 font-weight-bold text-high-emphasis">Check-in tiếp nhận</h1>
-                <p class="text-body-2 text-medium-emphasis mt-1">Tiếp nhận khách hàng đặt lịch & phục vụ dịch vụ</p>
+        <v-card elevation="2" rounded="xl" class="pa-6 mb-6">
+            <div class="d-flex align-center justify-space-between flex-wrap gap-4">
+                <div class="d-flex align-center gap-3">
+                    <v-avatar color="primary" variant="tonal" size="48" rounded="lg">
+                        <UserCheck class="w-6 h-6 text-primary" />
+                    </v-avatar>
+                    <div>
+                        <h1 class="text-h5 font-weight-bold text-high-emphasis mb-1">Check-in Tiếp Nhận</h1>
+                        <p class="text-body-2 text-medium-emphasis mb-0">Tiếp nhận khách hàng đặt lịch &amp; phục vụ dịch vụ</p>
+                    </div>
+                </div>
+                
+                <div class="d-flex align-center gap-3 flex-wrap">
+                    <v-btn
+                        variant="outlined"
+                        color="grey-darken-1"
+                        height="40"
+                        rounded="lg"
+                        class="text-none font-weight-bold"
+                        :loading="isLoading"
+                        @click="handleRefresh"
+                    >
+                        <template v-slot:prepend><RotateCcw class="w-4 h-4 mr-1" /></template>
+                        Làm mới
+                    </v-btn>
+
+                    <div style="width: 175px;">
+                        <v-text-field
+                            v-model="filterDate"
+                            type="date"
+                            label="Ngày hẹn"
+                            variant="outlined"
+                            density="compact"
+                            hide-details
+                            color="primary"
+                        >
+                            <template #prepend-inner>
+                                <CalendarIcon class="w-4 h-4 text-slate-400 mr-1" />
+                            </template>
+                        </v-text-field>
+                    </div>
+                </div>
             </div>
-            
-            <div style="width: 200px;">
-                <v-text-field
-                    v-model="filterDate"
-                    type="date"
-                    label="Ngày hẹn"
-                    variant="outlined"
-                    density="comfortable"
-                    hide-details
-                    color="primary"
-                >
-                    <template #prepend-inner>
-                        <CalendarIcon class="w-4 h-4 text-slate-400 mr-1" />
-                    </template>
-                </v-text-field>
-            </div>
-        </div>
+        </v-card>
 
         <v-row>
             <!-- CỘT TRÁI: Danh sách lịch hẹn -->

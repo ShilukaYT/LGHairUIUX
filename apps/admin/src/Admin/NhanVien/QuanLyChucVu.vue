@@ -266,69 +266,42 @@ const confirmDelete = async () => {
       </template>
     </v-snackbar>
 
-    <!-- ═══════ HEADER CARD (MATCHING SALE.VUE) ═══════ -->
+    <!-- ═══════ HEADER CARD ═══════ -->
     <v-card elevation="2" rounded="xl" class="pa-6 mb-6">
-      <div class="d-flex flex-column flex-lg-row align-lg-center justify-space-between gap-4">
-        <div>
-          <h2 class="text-h5 font-weight-bold text-slate-900 dark:text-white d-flex align-center gap-2 mb-1">
-            <Briefcase class="w-6 h-6 text-primary shrink-0" />
-            <span>Quản Lý Chức Vụ &amp; Lương Cơ Bản</span>
-          </h2>
-          <p class="text-subtitle-2 text-medium-emphasis mb-0">
-            Cấu hình danh mục chức vụ, định mức lương cơ bản và phân quyền dịch vụ cho nhân sự
-          </p>
+      <div class="d-flex flex-column flex-md-row align-md-center justify-space-between gap-4">
+        <div class="d-flex align-center gap-3">
+          <v-avatar color="primary" variant="tonal" size="48" rounded="lg">
+            <Briefcase class="w-6 h-6 text-primary" />
+          </v-avatar>
+          <div>
+            <h2 class="text-h5 font-weight-bold mb-1">
+              Quản Lý Chức Vụ &amp; Lương Cơ Bản
+            </h2>
+            <p class="text-subtitle-2 text-medium-emphasis mb-0">
+              Cấu hình danh mục chức vụ, định mức lương cơ bản và phân quyền dịch vụ cho nhân sự
+            </p>
+          </div>
         </div>
 
-        <div class="d-flex align-center gap-3 flex-grow-1 justify-lg-end flex-wrap">
-          <v-text-field
-            v-model="searchQuery"
-            placeholder="Tìm kiếm mã hoặc tên chức vụ..."
-            variant="outlined"
-            density="compact"
-            hide-details
-            clearable
-            class="flex-grow-1"
-            style="max-width: 350px; width: 100%; min-width: 220px;"
-          >
-            <template v-slot:prepend-inner>
-              <Search class="w-4 h-4 text-slate-400 mr-1 shrink-0" />
-            </template>
-          </v-text-field>
-
-          <v-select
-            v-model="filterStatus"
-            :items="[
-              { title: 'Tất cả trạng thái', value: '' },
-              { title: '🟢 Hoạt động', value: '1' },
-              { title: '🔴 Khóa / Tạm dừng', value: '0' }
-            ]"
-            item-title="title"
-            item-value="value"
-            variant="outlined"
-            density="compact"
-            hide-details
-            style="max-width: 190px; min-width: 170px;"
-          ></v-select>
-
+        <div class="d-flex align-center gap-2 flex-wrap">
           <v-btn
             variant="outlined"
             color="grey-darken-1"
             height="40"
-            width="40"
-            icon
-            rounded="xl"
+            rounded="lg"
+            class="text-none font-weight-bold"
             :loading="isLoading"
             @click="fetchData"
-            title="Tải lại"
           >
-            <RotateCcw class="w-5 h-5 text-slate-600 dark:text-slate-300" />
+            <template v-slot:prepend><RotateCcw class="w-4 h-4 mr-1" /></template>
+            Làm mới
           </v-btn>
 
           <v-btn
             color="primary"
+            variant="flat"
             height="40"
-            rounded="xl"
-            elevation="2"
+            rounded="lg"
             class="text-none font-weight-bold px-5"
             @click="openCreateDialog"
           >
@@ -416,7 +389,57 @@ const confirmDelete = async () => {
       </v-col>
     </v-row>
 
-    <!-- ═══════ DATA TABLE CARD (MATCHING SALE.VUE) ═══════ -->
+    <!-- ═══════ FILTERS CARD ═══════ -->
+    <v-card variant="outlined" rounded="xl" class="pa-4 mb-6 bg-surface">
+      <div class="d-flex flex-column flex-md-row align-md-center justify-space-between gap-3 flex-wrap">
+        <div class="d-flex align-center gap-3 flex-wrap flex-grow-1">
+          <v-text-field
+            v-model="searchQuery"
+            placeholder="Tìm kiếm theo mã hoặc tên chức vụ..."
+            variant="outlined"
+            density="compact"
+            hide-details
+            clearable
+            rounded="lg"
+            style="min-width: 320px; max-width: 460px;"
+          >
+            <template v-slot:prepend-inner>
+              <Search class="w-4 h-4 text-medium-emphasis mr-1 shrink-0" />
+            </template>
+          </v-text-field>
+
+          <v-select
+            v-model="filterStatus"
+            :items="[
+              { title: 'Tất cả trạng thái', value: '' },
+              { title: '🟢 Hoạt động', value: '1' },
+              { title: '🔴 Khóa / Tạm dừng', value: '0' }
+            ]"
+            item-title="title"
+            item-value="value"
+            label="Trạng thái"
+            variant="outlined"
+            density="compact"
+            hide-details
+            rounded="lg"
+            style="width: 165px;"
+          ></v-select>
+        </div>
+
+        <v-btn
+          variant="text"
+          color="primary"
+          rounded="lg"
+          class="text-none font-weight-bold"
+          height="40"
+          @click="() => { searchQuery = ''; filterStatus = ''; }"
+        >
+          Đặt lại lọc
+        </v-btn>
+      </div>
+    </v-card>
+
+    <!-- ═══════ DATA TABLE CARD ═══════ -->
     <v-card elevation="2" rounded="xl" class="pa-6">
       <v-table class="rounded-xl border" hover>
         <thead>

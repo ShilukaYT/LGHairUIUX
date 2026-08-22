@@ -229,6 +229,11 @@ async function fetchList() {
   }
 }
 
+async function handleRefresh() {
+  await fetchList()
+  showNotification('Đã làm mới danh sách khách hàng!', 'success')
+}
+
 function onCreateLoaiChange(v: string) {
   if (v === 'vang_lai') {
     createLoaiKhach.value = 'vang_lai'
@@ -481,13 +486,17 @@ onMounted(() => {
     <v-card width="100%" elevation="2" rounded="xl" class="d-flex flex-column w-full">
       <!-- Card Header -->
       <div class="d-flex flex-column flex-md-row align-md-center justify-space-between pa-6 pb-4 gap-4">
-        <div>
-          <h2 class="text-h5 font-weight-bold text-slate-900 dark:text-white d-flex align-center gap-2 mb-1">
-            <Users class="w-6 h-6 text-primary shrink-0" />
-            <span>Quản Lý Khách Hàng</span>
-          </h2>
-          <div class="text-subtitle-2 text-medium-emphasis">
-            Quản lý danh sách, tìm kiếm và chỉnh sửa thông tin khách hàng thân thiết
+        <div class="d-flex align-center gap-3">
+          <v-avatar color="primary" variant="tonal" size="48" rounded="lg">
+            <Users class="w-6 h-6 text-primary" />
+          </v-avatar>
+          <div>
+            <h2 class="text-h5 font-weight-bold text-slate-900 dark:text-white mb-1">
+              Quản Lý Khách Hàng
+            </h2>
+            <div class="text-subtitle-2 text-medium-emphasis">
+              Quản lý danh sách, tìm kiếm và chỉnh sửa thông tin khách hàng thân thiết
+            </div>
           </div>
         </div>
 
@@ -526,6 +535,20 @@ onMounted(() => {
               style="width: 130px;"
             ></v-select>
           </div>
+
+          <!-- Refresh Button -->
+          <v-btn
+            variant="outlined"
+            color="grey-darken-1"
+            height="40"
+            rounded="lg"
+            class="text-none font-weight-bold"
+            :loading="loading"
+            @click="handleRefresh"
+          >
+            <template v-slot:prepend><RotateCcw class="w-4 h-4 mr-1" /></template>
+            Làm mới
+          </v-btn>
 
           <!-- Add Button -->
           <v-btn
