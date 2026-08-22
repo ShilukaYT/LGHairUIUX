@@ -327,14 +327,16 @@ onMounted(() => {
     <!-- ═══════ HEADER CARD (MATCHING SALE.VUE / CHUCVU) ═══════ -->
     <v-card elevation="2" rounded="xl" class="pa-6 mb-6 print:hidden">
       <div class="d-flex flex-column flex-lg-row align-lg-center justify-space-between gap-4">
-        <div>
-          <h2 class="text-h5 font-weight-bold d-flex align-center gap-2 mb-1">
-            <Coins class="w-6 h-6 text-primary shrink-0" />
-            <span>Quản Lý Bảng Lương &amp; Quyết Toán</span>
-          </h2>
-          <p class="text-subtitle-2 text-medium-emphasis mb-0">
-            Theo dõi bảng lương, định mức công chuẩn và hoa hồng của {{ payrollSummary.tongNhanVien || 0 }} nhân sự
-          </p>
+        <div class="d-flex align-center gap-3">
+          <v-avatar color="primary" variant="tonal" size="48" rounded="lg">
+            <Coins class="w-6 h-6 text-primary" />
+          </v-avatar>
+          <div>
+            <h2 class="text-h5 font-weight-bold mb-1">Quản Lý Bảng Lương &amp; Quyết Toán</h2>
+            <p class="text-subtitle-2 text-medium-emphasis mb-0">
+              Theo dõi bảng lương, định mức công chuẩn và hoa hồng của {{ payrollSummary.tongNhanVien || 0 }} nhân sự
+            </p>
+          </div>
         </div>
 
         <div class="d-flex align-center gap-3 flex-grow-1 justify-lg-end flex-wrap">
@@ -719,6 +721,21 @@ onMounted(() => {
             <div v-if="selectedSalary.soCaParttime > 0" class="d-flex justify-space-between py-1 border-b pl-3 text-caption text-medium-emphasis">
               <span>↳ Ca part-time (× 0.5):</span>
               <span class="font-weight-bold text-warning">{{ selectedSalary.soCaParttime }} ca</span>
+            </div>
+
+            <div v-if="selectedSalary.soCaNghiPhep > 0" class="d-flex justify-space-between py-1 border-b pl-3 text-caption text-medium-emphasis">
+              <span>↳ Nghỉ phép (có phép):</span>
+              <span class="font-weight-bold text-purple">{{ selectedSalary.soCaNghiPhep }} ca</span>
+            </div>
+
+            <div v-if="selectedSalary.soCaNghiLe > 0" class="d-flex justify-space-between py-1 border-b pl-3 text-caption text-medium-emphasis">
+              <span>↳ Nghỉ lễ:</span>
+              <span class="font-weight-bold text-error">{{ selectedSalary.soCaNghiLe }} ca</span>
+            </div>
+
+            <div v-if="selectedSalary.soCaVangMat > 0" class="d-flex justify-space-between py-1 border-b pl-3 text-caption text-medium-emphasis">
+              <span>↳ Vắng mặt (không phép):</span>
+              <span class="font-weight-bold text-error">{{ selectedSalary.soCaVangMat }} ca</span>
             </div>
 
             <div class="d-flex justify-space-between py-1 border-b">

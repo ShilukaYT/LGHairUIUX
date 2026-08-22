@@ -4,7 +4,7 @@ import axios from "axios";
 import { logActivity } from "@/utils/activityLogger";
 import {
   Search, RotateCcw, Plus, Eye, Check, X, Trash2, Edit,
-  ChevronDown, Package, AlertTriangle, DollarSign, Ban,
+  ChevronDown, Package, AlertTriangle, DollarSign, Ban, Warehouse
 } from "lucide-vue-next";
 
 const API = import.meta.env.VITE_API_URL;
@@ -645,9 +645,14 @@ onMounted(async () => {
   <v-container fluid class="pa-6 fill-height align-start" style="min-height: 100vh;">
     <v-card width="100%" elevation="2" rounded="xl">
       <v-card-title class="d-flex flex-column flex-md-row align-md-center justify-space-between pa-6">
-        <div>
-          <h2 class="text-h5 font-weight-bold mb-1">Quản Lý Kho Hàng</h2>
-          <div class="text-subtitle-2 text-medium-emphasis">Theo dõi tồn kho, phiếu nhập và nhà cung cấp</div>
+        <div class="d-flex align-center gap-3">
+          <v-avatar color="primary" variant="tonal" size="48" rounded="lg">
+            <Warehouse class="w-6 h-6 text-primary" />
+          </v-avatar>
+          <div>
+            <h2 class="text-h5 font-weight-bold mb-1">Quản Lý Kho Hàng</h2>
+            <div class="text-subtitle-2 text-medium-emphasis">Theo dõi tồn kho, phiếu nhập và nhà cung cấp</div>
+          </div>
         </div>
 
         <div class="d-flex align-center gap-3 mt-4 mt-md-0 flex-wrap">

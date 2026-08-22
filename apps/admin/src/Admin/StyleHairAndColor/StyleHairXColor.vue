@@ -373,14 +373,18 @@ const confirmDelete = async () => {
     <!-- ═══════ HEADER CARD ═══════ -->
     <v-card elevation="2" rounded="xl" class="pa-6 mb-6 w-full">
       <div class="d-flex flex-column flex-lg-row align-lg-center justify-space-between gap-4">
-        <div>
-          <h2 class="text-h5 font-weight-bold text-slate-900 dark:text-white d-flex align-center gap-2 mb-1">
-            <Scissors class="w-6 h-6 text-primary shrink-0" />
-            <span>Quản Lý Style &amp; Màu Tóc</span>
-          </h2>
-          <p class="text-subtitle-2 text-medium-emphasis mb-0">
-            Quản lý danh mục kiểu tóc mẫu và bảng màu nhuộm tóc cho salon
-          </p>
+        <div class="d-flex align-center gap-3">
+          <v-avatar color="primary" variant="tonal" size="48" rounded="lg">
+            <Scissors class="w-6 h-6 text-primary" />
+          </v-avatar>
+          <div>
+            <h2 class="text-h5 font-weight-bold text-slate-900 dark:text-white mb-1">
+              Quản Lý Style &amp; Màu Tóc
+            </h2>
+            <p class="text-subtitle-2 text-medium-emphasis mb-0">
+              Quản lý danh mục kiểu tóc mẫu và bảng màu nhuộm tóc cho salon
+            </p>
+          </div>
         </div>
 
         <div class="d-flex align-center gap-3 flex-grow-1 justify-lg-end flex-wrap">

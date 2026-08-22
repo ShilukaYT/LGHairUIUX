@@ -5,7 +5,7 @@ import { logActivity } from "@/utils/activityLogger";
 import { useTheme } from "vuetify";
 import {
   Plus, Pencil, Trash2, Eye, Search, ImageOff, ChevronDown,
-  Check, X, RotateCcw,
+  Check, X, RotateCcw, Package
 } from "lucide-vue-next";
 
 const API = import.meta.env.VITE_API_URL;
@@ -632,10 +632,15 @@ onMounted(async () => {
   <v-container fluid class="pa-6 fill-height align-start" style="min-height: 100vh;">
     <v-card width="100%" elevation="2" rounded="xl">
       <v-card-title class="d-flex flex-column flex-md-row align-md-center justify-space-between pa-6">
-        <div>
-          <h2 class="text-h5 font-weight-bold mb-1">Quản Lý Sản Phẩm</h2>
-          <div class="text-subtitle-2 text-medium-emphasis">
-            {{ sanPhams.length }} sản phẩm · {{ totalActive }} đang bán
+        <div class="d-flex align-center gap-3">
+          <v-avatar color="primary" variant="tonal" size="48" rounded="lg">
+            <Package class="w-6 h-6 text-primary" />
+          </v-avatar>
+          <div>
+            <h2 class="text-h5 font-weight-bold mb-1">Quản Lý Sản Phẩm</h2>
+            <div class="text-subtitle-2 text-medium-emphasis">
+              {{ sanPhams.length }} sản phẩm · {{ totalActive }} đang bán
+            </div>
           </div>
         </div>
 

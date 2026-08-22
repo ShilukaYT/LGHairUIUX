@@ -358,14 +358,18 @@ onMounted(loadData)
     <!-- ═══════ HEADER CARD ═══════ -->
     <v-card elevation="2" rounded="xl" class="pa-6 mb-6 w-full">
       <div class="d-flex flex-column flex-lg-row align-lg-center justify-space-between gap-4">
-        <div>
-          <h2 class="text-h5 font-weight-bold d-flex align-center gap-2 mb-1">
-            <FolderKanban class="w-6 h-6 text-primary shrink-0" />
-            <span>Quản Lý Danh Mục Dịch Vụ</span>
-          </h2>
-          <p class="text-subtitle-2 text-medium-emphasis mb-0">
-            Quản lý và phân nhóm danh mục dịch vụ làm tóc, bảng giá và phân loại chuyên nghiệp
-          </p>
+        <div class="d-flex align-center gap-3">
+          <v-avatar color="primary" variant="tonal" size="48" rounded="lg">
+            <FolderKanban class="w-6 h-6 text-primary" />
+          </v-avatar>
+          <div>
+            <h2 class="text-h5 font-weight-bold mb-1">
+              Quản Lý Danh Mục Dịch Vụ
+            </h2>
+            <p class="text-subtitle-2 text-medium-emphasis mb-0">
+              Quản lý và phân nhóm danh mục dịch vụ làm tóc, bảng giá và phân loại chuyên nghiệp
+            </p>
+          </div>
         </div>
 
         <div class="d-flex align-center gap-3 flex-grow-1 justify-lg-end flex-wrap">

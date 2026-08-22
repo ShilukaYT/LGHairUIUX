@@ -383,14 +383,18 @@ const getAvailableServices = (currentIndex: number | string) => {
     <!-- ═══════ HEADER CARD ═══════ -->
     <v-card elevation="2" rounded="xl" class="pa-6 mb-6">
       <div class="d-flex flex-column flex-lg-row align-lg-center justify-space-between gap-4">
-        <div>
-          <h2 class="text-h5 font-weight-bold d-flex align-center gap-2 mb-1">
-            <Zap class="w-6 h-6 text-rose-500 shrink-0" />
-            <span>Quản Lý Flash Sale & Khuyến Mãi</span>
-          </h2>
-          <p class="text-subtitle-2 text-medium-emphasis mb-0">
-            Tạo và quản lý các chiến dịch giảm giá cho dịch vụ & combo trong hệ thống
-          </p>
+        <div class="d-flex align-center gap-3">
+          <v-avatar color="error" variant="tonal" size="48" rounded="lg">
+            <Zap class="w-6 h-6 text-error" />
+          </v-avatar>
+          <div>
+            <h2 class="text-h5 font-weight-bold mb-1">
+              Quản Lý Flash Sale &amp; Khuyến Mãi
+            </h2>
+            <p class="text-subtitle-2 text-medium-emphasis mb-0">
+              Tạo và quản lý các chiến dịch giảm giá cho dịch vụ &amp; combo trong hệ thống
+            </p>
+          </div>
         </div>
 
         <div class="d-flex align-center gap-3 flex-grow-1 justify-lg-end flex-wrap">

@@ -100,10 +100,15 @@ onMounted(() => loadDoiSoat());
 
       <!-- ── HEADER ─────────────────────────────────────────────── -->
       <v-card-title class="d-flex flex-column flex-md-row align-md-center justify-space-between pa-6">
-        <div>
-          <h2 class="text-h5 font-weight-bold mb-1">Đối Soát Hóa Đơn Sản Phẩm</h2>
-          <div class="text-subtitle-2 text-medium-emphasis">
-            Kiểm tra khớp giữa kho và hóa đơn điện tử
+        <div class="d-flex align-center gap-3">
+          <v-avatar color="primary" variant="tonal" size="48" rounded="lg">
+            <FileText class="w-6 h-6 text-primary" />
+          </v-avatar>
+          <div>
+            <h2 class="text-h5 font-weight-bold mb-1">Đối Soát Hóa Đơn Sản Phẩm</h2>
+            <div class="text-subtitle-2 text-medium-emphasis">
+              Kiểm tra khớp giữa kho và hóa đơn điện tử
+            </div>
           </div>
         </div>
 
