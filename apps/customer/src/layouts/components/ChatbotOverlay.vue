@@ -6,6 +6,7 @@ import { db } from '@/firebase'
 import { useRouter, useRoute } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/useAuthStore'
+import { useChatStore } from '@/stores/useChatStore'
 
 // ── Config ──────────────────────────────────────────────
 const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
@@ -18,6 +19,9 @@ const route = useRoute()
 
 // ── State ───────────────────────────────────────────────
 const isOpen        = ref(false)
+const chatStore     = useChatStore()
+// Đồng bộ trạng thái mở/đóng chat vào store để TryOn button né ra
+watch(isOpen, (val) => { chatStore.isChatOpen = val })
 const isConnecting  = ref(false)  // đang tạo phòng chat live
 const isConnected   = ref(false)  // false = Chat với AI | true = Chat với Nhân viên
 const connectError  = ref('')     
@@ -629,7 +633,8 @@ onUnmounted(() => {
     >
       <div
         v-if="isOpen"
-        class="mb-5 flex h-[520px] max-h-[75vh] w-[calc(100vw-40px)] max-w-[380px] flex-col overflow-hidden rounded-2xl border border-black/10 bg-white shadow-2xl"
+        class="mb-3 flex h-[520px] max-h-[calc(100vh-160px)] w-[calc(100vw-40px)] max-w-[380px] flex-col overflow-hidden rounded-2xl border border-black/10 bg-white shadow-2xl"
+        style="max-height: min(520px, calc(100dvh - 104px));"
       >
         <div class="flex items-center justify-between bg-black px-5 py-4 text-white flex-shrink-0">
           <div class="flex items-center gap-3">
