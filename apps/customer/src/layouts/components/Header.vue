@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Search, User, ShoppingBag, Menu, X, Heart } from 'lucide-vue-next';
+import { Search, User, ShoppingBag, Menu, X, Heart, Scissors } from 'lucide-vue-next';
 import axios from 'axios';
-import { getCartDB } from '@/Views/Anonymous/CSDL/cartDB';
+import { getProductCartDB } from '@/Views/Anonymous/CSDL/cartDB';
 import { useWishlistStore } from '@/stores/useWishlistStore';
+import { useBookingBasketStore } from '@/stores/useBookingBasketStore';
 
 const API = import.meta.env.VITE_API_URL;
 const route = useRoute();
@@ -16,6 +17,7 @@ let checkSessionInterval: ReturnType<typeof setInterval>;
 
 const cartCount = ref(0);
 const wishlistStore = useWishlistStore();
+const bookingBasketStore = useBookingBasketStore();
 const wishlistCount = computed(() => (wishlistStore.favoriteProducts?.length || 0) + (wishlistStore.favoriteServices?.length || 0) + (wishlistStore.favoriteEmployees?.length || 0));
 
 
@@ -30,8 +32,9 @@ const updateCartCount = async () => {
       maKH = 'GUEST';
     }
   }
-  const items = await getCartDB(maKH);
-  cartCount.value = items.length;
+  // Chỉ đếm sản phẩm vật lý (SANPHAM/BIENTHE), không đếm dịch vụ/combo
+  const productItems = await getProductCartDB(maKH);
+  cartCount.value = productItems.length;
 };
 
 watch(currentUser, () => {
@@ -434,6 +437,10 @@ onUnmounted(() => {
             <Heart :size="20" :stroke-width="1.5" />
             <span class="absolute -top-1 -right-1 w-3 h-3 text-white text-[8px] flex items-center justify-center rounded-full" :class="wishlistCount > 0 ? 'bg-red-500' : 'bg-black'">{{ wishlistCount }}</span>
           </router-link>
+          <button @click="bookingBasketStore.openDrawer()" class="text-black hover:text-gray-500 transition-colors relative" aria-label="Khay dịch vụ">
+            <Scissors :size="18" :stroke-width="1.5" />
+            <span v-if="bookingBasketStore.itemCount > 0" class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 text-white text-[8px] flex items-center justify-center rounded-full">{{ bookingBasketStore.itemCount }}</span>
+          </button>
           <router-link :to="{ name: currentUser ? 'profile' : 'login' }" class="text-black hover:text-gray-500 transition-colors flex items-center justify-center" aria-label="Account">
             <template v-if="currentUser">
               <div class="w-5 h-5 rounded-full overflow-hidden border border-gray-200 shrink-0 flex items-center justify-center bg-gray-50">

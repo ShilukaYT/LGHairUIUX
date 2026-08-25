@@ -4,6 +4,7 @@ const API = import.meta.env.VITE_API_URL;
 import { getCartDB, addToCartDB } from "@/Views/Anonymous/CSDL/cartDB";
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 import { useWishlistStore, showToast } from "@/stores/useWishlistStore";
+import { useBookingBasketStore } from "@/stores/useBookingBasketStore";
 import { Heart } from "lucide-vue-next";
 import ServiceReviews from "./ServiceReviews.vue";
 
@@ -40,6 +41,9 @@ export default {
   computed: {
     wishlistStore() {
       return useWishlistStore();
+    },
+    bookingBasketStore() {
+      return useBookingBasketStore();
     }
   },
 
@@ -143,10 +147,8 @@ export default {
       const s = Math.floor((diff / 1000) % 60);
       return `${d}d ${h}h ${m}m ${s}s`;
     },
-    // TRONG FILE ChiTietDichVu.vue
 
     async addToCart(comboArg) {
-      // Xác định xem tham số truyền vào là combo (từ "Combo liên quan") hay là dịch vụ hiện tại
       const isComboArg = comboArg && (comboArg.id || comboArg.maCb) && comboArg.tenCombo;
       const targetService = isComboArg ? comboArg : this.service;
 
@@ -169,9 +171,30 @@ export default {
       showToast(`Đã thêm "${item.tenItem}" vào giỏ hàng!`, "success");
     },
 
-    async bookNow() {
-      await this.addToCart();
-      this.$router.push('/cart');
+    addToBasket(comboArg) {
+      const isComboArg = comboArg && (comboArg.id || comboArg.maCb) && comboArg.tenCombo;
+      const targetService = isComboArg ? comboArg : this.service;
+
+      const imgPath = isComboArg 
+        ? (targetService.hinhAnh || targetService.images?.[0] || "") 
+        : (this.activeImage ? this.activeImage : this.service.images && this.service.images.length > 0 ? this.service.images[0] : "");
+
+      this.bookingBasketStore.addItem({
+        id: targetService.maDv || targetService.id || targetService.maCb,
+        tenItem: targetService.tenDv || targetService.tenCombo,
+        gia: targetService.gia,
+        giaGoc: targetService.giaGoc || targetService.originalPrice || targetService.gia,
+        hinhAnh: imgPath,
+        type: isComboArg ? 'COMBO' : 'DICHVU',
+        duration: targetService.thoiGianLam || 30,
+      });
+      showToast(`Đã thêm "${targetService.tenDv || targetService.tenCombo}" vào giỏ đặt lịch!`, "success");
+      this.bookingBasketStore.openDrawer();
+    },
+
+    bookNow() {
+      this.addToBasket();
+      this.bookingBasketStore.openDrawer();
     },
   },
 };
@@ -208,7 +231,6 @@ export default {
             <li class="breadcrumb-item">
               <router-link to="/services">Dịch vụ</router-link>
             </li>
-            <!-- <li class="breadcrumb-item active">{{ service.tenDv }}</li> -->
           </ol>
         </nav>
         <h1 class="category-grid-heading">{{ service.tenDv }}</h1>
@@ -236,7 +258,7 @@ export default {
       </div>
 
       <!-- ===================================================
-           GALLERY ẢNH (từ ChiTietDichVuOld — flex-wrap)
+           GALLERY ẢNH
       =================================================== -->
       <div
         class="svc-gallery mb-5"
@@ -254,14 +276,10 @@ export default {
               :alt="`Ảnh ${idx + 1}`"
               class="svc-gallery-img"
             />
-            <!-- <span v-if="service.phanTramGiam" class="svc-discount-badge">
-              -{{ service.phanTramGiam }}%
-            </span> -->
           </div>
         </div>
       </div>
 
-      <!-- Mô tả dưới gallery (từ ChiTietDichVuOld) -->
       <p v-if="service.moTaChiTiet" class="svc-mota-below">
         {{ service.moTaChiTiet }}
       </p>
@@ -269,7 +287,7 @@ export default {
       <hr class="gold-line mb-5" />
 
       <!-- ===================================================
-           PHẦN 2: TIÊU ĐỀ DỊCH VỤ (từ ChiTietDichVuOld)
+           PHẦN 2: TIÊU ĐỀ DỊCH VỤ
       =================================================== -->
       <section
         class="service-tieude-section mb-5"
@@ -283,7 +301,6 @@ export default {
             <p class="service-tieude-desc" v-if="td.moTaTieuDe">
               {{ td.moTaTieuDe }}
             </p>
-            <!-- <div class="heading-gold-line mx-auto"></div> -->
           </div>
           <div class="kieu-grid" v-if="td.chiTiet?.length">
             <div
@@ -306,18 +323,16 @@ export default {
         </div>
       </section>
 
-      <!-- <hr class="gold-line my-5" v-if="tieudeDichvus.length > 0" /> -->
-
-      <!-- ===================================================
-           PHẦN 2B: KIỂU TÓC GRID (từ ChiTietDichVuOld)
-      =================================================== -->
-
-      <!-- Nút thêm vào giỏ dịch vụ chính (thay thế Đặt lịch ngay từ ChiTietDichVuOld) -->
+      <!-- CTA BUTTONS -->
       <div
         class="d-flex gap-3 mt-5 action-buttons-container justify-content-center mx-auto"
       >
-        <button class="btn-add-cart" @click="addToCart">
-          <i class="fas fa-calendar-check me-2"></i>Đặt lịch
+        <button 
+          class="svc-btn-book"
+          @click="addToBasket(null)"
+          :class="{ 'is-selected': bookingBasketStore.hasItem(service.maDv) }"
+        >
+          <span class="btn-text ">{{ bookingBasketStore.hasItem(service.maDv) ? 'ĐÃ CHỌN ✓' : 'CHỌN DỊCH VỤ' }}</span>
         </button>
         <button class="btn-book-now" @click="bookNow">
           <i class="fas fa-calendar-check me-2"></i>ĐẶT LỊCH NGAY
@@ -338,7 +353,7 @@ export default {
       </div>
 
       <!-- ===================================================
-           PHẦN 3: COMBO LIÊN QUAN (giữ nguyên từ ChiTietDichVu)
+           PHẦN 3: COMBO LIÊN QUAN
       =================================================== -->
       <section class="related-combos mb-5" v-if="relatedCombos.length > 0">
         <hr class="gold-line mt-5" />
@@ -353,15 +368,9 @@ export default {
           >
             <router-link
               :to="{ name: 'detailCombo', params: { id: c.id } }"
-              style="
-                text-decoration: none;
-                color: inherit;
-                display: block;
-                height: 100%;
-              "
+              style="text-decoration: none; color: inherit; display: block; height: 100%;"
             >
               <div class="luxury-combo-card d-flex flex-column m-3">
-                <!-- Ảnh combo -->
                 <div class="combo-img-wrap" v-if="c.hinhAnh">
                   <img
                     :src="getImageUrl(c.hinhAnh)"
@@ -380,7 +389,6 @@ export default {
                       <li v-for="item in c.items" :key="item">
                         <i class="fas fa-check-circle"></i>
                         <span>{{ item }}</span>
-                        <!-- ← thêm span -->
                       </li>
                     </ul>
                   </div>
@@ -392,17 +400,9 @@ export default {
                       <span class="combo-price mb-0">
                         <template v-if="c.giaGoc">Chỉ từ </template>{{ formatPrice(c.gia) }}
                       </span>
-                      <span
-                        v-if="c.phanTramGiam"
-                        class="combo-discount-badge-gold"
-                        >-{{ c.phanTramGiam }}%</span
-                      >
                     </div>
-                    <button
-                      @click="addToCart(c)"
-                      class="btn-outline-gold-fixed w-100"
-                    >
-                      Đặt ngay
+                    <button class="svc-related-btn" @click.stop.prevent="addToBasket(c)" :class="{ 'is-selected': bookingBasketStore.hasItem(c.id || c.maCb) }">
+                      {{ bookingBasketStore.hasItem(c.id || c.maCb) ? 'ĐÃ CHỌN ✓' : 'CHỌN GÓI' }}
                     </button>
                   </div>
                 </div>
@@ -429,42 +429,43 @@ export default {
             :key="s.id"
             class="col-md-6 col-lg-4"
           >
-            <div class="service-card-item d-flex flex-column m-3">
-              <div class="card-image">
-                <img
-                  :src="getImageUrl(s.hinhAnh)"
-                  :alt="s.tenDv"
-                  class="img-main-card"
-                />
-                <div v-if="s.phanTramGiam" class="discount-ribbon">
-                  <span>-{{ s.phanTramGiam }}%</span>
-                </div>
-                <div class="duration-tag-overlay">{{ s.thoiGianLam }} Phút</div>
-              </div>
-              <div
-                class="card-body p-4 text-center d-flex flex-column flex-grow-1"
-              >
-                <h4 class="service-name-sm">{{ s.tenDv }}</h4>
-                <p class="service-desc-sm text-muted flex-grow-1">
-                  {{ s.moTa }}
-                </p>
-                <div class="mt-auto">
-                  <div class="price-box-sm mb-3">
-                    <span v-if="s.phanTramGiam" class="old-price-sm">{{
-                      formatPrice(s.giaGoc)
-                    }}</span>
-                    <span class="new-price-sm">
-                      <template v-if="s.phanTramGiam">Chỉ từ </template>{{ formatPrice(s.gia) }}
-                    </span>
+            <router-link
+              :to="{ name: 'serviceDetail', params: { id: s.id } }"
+              style="text-decoration: none; color: inherit; display: block; height: 100%;"
+            >
+              <div class="service-card-item d-flex flex-column m-3">
+                <div class="card-image">
+                  <img
+                    :src="getImageUrl(s.hinhAnh)"
+                    :alt="s.tenDv"
+                    class="img-main-card"
+                  />
+                  <div v-if="s.phanTramGiam" class="discount-ribbon">
+                    <span>-{{ s.phanTramGiam }}%</span>
                   </div>
-                  <router-link
-                    :to="{ name: 'serviceDetail', params: { id: s.id } }"
-                    class="btn-view-more-gold"
-                    >CHI TIẾT</router-link
-                  >
+                  <div class="duration-tag-overlay">{{ s.thoiGianLam }} Phút</div>
+                </div>
+                <div
+                  class="card-body p-4 text-center d-flex flex-column flex-grow-1"
+                >
+                  <h4 class="service-name-sm">{{ s.tenDv }}</h4>
+                  <p class="service-desc-sm text-muted flex-grow-1">
+                    {{ s.moTa }}
+                  </p>
+                  <div class="mt-auto">
+                    <div class="price-box-sm mb-3">
+                      <span v-if="s.phanTramGiam" class="old-price-sm">{{
+                        formatPrice(s.giaGoc)
+                      }}</span>
+                      <span class="new-price-sm">
+                        <template v-if="s.phanTramGiam">Chỉ từ </template>{{ formatPrice(s.gia) }}
+                      </span>
+                    </div>
+                    <div class="btn-view-more-gold">CHI TIẾT</div>
+                  </div>
                 </div>
               </div>
-            </div>
+            </router-link>
           </div>
         </div>
       </section>
@@ -1053,6 +1054,7 @@ export default {
 }
 
 .btn-add-cart,
+.svc-btn-book,
 .btn-book-now {
   display: inline-flex;
   align-items: center;
@@ -1072,13 +1074,13 @@ export default {
 }
 
 /* Nút Đặt lịch (thứ cấp) */
-.btn-add-cart {
+.svc-btn-book {
   background-color: var(--bg);
   color: var(--ink);
-  border-color: var(--line);
+  border: 1px solid var(--line);
 }
 
-.btn-add-cart:hover {
+.svc-btn-book:hover {
   background-color: var(--bg-soft);
   border-color: var(--ink);
   transform: translateY(-2px);
@@ -1582,7 +1584,7 @@ export default {
   .action-buttons-container {
     gap: 10px !important;
   }
-  .btn-add-cart,
+  .svc-btn-book,
   .btn-book-now {
     min-width: unset;
     flex: 1;
@@ -1662,7 +1664,7 @@ export default {
   .action-buttons-container {
     gap: 10px !important;
   }
-  .btn-add-cart,
+  .svc-btn-book,
   .btn-book-now {
     min-width: unset;
     flex: 1;

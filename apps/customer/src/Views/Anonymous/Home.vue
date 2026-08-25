@@ -48,33 +48,7 @@ const activeHeroSlide = ref<number>(0);
 let heroIntervalId: number | null = null;
 
 const heroSlides: HeroSlide[] = [
-  {
-    id: 1,
-    image: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&q=80&w=1400',
-    alt: 'Luxury female hair campaign',
-    subtitle: 'Salon Cao Cấp',
-    title: 'Chăm sóc tóc nữ',
-    desc: 'Khám phá dịch vụ salon và sản phẩm chăm sóc tóc dành riêng cho mái tóc hiện đại.',
-    route: 'services'
-  },
-  {
-    id: 2,
-    image: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&q=80&w=1400',
-    alt: 'Glossy salon hair banner',
-    subtitle: 'Sản Phẩm Thượng Hạng',
-    title: 'Nâng Tầm Phong Cách',
-    desc: 'Trải nghiệm bộ sưu tập sản phẩm chăm sóc tóc cao cấp được tinh tuyển bởi chuyên gia.',
-    route: 'shop'
-  },
-  {
-    id: 3,
-    image: 'https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&q=80&w=1400',
-    alt: 'Premium hair styling banner',
-    subtitle: 'Trải Nghiệm Đẳng Cấp',
-    title: 'Đặt lịch chăm sóc',
-    desc: 'Tận hưởng không gian làm đẹp sang trọng và dịch vụ chăm sóc tóc đẳng cấp.',
-    route: 'datdichvu'
-  }
+
 ];
 
 // Flash sale countdown
@@ -220,30 +194,7 @@ const getFallbackImg = (tenDanhMuc: string): string => {
 // Testimonials
 const activeTestimonial = ref<number>(0);
 const testimonials: Testimonial[] = [
-  {
-    id: 1,
-    name: 'Lê Khánh Linh',
-    role: 'Fashion Model',
-    quote: 'Dịch vụ cắt tóc Signature ở đây thực sự nâng tầm khuôn mặt. Kỹ thuật tỉ mỉ, sấy tạo kiểu giữ nếp lâu và không gian vô cùng thư giãn, sang trọng.',
-    rating: 5,
-    service: 'Cắt Tóc Signature'
-  },
-  {
-    id: 2,
-    name: 'Trần Minh Hằng',
-    role: 'Content Creator',
-    quote: 'Tôi đã uốn kỹ thuật số và nhuộm Balayage tại đây. Tóc lên màu chuẩn xác, sóng lơi mềm mại mà không hề bị khô xơ nhờ dùng kèm Huyết Thanh Lụa.',
-    rating: 5,
-    service: 'Nhuộm Màu & Uốn Sóng Lơi'
-  },
-  {
-    id: 3,
-    name: 'Nguyễn Thế Anh',
-    role: 'Creative Director',
-    quote: 'Rất ấn tượng với khu sản phẩm. Dầu gội cân bằng và mặt nạ phục hồi tóc dùng rất thích, thiết kế chai lọ tối giản rất hợp gu.',
-    rating: 5,
-    service: 'Chăm Sóc Tóc Nam & Boutique'
-  }
+ 
 ];
 
 const currentTestimonial = computed(() => {

@@ -21,7 +21,6 @@ const router = createRouter({
         { path: 'services', name: 'services', component: () => import('@/Views/Anonymous/Services.vue') },
         { path: 'service/:id', name: 'serviceDetail', component: () => import('@/Views/Anonymous/ServiceDetail.vue') },
         { path: 'cart', name: 'cart', component: () => import('@/Views/Anonymous/Cart.vue') },
-        { path: 'booking/:serviceId?', name: 'booking', component: () => import('@/Views/Anonymous/Booking.vue') },
         { path: 'don-hang', name: 'lich_su_mua_hang', component: () => import('@/Views/Anonymous/LichSuMuaHang.vue'), meta: { requiresAuth: true } },
         { path: 'wishlist', name: 'wishlist', component: () => import('@/Views/Anonymous/Wishlist.vue') },
         { path: 'profile', name: 'profile', component: () => import('@/Views/Anonymous/Profile.vue'), meta: { requiresAuth: true } },
