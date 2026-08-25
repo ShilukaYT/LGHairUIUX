@@ -4,17 +4,21 @@ import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios';
 import Swal from 'sweetalert2';
+import { useBookingBasketStore } from '@/stores/useBookingBasketStore';
 
 declare const AOS: any;
 
 const API = import.meta.env.VITE_API_URL;
 const allItemsFromApi = ref<any[]>([]);
-const stylists = ref<any[]>([]); // Đổi thành ref trống
+const stylists = ref<any[]>([]); 
 const isSearchingStylist = ref(false);
-const myVouchers = ref<any[]>([]); // Đổi thành ref trống
+const myVouchers = ref<any[]>([]); 
 const customerId = ref('');
 const tempDate = ref('');
 const tempTime = ref('');
+
+// Cờ chặn spam click khi đang xử lý
+const isSubmitting = ref(false);
 
 const favoriteStylistIds = ref<string[]>([]);
 
@@ -23,13 +27,11 @@ const isStylistFavorite = (stylistId: string) => {
     const cleanId = stylistId.trim().toLowerCase();
     return favoriteStylistIds.value.some(favId => favId.trim().toLowerCase() === cleanId);
 };
-// Thay dòng const estimatedTotalMinutes = ref(0); bằng:
+
 const estimatedTotalMinutes = computed(() => {
     return bookingData.value.selectedServices.reduce((sum, s) => sum + (s.duration || 30), 0);
 });
 
-
-// Sửa lại dòng 12 đến 22 cho chuẩn TypeScript
 const bookingData = ref({
     customerName: '',
     phone: '',
@@ -37,18 +39,12 @@ const bookingData = ref({
     bookingDate: '',
     stylistId: null as string | null,
     selectedServices: [] as Array<{ id: any, name: string, price: number, originalPrice: number, icon: string, duration: number, hinhAnh?: string }>,
-    /** Tối đa 2 mã, thứ tự = thứ tự áp dụng (mã trước trừ trước) */
     voucherIds: [] as string[],
     paymentMode: '10',
     paymentMethod: 'vnpay',
     note: ''
 });
 
-// ==========================================
-// HÓA ĐƠN ĐIỆN TỬ
-// Mặc định luôn xuất hóa đơn cá nhân, dùng Email đã nhập ở trên (không hỏi lại).
-// Chỉ mở rộng khi khách cần hóa đơn công ty (có MST).
-// ==========================================
 const showInvoiceCompanyForm = ref(false);
 const invoiceCompany = ref({ tenCongTy: '', mst: '' });
 const mstError = ref('');
@@ -77,11 +73,11 @@ function buildInvoiceInfoPayload() {
         laDoanhNghiep: showInvoiceCompanyForm.value,
         tenCongTy: showInvoiceCompanyForm.value ? invoiceCompany.value.tenCongTy : null,
         mst: showInvoiceCompanyForm.value ? invoiceCompany.value.mst : null,
-        diaChiXuatHD: null, // Dịch vụ làm tại salon, không có địa chỉ giao hàng riêng
+        diaChiXuatHD: null, 
         emailNhanHD: bookingData.value.email || null
     };
 }
-// Hàm load Voucher dựa trên tổng tiền hiện tại
+
 const loadVouchers = async () => {
     if (!customerId.value || customerId.value === 'GUEST') return;
     try {
@@ -95,7 +91,6 @@ const loadVouchers = async () => {
         });
         myVouchers.value = res.data;
 
-        // Bỏ các mã không còn trong danh sách hợp lệ
         bookingData.value.voucherIds = bookingData.value.voucherIds.filter((id) => {
             const v = myVouchers.value.find((x: any) => x.id === id);
             return v && !isVoucherDisabled(v);
@@ -106,7 +101,7 @@ const loadVouchers = async () => {
 };
 
 const isVoucherDisabled = (v: any) => {
-    if (v.isAvailable === false) return true; // Backend trả về
+    if (v.isAvailable === false) return true; 
     if (v.desc && v.desc.includes('Đơn tối thiểu')) {
         const match = v.desc.match(/Đơn tối thiểu ([\d,]+)đ/);
         if (match) {
@@ -117,28 +112,47 @@ const isVoucherDisabled = (v: any) => {
     return false;
 };
 
-
 onMounted(async () => {
-    // 1. Tự động điền thông tin khách hàng
     const customer = getCustomerInfo();
     customerId.value = customer.maKH;
-    if (customer.maKH !== 'GUEST') {
-        bookingData.value.customerName = customer.hoTen;
-        bookingData.value.email = customer.email;
-        bookingData.value.phone = customer.sdt;
+
+    // ===================================================================
+    // KHÔI PHỤC DỮ LIỆU TỪ LOCAL STORAGE (NẾU KHÁCH ẤN BACK TRÌNH DUYỆT)
+    // ===================================================================
+    const savedName = localStorage.getItem('temp_name');
+    const savedPhone = localStorage.getItem('temp_phone');
+    const savedEmail = localStorage.getItem('temp_email');
+    const savedDate = localStorage.getItem('temp_date'); 
+    
+    if (savedName) bookingData.value.customerName = savedName;
+    else if (customer.maKH !== 'GUEST') bookingData.value.customerName = customer.hoTen;
+
+    if (savedPhone) bookingData.value.phone = savedPhone;
+    else if (customer.maKH !== 'GUEST') bookingData.value.phone = customer.sdt;
+
+    if (savedEmail) bookingData.value.email = savedEmail;
+    else if (customer.maKH !== 'GUEST') bookingData.value.email = customer.email;
+
+    if (savedDate) {
+        const parts = savedDate.split('T');
+        if (parts.length === 2) {
+            tempDate.value = parts[0];
+            tempTime.value = parts[1];
+            bookingData.value.bookingDate = savedDate;
+        }
     }
+    // ===================================================================
+
     if (customerId.value !== 'GUEST') {
-        // Load từ LocalStorage trước làm dự phòng
-        const saved = localStorage.getItem(`favorite_employees_${customerId.value}`);
-        if (saved) {
+        const savedFav = localStorage.getItem(`favorite_employees_${customerId.value}`);
+        if (savedFav) {
             try {
-                favoriteStylistIds.value = JSON.parse(saved).map((id: string) => String(id).trim());
+                favoriteStylistIds.value = JSON.parse(savedFav).map((id: string) => String(id).trim());
             } catch (e) {
                 favoriteStylistIds.value = [];
             }
         }
 
-        // Sau đó gọi API để đồng bộ từ DB (nếu có)
         try {
             const resFav = await axios.get(`${API}/api/YeuThich/employees/${customerId.value}`);
             if (resFav.data && Array.isArray(resFav.data)) {
@@ -149,9 +163,8 @@ onMounted(async () => {
             console.error("Lỗi khi load thợ yêu thích từ DB:", error);
         }
     }
-    // 2. Fetch Dịch vụ, Combo & Stylist
+
     try {
-        // Gọi song song cả 2 API cho nhanh
         const [resBooking, resStylists] = await Promise.all([
             axios.get(`${API}/api/DatDichVu/data-booking`),
             axios.get(`${API}/api/DatDichVu/get-stylists`)
@@ -159,7 +172,6 @@ onMounted(async () => {
 
         allItemsFromApi.value = [...resBooking.data.services, ...resBooking.data.combos];
         
-        // Map cờ isFavorite và sắp xếp
         const mappedStylists = (resStylists.data || []).map((s: any) => ({
             ...s,
             isFavorite: s.isFavorite || isStylistFavorite(s.id)
@@ -173,28 +185,25 @@ onMounted(async () => {
 
         stylists.value = mappedStylists;
 
-        // Đọc stylistId từ query param và tự động chọn nếu hợp lệ
-        const params = new URLSearchParams(window.location.search);
-        const queryStylistId = params.get('stylistId');
-        if (queryStylistId) {
-            const hasStylist = stylists.value.some(s => s.id === queryStylistId);
-            if (hasStylist) {
-                bookingData.value.stylistId = queryStylistId;
-            }
+        // Khôi phục thợ đã chọn
+        const queryStylistId = new URLSearchParams(window.location.search).get('stylistId');
+        const savedStylistId = localStorage.getItem('temp_stylist_id');
+        
+        if (queryStylistId && stylists.value.some(s => s.id === queryStylistId)) {
+            bookingData.value.stylistId = queryStylistId;
+        } else if (savedStylistId && stylists.value.some(s => s.id === savedStylistId)) {
+            bookingData.value.stylistId = savedStylistId;
         }
     } catch (error) {
         console.error("Lỗi khi load dữ liệu:", error);
     }
-    // 3. Load giỏ hàng từ IndexedDB (đã chọn từ Services.vue)
-    // 3. Nhận dữ liệu đã đóng gói từ giỏ hàng
+
+    // Khôi phục Dịch vụ & Voucher
     const checkoutRaw = localStorage.getItem("checkoutData");
+    const tempVoucher = localStorage.getItem("temp_voucher");
 
     if (checkoutRaw) {
         const checkoutData = JSON.parse(checkoutRaw);
-
-        console.log("Dữ liệu nhận từ giỏ hàng:", checkoutData);
-
-        // Chỉ lấy DỊCH VỤ đưa vào form đặt lịch
         bookingData.value.selectedServices = (checkoutData.dichVuItems || []).map((item: any) => ({
             id: item.id,
             name: item.tenItem,
@@ -205,116 +214,85 @@ onMounted(async () => {
             hinhAnh: item.hinhAnh
         }));
         localStorage.removeItem("checkoutData");
-
-        // Nếu cần dùng sản phẩm / giao hàng sau này thì lấy như này
-        const sanPhamItems = checkoutData.sanPhamItems || [];
-        const thongTinGiaoHang = checkoutData.thongTinGiaoHang;
-        const nhanSanPham = checkoutData.nhanSanPham;
-        const loaiCheckout = checkoutData.loaiCheckout;
-
-        console.log("Sản phẩm:", sanPhamItems);
-        console.log("Thông tin giao hàng:", thongTinGiaoHang);
-        console.log("Kiểu nhận sản phẩm:", nhanSanPham);
-        console.log("Loại checkout:", loaiCheckout);
     } else {
-        // Nếu không có dữ liệu từ giỏ hàng thì fallback lấy từ IndexedDB
-        const cartData = await getCartDB(customer.maKH);
-
-        if (cartData && cartData.length > 0) {
-            bookingData.value.selectedServices = cartData
-                .filter((item: any) => item.type !== "SANPHAM" && !String(item.id).startsWith("SANPHAM_"))
-                .map((item: any) => ({
-                    id: item.id,
-                    name: item.tenItem,
-                    price: Number(item.gia || 0),
-                    originalPrice: Number(item.giaGoc || item.gia || 0),
-                    icon: 'fas fa-check-circle',
-                    duration: Number(item.duration || 30),
-                    hinhAnh: item.hinhAnh
-                }));
+        const bookingStore = useBookingBasketStore();
+        if (bookingStore.items && bookingStore.items.length > 0) {
+            bookingData.value.selectedServices = bookingStore.items.map((item: any) => ({
+                id: item.id,
+                name: item.tenItem,
+                price: Number(item.gia || 0),
+                originalPrice: Number(item.giaGoc || item.gia || 0),
+                icon: 'fas fa-check-circle',
+                duration: Number(item.duration || 30),
+                hinhAnh: item.hinhAnh
+            }));
+        } else {
+            bookingData.value.selectedServices = [];
         }
     }
+
+    if (tempVoucher) {
+        bookingData.value.voucherIds = [tempVoucher];
+    }
+
     await loadVouchers();
 });
 
 const searchQuery = ref('');
 const showServiceDropdown = ref(false);
 
-// --- LOGIC TÌM KIẾM ---
 const filteredServices = computed(() => {
     const query = searchQuery.value.toLowerCase().trim();
-
-    // Lấy toàn bộ dữ liệu từ API đã lưu vào allItemsFromApi
     let list = allItemsFromApi.value;
-
-    // Nếu có nhập từ khóa thì mới lọc theo tên
     if (query) {
-        list = list.filter(s =>
-            s.name.toLowerCase().includes(query)
-        );
+        list = list.filter(s => s.name.toLowerCase().includes(query));
     }
-
-    // Luôn lọc bỏ những dịch vụ đã có trong giỏ hàng (selectedServices)
-    return list.filter(item =>
-        !bookingData.value.selectedServices.find(selected => selected.id === item.id)
-    );
+    return list.filter(item => !bookingData.value.selectedServices.find(selected => selected.id === item.id));
 });
 
-
-
 const addService = async (service: any) => {
-    // 1. Kiểm tra nếu đã có trong danh sách thì không thêm nữa
     if (bookingData.value.selectedServices.find(s => s.id === service.id)) {
         showServiceDropdown.value = false;
         return;
     }
 
-    // 2. Thêm vào giao diện (Reactive array)
     bookingData.value.selectedServices.push({
         id: service.id,
         name: service.name,
         price: service.price,
-        // THÊM DÒNG NÀY:
         originalPrice: service.originalPrice || service.price,
         icon: service.icon || 'fas fa-check-circle',
         duration: service.duration || 30,
         hinhAnh: service.hinhAnh
     });
-    // 3. LƯU VÀO INDEXEDDB (QUAN TRỌNG)
+
     try {
         await addToCartDB(
             {
                 id: service.id,
                 tenItem: service.name,
                 gia: service.price,
-                hinhAnh: service.icon // Thêm hinhAnh để tránh lỗi thiếu thuộc tính trong CartItem
+                hinhAnh: service.icon 
             },
-            customerId.value || 'GUEST' // Truyền maKH làm tham số thứ hai ở đây
+            customerId.value || 'GUEST'
         );
-
-        console.log("Đã lưu dịch vụ mới vào IndexedDB");
     } catch (error) {
         console.error("Lỗi khi lưu vào IndexedDB:", error);
     }
-    // 4. Tải lại voucher vì tổng tiền đã thay đổi
+
     await loadVouchers();
-    // 5. Reset ô tìm kiếm
     searchQuery.value = '';
     showServiceDropdown.value = false;
 };
 
 const removeService = async (id: number | string) => {
-    // Xóa trên giao diện
     bookingData.value.selectedServices = bookingData.value.selectedServices.filter(s => s.id !== id);
-
-    // Xóa trong IndexedDB (Giỏ hàng gốc)
+    const bookingStore = useBookingBasketStore();
+    bookingStore.removeItem(id);
     await removeFromCartDB(id);
-
-    // Tải lại voucher vì tổng tiền đã thay đổi
     await loadVouchers();
 };
 
-// Các computed property giữ nguyên logic cũ nhưng dùng .value cho stylists
 const selectedStylist = computed(() => stylists.value.find(s => s.id === bookingData.value.stylistId));
 const subTotal = computed(() => bookingData.value.selectedServices.reduce((sum, s) => sum + s.price, 0));
 
@@ -322,7 +300,6 @@ const totalOriginalPrice = computed(() => {
     return bookingData.value.selectedServices.reduce((sum, s) => sum + (s.originalPrice || s.price), 0);
 });
 
-/** Tổng giảm & tổng sau giảm (API xếp chồng tối đa 2 mã) */
 const stackPreview = ref({ totalDiscount: 0, memberDiscount: 0, memberRankPercent: 0, finalAmount: 0 });
 
 const refreshStackPreview = async () => {
@@ -347,7 +324,6 @@ const refreshStackPreview = async () => {
             memberRankPercent: Number(res.data.memberRankPercent) || 0,
             finalAmount: Number(res.data.finalAmount) ?? Math.max(0, subTotal.value)
         };
-        console.log("preview-voucher-stack response:", res.data, stackPreview.value);
     } catch (e: any) {
         console.error("Lỗi preview voucher:", e);
         stackPreview.value = { totalDiscount: 0, memberDiscount: 0, memberRankPercent: 0, finalAmount: subTotal.value };
@@ -358,19 +334,6 @@ const refreshStackPreview = async () => {
         }
     }
 };
-
-// Thay thế đoạn watch cũ ở gần cuối block <script> bằng đoạn này:
-watch(
-    [
-        () => tempDate.value,
-        () => tempTime.value,
-        () => estimatedTotalMinutes.value // Đổi thành biến này
-    ],
-    () => {
-        loadAvailableStylists();
-    },
-    { deep: true }
-);
 
 const discountAmount = computed(() => stackPreview.value.totalDiscount);
 const memberDiscountAmount = computed(() => stackPreview.value.memberDiscount);
@@ -397,8 +360,12 @@ function toggleVoucher(id: string) {
     ids.push(id);
 }
 
-// Tìm hàm handleBooking và thay thế nội dung:
+// -------------------------------------------------------------------------
+// HÀM HANDLE BOOKING CHUẨN: CHẶN SPAM CLICK + KHÓA SLOT + BACKUP DỮ LIỆU
+// -------------------------------------------------------------------------
 const handleBooking = async () => {
+    if (isSubmitting.value) return;
+
     if (!bookingData.value.customerName || !bookingData.value.phone || !bookingData.value.email || !bookingData.value.bookingDate) {
         Swal.fire({ title: 'Thiếu thông tin', text: 'Vui lòng điền đầy đủ thông tin (Bao gồm cả Email để nhận mã QR)!', icon: 'warning', confirmButtonColor: '#d4af37' });
         return;
@@ -410,104 +377,115 @@ const handleBooking = async () => {
         return;
     }
 
+    // Backup dữ liệu xuống localStorage phòng hờ khách nhấn Back trình duyệt
+    localStorage.setItem('temp_name', bookingData.value.customerName);
+    localStorage.setItem('temp_phone', bookingData.value.phone);
+    localStorage.setItem('temp_email', bookingData.value.email);
+    localStorage.setItem('temp_date', bookingData.value.bookingDate);
     localStorage.setItem('temp_stylist_id', bookingData.value.stylistId || '');
+    localStorage.setItem('temp_services', JSON.stringify(bookingData.value.selectedServices));
+    if (bookingData.value.voucherIds.length > 0) {
+        localStorage.setItem('temp_voucher', bookingData.value.voucherIds[0]);
+    } else {
+        localStorage.removeItem('temp_voucher');
+    }
+
+    isSubmitting.value = true;
+
     try {
-        const mode = bookingData.value.paymentMode; // "10" hoặc "100"
+        const generatedBookingId = "LD" + Date.now().toString().slice(-10);
 
-        // LƯU CÁC THÔNG SỐ QUAN TRỌNG ĐỂ TÍNH TOÁN Ở TRANG SAU
-        localStorage.setItem('current_pay_mode', mode);
-        localStorage.setItem('total_bill_original', totalBill.value.toString()); // Lưu 500k
-        localStorage.setItem('temp_services', JSON.stringify(bookingData.value.selectedServices));
-        localStorage.setItem('temp_date', bookingData.value.bookingDate);
-        localStorage.setItem('temp_stylist_name', selectedStylist.value?.name || 'LG Stylist');
-        localStorage.setItem('temp_email', bookingData.value.email);
-        localStorage.setItem('temp_phone', bookingData.value.phone);
-        localStorage.setItem('temp_name', bookingData.value.customerName);
-        localStorage.setItem('temp_voucher', bookingData.value.voucherIds[0] || '');
-        // Lưu thông tin hóa đơn để trang PaymentResult.vue gửi kèm khi lưu booking
-        localStorage.setItem('temp_invoice_info', JSON.stringify(buildInvoiceInfoPayload()));
-
-        const paymentData = {
-            amount: payNow.value, // 50k hoặc 500k
-            orderDescription: bookingData.value.paymentMethod === 'vnpay' ? "vnpay" : "momo"
+        const bookingPayload = {
+            bookingId: generatedBookingId,
+            maKh: customerId.value || 'GUEST',
+            ngayHen: bookingData.value.bookingDate, 
+            totalAmount: totalBill.value,
+            services: bookingData.value.selectedServices.map(s => ({
+                id: String(s.id),
+                price: s.price
+            })),
+            email: bookingData.value.email,
+            phone: bookingData.value.phone,
+            hoTen: bookingData.value.customerName,
+            maCodes: bookingData.value.voucherIds,
+            invoiceInfo: buildInvoiceInfoPayload()
         };
 
-        const response = await axios.post(`${API}/api/DatDichVu/create-payment`, paymentData);
+        const paymentMode = bookingData.value.paymentMode; 
+        const paymentMethod = bookingData.value.paymentMethod; 
+        const stylistId = bookingData.value.stylistId || '';
+
+        const response = await axios.post(
+            `${API}/api/DatDichVu/save-booking-final?paymentMode=${paymentMode}&maStylist=${stylistId}&paymentMethod=${paymentMethod}`,
+            bookingPayload
+        );
+
         if (response.data?.url) {
+            useBookingBasketStore().clearAll();
             window.location.href = response.data.url;
+        } else {
+            Swal.fire({ title: 'Thành công', text: 'Đặt lịch thành công!', icon: 'success', confirmButtonColor: '#d4af37' }).then(() => {
+                useBookingBasketStore().clearAll();
+                window.location.href = '/';
+            });
         }
-    } catch (error) {
-        console.error("Lỗi thanh toán:", error);
+    } catch (error: any) {
+        console.error("Lỗi đặt lịch:", error);
+        const errorMsg = error.response?.data?.message || error.response?.data || 'Có lỗi xảy ra trong quá trình đặt lịch. Vui lòng thử lại!';
+        Swal.fire({ title: 'Không thể đặt lịch', text: errorMsg, icon: 'error', confirmButtonColor: '#d4af37' });
+    } finally {
+        isSubmitting.value = false;
     }
 };
-// 1. Chỉ cho chọn từ ngày hiện tại trở đi
+
 const minDate = new Date().toISOString().split('T')[0];
 
-
-// 2. Tạo danh sách giờ từ 08:00 đến 20:30 (Khớp với ca Sáng, Chiều, Tối)
 const availableHours = computed(() => {
     const hours = [];
     for (let i = 8; i <= 20; i++) {
         const hourLabel = i < 10 ? `0${i}:00` : `${i}:00`;
         hours.push(hourLabel);
-        // Thêm khung giờ rưỡi (Ví dụ: 08:30, 09:30)
         hours.push(i < 10 ? `0${i}:30` : `${i}:30`);
     }
     return hours;
 });
 
-// 3. Gộp ngày và giờ lại để lưu vào bookingData.bookingDate
 const combineDateTime = () => {
     if (tempDate.value && tempTime.value) {
-        // Kết quả sẽ có dạng: 2024-03-20T07:00
         bookingData.value.bookingDate = `${tempDate.value}T${tempTime.value}`;
     }
 };
 
-// 4. Tính toán giờ làm xong dự kiến
-// 4. Tính toán giờ làm xong dự kiến
 const expectedEndTime = computed(() => {
     if (!tempTime.value || estimatedTotalMinutes.value === 0) return '';
-
-    // Tách giờ và phút khách chọn (Đã thêm = 0 để fix lỗi TypeScript)
     const [hours = 0, minutes = 0] = tempTime.value.split(':').map(Number);
-
-    // Cộng dồn với tổng số phút làm dịch vụ
     const totalMins = hours * 60 + minutes + estimatedTotalMinutes.value;
-
-    // Đổi ngược lại ra Giờ:Phút
     const endHours = Math.floor(totalMins / 60);
     const endMins = totalMins % 60;
-
-    // Format cho đẹp (Thêm số 0 ở trước nếu < 10)
     const hh = endHours < 10 ? `0${endHours}` : endHours;
     const mm = endMins < 10 ? `0${endMins}` : endMins;
-
     return `${hh}:${mm}`;
 });
 
-
-// 2. HÀM TÌM THỢ (Dùng chuẩn biến bookingData.value.selectedServices của bạn)
 const loadAvailableStylists = async () => {
-    // Ngắt nếu chưa chọn đủ ngày, giờ hoặc không có dịch vụ nào
     if (!tempDate.value || !tempTime.value || estimatedTotalMinutes.value === 0) {
         return;
     }
 
-    isSearchingStylist.value = true; // Bật loading
+    isSearchingStylist.value = true;
     try {
         const res = await axios.post(`${API}/api/DatDichVu/get-available-stylists`, {
             ngayHen: tempDate.value,
             gioBatDau: tempTime.value,
             tongThoiGian: estimatedTotalMinutes.value,
-            maKh: customerId.value
+            maKh: customerId.value,
+            phone: bookingData.value.phone
         });
         const mappedStylists = (res.data || []).map((s: any) => ({
             ...s,
             isFavorite: s.isFavorite || isStylistFavorite(s.id)
         }));
 
-        // Sắp xếp: Ưu tiên thợ rảnh (isAvailable) -> Ưu tiên thợ yêu thích (isFavorite)
         mappedStylists.sort((a: any, b: any) => {
             if (a.isAvailable !== b.isAvailable) {
                 return a.isAvailable ? -1 : 1;
@@ -519,19 +497,18 @@ const loadAvailableStylists = async () => {
 
         stylists.value = mappedStylists;
 
-        // Nếu stylist đang chọn bị bận do đổi giờ/đổi dịch vụ, reset về null
-        if (bookingData.value.stylistId && !stylists.value.some(s => s.id === bookingData.value.stylistId)) {
+        // VÁ LỖI TẠI ĐÂY: Ép xóa tick xanh nếu thợ đang bận (isAvailable = false)
+        if (bookingData.value.stylistId && !stylists.value.some(s => s.id === bookingData.value.stylistId && s.isAvailable)) {
             bookingData.value.stylistId = null;
-            Swal.fire({ title: 'Thông báo', text: 'Stylist bạn chọn đã bận vào khung giờ này do thay đổi thời gian dịch vụ. Vui lòng chọn thợ khác!', icon: 'warning', confirmButtonColor: '#d4af37' });
+            Swal.fire({ title: 'Lỗi', text: 'Thợ này đã có người đặt. Vui lòng chọn thợ khác!', icon: 'warning', confirmButtonColor: '#d4af37' });
         }
     } catch (e) {
         console.error("Lỗi tải danh sách thợ:", e);
     } finally {
-        isSearchingStylist.value = false; // Tắt loading
+        isSearchingStylist.value = false;
     }
 };
 
-// 3. THEO DÕI SỰ THAY ĐỔI ĐỂ TỰ CHẠY
 watch(
     [() => tempDate.value, () => tempTime.value, () => bookingData.value.selectedServices.length],
     () => {
@@ -553,7 +530,6 @@ watch(
     },
     { deep: true, immediate: true }
 );
-
 </script>
 
 <template>
@@ -935,8 +911,12 @@ watch(
                                 </div>
                             </div>
 
-                            <button class="btn-confirm-metallic-final mt-4" @click="handleBooking">
-                                <span class="btn-text-normal">THANH TOÁN NGAY</span>
+                            <!-- VÁ LỖI TẠI ĐÂY: KHÓA NÚT KHI THỢ BỊ XÁM XỊT -->
+                            <button class="btn-confirm-metallic-final mt-4" @click="handleBooking" 
+                                    :disabled="isSubmitting || !selectedStylist || !selectedStylist.isAvailable" 
+                                    :class="{ 'opacity-50 cursor-not-allowed': isSubmitting || !selectedStylist || !selectedStylist.isAvailable }">
+                                <span v-if="!isSubmitting" class="btn-text-normal">THANH TOÁN NGAY</span>
+                                <span v-else class="btn-text-normal"><i class="fas fa-spinner fa-spin me-2"></i> ĐANG XỬ LÝ...</span>
                             </button>
                         </div>
                     </div>
@@ -1150,11 +1130,10 @@ select.booking-input {
     display: flex;
     gap: 16px;
     overflow-x: auto;
-    padding: 10px 4px 15px 4px; /* Trả lại padding bình thường */
+    padding: 10px 4px 15px 4px; 
     -webkit-overflow-scrolling: touch;
 }
 
-/* Hiển thị thanh cuộn (scrollbar) để người dùng có thể kéo ngang trên máy tính */
 .stylist-flex::-webkit-scrollbar {
     height: 6px;
 }
@@ -1186,16 +1165,15 @@ select.booking-input {
     display: flex;
     flex-direction: column;
     align-items: center;
-    /* Các card sẽ tự động bằng chiều cao nhau nhờ flexbox mặc định (align-items: stretch) */
 }
 
 .stylist-schedule-info {
-    position: relative; /* Không dùng absolute nữa */
+    position: relative; 
     background-color: #ffffff;
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 8px;
-    margin-bottom: 20px; /* Tăng khoảng cách xuống ảnh đại diện một chút */
+    margin-bottom: 20px; 
     width: 100%;
     text-align: center;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
@@ -1963,15 +1941,20 @@ select.booking-input {
     box-shadow: none;
 }
 
-.btn-confirm-metallic-final:hover {
+.btn-confirm-metallic-final:hover:not(:disabled) {
     background: transparent;
     color: var(--primary-color) !important;
     transform: translateY(-2px);
     box-shadow: none;
 }
 
-.btn-confirm-metallic-final:hover .btn-text-normal {
+.btn-confirm-metallic-final:hover:not(:disabled) .btn-text-normal {
     color: var(--primary-color) !important;
+}
+
+.btn-confirm-metallic-final:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
 }
 
 .btn-text-normal {
@@ -2024,7 +2007,6 @@ select.booking-input {
     background: #f9fafb;
 }
 
-/* Tắt hiệu ứng nhảy lên khi hover vào thợ bận */
 .stylist-card.is-disabled:hover {
     border-color: var(--border-color);
     transform: none;
@@ -2037,7 +2019,6 @@ select.booking-input {
     top: -4px;
     right: -4px;
     color: #ef4444;
-    /* Màu đỏ nổi bật */
     background: #ffffff;
     width: 22px;
     height: 22px;
@@ -2051,7 +2032,6 @@ select.booking-input {
     transition: transform 0.3s ease;
 }
 
-/* Hiệu ứng đập nhẹ khi hover vào thợ yêu thích */
 .stylist-card:hover .favorite-heart-badge {
     transform: scale(1.15);
 }

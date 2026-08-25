@@ -176,3 +176,14 @@ export const syncCartAfterLoginDB = async () => {
         console.error("Lỗi đồng bộ giỏ hàng khi Login:", error);
     }
 };
+
+// ========================================================
+// 5. HÀM TRỢ GIÚP: LẤY CHỈ SẢN PHẨM VẬT LÝ TỪ GIỎ HÀNG
+// ========================================================
+// Dùng cho Header badge — chỉ đếm sản phẩm, không đếm dịch vụ/combo
+export const getProductCartDB = async (maKH: string | null = null) => {
+    const allItems = await getCartDB(maKH);
+    return allItems.filter((item: any) =>
+        item.type === 'SANPHAM' || item.type === 'BIENTHE'
+    );
+};

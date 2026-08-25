@@ -5,6 +5,7 @@ const API = import.meta.env.VITE_API_URL;
 import { getCartDB, addToCartDB } from "@/Views/Anonymous/CSDL/cartDB";
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 import { showToast } from "@/stores/useWishlistStore";
+import { useBookingBasketStore } from "@/stores/useBookingBasketStore";
 
 export default {
   name: "ComboDetail",
@@ -52,6 +53,10 @@ export default {
 
     openCart() {
       this.$router.push('/cart');
+    },
+
+    hasInBasket(id) {
+      return useBookingBasketStore().hasItem(id);
     },
 
     async fetchCombo(id) {
@@ -169,9 +174,28 @@ export default {
       showToast(`Đã thêm "${item.tenItem}" vào giỏ hàng!`, "success");
     },
 
-    async bookNow() {
-      await this.addToCart();
-      this.$router.push('/cart');
+    addToBasket(comboArg) {
+      const isComboArg = comboArg && (comboArg.id || comboArg.maCb) && comboArg.tenCombo;
+      const targetCombo = isComboArg ? comboArg : this.combo;
+      let totalDuration = 60;
+      if (!isComboArg) {
+        if (this.dichVuTrongCombo && this.dichVuTrongCombo.length > 0) {
+          totalDuration = this.dichVuTrongCombo.reduce((sum, dv) => sum + (dv.thoiGianLam ), 0);
+        } else {
+          totalDuration = this.combo.tongThoiGian ; 
+        }
+      }
+      useBookingBasketStore().addItem({
+        ...targetCombo,
+        duration: isComboArg ? (targetCombo.thoiGianLam) : totalDuration,
+        type: 'COMBO'
+      });
+      useBookingBasketStore().openDrawer();
+    },
+
+    bookNow() {
+      this.addToBasket();
+      useBookingBasketStore().openDrawer();
     },
   },
 };
@@ -424,20 +448,17 @@ export default {
                       <span v-if="c.giaGoc" class="combo-price-old">{{
                         formatPrice(c.giaGoc)
                       }}</span>
-                      <span class="combo-price mb-0">
-                        <template v-if="c.giaGoc">Chỉ từ </template>{{ formatPrice(c.gia) }}
+                      <span class="combo-price mb-0 ">
+                        <template v-if="c.giaGoc"> Chỉ từ </template>{{ formatPrice(c.gia) }}
                       </span>
-                      <span
-                        v-if="c.phanTramGiam"
-                        class="combo-discount-badge-gold"
-                        >-{{ c.phanTramGiam }}%</span
-                      >
+                      <span v-if="c.phanTramGiam" class="combo-discount-badge-gold">-{{ c.phanTramGiam }}%</span>
                     </div>
-                    <button
-                      @click.prevent="addToCart(c)"
-                      class="btn-outline-gold-fixed w-100"
+                    <button 
+                      class="svc-btn-book"
+                      @click.prevent="addToBasket(c)"
+                      :class="{ 'is-selected': hasInBasket(c.id || c.maCb) }"
                     >
-                      Đặt ngay
+                      <span class="btn-text">{{ hasInBasket(c.id || c.maCb) ? 'ĐÃ CHỌN ✓' : 'CHỌN COMBO' }}</span>
                     </button>
                   </div>
                 </div>
@@ -463,43 +484,43 @@ export default {
             :key="s.id"
             class="col-md-6 col-lg-4"
           >
-            <div class="service-card-item d-flex flex-column m-3">
-              <div class="card-image">
-                <img
-                  :src="getImageUrl(s.hinhAnh)"
-                  :alt="s.tenDv"
-                  class="img-main-card"
-                />
-                <div v-if="s.phanTramGiam" class="discount-ribbon">
-                  <span>-{{ s.phanTramGiam }}%</span>
-                </div>
-                <!-- <div class="duration-tag-overlay">{{ s.thoiGianLam }} Phút</div> -->
-              </div>
-              <div
-                class="card-body p-4 text-center d-flex flex-column flex-grow-1"
-              >
-                <h4 class="service-name-sm">{{ s.tenDv }}</h4>
-                <p class="service-desc-sm text-muted flex-grow-1">
-                  {{ s.moTa }}
-                </p>
-                <div class="mt-auto">
-                  <div class="price-box-sm mb-3">
-                    <span v-if="s.phanTramGiam" class="old-price-sm">{{
-                      formatPrice(s.giaGoc)
-                    }}</span>
-                    <span class="new-price-sm">
-                      <template v-if="s.phanTramGiam">Chỉ từ </template>{{ formatPrice(s.gia) }}
-                    </span>
+            <router-link
+              :to="{ name: 'serviceDetail', params: { id: s.id } }"
+              style="text-decoration: none; color: inherit; display: block; height: 100%;"
+            >
+              <div class="service-card-item d-flex flex-column m-3">
+                <div class="card-image">
+                  <img
+                    :src="getImageUrl(s.hinhAnh)"
+                    :alt="s.tenDv"
+                    class="img-main-card"
+                  />
+                  <div v-if="s.phanTramGiam" class="discount-ribbon">
+                    <span>-{{ s.phanTramGiam }}%</span>
                   </div>
-                  <router-link
-                    :to="{ name: 'serviceDetail', params: { id: s.id } }"
-                    class="btn-view-more-gold"
-                  >
-                    CHI TIẾT
-                  </router-link>
+                  <!-- <div class="duration-tag-overlay">{{ s.thoiGianLam }} Phút</div> -->
+                </div>
+                <div
+                  class="card-body p-4 text-center d-flex flex-column flex-grow-1"
+                >
+                  <h4 class="service-name-sm">{{ s.tenDv }}</h4>
+                  <p class="service-desc-sm text-muted flex-grow-1">
+                    {{ s.moTa }}
+                  </p>
+                  <div class="mt-auto">
+                    <div class="price-box-sm mb-3">
+                      <span v-if="s.phanTramGiam" class="old-price-sm">{{
+                        formatPrice(s.giaGoc)
+                      }}</span>
+                      <span class="new-price-sm">
+                        <template v-if="s.phanTramGiam">Chỉ từ </template>{{ formatPrice(s.gia) }}
+                      </span>
+                    </div>
+                    <div class="btn-view-more-gold">CHI TIẾT</div>
+                  </div>
                 </div>
               </div>
-            </div>
+            </router-link>
           </div>
         </div>
       </section>
@@ -1607,7 +1628,7 @@ export default {
   margin-top: 2rem;
 }
 
-.btn-add-cart,
+.svc-btn-book,
 .btn-book-now {
   display: inline-flex;
   align-items: center;
@@ -1627,13 +1648,13 @@ export default {
 }
 
 /* Nút thứ cấp */
-.btn-add-cart {
+.svc-btn-book {
   background-color: var(--bg);
   color: var(--ink);
-  border-color: var(--line);
+  border: 1px solid var(--line);
 }
 
-.btn-add-cart:hover {
+.svc-btn-book:hover {
   background-color: var(--bg-soft);
   border-color: var(--ink);
   transform: translateY(-2px);
@@ -1701,7 +1722,7 @@ export default {
     gap: 10px !important;
   }
 
-  .btn-add-cart,
+  .svc-btn-book,
   .btn-book-now {
     min-width: unset;
     flex: 1;
