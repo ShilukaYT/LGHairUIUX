@@ -360,7 +360,7 @@ onMounted(loadData)
       <div class="d-flex flex-column flex-lg-row align-lg-center justify-space-between gap-4">
         <div>
           <h2 class="text-h5 font-weight-bold d-flex align-center gap-2 mb-1">
-            <FolderKanban class="w-6 h-6 text-primary shrink-0" />
+            <!-- <FolderKanban class="w-6 h-6 text-primary shrink-0" /> -->
             <span>Quản Lý Danh Mục Dịch Vụ</span>
           </h2>
           <p class="text-subtitle-2 text-medium-emphasis mb-0">
@@ -449,9 +449,9 @@ onMounted(loadData)
                 <Layers class="w-3.5 h-3.5" /> <span>{{ statActive }} đang hoạt động</span>
               </p>
             </div>
-            <v-avatar color="primary" variant="tonal" size="52" rounded="xl">
+            <!-- <v-avatar color="primary" variant="tonal" size="52" rounded="xl">
               <FolderKanban class="w-6 h-6" />
-            </v-avatar>
+            </v-avatar> -->
           </div>
         </v-card>
       </v-col>
@@ -467,9 +467,9 @@ onMounted(loadData)
                 <Check class="w-3.5 h-3.5" /> <span>Hiển thị trên hệ thống</span>
               </p>
             </div>
-            <v-avatar color="success" variant="tonal" size="52" rounded="xl">
+            <!-- <v-avatar color="success" variant="tonal" size="52" rounded="xl">
               <Check class="w-6 h-6" />
-            </v-avatar>
+            </v-avatar> -->
           </div>
         </v-card>
       </v-col>
@@ -485,9 +485,6 @@ onMounted(loadData)
                 <AlertCircle class="w-3.5 h-3.5" /> <span>Tạm ẩn danh mục</span>
               </p>
             </div>
-            <v-avatar color="error" variant="tonal" size="52" rounded="xl">
-              <X class="w-6 h-6" />
-            </v-avatar>
           </div>
         </v-card>
       </v-col>
@@ -503,9 +500,6 @@ onMounted(loadData)
                 <Scissors class="w-3.5 h-3.5" /> <span>Trong tất cả danh mục</span>
               </p>
             </div>
-            <v-avatar color="info" variant="tonal" size="52" rounded="xl">
-              <Sparkles class="w-6 h-6" />
-            </v-avatar>
           </div>
         </v-card>
       </v-col>
@@ -794,7 +788,7 @@ onMounted(loadData)
                   persistent-hint
                 ></v-text-field>
               </v-col> -->
-              <v-col cols="12" sm="6">
+              <!-- <v-col cols="12" sm="6">
                 <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Tên danh mục *</div>
                 <v-text-field
                   v-model="form.tenDanhMuc"
@@ -803,7 +797,7 @@ onMounted(loadData)
                   :error-messages="errors.tenDanhMuc"
                   @update:model-value="errors.tenDanhMuc = ''"
                 ></v-text-field>
-              </v-col>
+              </v-col> -->
 
             <!-- Tên danh mục -->
             <div class="mb-4">

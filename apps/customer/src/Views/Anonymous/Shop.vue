@@ -260,7 +260,16 @@ watch(thuongHieuList, () => {
   nextTick(updateBrandScrollState);
 });
 
+// Hủy request /filter đang bay dở khi có request mới hơn — tránh trường hợp response
+// của request CŨ (search trước) về SAU response của request MỚI (search sau) và ghi
+// đè kết quả đúng bằng kết quả sai (race condition khi gõ nhanh).
+let filterAbortController: AbortController | null = null;
+
 const fetchFiltered = async () => {
+  filterAbortController?.abort();
+  filterAbortController = new AbortController();
+  const { signal } = filterAbortController;
+
   try {
     const res = await axios.get(`${API}/api/SanPham/filter`, {
       params: {
@@ -271,10 +280,12 @@ const fetchFiltered = async () => {
         page:       currentPage.value,
         pageSize:   pageSize.value,
       },
+      signal,
     });
     products.value   = res.data.data;
     totalPages.value = res.data.totalPages;
   } catch (err) {
+    if (axios.isCancel(err) || (err as any)?.code === "ERR_CANCELED") return; // bị hủy do search mới hơn — bỏ qua, không phải lỗi thật
     console.error("fetchFiltered error:", err);
   }
 };
@@ -529,10 +540,25 @@ const firstFeedBanner = computed<FeedBanner | null>(() => {
 });
 
 
+// Danh mục / thương hiệu / khoảng giá là bấm chọn (không phải gõ) → lọc ngay lập tức.
 watch(
-  [searchQuery, selectedDanhMuc, selectedThuongHieu, selectedPriceRange],
+  [selectedDanhMuc, selectedThuongHieu, selectedPriceRange],
   () => { currentPage.value = 1; fetchFiltered(); }
 );
+
+// Ô tìm kiếm là gõ phím → debounce 300ms, chỉ gọi API sau khi người dùng ngừng gõ,
+// tránh bắn 1 request/ký tự (gây giật khi gõ nhanh và tốn ngân sách Redis cache vì
+// mỗi chuỗi tìm kiếm dở dang cũng tạo 1 cacheKey riêng ở BE).
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+const SEARCH_DEBOUNCE_MS = 300;
+
+watch(searchQuery, () => {
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+  searchDebounceTimer = setTimeout(() => {
+    currentPage.value = 1;
+    fetchFiltered();
+  }, SEARCH_DEBOUNCE_MS);
+});
 
 // Đồng bộ lại danh mục mỗi khi query ?danhMuc=... đổi (vd: bấm mega menu khi đang ở trang Product).
 // Vue Router không remount component nếu route name không đổi, nên onMounted không tự chạy lại —
@@ -618,6 +644,8 @@ onUnmounted(() => {
   feedObserver?.disconnect();
   stopAllBannerAutoplay();
   window.removeEventListener("resize", updateBrandScrollState);
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+  filterAbortController?.abort();
 });
 </script>
 
@@ -1569,6 +1597,10 @@ onUnmounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 24px;
+  /* Căn giữa để khi danh mục ít (không đủ lấp đầy hàng) chúng nằm giữa thay vì
+     dồn hết bên trái và bỏ trống bên phải. Với hàng đã đầy, center không đổi gì
+     so với flex-start vì không còn khoảng trống để phân bổ. */
+  justify-content: center;
 }
 
 .category-grid-item {
@@ -1642,7 +1674,7 @@ onUnmounted(() => {
 @media (max-width: 576px) {
   .category-grid {
     gap: 16px;
-    justify-content: space-between;
+    justify-content: center;
   }
   .category-grid-item {
     width: calc(50% - 8px);

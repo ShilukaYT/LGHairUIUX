@@ -82,13 +82,42 @@ const goToProductsPage = () => {
   routerInstance.push({ name: PRODUCTS_ROUTE_NAME });
 };
 
-// Đồng bộ bộ lọc dịch vụ hiện tại lên URL (dùng replace để không phá lịch sử back/forward)
+// Đồng bộ bộ lọc dịch vụ hiện tại lên URL (dùng replace để không phá lịch sử back/forward).
+// Có "page" ở đây để reload/mở lại đúng trang đang xem thay vì luôn nhảy về trang 1
+// (trước đây chỉ đồng bộ category, nên currentPage bị reset về mặc định mỗi lần mount).
 const syncRouteQuery = () => {
   routerInstance.replace({
     query: {
       category: selectedCategory.value !== "all" ? selectedCategory.value : undefined,
+      page: currentPage.value !== 1 ? String(currentPage.value) : undefined,
     },
   });
+};
+
+// =======================
+// GHI NHỚ TRANG/DANH MỤC ĐANG XEM QUA CÁC LẦN ĐIỀU HƯỚNG (sessionStorage)
+// =======================
+// syncRouteQuery() chỉ giúp giữ đúng trang khi URL còn "?page=..." (reload, back/forward
+// của trình duyệt). Nhưng khi bấm menu/nút "Xem sản phẩm" rồi bấm lại menu "Dịch Vụ" (điều
+// hướng bằng router-link/router.push tới route dịch vụ KHÔNG kèm query), URL bị mất hết
+// query cũ nên currentPage/selectedCategory lại về mặc định (trang 1, "all"). Lưu thêm 1
+// bản vào sessionStorage để khôi phục cho đúng trường hợp này — không phụ thuộc URL.
+const DMDV_STATE_KEY = "dmdv:lastState";
+const saveStateToSession = () => {
+  try {
+    sessionStorage.setItem(
+      DMDV_STATE_KEY,
+      JSON.stringify({
+        category: selectedCategory.value,
+        page: currentPage.value,
+      }),
+    );
+    console.log("[Dmdichvu debug] đã lưu:", { category: selectedCategory.value, page: currentPage.value }); // 🔎 TẠM THỜI — xoá sau khi debug xong
+  } catch (e) {
+    console.log("[Dmdichvu debug] lỗi lưu sessionStorage:", e); // 🔎 TẠM THỜI
+    // sessionStorage có thể bị chặn (chế độ ẩn danh/quyền trình duyệt) — bỏ qua, không
+    // ảnh hưởng chức năng chính, chỉ mất khả năng ghi nhớ trang.
+  }
 };
 
 // =======================
@@ -181,6 +210,8 @@ const changePage = async (page: number) => {
   if (page < 1 || page > totalPages.value) return;
 
   currentPage.value = page;
+  syncRouteQuery(); // 🔥 ghi lại "page" lên URL để reload/mở lại đúng trang đang xem
+  saveStateToSession(); // 🔥 để khôi phục đúng trang khi quay lại từ trang khác qua menu
   await fetchFiltered(); // 🔥 thiếu cái này
   scrollToServicesTop(); // 🔥 auto scroll lên dịch vụ đầu tiên khi đổi trang
   // 🔥 KHÔNG gọi refreshAos() ở đây: thẻ dịch vụ (v-for services) không có data-aos,
@@ -299,12 +330,20 @@ const fetchFiltered = async () => {
 // việc debounce giúp giảm hẳn số request bay đi cùng lúc → giao diện đỡ giật/nát
 // khi gõ nhanh, đồng thời đỡ tải cho server. selectedCategory/selectedPriceRange
 // là lựa chọn rời rạc (bấm 1 lần) nên debounce ngắn không ảnh hưởng cảm giác dùng.
+// 🔥 Bật lên trong lúc onMounted đang khôi phục category/page từ URL — watcher
+// [searchQuery, selectedCategory, selectedPriceRange] bên dưới sẽ bỏ qua lần kích
+// hoạt này (không reset currentPage về 1), vì gán selectedCategory.value từ URL
+// cũng kích hoạt watcher y hệt như người dùng tự bấm chọn category.
+let isRestoringFromUrl = false;
+
 let filterDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 watch([searchQuery, selectedCategory, selectedPriceRange], () => {
+  if (isRestoringFromUrl) return;
   if (filterDebounceTimer) clearTimeout(filterDebounceTimer);
   filterDebounceTimer = setTimeout(async () => {
     currentPage.value = 1;
     syncRouteQuery();
+    saveStateToSession(); // 🔥 để khôi phục đúng category khi quay lại từ trang khác qua menu
     await fetchFiltered();
     // 🔥 KHÔNG gọi refreshAos() ở đây (xem giải thích chi tiết trong changePage()
     // phía trên) — đây là nguyên nhân khiến .category-grid-section và nút "Bộ Lọc"
@@ -372,11 +411,52 @@ onMounted(async () => {
   }, 1000);
 
   // =======================
-  // ĐỌC QUERY PARAM TỪ URL: ?category=...
+  // ĐỌC QUERY PARAM TỪ URL: ?category=...&page=...
+  // Nếu URL không có gì (vd: vừa bấm menu "Dịch Vụ" từ trang khác, router.push không
+  // kèm query) thì khôi phục từ sessionStorage — đây là trạng thái lọc/trang gần nhất
+  // người dùng đang xem trước khi rời trang.
   // =======================
-  if (route.query.category && typeof route.query.category === "string") {
-    selectedCategory.value = route.query.category;
+  isRestoringFromUrl = true;
+
+  const hasCategoryInUrl = typeof route.query.category === "string";
+  const hasPageInUrl = typeof route.query.page === "string";
+
+  if (hasCategoryInUrl) {
+    selectedCategory.value = route.query.category as string;
   }
+  // 🔥 Đọc lại "page" từ URL để reload đúng trang đang xem thay vì luôn nhảy về
+  // trang 1. fetchFiltered() bên dưới đã đọc currentPage.value nên chỉ cần set
+  // trước khi Promise.all chạy.
+  if (hasPageInUrl) {
+    const parsedPage = parseInt(route.query.page as string, 10);
+    if (!isNaN(parsedPage) && parsedPage > 0) {
+      currentPage.value = parsedPage;
+    }
+  }
+
+  // URL không mang theo gì → thử khôi phục từ lần xem gần nhất trong sessionStorage
+  // (trường hợp quay lại trang này bằng menu/router.push thay vì URL có sẵn query).
+  if (!hasCategoryInUrl && !hasPageInUrl) {
+    try {
+      const saved = sessionStorage.getItem(DMDV_STATE_KEY);
+      console.log("[Dmdichvu debug] sessionStorage raw:", saved); // 🔎 TẠM THỜI — xoá sau khi debug xong
+      if (saved) {
+        const parsed = JSON.parse(saved) as { category?: string; page?: number };
+        if (parsed.category) selectedCategory.value = parsed.category;
+        if (parsed.page && parsed.page > 0) currentPage.value = parsed.page;
+        console.log("[Dmdichvu debug] khôi phục:", { category: selectedCategory.value, page: currentPage.value }); // 🔎 TẠM THỜI
+        syncRouteQuery(); // đưa state khôi phục được lên URL để reload sau đó vẫn đúng
+      }
+    } catch (e) {
+      console.log("[Dmdichvu debug] lỗi khôi phục sessionStorage:", e); // 🔎 TẠM THỜI
+      // JSON hỏng hoặc sessionStorage bị chặn — bỏ qua, dùng giá trị mặc định.
+    }
+  }
+
+  // nextTick để watcher (nếu có kích hoạt bất đồng bộ) chắc chắn đã chạy xong dưới
+  // cờ isRestoringFromUrl trước khi tắt cờ lại.
+  await nextTick();
+  isRestoringFromUrl = false;
 
   // 🔥 5 lệnh gọi API này độc lập với nhau (không cái nào cần dữ liệu của cái kia),
   // trước đây await tuần tự nên tổng thời gian chờ = cộng dồn round-trip của cả 5 API.
