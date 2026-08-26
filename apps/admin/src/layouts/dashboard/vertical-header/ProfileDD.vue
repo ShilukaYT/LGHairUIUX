@@ -108,17 +108,16 @@ const handleLogout = () => {
   router.push('/admin/login');
 };
 
-const navigateToProfile = () => {
-  // Dùng path hiện tại để phát hiện đang ở giao diện nào
-  // Nếu URL bắt đầu bằng /nhanvien → dùng route nhân viên
-  // Ngược lại → dùng route admin
-  const isNhanVienContext = route.path.startsWith('/nhanvien');
+const emit = defineEmits(['close']);
 
-  if (isNhanVienContext) {
-    router.push({ name: 'NhanVienProfile' });
-  } else {
-    router.push({ name: 'AdminProfile' });
-  }
+const profileUrl = computed(() => {
+  const isNhanVienContext = route.path.toLowerCase().startsWith('/nhanvien');
+  return isNhanVienContext ? '/nhanvien/profile' : '/admin/profile';
+});
+
+const navigateToProfile = () => {
+  emit('close');
+  router.push(profileUrl.value);
 };
 </script>
 
@@ -145,7 +144,7 @@ const navigateToProfile = () => {
     <v-divider></v-divider>
     
     <perfect-scrollbar style="height: auto; max-height: 350px" :options="{ wheelPropagation: false }">
-      <v-list class="py-0" aria-label="profile list" aria-busy="true">
+      <v-list class="py-0" aria-label="profile list">
         
         <v-list-subheader class="text-uppercase text-caption font-weight-bold px-5 mt-2">Giao diện</v-list-subheader>
         <v-list-item class="px-5 mb-2">
@@ -169,21 +168,21 @@ const navigateToProfile = () => {
 
         <v-list-subheader class="text-uppercase text-caption font-weight-bold px-5 mt-2">Tài khoản</v-list-subheader>
         
-        <v-list-item @click="navigateToProfile" color="primary" rounded="0" value="Edit profile">
+        <v-list-item @click="navigateToProfile" :active="false" rounded="0">
           <template v-slot:prepend>
             <EditOutlined :style="{ fontSize: '14px' }" class="mr-4" />
           </template>
           <v-list-item-title class="text-body-1"> Chỉnh sửa thông tin</v-list-item-title>
         </v-list-item>
 
-        <v-list-item @click="navigateToProfile" color="primary" rounded="0" value="View Profile">
+        <v-list-item @click="navigateToProfile" :active="false" rounded="0">
           <template v-slot:prepend>
             <UserOutlined :style="{ fontSize: '14px' }" class="mr-4" />
           </template>
           <v-list-item-title class="text-body-1"> Xem thông tin</v-list-item-title>
         </v-list-item>
         
-        <v-list-item @click="navigateToProfile" color="primary" rounded="0" value="Account settings">
+        <v-list-item @click="navigateToProfile" :active="false" rounded="0">
           <template v-slot:prepend>
             <SettingOutlined :style="{ fontSize: '14px' }" class="mr-4" />
           </template>

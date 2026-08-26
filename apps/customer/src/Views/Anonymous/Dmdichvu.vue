@@ -5,9 +5,11 @@ import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 import { useRoute, useRouter } from "vue-router";
 import axios from "axios";
 import { showToast } from "@/stores/useWishlistStore";
+import { useBookingBasketStore } from "@/stores/useBookingBasketStore";
 
 const route = useRoute();
 const routerInstance = useRouter();
+const bookingBasketStore = useBookingBasketStore();
 
 // Vị trí "neo" đầu danh sách dịch vụ — dùng để auto scroll khi đổi trang / vào lại trang
 const servicesListRef = ref<HTMLElement | null>(null);
@@ -401,6 +403,14 @@ const addToCart = async (rawItem: any) => {
   window.dispatchEvent(new Event("cart-updated"));
   showToast("Đã thêm dịch vụ vào giỏ hàng!", "success");
 };
+
+// =====================================================================
+// THÊM DỊCH VỤ VÀO KHAY ĐẶT LỊCH (Booking Basket) — KHÔNG qua API Cart
+// =====================================================================
+const addToBasket = (rawItem: any) => {
+  bookingBasketStore.addItem(rawItem);
+  bookingBasketStore.openDrawer();
+};
 // =======================
 // MOUNT
 // =======================
@@ -632,8 +642,8 @@ const formatPrice = (price: number) => {
                       </div>
 
                       <div class="editorial-actions">
-                        <a href="#" class="combo-grid-link" @click.prevent="addToCart(s)">
-                          Đặt lịch hẹn
+                        <a href="#" class="combo-grid-link" @click.prevent="addToBasket(s)" :class="{ 'is-selected': bookingBasketStore.hasItem(s.maDv) }">
+                          {{ bookingBasketStore.hasItem(s.maDv) ? 'Đã chọn ' : 'Chọn dịch vụ' }}
                         </a>
                       </div>
                     </div>
@@ -759,8 +769,8 @@ const formatPrice = (price: number) => {
               </template>
             </div>
 
-            <a href="#" class="combo-grid-link" @click.prevent="addToCart(c)">
-              Đặt lịch hẹn
+            <a href="#" class="combo-grid-link" @click.prevent="addToBasket(c)" :class="{ 'is-selected': bookingBasketStore.hasItem(c.maCb) }">
+              {{ bookingBasketStore.hasItem(c.maCb) ? 'Đã chọn ✓' : 'Chọn gói' }}
             </a>
           </div>
         </div>
@@ -785,8 +795,9 @@ const formatPrice = (price: number) => {
     <Teleport to="body">
       <button
         type="button"
-        class="combo-filter-fab"
+        class="combo-filter-fab "
         :class="{ 'has-active-filter': comboFilterActive }"
+        :style="{ bottom: bookingBasketStore.isEmpty ? '' : '94px' }"
         @click="comboFilterOpen = true"
       >
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

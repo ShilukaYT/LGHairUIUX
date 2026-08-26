@@ -1,23 +1,16 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, reactive } from 'vue'
 import {
-    Search, MessageSquare, X, Clock, Users, Phone, Scissors,
-    ChevronLeft, ChevronRight, Calendar as CalendarIcon,
-    Star, Image as ImageIcon, Reply, Trash2, EyeOff, Eye, CheckCircle2, BarChart3
+  Search, MessageSquare, X, Clock, Users, Phone, Scissors,
+  Star, Image as ImageIcon, Reply, Trash2, EyeOff, Eye, CheckCircle2, BarChart3,
+  RotateCcw, AlertTriangle
 } from 'lucide-vue-next'
 import axios from 'axios'
-import { toast } from 'vue-sonner'
-import Swal from 'sweetalert2'
 import { logActivity } from '@/utils/activityLogger'
-
-// --- UI Components ---
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Label } from '@/components/ui/label'
 import ThongKeDichVuModal from './ThongKeDichVuModal.vue'
 
 // URL API Backend
 const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
-
 const API_BASE_URL = API + '/api/QuanLyDanhGiaDichVu'
 
 // --- State ---
@@ -41,495 +34,680 @@ const itemsPerPage = 10
 // Reply state
 const replyContent = ref('')
 
+// Snackbar notification
+const snackbar = ref({
+  show: false,
+  text: '',
+  color: 'success'
+})
+const showSnackbar = (text: string, color = 'success') => {
+  snackbar.value = { show: true, text, color }
+}
+
+// Native Vuetify Confirm Dialog State
+const confirmDialog = reactive({
+  open: false,
+  title: '',
+  subtitle: '',
+  message: '',
+  confirmText: 'Đồng ý',
+  color: 'primary',
+  icon: AlertTriangle as any,
+  loading: false,
+  action: null as (() => Promise<void>) | null
+})
+
+const openConfirm = (opts: {
+  title: string
+  subtitle?: string
+  message: string
+  confirmText?: string
+  color?: string
+  icon?: any
+  action: () => Promise<void>
+}) => {
+  confirmDialog.title = opts.title
+  confirmDialog.subtitle = opts.subtitle || 'Xác nhận hành động'
+  confirmDialog.message = opts.message
+  confirmDialog.confirmText = opts.confirmText || 'Đồng ý'
+  confirmDialog.color = opts.color || 'primary'
+  confirmDialog.icon = opts.icon || AlertTriangle
+  confirmDialog.action = opts.action
+  confirmDialog.loading = false
+  confirmDialog.open = true
+}
+
+const executeConfirmAction = async () => {
+  if (!confirmDialog.action) return
+  confirmDialog.loading = true
+  try {
+    await confirmDialog.action()
+    confirmDialog.open = false
+  } finally {
+    confirmDialog.loading = false
+  }
+}
+
 // --- Computed properties ---
 const filteredData = computed(() => {
-    return reviews.value.filter(r => {
-        const q = searchQuery.value.toLowerCase()
-        const matchSearch = (r.tenKhach || '').toLowerCase().includes(q) || (r.tenDichVu || '').toLowerCase().includes(q)
-        const matchStar = filterStar.value === 'all' || r.soSao === parseInt(filterStar.value)
-        const matchStatus = filterStatus.value === 'all' ||
-            (filterStatus.value === 'replied' ? r.daPhanHoi : !r.daPhanHoi)
-        const matchDate = !filterDate.value || (r.ngayDanhGia && r.ngayDanhGia.includes(filterDate.value))
+  return reviews.value.filter(r => {
+    const q = searchQuery.value.toLowerCase()
+    const matchSearch = !q || (r.tenKhach || '').toLowerCase().includes(q) || (r.tenDichVu || '').toLowerCase().includes(q) || String(r.maHd || '').toLowerCase().includes(q)
+    const matchStar = filterStar.value === 'all' || r.soSao === parseInt(filterStar.value)
+    const matchStatus = filterStatus.value === 'all' ||
+      (filterStatus.value === 'replied' ? r.daPhanHoi : !r.daPhanHoi)
+    const matchDate = !filterDate.value || (r.ngayDanhGia && r.ngayDanhGia.includes(filterDate.value))
 
-        return matchSearch && matchStar && matchStatus && matchDate
-    })
+    return matchSearch && matchStar && matchStatus && matchDate
+  })
 })
 
 const paginatedData = computed(() => {
-    const start = (currentPage.value - 1) * itemsPerPage
-    return filteredData.value.slice(start, start + itemsPerPage)
+  const start = (currentPage.value - 1) * itemsPerPage
+  return filteredData.value.slice(start, start + itemsPerPage)
 })
 
 const totalPages = computed(() => Math.ceil(filteredData.value.length / itemsPerPage) || 1)
 
 // Lấy chữ cái viết tắt của tên khách để làm Avatar
 const getInitials = (name: string) => {
-    if (!name) return 'KH'
-    const parts = name.trim().split(' ')
-    if (parts.length === 1) {
-        const first = parts[0]
-        return first ? first.substring(0, 2).toUpperCase() : 'KH'
-    }
-    const firstChar = parts[parts.length - 2]?.substring(0, 1) || ''
-    const secondChar = parts[parts.length - 1]?.substring(0, 1) || ''
-    return (firstChar + secondChar).toUpperCase() || 'KH'
+  if (!name) return 'KH'
+  const parts = name.trim().split(' ')
+  if (parts.length === 1) {
+    const first = parts[0]
+    return first ? first.substring(0, 2).toUpperCase() : 'KH'
+  }
+  const firstChar = parts[parts.length - 2]?.substring(0, 1) || ''
+  const secondChar = parts[parts.length - 1]?.substring(0, 1) || ''
+  return (firstChar + secondChar).toUpperCase() || 'KH'
 }
 
 // Kiểm tra ảnh hợp lệ
 const hasImage = computed(() => {
-    if (!selectedReview.value?.hinhAnh) return false
-    const imgStr = selectedReview.value.hinhAnh.trim().toLowerCase()
-    if (imgStr === '' || imgStr === 'null' || imgStr.endsWith('/null') || imgStr.endsWith('/')) return false
-    return !isImageBroken.value
+  if (!selectedReview.value?.hinhAnh) return false
+  const imgStr = selectedReview.value.hinhAnh.trim().toLowerCase()
+  if (imgStr === '' || imgStr === 'null' || imgStr.endsWith('/null') || imgStr.endsWith('/')) return false
+  return !isImageBroken.value
 })
 
 // --- API Calls ---
-
-// 1. Tải danh sách đánh giá
 const fetchReviews = async () => {
-    isLoading.value = true
-    try {
-        const res = await axios.get(`${API_BASE_URL}/get-all`)
-        reviews.value = res.data
-    } catch (error) {
-        toast.error("Lỗi khi tải danh sách đánh giá dịch vụ!")
-        console.error(error)
-    } finally {
-        isLoading.value = false
-    }
+  isLoading.value = true
+  try {
+    const res = await axios.get(`${API_BASE_URL}/get-all`)
+    reviews.value = res.data
+  } catch (error) {
+    showSnackbar("Lỗi khi tải danh sách đánh giá dịch vụ!", "error")
+    console.error(error)
+  } finally {
+    isLoading.value = false
+  }
 }
 
 // Logic chọn đánh giá để xem chi tiết
 const openDetail = (item: any) => {
-    selectedReview.value = { ...item }
-    replyContent.value = item.phanHoiAdmin || ''
-    isImageBroken.value = false
-    detailOpen.value = true
+  selectedReview.value = { ...item }
+  replyContent.value = item.phanHoiAdmin || ''
+  isImageBroken.value = false
+  detailOpen.value = true
 }
 
-// Format ngày giờ đẹp mắt
+// Format ngày giờ
 const formatDateTime = (dateStr: string) => {
-    if (!dateStr) return ''
-    const d = new Date(dateStr)
-    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')} - ${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')} - ${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`
 }
-
-// --- Các chức năng xử lý (Actions) ---
 
 // 2. Gửi phản hồi cho khách hàng
 const submitReply = async () => {
-    if (!replyContent.value.trim()) return toast.warning("Vui lòng nhập nội dung phản hồi!")
+  if (!replyContent.value.trim()) return showSnackbar("Vui lòng nhập nội dung phản hồi!", "warning")
 
-    try {
-        await axios.post(`${API_BASE_URL}/reply`, {
-            id: selectedReview.value.id,
-            reply: replyContent.value
-        })
+  try {
+    await axios.post(`${API_BASE_URL}/reply`, {
+      id: selectedReview.value.id,
+      reply: replyContent.value
+    })
 
-        logActivity("Phản hồi đánh giá dịch vụ", `Đã phản hồi đánh giá của khách hàng ${selectedReview.value.tenKhach} cho dịch vụ ${selectedReview.value.tenDichVu}`, "Đánh giá");
-        toast.success("Đã gửi phản hồi cho khách hàng!")
+    logActivity("Phản hồi đánh giá dịch vụ", `Đã phản hồi đánh giá của khách hàng ${selectedReview.value.tenKhach} cho dịch vụ ${selectedReview.value.tenDichVu}`, "Đánh giá")
+    showSnackbar("Đã gửi phản hồi cho khách hàng!", "success")
 
-        // Ghi nhận trực tiếp trên UI
+    const idx = reviews.value.findIndex(r => r.id === selectedReview.value.id)
+    if (idx !== -1) {
+      reviews.value[idx].daPhanHoi = true
+      reviews.value[idx].phanHoiAdmin = replyContent.value
+    }
+    selectedReview.value.daPhanHoi = true
+    selectedReview.value.phanHoiAdmin = replyContent.value
+    detailOpen.value = false
+  } catch (error: any) {
+    logActivity("Phản hồi đánh giá dịch vụ", `Thất bại khi phản hồi đánh giá của ${selectedReview.value?.tenKhach || ''} - Lỗi: ${error.message || ''}`, "Đánh giá", "Thất bại")
+    showSnackbar("Lỗi khi gửi phản hồi!", "error")
+  }
+}
+
+// 3. Ẩn/Hiện đánh giá bằng Vuetify Confirm Modal
+const toggleVisibility = () => {
+  const actionStr = selectedReview.value.isHidden ? 'hiển thị lại' : 'ẩn'
+  openConfirm({
+    title: `Xác nhận ${actionStr}?`,
+    subtitle: 'Thay đổi trạng thái hiển thị',
+    message: `Bạn có chắc chắn muốn ${actionStr} đánh giá dịch vụ này trên ứng dụng khách hàng?`,
+    confirmText: selectedReview.value.isHidden ? 'Hiển thị' : 'Ẩn ngay',
+    color: selectedReview.value.isHidden ? 'success' : 'warning',
+    icon: selectedReview.value.isHidden ? Eye : EyeOff,
+    action: async () => {
+      try {
+        await axios.put(`${API_BASE_URL}/toggle-visibility/${selectedReview.value.id}`)
+        logActivity("Đổi trạng thái hiển thị đánh giá dịch vụ", `Đã ${actionStr} đánh giá của khách hàng ${selectedReview.value.tenKhach}`, "Đánh giá")
+        showSnackbar(`Đã ${actionStr} đánh giá dịch vụ!`, "success")
+
+        selectedReview.value.isHidden = !selectedReview.value.isHidden
         const idx = reviews.value.findIndex(r => r.id === selectedReview.value.id)
-        if (idx !== -1) {
-            reviews.value[idx].daPhanHoi = true
-            reviews.value[idx].phanHoiAdmin = replyContent.value
-        }
-        selectedReview.value.daPhanHoi = true
-        selectedReview.value.phanHoiAdmin = replyContent.value
+        if (idx !== -1) reviews.value[idx].isHidden = selectedReview.value.isHidden
+      } catch (error: any) {
+        logActivity("Đổi trạng thái hiển thị đánh giá dịch vụ", `Thất bại khi ${actionStr} đánh giá của ${selectedReview.value.tenKhach} - Lỗi: ${error.message || ''}`, "Đánh giá", "Thất bại")
+        showSnackbar("Thao tác thất bại!", "error")
+      }
+    }
+  })
+}
+
+// 4. Xóa vĩnh viễn đánh giá bằng Vuetify Confirm Modal
+const deleteReview = () => {
+  const reviewKhachName = selectedReview.value.tenKhach
+  openConfirm({
+    title: 'Xóa vĩnh viễn đánh giá?',
+    subtitle: 'Hành động không thể hoàn tác',
+    message: 'Dữ liệu đánh giá và hình ảnh sẽ bị xóa khỏi hệ thống. Bạn có chắc chắn muốn xóa?',
+    confirmText: 'Xóa ngay',
+    color: 'error',
+    icon: Trash2,
+    action: async () => {
+      try {
+        await axios.delete(`${API_BASE_URL}/delete/${selectedReview.value.id}`)
+        logActivity("Xóa đánh giá dịch vụ", `Đã xóa vĩnh viễn đánh giá của khách hàng ${reviewKhachName}`, "Đánh giá")
+        showSnackbar("Đã xóa đánh giá!", "success")
+
+        reviews.value = reviews.value.filter(r => r.id !== selectedReview.value.id)
+        selectedReview.value = null
         detailOpen.value = false
 
-    } catch (error: any) {
-        logActivity("Phản hồi đánh giá dịch vụ", `Thất bại khi phản hồi đánh giá của ${selectedReview.value?.tenKhach || ''} - Lỗi: ${error.message || ''}`, "Đánh giá", "Thất bại");
-        toast.error("Lỗi khi gửi phản hồi!")
+        if (paginatedData.value.length === 0 && currentPage.value > 1) currentPage.value--
+      } catch (error: any) {
+        logActivity("Xóa đánh giá dịch vụ", `Thất bại khi xóa vĩnh viễn đánh giá của ${reviewKhachName} - Lỗi: ${error.message || ''}`, "Đánh giá", "Thất bại")
+        showSnackbar("Lỗi khi xóa đánh giá!", "error")
+      }
     }
+  })
 }
 
-// 3. Ẩn/Hiện đánh giá
-const toggleVisibility = async () => {
-    const actionStr = selectedReview.value.isHidden ? 'hiển thị lại' : 'ẩn'
-    const result = await Swal.fire({
-        title: `Xác nhận ${actionStr}?`,
-        text: `Bạn có chắc muốn ${actionStr} đánh giá dịch vụ này trên ứng dụng khách hàng?`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#1677ff',
-        cancelButtonColor: '#cbd5e1',
-        confirmButtonText: 'Đồng ý'
-    })
-
-    if (result.isConfirmed) {
-        try {
-            await axios.put(`${API_BASE_URL}/toggle-visibility/${selectedReview.value.id}`)
-            logActivity("Đổi trạng thái hiển thị đánh giá dịch vụ", `Đã ${actionStr} đánh giá của khách hàng ${selectedReview.value.tenKhach}`, "Đánh giá");
-            toast.success(`Đã ${actionStr} đánh giá dịch vụ!`)
-
-            selectedReview.value.isHidden = !selectedReview.value.isHidden
-            const idx = reviews.value.findIndex(r => r.id === selectedReview.value.id)
-            if (idx !== -1) reviews.value[idx].isHidden = selectedReview.value.isHidden
-        } catch (error: any) {
-            logActivity("Đổi trạng thái hiển thị đánh giá dịch vụ", `Thất bại khi ${actionStr} đánh giá của ${selectedReview.value.tenKhach} - Lỗi: ${error.message || ''}`, "Đánh giá", "Thất bại");
-            toast.error("Thao tác thất bại!")
-        }
-    }
-}
-
-// 4. Xóa vĩnh viễn đánh giá
-const deleteReview = async () => {
-    const result = await Swal.fire({
-        title: 'Xóa vĩnh viễn?',
-        text: 'Dữ liệu đánh giá và hình ảnh sẽ bị xóa khỏi hệ thống. Không thể hoàn tác!',
-        icon: 'error',
-        showCancelButton: true,
-        confirmButtonColor: '#ef4444',
-        cancelButtonColor: '#cbd5e1',
-        confirmButtonText: 'Xóa ngay'
-    })
-
-    if (result.isConfirmed) {
-        const reviewKhachName = selectedReview.value.tenKhach;
-        try {
-            await axios.delete(`${API_BASE_URL}/delete/${selectedReview.value.id}`)
-            logActivity("Xóa đánh giá dịch vụ", `Đã xóa vĩnh viễn đánh giá của khách hàng ${reviewKhachName}`, "Đánh giá");
-            toast.success("Đã xóa đánh giá!")
-
-            // Cập nhật lại list trên UI
-            reviews.value = reviews.value.filter(r => r.id !== selectedReview.value.id)
-            selectedReview.value = null
-            detailOpen.value = false
-
-            // Xử lý tụt trang nếu xóa hết item ở trang cuối
-            if (paginatedData.value.length === 0 && currentPage.value > 1) currentPage.value--
-        } catch (error: any) {
-            logActivity("Xóa đánh giá dịch vụ", `Thất bại khi xóa vĩnh viễn đánh giá của ${reviewKhachName} - Lỗi: ${error.message || ''}`, "Đánh giá", "Thất bại");
-            toast.error("Lỗi khi xóa đánh giá!")
-        }
-    }
-}
-
-// Load dữ liệu khi vào trang
 onMounted(() => {
-    fetchReviews()
+  fetchReviews()
 })
 
-// Tự động nhảy về trang 1 nếu người dùng thay đổi bộ lọc
 watch([searchQuery, filterStar, filterStatus, filterDate], () => {
-    currentPage.value = 1
+  currentPage.value = 1
 })
 </script>
 
 <template>
-    <div class="flex flex-col gap-6 w-full">
-        <!-- Sub Toolbar -->
-        <div class="d-flex flex-column flex-sm-row align-sm-center justify-space-between gap-3 flex-wrap bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-2xs">
-            <!-- Filter Actions on Left -->
-            <div class="d-flex align-center gap-3 flex-wrap flex-1">
-                <div class="relative w-full sm:w-64">
-                    <Search class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input v-model="searchQuery" placeholder="Tìm khách hàng, dịch vụ..."
-                        class="w-full h-10 pl-10 pr-4 rounded-lg border border-slate-300 text-xs font-semibold outline-none focus:border-primary bg-white text-slate-800 shadow-2xs" />
-                </div>
+  <div class="d-flex flex-column gap-4 w-100">
+    <!-- Snackbar -->
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" location="top right" :timeout="3000">
+      {{ snackbar.text }}
+      <template v-slot:actions>
+        <v-btn variant="text" icon density="compact" @click="snackbar.show = false">
+          <X class="w-4 h-4" />
+        </v-btn>
+      </template>
+    </v-snackbar>
 
-                <div class="d-flex align-center gap-2 text-caption font-weight-bold text-medium-emphasis">
-                    <span class="text-xs text-slate-500">SAO:</span>
-                    <select v-model="filterStar" class="h-10 px-3 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-700 outline-none cursor-pointer hover:border-slate-400 transition-colors">
-                        <option value="all">Tất cả sao</option>
-                        <option value="5">5 Sao</option>
-                        <option value="4">4 Sao</option>
-                        <option value="3">3 Sao</option>
-                        <option value="2">2 Sao</option>
-                        <option value="1">1 Sao</option>
-                    </select>
-                </div>
+    <!-- Sub Toolbar -->
+    <v-card variant="outlined" rounded="xl" class="pa-4 bg-surface">
+      <div class="d-flex flex-column flex-md-row align-md-center justify-space-between gap-3 flex-wrap">
+        <!-- Filters -->
+        <div class="d-flex align-center gap-3 flex-wrap flex-grow-1">
+          <v-text-field
+            v-model="searchQuery"
+            placeholder="Tìm mã đơn, khách hàng, dịch vụ..."
+            variant="outlined"
+            density="compact"
+            hide-details
+            clearable
+            rounded="lg"
+            style="min-width: 260px; max-width: 320px;"
+          >
+            <template v-slot:prepend-inner>
+              <Search class="w-4 h-4 text-medium-emphasis mr-1" />
+            </template>
+          </v-text-field>
 
-                <div class="d-flex align-center gap-2 text-caption font-weight-bold text-medium-emphasis">
-                    <span class="text-xs text-slate-500">TRẠNG THÁI:</span>
-                    <select v-model="filterStatus" class="h-10 px-3 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-700 outline-none cursor-pointer hover:border-slate-400 transition-colors">
-                        <option value="all">Tất cả</option>
-                        <option value="unreplied">Chưa phản hồi</option>
-                        <option value="replied">Đã phản hồi</option>
-                    </select>
-                </div>
+          <v-select
+            v-model="filterStar"
+            :items="[
+              { title: 'Tất cả sao', value: 'all' },
+              { title: '5 Sao', value: '5' },
+              { title: '4 Sao', value: '4' },
+              { title: '3 Sao', value: '3' },
+              { title: '2 Sao', value: '2' },
+              { title: '1 Sao', value: '1' }
+            ]"
+            item-title="title"
+            item-value="value"
+            label="Số sao"
+            variant="outlined"
+            density="compact"
+            hide-details
+            rounded="lg"
+            style="width: 140px;"
+          ></v-select>
 
-                <div class="d-flex align-center gap-2 bg-white px-3 h-10 rounded-lg border border-slate-300 shadow-2xs">
-                    <CalendarIcon class="w-4 h-4 text-slate-400" />
-                    <input type="date" v-model="filterDate"
-                        class="bg-transparent border-none font-semibold text-[11px] outline-none text-slate-700 cursor-pointer" />
-                </div>
-            </div>
+          <v-select
+            v-model="filterStatus"
+            :items="[
+              { title: 'Tất cả trạng thái', value: 'all' },
+              { title: 'Chưa phản hồi', value: 'unreplied' },
+              { title: 'Đã phản hồi', value: 'replied' }
+            ]"
+            item-title="title"
+            item-value="value"
+            label="Trạng thái"
+            variant="outlined"
+            density="compact"
+            hide-details
+            rounded="lg"
+            style="width: 170px;"
+          ></v-select>
 
-            <!-- Action buttons on Right -->
-            <div class="d-flex align-center gap-2.5">
-                <v-btn @click="showStats = true" variant="flat" color="primary" rounded="lg" class="text-none font-weight-bold h-10 text-xs text-white shadow-sm">
-                    <template v-slot:prepend><BarChart3 class="w-4 h-4 mr-1" /></template>
-                    Thống kê hiệu năng
-                </v-btn>
-                <v-btn @click="fetchReviews" variant="outlined" color="grey-darken-1" rounded="lg" class="text-none font-weight-bold h-10 text-xs bg-white hover:bg-slate-50">
-                    <template v-slot:prepend><Clock class="w-4 h-4 mr-1" /></template>
-                    Làm mới
-                </v-btn>
-            </div>
+          <v-text-field
+            v-model="filterDate"
+            type="date"
+            label="Ngày đánh giá"
+            variant="outlined"
+            density="compact"
+            hide-details
+            clearable
+            rounded="lg"
+            style="width: 160px;"
+          ></v-text-field>
         </div>
 
-        <!-- Full-Width Table Layout -->
-        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col shadow-sm w-full">
-            <div class="overflow-x-auto relative w-full">
-                <div v-if="isLoading" class="absolute inset-0 bg-white/80 backdrop-blur-xs z-10 flex items-center justify-center">
-                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                </div>
+        <!-- Action Buttons -->
+        <div class="d-flex align-center gap-2">
+          <v-btn
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            class="text-none font-weight-bold"
+            height="40"
+            @click="showStats = true"
+          >
+            <template v-slot:prepend><BarChart3 class="w-4 h-4 mr-1" /></template>
+            Thống kê hiệu năng
+          </v-btn>
 
-                <Table class="w-full text-xs text-left">
-                    <TableHeader class="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
-                        <TableRow class="hover:bg-transparent">
-                            <TableHead class="pl-6 w-[110px] py-3.5 font-bold text-center">MÃ ĐƠN</TableHead>
-                            <TableHead class="w-[220px] py-3.5 font-bold">Khách hàng</TableHead>
-                            <TableHead class="w-[280px] py-3.5 font-bold">Dịch vụ & Nhận xét</TableHead>
-                            <TableHead class="w-[160px] py-3.5 font-bold text-center">Số sao</TableHead>
-                            <TableHead class="w-[160px] py-3.5 font-bold text-center">Ngày đánh giá</TableHead>
-                            <TableHead class="w-[140px] py-3.5 font-bold text-center">Trạng thái</TableHead>
-                            <TableHead class="w-[100px] py-3.5 font-bold text-center">Thao tác</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody class="divide-y divide-slate-100">
-                        <TableRow v-for="item in paginatedData" :key="item.id" @click="openDetail(item)"
-                            class="cursor-pointer hover:bg-slate-50/50 border-b border-slate-100 transition-all duration-150 group"
-                        >
-                            <!-- Mã HD -->
-                            <TableCell class="py-4 text-center font-mono font-bold text-slate-800">#{{ item.maHd }}</TableCell>
-
-                            <!-- Khách hàng -->
-                            <TableCell class="py-4">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-8 h-8 bg-primary/10 text-primary font-bold flex items-center justify-center text-xs rounded-md">
-                                        {{ getInitials(item.tenKhach) }}
-                                    </div>
-                                    <div>
-                                        <div class="text-xs font-bold text-slate-800 flex items-center gap-1.5 group-hover:text-primary transition-colors">
-                                            {{ item.tenKhach }}
-                                            <EyeOff v-if="item.isHidden" class="w-3.5 h-3.5 text-red-500" title="Đánh giá đang bị ẩn" />
-                                        </div>
-                                        <div class="text-[10px] text-slate-400 font-semibold mt-0.5">{{ item.sdt || 'Chưa có SĐT' }}</div>
-                                    </div>
-                                </div>
-                            </TableCell>
-
-                            <!-- Dịch vụ & Nhận xét -->
-                            <TableCell class="py-4">
-                                <div class="font-bold text-slate-700 max-w-[260px] truncate" :title="item.tenDichVu">{{ item.tenDichVu }}</div>
-                                <div class="text-[11px] text-slate-400 italic mt-1 truncate max-w-[260px] font-medium" :title="item.noiDung">
-                                    "{{ item.noiDung || 'Khách hàng chỉ chấm sao' }}"
-                                </div>
-                            </TableCell>
-
-                            <!-- Số sao -->
-                            <TableCell class="py-4 text-center">
-                                <div class="flex items-center justify-center gap-0.5">
-                                    <Star v-for="n in 5" :key="n" class="w-3.5 h-3.5"
-                                        :class="n <= item.soSao ? 'fill-yellow-400 text-yellow-400' : 'fill-slate-100 text-slate-200'" />
-                                    <ImageIcon v-if="item.hinhAnh && !item.hinhAnh.toLowerCase().includes('null')" class="w-3.5 h-3.5 text-primary ml-1.5" />
-                                </div>
-                            </TableCell>
-
-                            <!-- Ngày đánh giá -->
-                            <TableCell class="py-4 text-center text-slate-655 font-medium">
-                                {{ formatDateTime(item.ngayDanhGia) }}
-                            </TableCell>
-
-                            <!-- Trạng thái -->
-                            <TableCell class="py-4 text-center">
-                                <span class="px-2.5 py-1 rounded-md text-[9px] font-extrabold uppercase tracking-widest border border-solid"
-                                    :class="item.daPhanHoi ? 'bg-emerald-50 text-emerald-700 border-emerald-250' : 'bg-amber-50 text-amber-700 border-amber-250'">
-                                    {{ item.daPhanHoi ? 'Đã phản hồi' : 'Chưa xử lý' }}
-                                </span>
-                            </TableCell>
-
-                            <!-- Thao tác -->
-                            <TableCell class="py-4 text-center" @click.stop>
-                                <v-btn @click="openDetail(item)" variant="outlined" color="primary" size="small" rounded="md" class="text-none font-weight-bold h-8 text-[11px] px-3">
-                                    Chi tiết
-                                </v-btn>
-                            </TableCell>
-                        </TableRow>
-
-                        <TableRow v-if="paginatedData.length === 0 && !isLoading" class="border-none hover:bg-transparent">
-                            <TableCell colspan="7" class="text-center py-20 text-slate-350 bg-white">
-                                <MessageSquare class="w-8 h-8 mx-auto mb-3 opacity-30 text-primary" />
-                                <p class="text-xs font-bold uppercase tracking-widest">Không tìm thấy đánh giá dịch vụ nào</p>
-                            </TableCell>
-                        </TableRow>
-                    </TableBody>
-                </Table>
-            </div>
-
-            <!-- Pagination -->
-            <div class="px-6 py-4 flex justify-between items-center border-t border-slate-250 bg-white">
-                <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">
-                    Tổng số <strong class="text-slate-700 font-mono">{{ filteredData.length }}</strong> đánh giá · Trang {{ currentPage }} / {{ totalPages }}
-                </span>
-                <div class="flex gap-1.5">
-                    <v-btn
-                        variant="outlined" color="grey-darken-1" size="36" rounded="md"
-                        :disabled="currentPage <= 1 || isLoading"
-                        @click="currentPage = Math.max(1, currentPage - 1)"
-                        class="min-w-0"
-                    >
-                        <ChevronLeft class="w-4 h-4" />
-                    </v-btn>
-                    <v-btn
-                        variant="outlined" color="grey-darken-1" size="36" rounded="md"
-                        :disabled="currentPage >= totalPages || isLoading"
-                        @click="currentPage = Math.min(totalPages, currentPage + 1)"
-                        class="min-w-0"
-                    >
-                        <ChevronRight class="w-4 h-4" />
-                    </v-btn>
-                </div>
-            </div>
+          <v-btn
+            variant="outlined"
+            color="grey-darken-1"
+            rounded="lg"
+            class="text-none font-weight-bold"
+            height="40"
+            :loading="isLoading"
+            @click="fetchReviews"
+          >
+            <template v-slot:prepend><RotateCcw class="w-4 h-4 mr-1" /></template>
+            Làm mới
+          </v-btn>
         </div>
+      </div>
+    </v-card>
 
-        <!-- Detail Modal Dialog (Standard rounded-lg, 100% Symmetrical, Native Inputs, No Clipping) -->
-        <Teleport to="body">
-            <div v-if="detailOpen"
-                class="fixed inset-0 z-[2400] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-opacity"
-                role="dialog" aria-modal="true"
+    <!-- Table Card -->
+    <v-card variant="outlined" rounded="xl" class="overflow-hidden">
+      <div v-if="isLoading" class="d-flex justify-center align-center py-16">
+        <v-progress-circular indeterminate color="primary" size="48" />
+      </div>
+
+      <div v-else class="overflow-x-auto">
+        <v-table hover>
+          <thead>
+            <tr class="border-b" style="background-color: rgba(var(--v-theme-on-surface), 0.04);">
+              <th class="font-weight-bold text-caption text-center py-3" style="width: 100px;">MÃ ĐƠN</th>
+              <th class="font-weight-bold text-caption text-left py-3" style="width: 220px;">KHÁCH HÀNG</th>
+              <th class="font-weight-bold text-caption text-left py-3" style="min-width: 250px;">DỊCH VỤ &amp; NHẬN XÉT</th>
+              <th class="font-weight-bold text-caption text-center py-3" style="width: 150px;">SỐ SAO</th>
+              <th class="font-weight-bold text-caption text-center py-3" style="width: 160px;">NGÀY ĐÁNH GIÁ</th>
+              <th class="font-weight-bold text-caption text-center py-3" style="width: 140px;">TRẠNG THÁI</th>
+              <th class="font-weight-bold text-caption text-center py-3" style="width: 110px;">THAO TÁC</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="item in paginatedData"
+              :key="item.id"
+              class="border-b cursor-pointer"
+              @click="openDetail(item)"
             >
-                <button type="button" class="absolute inset-0 bg-transparent cursor-default border-none outline-none" @click="detailOpen = false" />
-                
-                <div class="relative z-10 flex max-h-[90vh] w-full max-w-2xl min-h-0 flex-col overflow-hidden rounded-xl border border-solid border-slate-300 bg-white shadow-2xl transition-all animate-in zoom-in-95 duration-200"
-                    @click.stop
-                >
-                    <!-- Header -->
-                    <div class="shrink-0 border-b border-solid border-slate-205 !px-8 !pt-6 !pb-4 bg-slate-50 flex justify-between items-center">
-                        <div>
-                            <h2 class="text-lg font-bold text-slate-800 tracking-wide uppercase">Chi Tiết Đánh Giá Dịch Vụ</h2>
-                            <div class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5 font-mono">MÃ ĐƠN HÀNG: #{{ selectedReview.maHd }}</div>
-                        </div>
-                        <button @click="detailOpen = false" class="w-8 h-8 rounded-full bg-white hover:bg-slate-100 flex items-center justify-center text-slate-400 border border-solid border-slate-200 cursor-pointer transition-all duration-200 shadow-2xs">
-                            <X class="w-4 h-4" />
-                        </button>
+              <!-- Mã đơn -->
+              <td class="text-center font-weight-bold font-mono">#{{ item.maHd }}</td>
+
+              <!-- Khách hàng -->
+              <td>
+                <div class="d-flex align-center gap-3">
+                  <v-avatar color="primary" variant="tonal" size="36" rounded="lg" class="font-weight-bold text-caption">
+                    {{ getInitials(item.tenKhach) }}
+                  </v-avatar>
+                  <div>
+                    <div class="font-weight-bold text-body-2 d-flex align-center gap-1">
+                      {{ item.tenKhach }}
+                      <EyeOff v-if="item.isHidden" class="w-3.5 h-3.5 text-error inline" title="Đánh giá đang bị ẩn" />
                     </div>
-
-                    <!-- Body (Flexbox container with explicit gap-6 to prevent layout collapse/overlapping) -->
-                    <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain !px-8 !py-6 flex flex-col gap-6 text-xs text-left bg-slate-100">
-                        <div v-if="selectedReview.isHidden" class="bg-red-50 text-red-655 text-[10px] font-bold uppercase tracking-widest text-center py-2.5 rounded-lg border border-solid border-red-200 shadow-sm">
-                            Đánh giá này đang bị ẩn khỏi ứng dụng khách hàng
-                        </div>
-
-                        <!-- Row 1: Tên khách hàng & Số điện thoại (Native inputs to prevent overlapping and clipping) -->
-                        <div class="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-x-6">
-                            <div class="flex flex-col gap-2">
-                                <Label class="text-[10px] font-extrabold text-slate-500 tracking-wider uppercase ml-1">Tên khách hàng</Label>
-                                <div class="relative group">
-                                    <Users class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-hover:text-primary transition-colors" />
-                                    <input v-model="selectedReview.tenKhach" readonly
-                                        class="w-full h-11 pl-10 pr-4 text-xs border border-solid border-slate-300 bg-white text-slate-800 font-bold outline-none cursor-default shadow-sm hover:border-slate-400 transition-all duration-200 !rounded-lg" />
-                                </div>
-                            </div>
-                            <div class="flex flex-col gap-2">
-                                <Label class="text-[10px] font-extrabold text-slate-500 tracking-wider uppercase ml-1">Số điện thoại</Label>
-                                <div class="relative group">
-                                    <Phone class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-hover:text-primary transition-colors" />
-                                    <input v-model="selectedReview.sdt" readonly
-                                        class="w-full h-11 pl-10 pr-4 text-xs border border-solid border-slate-300 bg-white text-slate-800 font-bold outline-none cursor-default shadow-sm hover:border-slate-400 transition-all duration-200 !rounded-lg" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Row 2: Dịch vụ đánh giá & Xếp hạng sao -->
-                        <div class="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-x-6">
-                            <div class="flex flex-col gap-2">
-                                <Label class="text-[10px] font-extrabold text-slate-500 tracking-wider uppercase ml-1">Dịch vụ đánh giá</Label>
-                                <div class="relative group">
-                                    <Scissors class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-hover:text-primary transition-colors" />
-                                    <input v-model="selectedReview.tenDichVu" readonly
-                                        class="w-full h-11 pl-10 pr-4 text-xs border border-solid border-slate-300 bg-white text-primary font-extrabold outline-none cursor-default shadow-sm hover:border-slate-400 transition-all duration-200 !rounded-lg" />
-                                </div>
-                            </div>
-                            <div class="flex flex-col gap-2">
-                                <Label class="text-[10px] font-extrabold text-slate-500 tracking-wider uppercase ml-1">Xếp hạng (Sao)</Label>
-                                <div class="h-11 flex items-center px-4 !rounded-lg border border-solid border-slate-300 bg-white shadow-sm transition-all duration-200">
-                                    <div class="flex gap-0.5">
-                                        <Star v-for="n in 5" :key="n" class="w-4 h-4"
-                                            :class="n <= selectedReview.soSao ? 'fill-yellow-400 text-yellow-400' : 'fill-slate-100 text-slate-200'" />
-                                    </div>
-                                    <span class="ml-2.5 text-[10px] font-extrabold text-slate-500">({{ selectedReview.soSao }} / 5 Sao)</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Row 3: Nhận xét từ khách hàng (Immersive text area with clean straight blue left-border) -->
-                        <div class="flex flex-col gap-2">
-                            <Label class="text-[10px] font-extrabold text-slate-500 tracking-wider uppercase ml-1">Nhận xét từ khách hàng</Label>
-                            <div class="relative group">
-                                <MessageSquare class="absolute left-3.5 top-3.5 w-4 h-4 text-slate-400 group-hover:text-primary transition-colors" />
-                                <textarea v-model="selectedReview.noiDung" readonly 
-                                    class="w-full min-h-[90px] pl-10 pr-4 py-3 text-xs bg-white border border-solid border-slate-300 border-l-4 border-l-primary hover:border-slate-350 text-slate-700 outline-none resize-none shadow-sm cursor-default font-medium leading-relaxed italic transition-all duration-200 !rounded-lg"></textarea>
-                            </div>
-                            <div class="text-[10px] text-slate-400 text-end font-semibold mr-1">
-                                Ngày gửi: {{ formatDateTime(selectedReview.ngayDanhGia) }}
-                            </div>
-                        </div>
-
-                        <!-- Row 4: Hình ảnh đính kèm -->
-                        <div v-if="hasImage" class="flex flex-col gap-2 animate-in slide-in-from-bottom-2 duration-200">
-                            <Label class="text-[10px] font-extrabold text-slate-550 tracking-wider flex items-center gap-1.5 ml-1">
-                                <ImageIcon class="w-3.5 h-3.5 text-slate-450" /> Hình ảnh đính kèm
-                            </Label>
-                            <div class="border border-solid border-slate-300 p-2.5 bg-white !rounded-lg shadow-sm inline-block hover:shadow-md transition-shadow duration-200">
-                                <img :src="API + selectedReview.hinhAnh"
-                                    @error="isImageBroken = true"
-                                    class="max-w-[220px] h-auto object-contain cursor-zoom-in rounded-md hover:opacity-95 transition-opacity"
-                                    alt="Review Image" />
-                            </div>
-                        </div>
-
-                        <!-- Row 5: Phản hồi của Salon (Standard rounded-lg textarea) -->
-                        <div class="flex flex-col gap-2">
-                            <Label class="text-[10px] font-extrabold text-slate-550 tracking-wider flex items-center gap-1.5 uppercase ml-1">
-                                <Reply class="w-4 h-4 text-primary" /> Phản hồi từ Salon
-                            </Label>
-                            <textarea v-model="replyContent" rows="4" placeholder="Nhập phản hồi chăm sóc khách hàng..." 
-                                class="w-full border border-solid border-slate-300 !rounded-lg p-4 text-xs font-semibold text-slate-800 bg-white outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all duration-200 resize-none shadow-sm"></textarea>
-                        </div>
-                    </div>
-
-                    <!-- Footer Actions -->
-                    <div class="shrink-0 border-t border-solid border-slate-205 !px-8 !py-4 bg-slate-50 flex justify-end gap-3 items-center">
-                        <v-btn variant="outlined" color="grey-darken-1" rounded="md" class="text-none font-weight-bold text-slate-700 bg-white hover:bg-slate-50" @click="toggleVisibility">
-                            <template v-slot:prepend>
-                                <component :is="selectedReview.isHidden ? Eye : EyeOff" class="w-4 h-4 mr-1"
-                                    :class="selectedReview.isHidden ? 'text-emerald-500' : 'text-slate-555'" />
-                            </template>
-                            {{ selectedReview.isHidden ? 'Hiển thị lại' : 'Ẩn Đánh Gia' }}
-                        </v-btn>
-                        <v-btn variant="flat" color="error" rounded="md" class="text-none font-weight-bold shadow-sm" @click="deleteReview">
-                            <template v-slot:prepend><Trash2 class="w-4 h-4 mr-1" /></template>
-                            Xóa vĩnh viễn
-                        </v-btn>
-                        <v-btn color="primary" variant="flat" rounded="md" class="text-none font-weight-bold text-white shadow-sm" @click="submitReply">
-                            <template v-slot:prepend><CheckCircle2 class="w-4 h-4 mr-1" /></template>
-                            Lưu phản hồi
-                        </v-btn>
-                    </div>
+                    <div class="text-caption text-medium-emphasis">{{ item.sdt || 'Chưa có SĐT' }}</div>
+                  </div>
                 </div>
+              </td>
+
+              <!-- Dịch vụ & Nhận xét -->
+              <td>
+                <div class="font-weight-bold text-body-2 text-truncate" style="max-width: 280px;">{{ item.tenDichVu }}</div>
+                <div class="text-caption text-medium-emphasis text-truncate font-italic mt-0.5" style="max-width: 280px;">
+                  "{{ item.noiDung || 'Khách hàng chỉ chấm sao' }}"
+                </div>
+              </td>
+
+              <!-- Số sao -->
+              <td class="text-center">
+                <div class="d-inline-flex align-center gap-0.5">
+                  <Star
+                    v-for="n in 5"
+                    :key="n"
+                    class="w-3.5 h-3.5"
+                    :class="n <= item.soSao ? 'fill-amber-400 text-amber-400' : 'fill-slate-200 text-slate-300'"
+                  />
+                  <ImageIcon v-if="item.hinhAnh && !item.hinhAnh.toLowerCase().includes('null')" class="w-3.5 h-3.5 text-primary ml-1" />
+                </div>
+              </td>
+
+              <!-- Ngày đánh giá -->
+              <td class="text-center text-caption text-medium-emphasis">
+                {{ formatDateTime(item.ngayDanhGia) }}
+              </td>
+
+              <!-- Trạng thái -->
+              <td class="text-center">
+                <v-chip
+                  size="small"
+                  :color="item.daPhanHoi ? 'success' : 'warning'"
+                  variant="tonal"
+                  class="font-weight-bold text-caption text-uppercase"
+                >
+                  {{ item.daPhanHoi ? 'Đã phản hồi' : 'Chưa xử lý' }}
+                </v-chip>
+              </td>
+
+              <!-- Thao tác -->
+              <td class="text-center" @click.stop>
+                <v-btn
+                  variant="outlined"
+                  color="primary"
+                  size="small"
+                  rounded="lg"
+                  class="text-none font-weight-bold"
+                  @click="openDetail(item)"
+                >
+                  Chi tiết
+                </v-btn>
+              </td>
+            </tr>
+
+            <tr v-if="paginatedData.length === 0">
+              <td colspan="7" class="text-center py-16 text-medium-emphasis">
+                <MessageSquare class="w-10 h-10 mx-auto mb-2 text-slate-300 opacity-50" />
+                <div class="font-weight-bold text-body-2">Không tìm thấy đánh giá dịch vụ nào</div>
+              </td>
+            </tr>
+          </tbody>
+        </v-table>
+      </div>
+
+      <!-- Pagination -->
+      <v-divider></v-divider>
+      <div class="pa-4 d-flex align-center justify-space-between flex-wrap gap-2">
+        <div class="text-caption text-medium-emphasis">
+          Tổng số <strong class="text-high-emphasis">{{ filteredData.length }}</strong> đánh giá
+        </div>
+        <v-pagination
+          v-model="currentPage"
+          :length="totalPages"
+          :total-visible="5"
+          density="comfortable"
+          rounded="lg"
+          size="small"
+        ></v-pagination>
+      </div>
+    </v-card>
+
+    <!-- Detail Dialog -->
+    <v-dialog v-model="detailOpen" max-width="680px" scrollable>
+      <v-card v-if="selectedReview" rounded="xl" class="overflow-hidden">
+        <!-- Header -->
+        <v-card-title class="pa-6 border-b d-flex align-center justify-space-between bg-surface">
+          <div class="d-flex align-center gap-3">
+            <v-avatar color="primary" variant="tonal" size="44" rounded="lg">
+              <MessageSquare class="w-5 h-5 text-primary" />
+            </v-avatar>
+            <div>
+              <h3 class="text-h6 font-weight-bold mb-0">Chi Tiết Đánh Giá Dịch Vụ</h3>
+              <div class="text-caption font-mono text-medium-emphasis">MÃ ĐƠN: #{{ selectedReview.maHd }}</div>
             </div>
-        </Teleport>
+          </div>
+          <v-btn icon variant="text" density="comfortable" @click="detailOpen = false">
+            <X class="w-5 h-5" />
+          </v-btn>
+        </v-card-title>
 
-        <ThongKeDichVuModal :is-open="showStats" @close="showStats = false" />
-    </div>
+        <!-- Body -->
+        <v-card-text class="pa-6 d-flex flex-column gap-4">
+          <v-alert v-if="selectedReview.isHidden" type="warning" variant="tonal" density="compact" rounded="lg">
+            Đánh giá này hiện đang bị ẩn khỏi ứng dụng khách hàng.
+          </v-alert>
+
+          <!-- Customer Info -->
+          <v-row dense>
+            <v-col cols="12" sm="6">
+              <v-text-field
+                :model-value="selectedReview.tenKhach"
+                label="Khách hàng"
+                variant="outlined"
+                density="compact"
+                readonly
+                rounded="lg"
+                hide-details
+              >
+                <template v-slot:prepend-inner><Users class="w-4 h-4 text-medium-emphasis mr-1" /></template>
+              </v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field
+                :model-value="selectedReview.sdt || 'Chưa cập nhật'"
+                label="Số điện thoại"
+                variant="outlined"
+                density="compact"
+                readonly
+                rounded="lg"
+                hide-details
+              >
+                <template v-slot:prepend-inner><Phone class="w-4 h-4 text-medium-emphasis mr-1" /></template>
+              </v-text-field>
+            </v-col>
+          </v-row>
+
+          <!-- Service & Rating -->
+          <v-row dense>
+            <v-col cols="12" sm="6">
+              <v-text-field
+                :model-value="selectedReview.tenDichVu"
+                label="Dịch vụ đánh giá"
+                variant="outlined"
+                density="compact"
+                readonly
+                rounded="lg"
+                hide-details
+              >
+                <template v-slot:prepend-inner><Scissors class="w-4 h-4 text-primary mr-1" /></template>
+              </v-text-field>
+            </v-col>
+            <v-col cols="12" sm="6">
+              <div class="border rounded-lg pa-2 px-3 d-flex align-center justify-space-between" style="height: 40px;">
+                <div class="d-flex gap-0.5">
+                  <Star
+                    v-for="n in 5"
+                    :key="n"
+                    class="w-4 h-4"
+                    :class="n <= selectedReview.soSao ? 'fill-amber-400 text-amber-400' : 'fill-slate-200 text-slate-300'"
+                  />
+                </div>
+                <span class="text-caption font-weight-bold text-medium-emphasis">({{ selectedReview.soSao }} / 5 Sao)</span>
+              </div>
+            </v-col>
+          </v-row>
+
+          <!-- Review Content -->
+          <div>
+            <div class="text-subtitle-2 font-weight-bold mb-1">Nhận xét của khách hàng</div>
+            <v-textarea
+              :model-value="selectedReview.noiDung || 'Khách hàng chỉ chấm sao không để lại lời bình.'"
+              variant="outlined"
+              density="compact"
+              readonly
+              rounded="lg"
+              rows="3"
+              hide-details
+              class="font-italic"
+            ></v-textarea>
+            <div class="text-caption text-medium-emphasis text-end mt-1">
+              Ngày gửi: {{ formatDateTime(selectedReview.ngayDanhGia) }}
+            </div>
+          </div>
+
+          <!-- Attached Image -->
+          <div v-if="hasImage">
+            <div class="text-subtitle-2 font-weight-bold mb-1 d-flex align-center gap-1">
+              <ImageIcon class="w-4 h-4 text-medium-emphasis" /> Hình ảnh đính kèm
+            </div>
+            <div class="border rounded-lg pa-2 d-inline-block">
+              <img
+                :src="API + selectedReview.hinhAnh"
+                @error="isImageBroken = true"
+                class="rounded-lg"
+                style="max-width: 220px; max-height: 180px; object-fit: contain;"
+                alt="Review Image"
+              />
+            </div>
+          </div>
+
+          <!-- Admin Reply -->
+          <div>
+            <div class="text-subtitle-2 font-weight-bold mb-1 d-flex align-center gap-1">
+              <Reply class="w-4 h-4 text-primary" /> Phản hồi từ Salon
+            </div>
+            <v-textarea
+              v-model="replyContent"
+              placeholder="Nhập nội dung phản hồi chăm sóc khách hàng..."
+              variant="outlined"
+              density="compact"
+              rounded="lg"
+              rows="3"
+              hide-details
+            ></v-textarea>
+          </div>
+        </v-card-text>
+
+        <!-- Footer Actions -->
+        <v-divider></v-divider>
+        <v-card-actions class="pa-4 d-flex justify-space-between flex-wrap gap-2">
+          <div class="d-flex gap-2">
+            <v-btn
+              variant="outlined"
+              color="grey-darken-1"
+              rounded="lg"
+              class="text-none font-weight-bold"
+              @click="toggleVisibility"
+            >
+              <template v-slot:prepend>
+                <component :is="selectedReview.isHidden ? Eye : EyeOff" class="w-4 h-4 mr-1" />
+              </template>
+              {{ selectedReview.isHidden ? 'Hiển thị lại' : 'Ẩn đánh giá' }}
+            </v-btn>
+
+            <v-btn
+              color="error"
+              variant="tonal"
+              rounded="lg"
+              class="text-none font-weight-bold"
+              @click="deleteReview"
+            >
+              <template v-slot:prepend><Trash2 class="w-4 h-4 mr-1" /></template>
+              Xóa
+            </v-btn>
+          </div>
+
+          <v-btn
+            color="primary"
+            variant="flat"
+            rounded="lg"
+            class="text-none font-weight-bold px-5"
+            @click="submitReply"
+          >
+            <template v-slot:prepend><CheckCircle2 class="w-4 h-4 mr-1" /></template>
+            Lưu phản hồi
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Native Vuetify Confirm Dialog -->
+    <v-dialog v-model="confirmDialog.open" max-width="440px">
+      <v-card rounded="xl" class="pa-6">
+        <div class="d-flex align-center gap-3 mb-4">
+          <v-avatar :color="confirmDialog.color" variant="tonal" size="48" rounded="lg">
+            <component :is="confirmDialog.icon" class="w-6 h-6" :class="`text-${confirmDialog.color}`" />
+          </v-avatar>
+          <div>
+            <h3 class="text-h6 font-weight-bold mb-0">{{ confirmDialog.title }}</h3>
+            <p class="text-caption text-medium-emphasis mb-0">{{ confirmDialog.subtitle }}</p>
+          </div>
+        </div>
+
+        <p class="text-body-2 mb-6 text-medium-emphasis">
+          {{ confirmDialog.message }}
+        </p>
+
+        <div class="d-flex justify-end gap-2">
+          <v-btn
+            variant="outlined"
+            rounded="lg"
+            class="text-none font-weight-bold"
+            @click="confirmDialog.open = false"
+          >
+            Hủy bỏ
+          </v-btn>
+          <v-btn
+            :color="confirmDialog.color"
+            variant="flat"
+            rounded="lg"
+            class="text-none font-weight-bold text-white"
+            :loading="confirmDialog.loading"
+            @click="executeConfirmAction"
+          >
+            {{ confirmDialog.confirmText }}
+          </v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
+
+    <!-- Stats Modal -->
+    <ThongKeDichVuModal :is-open="showStats" @close="showStats = false" />
+  </div>
 </template>
-
-<style scoped>
-.custom-scroll::-webkit-scrollbar {
-    width: 4px;
-}
-
-.custom-scroll::-webkit-scrollbar-thumb {
-    background: #E2E8F0;
-    border-radius: 10px;
-}
-
-.custom-scroll::-webkit-scrollbar-track {
-    background: transparent;
-}
-</style>

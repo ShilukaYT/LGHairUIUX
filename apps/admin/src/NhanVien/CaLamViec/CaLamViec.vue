@@ -371,9 +371,14 @@ const showSnackbar = (msg: string, color = 'success') => {
 
 <template>
   <v-container fluid>
-    <div class="mb-6">
-      <h2 class="text-h5 font-weight-bold">Ca làm việc của bạn</h2>
-      <p class="text-body-2 text-medium-emphasis mt-1">Xem trạng thái ca làm hôm nay và lịch sử 7 ngày gần nhất.</p>
+    <div class="mb-6 d-flex align-center gap-3">
+      <v-avatar color="primary" variant="tonal" size="48" rounded="lg">
+        <CalendarDays class="w-6 h-6 text-primary" />
+      </v-avatar>
+      <div>
+        <h2 class="text-h5 font-weight-bold mb-1">Ca làm việc của bạn</h2>
+        <p class="text-body-2 text-medium-emphasis mb-0">Xem trạng thái ca làm hôm nay và lịch sử 7 ngày gần nhất.</p>
+      </div>
     </div>
 
     <v-row>
@@ -399,9 +404,13 @@ const showSnackbar = (msg: string, color = 'success') => {
             <div class="mb-6">
               <div class="text-caption text-uppercase text-medium-emphasis font-weight-bold mb-2">Trạng thái hiện tại</div>
               
-              <v-chip v-if="todayShift.caLam === 'Nghỉ lễ'" color="error" variant="flat" class="font-weight-bold text-white">
+              <v-chip v-if="todayShift.caLam === 'Nghỉ lễ' || todayShift.trangThai === 7" color="error" variant="flat" class="font-weight-bold text-white">
                 <template v-slot:prepend><Sun class="mr-1" :size="16" /></template>
                 Nghỉ lễ
+              </v-chip>
+              <v-chip v-else-if="todayShift.caLam === 'Nghỉ phép' || todayShift.trangThai === 4" color="purple" variant="flat" class="font-weight-bold text-white">
+                <template v-slot:prepend><CalendarDays class="mr-1" :size="16" /></template>
+                Nghỉ phép
               </v-chip>
               <v-chip v-else-if="todayShift.caLam === 'Chưa xếp'" color="error" variant="tonal" class="font-weight-bold">
                 <template v-slot:prepend><XCircle class="mr-1" :size="16" /></template>
@@ -418,10 +427,6 @@ const showSnackbar = (msg: string, color = 'success') => {
               <v-chip v-else-if="todayShift.trangThai === 3" color="blue-grey" variant="outlined" class="font-weight-bold">
                 <template v-slot:prepend><LogOut class="mr-1" :size="16" /></template>
                 Đã rời ca
-              </v-chip>
-              <v-chip v-else-if="todayShift.trangThai === 4" color="info" variant="tonal" class="font-weight-bold">
-                <template v-slot:prepend><Clock class="mr-1" :size="16" /></template>
-                Xin đổi ca
               </v-chip>
               <v-chip v-else-if="todayShift.trangThai === 5" color="error" variant="flat" class="font-weight-bold text-white">
                 <template v-slot:prepend><XCircle class="mr-1" :size="16" /></template>
@@ -499,12 +504,12 @@ const showSnackbar = (msg: string, color = 'success') => {
                 <td class="font-weight-bold">{{ item.ngay }}</td>
                 <td class="font-weight-medium text-medium-emphasis">{{ item.caLam }}</td>
                 <td class="text-center">
-                  <v-chip v-if="item.caLam === 'Nghỉ lễ'" color="error" size="small" class="font-weight-bold text-white" variant="flat">Nghỉ lễ</v-chip>
+                  <v-chip v-if="item.caLam === 'Nghỉ lễ' || item.trangThai === 7" color="error" size="small" class="font-weight-bold text-white" variant="flat">Nghỉ lễ</v-chip>
+                  <v-chip v-else-if="item.caLam === 'Nghỉ phép' || item.trangThai === 4" color="purple" size="small" class="font-weight-bold text-white" variant="flat">Nghỉ phép</v-chip>
                   <v-chip v-else-if="item.caLam === 'Chưa xếp'" color="error" size="small" class="font-weight-bold" variant="tonal">Không xếp ca</v-chip>
                   <v-chip v-else-if="item.trangThai === 2" color="success" size="small" class="font-weight-bold" variant="tonal">Có mặt</v-chip>
                   <v-chip v-else-if="item.trangThai === 3" color="warning" size="small" class="font-weight-bold" variant="tonal">Rời sớm</v-chip>
                   <v-chip v-else-if="item.trangThai === 1" color="blue-grey" size="small" class="font-weight-bold" variant="tonal">Chưa làm</v-chip>
-                  <v-chip v-else-if="item.trangThai === 4" color="info" size="small" class="font-weight-bold" variant="tonal">Xin đổi ca</v-chip>
                   <v-chip v-else-if="item.trangThai === 5" color="error" size="small" class="font-weight-bold text-white" variant="flat">Vắng mặt</v-chip>
                   <v-chip v-else-if="item.trangThai === 6" color="warning" size="small" class="font-weight-bold text-white" variant="flat">Muộn</v-chip>
                   <span v-else class="text-medium-emphasis font-weight-bold">-</span>
@@ -574,7 +579,7 @@ const showSnackbar = (msg: string, color = 'success') => {
               {title: 'Đổi sang Ca sáng (Part-time)', value: 'Ca sáng (Part-time)'},
               {title: 'Đổi sang Ca chiều (Part-time)', value: 'Ca chiều (Part-time)'},
               {title: 'Đổi sang Ca tối (Part-time)', value: 'Ca tối (Part-time)'},
-              {title: 'Xin nghỉ hẳn (Không làm bù)', value: 'Nghỉ nguyên ngày'}
+              {title: 'Xin nghỉ phép (Cần quản lý duyệt)', value: 'Nghỉ phép'}
             ]"
             item-title="title"
             item-value="value"

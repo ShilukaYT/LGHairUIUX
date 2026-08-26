@@ -167,6 +167,11 @@ const fetchHoaDons = async () => {
   }
 }
 
+const handleRefresh = async () => {
+  await fetchHoaDons()
+  showNotification('Đã làm mới danh sách hóa đơn!', 'success')
+}
+
 // ── STATUS DISPLAY & CHIP COLORS ──
 const getStatusText = (status: number, maHd: string = '') => {
   const laDonSp = maHd.startsWith('SP') || maHd.startsWith('HDSP')
@@ -567,32 +572,46 @@ const totalPages = computed(() => {
     <!-- ═══════ HEADER CARD ═══════ -->
     <v-card elevation="2" rounded="xl" class="pa-6 mb-6">
       <div class="d-flex flex-column flex-md-row align-start align-md-center justify-space-between gap-4">
-        <div class="d-flex align-center gap-4">
-          <v-avatar color="primary" size="56" rounded="lg" elevation="3">
-            <FileText class="w-7 h-7 text-white" />
+        <div class="d-flex align-center gap-3">
+          <v-avatar color="primary" variant="tonal" size="48" rounded="lg">
+            <FileText class="w-6 h-6 text-primary" />
           </v-avatar>
           <div>
             <h1 class="text-h5 font-weight-bold mb-1">Quản Lý Hóa Đơn</h1>
-            <p class="text-caption text-medium-emphasis mb-0">
+            <p class="text-subtitle-2 text-medium-emphasis mb-0">
               Quản lý danh mục Hóa đơn dịch vụ Salon và Hóa đơn bán Sản phẩm lẻ
             </p>
           </div>
         </div>
 
-        <v-btn
-          color="primary"
-          variant="flat"
-          size="large"
-          rounded="xl"
-          elevation="3"
-          class="text-none font-weight-bold"
-          @click="exportExcel"
-        >
-          <template v-slot:prepend>
-            <FileDown class="w-5 h-5 mr-1" />
-          </template>
-          Xuất Excel
-        </v-btn>
+        <div class="d-flex align-center gap-2 flex-wrap">
+          <v-btn
+            variant="outlined"
+            color="grey-darken-1"
+            height="40"
+            rounded="lg"
+            class="text-none font-weight-bold"
+            :loading="isLoading"
+            @click="handleRefresh"
+          >
+            <template v-slot:prepend><RotateCcw class="w-4 h-4 mr-1" /></template>
+            Làm mới
+          </v-btn>
+
+          <v-btn
+            color="primary"
+            variant="flat"
+            height="40"
+            rounded="lg"
+            class="text-none font-weight-bold"
+            @click="exportExcel"
+          >
+            <template v-slot:prepend>
+              <FileDown class="w-4 h-4 mr-1" />
+            </template>
+            Xuất Excel
+          </v-btn>
+        </div>
       </div>
     </v-card>
 
@@ -673,16 +692,16 @@ const totalPages = computed(() => {
 
     <!-- ═══════ DATA TABLE CARD ═══════ -->
     <v-card elevation="2" rounded="xl" class="pa-6">
-      <v-table class="rounded-xl border">
+      <v-table class="rounded-xl border" hover>
         <thead>
-          <tr class="bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700">
-            <th class="font-weight-bold text-caption uppercase text-left py-3 text-slate-700 dark:text-slate-200" style="width: 140px;">Mã HD</th>
-            <th class="font-weight-bold text-caption uppercase text-left py-3 text-slate-700 dark:text-slate-200">Khách hàng</th>
-            <th class="font-weight-bold text-caption uppercase text-left py-3 text-slate-700 dark:text-slate-200" style="width: 140px;">Ngày tạo</th>
-            <th v-if="activeTab === 'sanPham'" class="font-weight-bold text-caption uppercase text-center py-3 text-slate-700 dark:text-slate-200" style="width: 110px;">Số lượng</th>
-            <th class="font-weight-bold text-caption uppercase text-left py-3 text-slate-700 dark:text-slate-200" style="width: 160px;">Thành tiền</th>
-            <th class="font-weight-bold text-caption uppercase text-center py-3 text-slate-700 dark:text-slate-200" style="width: 210px;">Trạng thái đơn hàng</th>
-            <th class="font-weight-bold text-caption uppercase text-center py-3 text-slate-700 dark:text-slate-200" style="width: 90px;">Thao tác</th>
+          <tr class="border-b" style="background-color: rgba(var(--v-theme-on-surface), 0.04);">
+            <th class="font-weight-bold text-caption uppercase text-left py-3" style="width: 140px;">Mã HD</th>
+            <th class="font-weight-bold text-caption uppercase text-left py-3">Khách hàng</th>
+            <th class="font-weight-bold text-caption uppercase text-left py-3" style="width: 140px;">Ngày tạo</th>
+            <th v-if="activeTab === 'sanPham'" class="font-weight-bold text-caption uppercase text-center py-3" style="width: 110px;">Số lượng</th>
+            <th class="font-weight-bold text-caption uppercase text-left py-3" style="width: 160px;">Thành tiền</th>
+            <th class="font-weight-bold text-caption uppercase text-center py-3" style="width: 210px;">Trạng thái đơn hàng</th>
+            <th class="font-weight-bold text-caption uppercase text-center py-3" style="width: 90px;">Thao tác</th>
           </tr>
         </thead>
         <tbody>
@@ -853,7 +872,7 @@ const totalPages = computed(() => {
             </div>
 
             <!-- Info Cards Grid (Desktop View) -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-xl border bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 print:hidden">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-xl border print:hidden" style="background-color: rgba(var(--v-theme-on-surface), 0.03);">
               <div class="d-flex flex-column gap-1">
                 <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">MÃ HÓA ĐƠN</span>
                 <span class="text-body-2 font-weight-black font-mono text-primary">#{{ selectedHd.maHd }}</span>
@@ -884,13 +903,13 @@ const totalPages = computed(() => {
             </div>
 
             <!-- Invoice Items Table -->
-            <v-table density="compact" class="border rounded-xl print:border-none">
+            <v-table density="compact" class="border rounded-xl print:border-none" hover>
               <thead>
-                <tr class="bg-slate-100 dark:bg-slate-800 border-b print:bg-transparent print:border-t print:border-b print:border-dashed print:border-black">
-                  <th class="font-weight-bold text-caption uppercase text-left py-2">Tên Sản phẩm / Dịch vụ</th>
-                  <th class="font-weight-bold text-caption uppercase text-center py-2" style="width: 70px;">SL</th>
-                  <th class="font-weight-bold text-caption uppercase text-left py-2 print:hidden" style="width: 140px;">Thợ làm việc</th>
-                  <th class="font-weight-bold text-caption uppercase text-right py-2" style="width: 140px;">Thành tiền</th>
+                <tr class="border-b print:bg-transparent print:border-t print:border-b print:border-dashed print:border-black" style="background-color: rgba(var(--v-theme-on-surface), 0.04);">
+                  <th class="font-weight-bold text-caption uppercase text-left py-2.5">Tên Sản phẩm / Dịch vụ</th>
+                  <th class="font-weight-bold text-caption uppercase text-center py-2.5" style="width: 70px;">SL</th>
+                  <th class="font-weight-bold text-caption uppercase text-left py-2.5 print:hidden" style="width: 140px;">Thợ làm việc</th>
+                  <th class="font-weight-bold text-caption uppercase text-right py-2.5" style="width: 140px;">Thành tiền</th>
                 </tr>
               </thead>
               <tbody>

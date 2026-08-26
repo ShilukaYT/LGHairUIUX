@@ -6,11 +6,13 @@ import { ref, computed, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import axios from "axios";
 import { useWishlistStore, showToast } from "@/stores/useWishlistStore";
+import { useBookingBasketStore } from "@/stores/useBookingBasketStore";
 import { Heart } from "lucide-vue-next";
 
 const route = useRoute();
 const routerInstance = useRouter();
 const wishlistStore = useWishlistStore();
+const bookingBasketStore = useBookingBasketStore();
 const cartItems = ref<any[]>([]);
 const cartRef = ref<any>(null);
 const userMaKH = ref<string | null>(null);
@@ -213,6 +215,14 @@ const addToCart = async (rawItem: any) => {
   await updateCartBadge();
   window.dispatchEvent(new Event("cart-updated"));
   showToast("Đã thêm dịch vụ vào giỏ hàng!", "success");
+};
+
+// =====================================================================
+// THÊM DỊCH VỤ VÀO KHAY ĐẶT LỊCH (Booking Basket)
+// =====================================================================
+const addToBasket = (rawItem: any) => {
+  bookingBasketStore.addItem(rawItem);
+  bookingBasketStore.openDrawer();
 };
 // =======================
 // MOUNT
@@ -428,10 +438,11 @@ const formatPrice = (price: number) => {
                   </button>
 
                   <button
-                    @click.stop.prevent="addToCart(s)"
+                    @click.stop.prevent="addToBasket(s)"
                     class="btn-order-now"
+                    :class="{ 'is-selected': bookingBasketStore.hasItem(s.maDv) }"
                   >
-                    ĐẶT NGAY
+                    {{ bookingBasketStore.hasItem(s.maDv) ? 'ĐÃ CHỌN ✓' : 'CHỌN DỊCH VỤ' }}
                   </button>
                 </div>
               </div>
@@ -592,8 +603,8 @@ const formatPrice = (price: number) => {
                     </li>
                   </ul>
                 </div>
-                <button @click="addToCart(c)" class="btn-booking-luxury">
-                  Đặt lịch Ngay
+                <button @click="addToBasket(c)" class="btn-booking-luxury" :class="{ 'is-selected': bookingBasketStore.hasItem(c.maCb) }">
+                  {{ bookingBasketStore.hasItem(c.maCb) ? 'Đã chọn ✓' : 'Chọn gói' }}
                 </button>
               </div>
             </router-link>

@@ -491,55 +491,41 @@ onMounted(async () => {
 
     <!-- ═══════ HEADER CARD ═══════ -->
     <v-card elevation="2" rounded="xl" class="pa-6 mb-6">
-      <div class="d-flex flex-column flex-lg-row align-lg-center justify-space-between gap-4">
-        <div>
-          <h2 class="text-h5 font-weight-bold text-slate-900 dark:text-white d-flex align-center gap-2 mb-1">
-            <Tag class="w-6 h-6 text-primary shrink-0" />
-            <span>Quản Lý Voucher & Mã Giảm Giá</span>
-          </h2>
-          <p class="text-subtitle-2 text-medium-emphasis mb-0">
-            Quản lý mã giảm giá, ưu đãi và lượt sử dụng của khách hàng trong hệ thống
-          </p>
+      <div class="d-flex flex-column flex-md-row align-md-center justify-space-between gap-4">
+        <div class="d-flex align-center gap-3">
+          <v-avatar color="primary" variant="tonal" size="48" rounded="lg">
+            <Tag class="w-6 h-6 text-primary" />
+          </v-avatar>
+          <div>
+            <h2 class="text-h5 font-weight-bold mb-1">
+              Quản Lý Voucher &amp; Mã Giảm Giá
+            </h2>
+            <p class="text-subtitle-2 text-medium-emphasis mb-0">
+              Quản lý mã giảm giá, ưu đãi và lượt sử dụng của khách hàng trong hệ thống
+            </p>
+          </div>
         </div>
 
-        <div class="d-flex align-center gap-3 flex-grow-1 justify-lg-end flex-wrap">
-          <v-select
-            v-model="lifecycleFilter"
-            :items="lifecycleOptions"
-            item-title="title"
-            item-value="value"
-            variant="outlined"
-            density="compact"
-            hide-details
-            class="flex-grow-1"
-            style="max-width: 280px; min-width: 200px;"
-            @update:model-value="load"
-          >
-            <template v-slot:prepend-inner>
-              <Tag class="w-4 h-4 text-slate-400 mr-1 shrink-0" />
-            </template>
-          </v-select>
-
+        <div class="d-flex align-center gap-2 flex-wrap">
           <v-btn
             variant="outlined"
             color="grey-darken-1"
             height="40"
-            width="40"
-            icon
-            rounded="xl"
+            rounded="lg"
+            class="text-none font-weight-bold"
             :loading="loading"
             @click="load"
-            title="Tải lại"
           >
-            <RotateCcw class="w-5 h-5 text-slate-600 dark:text-slate-300" />
+            <template v-slot:prepend><RotateCcw class="w-4 h-4 mr-1" /></template>
+            Làm mới
           </v-btn>
 
           <v-btn
             color="primary"
+            variant="flat"
             height="40"
-            rounded="xl"
-            elevation="2"
-            class="text-none font-weight-bold px-5"
+            rounded="lg"
+            class="text-none font-weight-bold px-4"
             @click="openCreate"
           >
             <template v-slot:prepend>
@@ -551,19 +537,56 @@ onMounted(async () => {
       </div>
     </v-card>
 
+    <!-- ═══════ FILTERS CARD ═══════ -->
+    <v-card variant="outlined" rounded="xl" class="pa-4 mb-6 bg-surface">
+      <div class="d-flex flex-column flex-md-row align-md-center justify-space-between gap-3 flex-wrap">
+        <div class="d-flex align-center gap-3 flex-wrap flex-grow-1">
+          <div style="min-width: 240px; max-width: 320px;">
+            <v-select
+              v-model="lifecycleFilter"
+              :items="lifecycleOptions"
+              item-title="title"
+              item-value="value"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              @update:model-value="load"
+            >
+              <template v-slot:prepend-inner>
+                <Tag class="w-4 h-4 text-medium-emphasis mr-1 shrink-0" />
+              </template>
+            </v-select>
+          </div>
+        </div>
+
+        <v-btn
+          variant="text"
+          color="primary"
+          rounded="lg"
+          class="text-none font-weight-bold"
+          height="40"
+          @click="() => { lifecycleFilter = ''; load(); }"
+        >
+          <template v-slot:prepend><RotateCcw class="w-4 h-4 mr-1" /></template>
+          Đặt lại lọc
+        </v-btn>
+      </div>
+    </v-card>
+
     <!-- ═══════ DATA TABLE CARD ═══════ -->
     <v-card elevation="2" rounded="xl" class="pa-6">
-      <v-table class="rounded-xl border">
+      <v-table class="rounded-xl border" hover>
         <thead>
-          <tr class="bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700">
-            <th class="font-weight-bold text-caption uppercase text-center py-3 text-slate-700 dark:text-slate-200" style="width: 10%;">Mã</th>
-            <th class="font-weight-bold text-caption uppercase text-center py-3 text-slate-700 dark:text-slate-200" style="width: 12%;">Ưu đãi</th>
-            <th class="font-weight-bold text-caption uppercase text-left py-3 text-slate-700 dark:text-slate-200" style="width: 28%;">Mô tả</th>
-            <th class="font-weight-bold text-caption uppercase text-center py-3 text-slate-700 dark:text-slate-200" style="width: 12%;">HSD</th>
-            <th class="font-weight-bold text-caption uppercase text-center py-3 text-slate-700 dark:text-slate-200" style="width: 10%;">Lượt dùng</th>
-            <th class="font-weight-bold text-caption uppercase text-center py-3 text-slate-700 dark:text-slate-200" style="width: 8%;">KH lưu</th>
-            <th class="font-weight-bold text-caption uppercase text-center py-3 text-slate-700 dark:text-slate-200" style="width: 10%;">Trạng thái</th>
-            <th class="font-weight-bold text-caption uppercase text-right py-3 text-slate-700 dark:text-slate-200" style="width: 10%;">Thao tác</th>
+          <tr class="border-b" style="background-color: rgba(var(--v-theme-on-surface), 0.04);">
+            <th class="font-weight-bold text-caption uppercase text-center py-3" style="width: 10%;">Mã</th>
+            <th class="font-weight-bold text-caption uppercase text-center py-3" style="width: 12%;">Ưu đãi</th>
+            <th class="font-weight-bold text-caption uppercase text-left py-3" style="width: 28%;">Mô tả</th>
+            <th class="font-weight-bold text-caption uppercase text-center py-3" style="width: 12%;">HSD</th>
+            <th class="font-weight-bold text-caption uppercase text-center py-3" style="width: 10%;">Lượt dùng</th>
+            <th class="font-weight-bold text-caption uppercase text-center py-3" style="width: 8%;">KH lưu</th>
+            <th class="font-weight-bold text-caption uppercase text-center py-3" style="width: 10%;">Trạng thái</th>
+            <th class="font-weight-bold text-caption uppercase text-right py-3" style="width: 10%;">Thao tác</th>
           </tr>
         </thead>
         <tbody>
@@ -936,13 +959,13 @@ onMounted(async () => {
                 <UserCheck class="w-4 h-4 text-info" />
                 Khách hàng đã lưu mã ({{ detailKhach.length }})
               </h4>
-              <v-table density="compact" class="border rounded-xl">
+              <v-table density="compact" class="border rounded-xl" hover>
                 <thead>
-                  <tr class="bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700">
-                    <th class="font-weight-bold text-caption uppercase text-center py-2 text-slate-700 dark:text-slate-200">Mã KH</th>
-                    <th class="font-weight-bold text-caption uppercase text-left py-2 text-slate-700 dark:text-slate-200">Họ tên</th>
-                    <th class="font-weight-bold text-caption uppercase text-center py-2 text-slate-700 dark:text-slate-200">SĐT</th>
-                    <th class="font-weight-bold text-caption uppercase text-left py-2 text-slate-700 dark:text-slate-200">Email</th>
+                  <tr class="border-b" style="background-color: rgba(var(--v-theme-on-surface), 0.04);">
+                    <th class="font-weight-bold text-caption uppercase text-center py-2.5">Mã KH</th>
+                    <th class="font-weight-bold text-caption uppercase text-left py-2.5">Họ tên</th>
+                    <th class="font-weight-bold text-caption uppercase text-center py-2.5">SĐT</th>
+                    <th class="font-weight-bold text-caption uppercase text-left py-2.5">Email</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -965,15 +988,15 @@ onMounted(async () => {
                 <Receipt class="w-4 h-4 text-primary" />
                 Hóa đơn đã áp dụng mã ({{ detailHoaDon.length }})
               </h4>
-              <v-table density="compact" class="border rounded-xl">
+              <v-table density="compact" class="border rounded-xl" hover>
                 <thead>
-                  <tr class="bg-slate-100/80 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700">
-                    <th class="font-weight-bold text-caption uppercase text-center py-2 text-slate-700 dark:text-slate-200">Mã HĐ</th>
-                    <th class="font-weight-bold text-caption uppercase text-center py-2 text-slate-700 dark:text-slate-200">Mã KH</th>
-                    <th class="font-weight-bold text-caption uppercase text-center py-2 text-slate-700 dark:text-slate-200">Ngày</th>
-                    <th class="font-weight-bold text-caption uppercase text-center py-2 text-slate-700 dark:text-slate-200">Tổng tiền</th>
-                    <th class="font-weight-bold text-caption uppercase text-center py-2 text-slate-700 dark:text-slate-200">Thành tiền</th>
-                    <th class="font-weight-bold text-caption uppercase text-center py-2 text-slate-700 dark:text-slate-200">Trạng thái</th>
+                  <tr class="border-b" style="background-color: rgba(var(--v-theme-on-surface), 0.04);">
+                    <th class="font-weight-bold text-caption uppercase text-center py-2.5">Mã HĐ</th>
+                    <th class="font-weight-bold text-caption uppercase text-center py-2.5">Mã KH</th>
+                    <th class="font-weight-bold text-caption uppercase text-center py-2.5">Ngày</th>
+                    <th class="font-weight-bold text-caption uppercase text-center py-2.5">Tổng tiền</th>
+                    <th class="font-weight-bold text-caption uppercase text-center py-2.5">Thành tiền</th>
+                    <th class="font-weight-bold text-caption uppercase text-center py-2.5">Trạng thái</th>
                   </tr>
                 </thead>
                 <tbody>

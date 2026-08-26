@@ -48,33 +48,7 @@ const activeHeroSlide = ref<number>(0);
 let heroIntervalId: number | null = null;
 
 const heroSlides: HeroSlide[] = [
-  {
-    id: 1,
-    image: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&q=80&w=1400',
-    alt: 'Luxury female hair campaign',
-    subtitle: 'Salon Cao Cấp',
-    title: 'Chăm sóc tóc nữ',
-    desc: 'Khám phá dịch vụ salon và sản phẩm chăm sóc tóc dành riêng cho mái tóc hiện đại.',
-    route: 'services'
-  },
-  {
-    id: 2,
-    image: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&q=80&w=1400',
-    alt: 'Glossy salon hair banner',
-    subtitle: 'Sản Phẩm Thượng Hạng',
-    title: 'Nâng Tầm Phong Cách',
-    desc: 'Trải nghiệm bộ sưu tập sản phẩm chăm sóc tóc cao cấp được tinh tuyển bởi chuyên gia.',
-    route: 'shop'
-  },
-  {
-    id: 3,
-    image: 'https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&q=80&w=1400',
-    alt: 'Premium hair styling banner',
-    subtitle: 'Trải Nghiệm Đẳng Cấp',
-    title: 'Đặt lịch chăm sóc',
-    desc: 'Tận hưởng không gian làm đẹp sang trọng và dịch vụ chăm sóc tóc đẳng cấp.',
-    route: 'datdichvu'
-  }
+
 ];
 
 // Flash sale countdown
@@ -220,30 +194,7 @@ const getFallbackImg = (tenDanhMuc: string): string => {
 // Testimonials
 const activeTestimonial = ref<number>(0);
 const testimonials: Testimonial[] = [
-  {
-    id: 1,
-    name: 'Lê Khánh Linh',
-    role: 'Fashion Model',
-    quote: 'Dịch vụ cắt tóc Signature ở đây thực sự nâng tầm khuôn mặt. Kỹ thuật tỉ mỉ, sấy tạo kiểu giữ nếp lâu và không gian vô cùng thư giãn, sang trọng.',
-    rating: 5,
-    service: 'Cắt Tóc Signature'
-  },
-  {
-    id: 2,
-    name: 'Trần Minh Hằng',
-    role: 'Content Creator',
-    quote: 'Tôi đã uốn kỹ thuật số và nhuộm Balayage tại đây. Tóc lên màu chuẩn xác, sóng lơi mềm mại mà không hề bị khô xơ nhờ dùng kèm Huyết Thanh Lụa.',
-    rating: 5,
-    service: 'Nhuộm Màu & Uốn Sóng Lơi'
-  },
-  {
-    id: 3,
-    name: 'Nguyễn Thế Anh',
-    role: 'Creative Director',
-    quote: 'Rất ấn tượng với khu sản phẩm. Dầu gội cân bằng và mặt nạ phục hồi tóc dùng rất thích, thiết kế chai lọ tối giản rất hợp gu.',
-    rating: 5,
-    service: 'Chăm Sóc Tóc Nam & Boutique'
-  }
+ 
 ];
 
 const currentTestimonial = computed(() => {
@@ -559,20 +510,6 @@ const addProductToCart = async (prod: any) => {
             <div class="hm-cat-sub">{{ p.subtitle }}</div>
           </div>
         </div>
-        <div class="hm-cat-card" @click="goToRoute('services')">
-          <!-- Ảnh cho card Dịch Vụ Tóc -->
-          <img
-            src="/dich-vu-toc.png"
-            alt="Dịch vụ tóc"
-            class="hm-cat-hover-img"
-          />
-          <div class="hm-cat-hover-overlay"></div>
-          <div class="hm-cat-content">
-            <div class="hm-cat-num">04</div>
-            <div class="hm-cat-title">Dịch Vụ Tóc</div>
-            <div class="hm-cat-sub">Hair Services</div>
-          </div>
-        </div>
         <div class="hm-cat-card hm-cat-card-img" @click="goToRoute('services')">
           <img
             :src="dataStore.SERVICES[0]?.img || 'https://images.unsplash.com/photo-1595476108010-b4d1f10d5e43?q=80&w=400'"
@@ -789,6 +726,7 @@ const addProductToCart = async (prod: any) => {
     <!-- ===== CỬA HÀNG / SẢN PHẨM ===== -->
     <section class="hm-shop-section">
       <h2 class="hm-section-title">Cửa Hàng Của Chúng Tôi</h2>
+
 
       <div v-if="isLoadingProducts" class="hm-prod-grid">
         <div v-for="n in 8" :key="n" class="hm-prod-skeleton">
@@ -1053,7 +991,7 @@ const addProductToCart = async (prod: any) => {
 }
 .hm-category-inner {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   width: 100%;
 }
 .hm-cat-card {
@@ -1774,22 +1712,67 @@ const addProductToCart = async (prod: any) => {
   100% { opacity: 1; }
 }
 
+/* ==================== SEARCH BAR SẢN PHẨM ==================== */
+.hm-search-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 40px 0;
+}
+.hm-search-bar {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 520px;
+  border-bottom: 1.5px solid #111;
+  padding-bottom: 10px;
+  gap: 8px;
+}
+.hm-search-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #111;
+  caret-color: #111;
+}
+.hm-search-input::placeholder {
+  color: #999;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.hm-search-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #111;
+  display: flex;
+  align-items: center;
+  padding: 0;
+  transition: opacity 0.2s;
+}
+.hm-search-btn:hover { opacity: 0.6; }
+
+
 .hm-xem-them {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 20px 64px;
-  background: #000;
-  color: #fff;
+  background: #fff;
+  color: #000;
   font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
   font-size: 22px;
   text-transform: capitalize;
-  border: none;
+  border: 1.5px solid #000;
   border-radius: 40px;
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: background 0.2s, color 0.2s;
 }
-.hm-xem-them:hover { opacity: 0.8; }
+.hm-xem-them:hover { background: #f5f5f5; }
 
 /* ==================== TESTIMONIAL ==================== */
 .hm-testimonial-section {

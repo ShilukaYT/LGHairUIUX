@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
-import axios from 'axios';
+import { ref, computed, onMounted, watch, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { getCartDB, removeFromCartDB, addToCartDB } from '@/Views/Anonymous/CSDL/cartDB';
+import axios from 'axios';
+import Swal from 'sweetalert2';
+import { getCartDB, removeFromCartDB, addToCartDB, clearCartDB } from '@/Views/Anonymous/CSDL/cartDB';
 import { getCustomerInfo } from '@/Views/Anonymous/CSDL/DuLieuNguoiDung';
+import { useBookingBasketStore } from '@/stores/useBookingBasketStore';
 import { KHO_ORIGIN, calculateShippingFee } from './shippingCalculator';
 
 const API = import.meta.env.VITE_API_URL;
@@ -25,6 +27,13 @@ type ProductItem = {
     gia: number;
     hinhAnh?: string;
     soLuong: number;
+    soLuongTon?: number;
+};
+
+const getImageUrl = (path?: string) => {
+    if (!path) return '/images/no-image.png';
+    if (path.startsWith('http')) return path;
+    return `${API}${path}`;
 };
 
 const customer = getCustomerInfo();
@@ -45,6 +54,9 @@ const loadingStylists = ref(false);
 const stylistMessage = ref('');
 const myVouchers = ref<any[]>([]);
 
+// Cờ chặn spam click & loading xoay vòng
+const isSubmitting = ref(false);
+
 const tempDate = ref('');
 const tempTime = ref('');
 
@@ -56,8 +68,8 @@ const bookingData = ref({
     stylistId: null as string | null,
     selectedServices: [] as ServiceItem[],
     voucherIds: [] as string[],
-    paymentMode: '10',
-    paymentMethod: 'vnpay',
+    paymentMode: '10', // '10' hoặc '100'
+    paymentMethod: 'vnpay', // 'vnpay' hoặc 'momo'
     note: ''
 });
 
@@ -68,13 +80,11 @@ const productData = ref({
     receiverEmail: customer.email || '',
     address: '',
     deliveryNote: '',
-    paymentMethod: 'vnpay'
+    paymentMethod: 'vnpay' // 'vnpay', 'momo', 'cod'
 });
 
 // ==========================================
-// HÓA ĐƠN ĐIỆN TỬ
-// Mặc định luôn xuất hóa đơn cá nhân, dùng Email + Địa chỉ đã nhập ở trên (không hỏi lại).
-// Chỉ mở rộng khi khách cần hóa đơn công ty (có MST).
+// HÓA ĐƠN ĐIỆN TỬ DOANH NGHIỆP
 // ==========================================
 const showInvoiceCompanyForm = ref(false);
 const invoiceCompany = ref({ tenCongTy: '', mst: '' });
@@ -115,6 +125,8 @@ const serviceSearch = ref('');
 const productSearch = ref('');
 const showServiceDropdown = ref(false);
 const showProductDropdown = ref(false);
+let productSearchTimeout: any = null;
+let stockPollingTimer: any = null;
 
 const minDate = new Date().toISOString().split('T')[0];
 
@@ -181,10 +193,6 @@ const productSubTotal = computed(() => {
     return productItems.value.reduce((sum, p) => sum + Number(p.gia || 0) * Number(p.soLuong || 1), 0);
 });
 
-const needDeliveryAddress = computed(() => {
-    return productItems.value.length > 0 && productData.value.receiveType === 'home';
-});
-
 const distanceText = ref<string>('');
 const shippingFee = ref<number>(0);
 const isCalculatingRoute = ref(false);
@@ -197,7 +205,6 @@ const calculateRouteAndFee = () => {
     }
 
     isCalculatingRoute.value = true;
-    
     setTimeout(() => {
         const destLower = productData.value.address.toLowerCase();
         let distanceInKm = 0;
@@ -229,51 +236,68 @@ watch(() => productData.value.address, (newAddress) => {
     }, 1000);
 });
 
+// ==========================================
+// TÍNH TỔNG TIỀN VÀ GOM ID (DỊCH VỤ + SẢN PHẨM)
+// ==========================================
+const combinedSubTotal = computed(() => serviceSubTotal.value + productSubTotal.value);
+
+const combinedItemIds = computed(() => {
+    const sIds = bookingData.value.selectedServices.map(s => s.id);
+    const pIds = productItems.value.map(p => p.id);
+    return [...sIds, ...pIds].join(',');
+});
+
 const stackPreview = ref({ totalDiscount: 0, finalAmount: 0, memberDiscount: 0, voucherAmount: 0, memberRankPercent: 0 });
 const discountAmount = computed(() => Number(stackPreview.value.totalDiscount || 0));
 const memberDiscount = computed(() => Number(stackPreview.value.memberDiscount || 0));
 const voucherAmount = computed(() => Number(stackPreview.value.voucherAmount || 0));
 const memberRankPercent = computed(() => Number(stackPreview.value.memberRankPercent || 0));
-const serviceAfterVoucher = computed(() => Math.max(0, serviceSubTotal.value - discountAmount.value));
 const grandTotal = computed(() => Math.max(0, stackPreview.value.finalAmount) + shippingFee.value);
 
 const payNow = computed(() => {
-    let servicePayment = serviceAfterVoucher.value;
-    if (bookingData.value.paymentMode === '10') {
-        servicePayment = serviceSubTotal.value * 0.1;
+    let servicePayment = 0;
+    if (bookingData.value.selectedServices.length > 0) {
+        if (bookingData.value.paymentMode === '10') {
+            servicePayment = serviceSubTotal.value * 0.1;
+        } else {
+            servicePayment = Math.max(0, serviceSubTotal.value - discountAmount.value);
+        }
     }
-    
-    const remainingDiscount = Math.max(0, discountAmount.value - serviceSubTotal.value);
-    const productAfterVoucher = Math.max(0, productSubTotal.value - remainingDiscount);
-    
-    let productPayment = productAfterVoucher + shippingFee.value;
-    if (productData.value.paymentMethod === 'cod' || productData.value.receiveType === 'store') {
-        productPayment = 0;
+
+    let productPayment = 0;
+    if (productItems.value.length > 0) {
+        const remainingDiscount = Math.max(0, discountAmount.value - serviceSubTotal.value);
+        const productAfterDiscount = Math.max(0, productSubTotal.value - remainingDiscount);
+        if (productData.value.paymentMethod !== 'cod' && productData.value.receiveType === 'home') {
+            productPayment = productAfterDiscount + shippingFee.value;
+        } else if (productData.value.receiveType === 'store') {
+            productPayment = 0;
+        } else {
+            productPayment = 0;
+        }
     }
-    
+
     return servicePayment + productPayment;
 });
 
 const remainAtStore = computed(() => {
     let total = 0;
 
-    // Dịch vụ: còn lại sau khi cọc
     if (bookingData.value.selectedServices.length > 0 && bookingData.value.paymentMode === '10') {
-        total += Math.max(0, serviceAfterVoucher.value - (serviceSubTotal.value * 0.1));
+        const serviceAfterVoucher = Math.max(0, serviceSubTotal.value - discountAmount.value);
+        total += Math.max(0, serviceAfterVoucher - (serviceSubTotal.value * 0.1));
     }
 
-    // Sản phẩm: nhận tại tiệm → trả tại tiệm
     if (productItems.value.length > 0 && productData.value.receiveType === 'store') {
         const remainingDiscount = Math.max(0, discountAmount.value - serviceSubTotal.value);
-        const productAfterVoucher = Math.max(0, productSubTotal.value - remainingDiscount);
-        total += productAfterVoucher;
+        total += Math.max(0, productSubTotal.value - remainingDiscount);
     }
 
     return total;
 });
 
 const remainCOD = computed(() => {
-    if (productItems.value.length === 0 || productData.value.paymentMethod !== 'cod') return 0;
+    if (productItems.value.length === 0 || productData.value.paymentMethod !== 'cod' || productData.value.receiveType !== 'home') return 0;
     const remainingDiscount = Math.max(0, discountAmount.value - serviceSubTotal.value);
     const productAfterVoucher = Math.max(0, productSubTotal.value - remainingDiscount);
     return productAfterVoucher + shippingFee.value;
@@ -288,18 +312,112 @@ const filteredServices = computed(() => {
     return list.filter(item => !bookingData.value.selectedServices.find(s => s.id === item.id));
 });
 
-let productSearchTimeout: any = null;
-watch(productSearch, (newVal) => {
-    clearTimeout(productSearchTimeout);
-    productSearchTimeout = setTimeout(() => {
-        loadProducts(newVal);
-    }, 500);
-});
-
 const formatMoney = (money: number) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(money || 0));
 };
 
+// ==========================================
+// VOUCHER LOGIC
+// ==========================================
+const isVoucherDisabled = (v: any) => {
+    if (v.isAvailable === false) return true;
+    if (v.desc && v.desc.includes('Đơn tối thiểu')) {
+        const match = v.desc.match(/Đơn tối thiểu ([\d,]+)đ/);
+        if (match) {
+            const minVal = parseInt(match[1].replace(/,/g, ''));
+            if (combinedSubTotal.value < minVal) return true;
+        }
+    }
+    return false;
+};
+
+const loadVouchers = async () => {
+    if (!customerId.value || customerId.value === 'GUEST') return;
+    try {
+        const res = await axios.get(`${API}/api/ThanhToanTong/get-my-vouchers/${customerId.value}`, {
+            params: {
+                subTotal: combinedSubTotal.value, 
+                ngayGioHen: bookingData.value.bookingDate || undefined,
+                itemIds: combinedItemIds.value || undefined
+            }
+        });
+        myVouchers.value = res.data || [];
+        bookingData.value.voucherIds = bookingData.value.voucherIds.filter(id => {
+            const v = myVouchers.value.find(x => x.id === id);
+            return v && !isVoucherDisabled(v);
+        });
+    } catch (error) {
+        console.error('Lỗi load voucher:', error);
+    }
+};
+
+const refreshStackPreview = async () => {
+    if (!customerId.value || customerId.value === 'GUEST') {
+        stackPreview.value = { totalDiscount: 0, finalAmount: combinedSubTotal.value, memberDiscount: 0, voucherAmount: 0, memberRankPercent: 0 };
+        return;
+    }
+    try {
+        const codes = bookingData.value.voucherIds.join(',');
+        const res = await axios.get(`${API}/api/ThanhToanTong/preview-voucher-stack`, {
+            params: {
+                maKH: customerId.value,
+                codes,
+                subTotal: combinedSubTotal.value,
+                ngayGioHen: bookingData.value.bookingDate || undefined,
+                itemIds: combinedItemIds.value || undefined
+            }
+        });
+        stackPreview.value = {
+            totalDiscount: Number(res.data.totalDiscount) || 0,
+            finalAmount: Number(res.data.finalAmount) || combinedSubTotal.value,
+            memberDiscount: Number(res.data.memberDiscount) || 0,
+            voucherAmount: Number(res.data.voucherAmount) || 0,
+            memberRankPercent: Number(res.data.memberRankPercent) || 0
+        };
+    } catch (e: any) {
+        stackPreview.value = { totalDiscount: 0, finalAmount: combinedSubTotal.value, memberDiscount: 0, voucherAmount: 0, memberRankPercent: 0 };
+        const msg = e.response?.data?.message || 'Voucher không đủ điều kiện áp dụng!';
+        Swal.fire({ title: 'Opps!', text: msg, icon: 'warning', confirmButtonText: 'Đã hiểu', confirmButtonColor: '#000' });
+        if (bookingData.value.voucherIds.length > 0) {
+            bookingData.value.voucherIds.pop();
+        }
+    }
+};
+
+function toggleVoucher(id: string) {
+    const ids = bookingData.value.voucherIds;
+    const v = myVouchers.value.find(x => x.id === id);
+    if (v && isVoucherDisabled(v)) {
+        Swal.fire({ 
+            title: 'Không hợp lệ', 
+            text: 'Không thể áp dụng voucher: ' + (v.errorMessage || 'Chưa đủ điều kiện.'), 
+            icon: 'warning', 
+            confirmButtonText: 'Đã hiểu', 
+            confirmButtonColor: '#000' 
+        });
+        return;
+    }
+    const i = ids.indexOf(id);
+    if (i >= 0) {
+        ids.splice(i, 1);
+        return;
+    }
+    if (ids.length >= 2) {
+        Swal.fire({ 
+            title: 'Giới hạn voucher', 
+            text: 'Chỉ chọn tối đa 2 voucher cho đơn hàng.', 
+            icon: 'info', 
+            confirmButtonText: 'Đã hiểu', 
+            confirmButtonColor: '#000' 
+        });
+        return;
+    }
+    ids.push(id);
+}
+
+// ==========================================
+// THÊM / XÓA / SỬA DỊCH VỤ & SẢN PHẨM
+// ==========================================
 const addService = async (service: any) => {
     if (bookingData.value.selectedServices.find(s => s.id === service.id)) return;
 
@@ -334,8 +452,10 @@ const addService = async (service: any) => {
 
 const removeService = async (id: any) => {
     bookingData.value.selectedServices = bookingData.value.selectedServices.filter(s => s.id !== id);
+    const bookingStore = useBookingBasketStore();
+    bookingStore.removeItem(id);
     try {
-        await removeFromCartDB(id);
+        await removeFromCartDB(id, 'DICHVU');
     } catch (error) {
         console.error('Lỗi xóa dịch vụ:', error);
     }
@@ -343,15 +463,44 @@ const removeService = async (id: any) => {
 };
 
 const addProduct = (sp: any, bt: any) => {
-    if (bt.soLuongTon <= 0 || productItems.value.some(p => p.id === bt.maBienThe)) return;
+    if (bt.soLuongTon <= 0) return;
 
-    productItems.value.push({
-        id: bt.maBienThe,
-        tenItem: `${sp.tenSp} - ${bt.tenBienThe}`,
-        gia: Number(bt.giaBan || 0),
-        hinhAnh: bt.hinhAnhDaiDien || bt.hinhAnh || sp.hinhAnhDaiDien,
-        soLuong: 1
-    });
+    const existingProduct = productItems.value.find(p => p.id === bt.maBienThe);
+
+    if (existingProduct) {
+        if (existingProduct.soLuong >= bt.soLuongTon) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Vượt quá số lượng',
+                text: `Chỉ còn ${bt.soLuongTon} sản phẩm trong kho!`,
+                confirmButtonColor: '#000'
+            });
+            return;
+        }
+        existingProduct.soLuong++;
+    } else {
+        productItems.value.push({
+            id: bt.maBienThe,
+            tenItem: `${sp.tenSp} - ${bt.tenBienThe}`,
+            gia: Number(bt.giaBan || 0),
+            hinhAnh: bt.hinhAnhDaiDien || bt.hinhAnh || sp.hinhAnhDaiDien,
+            soLuong: 1,
+            soLuongTon: bt.soLuongTon
+        });
+    }
+
+    try {
+        addToCartDB({
+            id: bt.maBienThe,
+            tenItem: `${sp.tenSp} - ${bt.tenBienThe}`,
+            gia: Number(bt.giaBan || 0),
+            type: 'SANPHAM',
+            soLuong: 1,
+            hinhAnh: bt.hinhAnhDaiDien || bt.hinhAnh || sp.hinhAnhDaiDien
+        }, customerId.value || 'GUEST');
+    } catch (e) {
+        console.error("Lỗi thêm cart db:", e);
+    }
 
     productSearch.value = '';
     showProductDropdown.value = false;
@@ -359,9 +508,19 @@ const addProduct = (sp: any, bt: any) => {
 
 const removeProduct = (id: any) => {
     productItems.value = productItems.value.filter(p => p.id !== id);
+    removeFromCartDB(id, 'SANPHAM').catch(e => console.error(e));
 };
 
 const increaseQuantity = (item: ProductItem) => {
+    if (item.soLuongTon !== undefined && item.soLuong >= item.soLuongTon) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Vượt quá số lượng',
+            text: `Chỉ còn ${item.soLuongTon} sản phẩm trong kho!`,
+            confirmButtonColor: '#000'
+        });
+        return;
+    }
     item.soLuong++;
 };
 
@@ -370,85 +529,27 @@ const decreaseQuantity = (item: ProductItem) => {
 };
 
 const validateQuantity = (item: ProductItem) => {
-    if (typeof item.soLuong !== 'number' || isNaN(item.soLuong) || item.soLuong < 1) {
-        item.soLuong = 1;
+    let newQty = Number(item.soLuong);
+    if (isNaN(newQty) || newQty < 1) {
+        newQty = 1;
     }
+
+    if (item.soLuongTon !== undefined && newQty > item.soLuongTon) {
+        newQty = item.soLuongTon;
+        Swal.fire({
+            icon: 'warning',
+            title: 'Vượt quá số lượng',
+            text: `Chỉ còn ${item.soLuongTon} sản phẩm trong kho!`,
+            confirmButtonColor: '#000'
+        });
+    }
+
+    item.soLuong = newQty;
 };
 
 // ==========================================
-// TÍNH TỔNG TIỀN VÀ GOM ID (DỊCH VỤ + SẢN PHẨM)
+// TẢI STYLISTS KHẢ DỤNG
 // ==========================================
-const combinedSubTotal = computed(() => serviceSubTotal.value + productSubTotal.value);
-
-const combinedItemIds = computed(() => {
-    const sIds = bookingData.value.selectedServices.map(s => s.id);
-    const pIds = productItems.value.map(p => p.id);
-    return [...sIds, ...pIds].join(',');
-});
-
-const loadVouchers = async () => {
-    if (!customerId.value || customerId.value === 'GUEST') return;
-    try {
-        // Đổi về Controller ThanhToanTong
-        const res = await axios.get(`${API}/api/ThanhToanTong/get-my-vouchers/${customerId.value}`, {
-            params: {
-                subTotal: combinedSubTotal.value, 
-                ngayGioHen: bookingData.value.bookingDate || undefined,
-                itemIds: combinedItemIds.value || undefined // Đổi serviceIds thành itemIds
-            }
-        });
-        myVouchers.value = res.data || [];
-        bookingData.value.voucherIds = bookingData.value.voucherIds.filter(id =>
-            myVouchers.value.some(v => v.id === id)
-        );
-    } catch (error) {
-        console.error('Lỗi load voucher:', error);
-    }
-};
-
-const refreshStackPreview = async () => {
-    if (!customerId.value || customerId.value === 'GUEST') {
-        stackPreview.value = { totalDiscount: 0, finalAmount: combinedSubTotal.value, memberDiscount: 0, voucherAmount: 0, memberRankPercent: 0 };
-        return;
-    }
-    try {
-        const codes = bookingData.value.voucherIds.join(',');
-        // Đổi về Controller ThanhToanTong
-        const res = await axios.get(`${API}/api/ThanhToanTong/preview-voucher-stack`, {
-            params: {
-                maKH: customerId.value,
-                codes,
-                subTotal: combinedSubTotal.value,
-                ngayGioHen: bookingData.value.bookingDate || undefined,
-                itemIds: combinedItemIds.value || undefined // Đổi serviceIds thành itemIds
-            }
-        });
-        stackPreview.value = {
-            totalDiscount: Number(res.data.totalDiscount) || 0,
-            finalAmount: Number(res.data.finalAmount) || combinedSubTotal.value,
-            memberDiscount: Number(res.data.memberDiscount) || 0,
-            voucherAmount: Number(res.data.voucherAmount) || 0,
-            memberRankPercent: Number(res.data.memberRankPercent) || 0
-        };
-    } catch {
-        stackPreview.value = { totalDiscount: 0, finalAmount: combinedSubTotal.value, memberDiscount: 0, voucherAmount: 0, memberRankPercent: 0 };
-    }
-};
-
-function toggleVoucher(id: string) {
-    const ids = bookingData.value.voucherIds;
-    const i = ids.indexOf(id);
-    if (i >= 0) {
-        ids.splice(i, 1);
-        return;
-    }
-    if (ids.length >= 2) {
-        alert('Chỉ chọn tối đa 2 voucher.');
-        return;
-    }
-    ids.push(id);
-}
-
 const loadAvailableStylists = async () => {
     combineDateTime();
 
@@ -467,7 +568,8 @@ const loadAvailableStylists = async () => {
             ngayHen: tempDate.value,
             gioBatDau: tempTime.value,
             tongThoiGian: estimatedTotalMinutes.value,
-            maKh: customerId.value
+            maKh: customerId.value,
+            phone: bookingData.value.phone
         });
 
         const rawList = Array.isArray(res.data)
@@ -485,7 +587,6 @@ const loadAvailableStylists = async () => {
             isFavorite: s.isFavorite || isStylistFavorite(s.id)
         }));
 
-        // Sắp xếp: Ưu tiên thợ rảnh (isAvailable) -> Ưu tiên thợ yêu thích (isFavorite)
         mapped.sort((a: any, b: any) => {
             if (a.isAvailable !== b.isAvailable) {
                 return a.isAvailable ? -1 : 1;
@@ -497,10 +598,14 @@ const loadAvailableStylists = async () => {
 
         stylists.value = mapped;
 
-        // Nếu stylist đang chọn bị bận do đổi giờ/đổi dịch vụ, reset về null
-        if (bookingData.value.stylistId && !stylists.value.some(s => String(s.id) === String(bookingData.value.stylistId))) {
+        if (bookingData.value.stylistId && !stylists.value.some(s => String(s.id) === String(bookingData.value.stylistId) && s.isAvailable)) {
             bookingData.value.stylistId = null;
-            alert("Stylist bạn chọn đã bận vào khung giờ này do thay đổi thời gian dịch vụ. Vui lòng chọn thợ khác!");
+            Swal.fire({
+                title: 'Stylist bận',
+                text: 'Stylist bạn chọn đã bận vào khung giờ này do thay đổi thời gian dịch vụ. Vui lòng chọn thợ khác!',
+                icon: 'info',
+                confirmButtonColor: '#000'
+            });
         }
 
         if (stylists.value.length === 0) {
@@ -510,11 +615,47 @@ const loadAvailableStylists = async () => {
         console.error('Lỗi tải stylist:', error);
         stylists.value = [];
         bookingData.value.stylistId = null;
-        stylistMessage.value = 'Không tải được danh sách stylist. Kiểm tra API get-available-stylists.';
+        stylistMessage.value = 'Không tải được danh sách stylist. Vui lòng thử lại sau.';
     } finally {
         loadingStylists.value = false;
     }
 };
+
+// ==========================================
+// TẢI DỮ LIỆU TỪ SERVER & POLLING
+// ==========================================
+const loadServices = async () => {
+    try {
+        const res = await axios.get(`${API}/api/ThanhToanTong/get-services`);
+        if (res.data && res.data.success) {
+            allItemsFromApi.value = [...res.data.services, ...res.data.combos];
+        }
+    } catch (error) {
+        console.error('Lỗi tải danh sách dịch vụ:', error);
+        allItemsFromApi.value = []; 
+    }
+};
+
+const loadProductsWithVariants = async (keyword = '') => {
+    try {
+        const res = await axios.get(`${API}/api/ThanhToanSanPham/search-products-variants`, {
+            params: { keyword: keyword }
+        });
+        if (res.data && res.data.success) {
+            allProductsFromApi.value = res.data.data;
+        }
+    } catch (error) {
+        console.error('Lỗi tải danh sách sản phẩm:', error);
+        allProductsFromApi.value = [];
+    }
+};
+
+watch(productSearch, (newVal) => {
+    clearTimeout(productSearchTimeout);
+    productSearchTimeout = setTimeout(() => {
+        loadProductsWithVariants(newVal);
+    }, 500);
+});
 
 watch(
     () => [
@@ -522,7 +663,8 @@ watch(
         combinedSubTotal.value,
         customerId.value,
         bookingData.value.bookingDate,
-        bookingData.value.selectedServices.map(s => s.id).join(',')
+        bookingData.value.selectedServices.map(s => s.id).join(','),
+        productItems.value.length
     ],
     () => void refreshStackPreview(),
     { deep: true, immediate: true }
@@ -553,7 +695,6 @@ watch(() => productData.value.receiveType, (newVal) => {
     }
 });
 
-// Synchronize payment methods (forcing VNPay/MoMo alignment, no mixing)
 watch(() => bookingData.value.paymentMethod, (newVal) => {
     if (productData.value.paymentMethod !== 'cod') {
         productData.value.paymentMethod = newVal;
@@ -569,53 +710,88 @@ watch(() => productData.value.paymentMethod, (newVal) => {
     }
 });
 
-// Phương thức thanh toán hiện tại (ưu tiên dịch vụ, nếu không có thì lấy sản phẩm)
-const activePaymentMethod = computed(() => {
-    if (bookingData.value.selectedServices.length > 0) return bookingData.value.paymentMethod;
-    return productData.value.paymentMethod;
-});
-
 // ==========================================
-// HÀM THANH TOÁN TỔNG (GỌI 1 API DUY NHẤT)
+// XỬ LÝ THANH TOÁN (XỬ LÝ HẾT HÀNG ĐA BƯỚC KHÔNG HỦY 1 LÚC)
 // ==========================================
 const handlePayment = async () => {
-    // 1. KIỂM TRA ĐIỀU KIỆN (Validations)
+    if (isSubmitting.value) return;
+
     if (!bookingData.value.customerName || !bookingData.value.phone) {
-        alert('Vui lòng nhập đầy đủ thông tin khách hàng (Họ tên, Số điện thoại).');
+        Swal.fire({
+            title: 'Thiếu thông tin',
+            text: 'Vui lòng nhập đầy đủ thông tin khách hàng (Họ tên, Số điện thoại).',
+            icon: 'warning',
+            confirmButtonColor: '#000'
+        });
         return;
     }
 
     if (bookingData.value.selectedServices.length > 0) {
-        if (!bookingData.value.bookingDate) {
-            alert('Vui lòng chọn ngày và giờ đặt lịch.');
+        if (!tempDate.value || !tempTime.value || !bookingData.value.bookingDate) {
+            Swal.fire({
+                title: 'Chưa chọn thời gian',
+                text: 'Vui lòng chọn ngày và giờ hẹn cho dịch vụ.',
+                icon: 'warning',
+                confirmButtonColor: '#000'
+            });
             return;
         }
     }
 
     if (productItems.value.length > 0 && productData.value.receiveType === 'home') {
         if (!productData.value.receiverName || !productData.value.receiverPhone || !productData.value.address) {
-            alert('Vui lòng nhập đầy đủ thông tin giao hàng (Tên, SĐT, Địa chỉ).');
+            Swal.fire({
+                title: 'Thiếu địa chỉ giao hàng',
+                text: 'Vui lòng nhập đầy đủ thông tin người nhận và địa chỉ giao hàng chi tiết!',
+                icon: 'warning',
+                confirmButtonColor: '#000'
+            });
             return;
         }
     }
 
     if (bookingData.value.selectedServices.length === 0 && productItems.value.length === 0) {
-        alert('Giỏ hàng trống! Vui lòng chọn ít nhất 1 dịch vụ hoặc 1 sản phẩm.');
+        Swal.fire({
+            title: 'Giỏ hàng trống',
+            text: 'Giỏ hàng đang trống! Vui lòng chọn ít nhất 1 dịch vụ hoặc 1 sản phẩm.',
+            icon: 'warning',
+            confirmButtonColor: '#000'
+        });
         return;
     }
 
     const invoiceErr = validateInvoiceInfo();
     if (invoiceErr) {
-        alert(invoiceErr);
+        Swal.fire({
+            title: 'Lỗi hóa đơn',
+            text: invoiceErr,
+            icon: 'warning',
+            confirmButtonColor: '#000'
+        });
         return;
     }
+
+    // BACKUP LOCALSTORAGE ĐỂ CHỐNG MẤT DATA KHI BACK TỪ VNPAY
+    localStorage.setItem('temp_name', bookingData.value.customerName);
+    localStorage.setItem('temp_phone', bookingData.value.phone);
+    localStorage.setItem('temp_email', bookingData.value.email);
+    localStorage.setItem('temp_note', bookingData.value.note);
+    localStorage.setItem('temp_stylist_id', bookingData.value.stylistId || '');
+    localStorage.setItem('temp_date', bookingData.value.bookingDate || '');
+    localStorage.setItem('temp_receive_type', productData.value.receiveType);
+    if (productData.value.receiveType === 'home') {
+        localStorage.setItem('temp_receiver_name', productData.value.receiverName);
+        localStorage.setItem('temp_receiver_phone', productData.value.receiverPhone);
+        localStorage.setItem('temp_address', productData.value.address);
+    }
+
+    isSubmitting.value = true;
 
     try {
         const checkoutType = bookingData.value.selectedServices.length > 0 && productItems.value.length > 0
                 ? 'DAT_LICH_VA_MUA_SAN_PHAM'
                 : bookingData.value.selectedServices.length > 0 ? 'CHI_DAT_LICH' : 'CHI_MUA_SAN_PHAM';
 
-        // 2. GOM DỮ LIỆU THÀNH 1 GÓI DUY NHẤT CHUẨN DTO CỦA C#
         const payload = {
             checkoutType: checkoutType,
             maKh: customerId.value || 'GUEST',
@@ -624,16 +800,14 @@ const handlePayment = async () => {
             email: bookingData.value.email || '',
             note: bookingData.value.note || '',
             
-            // Thông tin Dịch vụ
             bookingDate: bookingData.value.bookingDate || null,
             stylistId: bookingData.value.stylistId || '',
             services: bookingData.value.selectedServices.map(s => ({ 
                 id: s.id, 
                 price: s.price,
-                duration: Number(s.duration || 30) // Bắt buộc gửi số phút để Backend cộng giờ
+                duration: Number(s.duration || 30)
             })),
             
-            // Thông tin Sản phẩm
             products: productItems.value.map(p => ({ 
                 id: p.id, 
                 gia: p.gia, 
@@ -647,26 +821,21 @@ const handlePayment = async () => {
                 diaChi: productData.value.address
             } : null,
 
-            // Tiền bạc & Voucher
             voucherIds: bookingData.value.voucherIds || [],
             shippingFee: shippingFee.value || 0,
             grandTotal: grandTotal.value, 
-            paidAmount: payNow.value, // Số tiền cần quẹt thẻ/momo ngay lúc này
+            paidAmount: payNow.value,
 
-            // Cấu hình phương thức thanh toán
             paymentMode: bookingData.value.paymentMode, 
             servicePaymentMethod: bookingData.value.paymentMethod,
             productPaymentMethod: productData.value.paymentMethod,
 
-            // Hóa đơn điện tử
             invoiceInfo: buildInvoiceInfoPayload()
         };
 
-        // 3. GỌI API LƯU TẤT CẢ VÀO DATABASE BẰNG 1 LẦN GỌI
         const res = await axios.post(`${API}/api/ThanhToanTong/submit-checkout`, payload);
 
         if (res.data && res.data.success) {
-            // LƯU TRỮ THÔNG TIN LỊCH HẸN VÀ SẢN PHẨM VÀO LOCALSTORAGE CHO TRANG XACNHANDICHVU
             localStorage.setItem('last_booking_ref', res.data.maHd || 'N/A');
             localStorage.setItem('current_pay_mode', bookingData.value.paymentMode);
             localStorage.setItem('total_bill_original', grandTotal.value.toString());
@@ -688,30 +857,26 @@ const handlePayment = async () => {
                 localStorage.removeItem('temp_delivery_info');
             }
 
-            // ===============================================
-            // DỌN SẠCH RÁC TRONG GIỎ HÀNG (ĐÃ FIX LỖI CARTDB)
-            // ===============================================
             localStorage.removeItem('checkoutData');
             localStorage.removeItem('cart'); 
             localStorage.removeItem('cartSP'); 
 
-            // Quét và xóa sạch từng món trong cơ sở dữ liệu giỏ hàng (cartDB)
             try {
                 for (const s of bookingData.value.selectedServices) {
-                    await removeFromCartDB(s.id);
+                    await removeFromCartDB(s.id, 'DICHVU');
                 }
                 for (const p of productItems.value) {
-                    await removeFromCartDB(p.id);
+                    await removeFromCartDB(p.id, 'SANPHAM');
                 }
+                await clearCartDB(customerId.value || 'GUEST');
             } catch (err) {
                 console.error('Lỗi khi xóa cartDB:', err);
             }
 
             productItems.value = [];
             bookingData.value.selectedServices = [];
-            // ===============================================
+            useBookingBasketStore().clearAll();
 
-            // KIỂM TRA CHUYỂN HƯỚNG
             if (res.data.isOnlinePayment && res.data.url) {
                 window.location.href = res.data.url;
             } else {
@@ -720,42 +885,214 @@ const handlePayment = async () => {
         }
     } catch (error: any) {
         console.error('Lỗi thanh toán:', error);
-        alert(error.response?.data?.message || 'Có lỗi xảy ra khi tạo giao dịch. Vui lòng thử lại!');
-    }
-};
-// ==========================================
-// HÀM TẢI DỮ LIỆU BÊN VUE (MỚI)
-// ==========================================
-const loadServices = async () => {
-    try {
-        const res = await axios.get(`${API}/api/ThanhToanTong/get-services`);
-        if (res.data && res.data.success) {
-            // Gộp cả 2 vào mảng hiển thị
-            allItemsFromApi.value = [...res.data.services, ...res.data.combos];
-        }
-    } catch (error) {
-        console.error('Lỗi tải danh sách dịch vụ:', error);
-        allItemsFromApi.value = []; 
-    }
-};
+        const errData = error.response?.data;
 
-const loadProducts = async (keyword = '') => {
-    try {
-        const resProducts = await axios.get(`${API}/api/ThanhToanSanPham/search-products-variants`, {
-            params: { keyword: keyword }
-        });
-        if (resProducts.data && resProducts.data.success) {
-            allProductsFromApi.value = resProducts.data.data;
+        const isOutOfStock = errData && (
+            errData.errorCode === 'PRODUCT_OUT_OF_STOCK' ||
+            (typeof errData.message === 'string' && (
+                errData.message.toLowerCase().includes('tồn kho') ||
+                errData.message.toLowerCase().includes('hết hàng') ||
+                errData.message.toLowerCase().includes('không đủ số lượng') ||
+                errData.message.toLowerCase().includes('vượt quá số lượng')
+            ))
+        );
+
+        if (isOutOfStock) {
+            let outOfStockId = errData.outOfStockProductId;
+            if (!outOfStockId && productItems.value.length > 0) {
+                const matched = productItems.value.find(p => errData.message && typeof errData.message === 'string' && errData.message.includes(p.tenItem));
+                outOfStockId = matched ? matched.id : productItems.value[0]?.id;
+            }
+
+            const result = await Swal.fire({
+                title: 'Hết hàng đột xuất!',
+                text: `${errData.message || 'Một sản phẩm trong đơn đã hết hàng.'}\n\nBạn có muốn BỎ sản phẩm này ra khỏi đơn để tiếp tục thực hiện đơn hàng không?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#000',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Bỏ sản phẩm & Tiếp tục',
+                cancelButtonText: 'Không bỏ sản phẩm'
+            });
+
+            if (result.isConfirmed) {
+                if (outOfStockId) {
+                    productItems.value = productItems.value.filter(p => p.id !== outOfStockId);
+                    removeFromCartDB(outOfStockId, 'SANPHAM').catch(e => console.error(e));
+                }
+
+                if (productItems.value.length === 0) {
+                    if (bookingData.value.selectedServices.length > 0) {
+                        const serviceChoice = await Swal.fire({
+                            title: 'Sản phẩm đã hết!',
+                            text: 'Tất cả sản phẩm trong đơn đã hết hàng. Bạn có muốn tiếp tục ĐẶT LỊCH HẸN DỊCH VỤ không?',
+                            icon: 'question',
+                            showCancelButton: true,
+                            confirmButtonColor: '#000',
+                            cancelButtonColor: '#6b7280',
+                            confirmButtonText: 'Tiếp tục đặt lịch dịch vụ',
+                            cancelButtonText: 'Hủy toàn bộ đơn'
+                        });
+
+                        if (serviceChoice.isConfirmed) {
+                            setTimeout(() => {
+                                handlePayment();
+                            }, 600);
+                        } else {
+                            const doubleConfirm = await Swal.fire({
+                                title: 'Xác nhận hủy đặt lịch?',
+                                text: 'Bạn có chắc chắn muốn hủy luôn lịch hẹn dịch vụ và rời khỏi trang thanh toán không?',
+                                icon: 'warning',
+                                showCancelButton: true,
+                                confirmButtonColor: '#d33',
+                                cancelButtonColor: '#000',
+                                confirmButtonText: 'Đúng, hủy toàn bộ',
+                                cancelButtonText: 'Không, giữ lại lịch dịch vụ'
+                            });
+
+                            if (doubleConfirm.isConfirmed) {
+                                for (const s of bookingData.value.selectedServices) {
+                                    await removeFromCartDB(s.id, 'DICHVU').catch(() => {});
+                                }
+                                bookingData.value.selectedServices = [];
+                                await clearCartDB(customerId.value || 'GUEST');
+                                Swal.fire({
+                                    title: 'Đã hủy',
+                                    text: 'Đã hủy toàn bộ đơn hàng và lịch hẹn dịch vụ.',
+                                    icon: 'info',
+                                    confirmButtonColor: '#000'
+                                });
+                                router.push('/cart');
+                            } else {
+                                Swal.fire({
+                                    title: 'Đã giữ lại lịch hẹn',
+                                    text: 'Lịch hẹn dịch vụ của bạn vẫn được giữ nguyên. Bạn có thể thanh toán dịch vụ bất kỳ lúc nào.',
+                                    icon: 'success',
+                                    confirmButtonColor: '#000'
+                                });
+                            }
+                        }
+                    } else {
+                        Swal.fire({
+                            title: 'Giỏ hàng trống',
+                            text: 'Tất cả sản phẩm trong giỏ hàng đều đã hết hàng!',
+                            icon: 'info',
+                            confirmButtonColor: '#000'
+                        });
+                        router.push('/cart');
+                    }
+                } else {
+                    setTimeout(() => {
+                        handlePayment();
+                    }, 600);
+                }
+            } else {
+                if (bookingData.value.selectedServices.length > 0) {
+                    const cancelChoice = await Swal.fire({
+                        title: 'Giữ lịch hẹn hay hủy toàn bộ?',
+                        text: 'Sản phẩm này hiện đang hết hàng. Bạn có muốn giữ lại lịch hẹn dịch vụ để tiếp tục đặt lịch không?',
+                        icon: 'question',
+                        showCancelButton: true,
+                        showDenyButton: true,
+                        confirmButtonText: 'Chỉ đặt lịch dịch vụ',
+                        denyButtonText: 'Hủy toàn bộ đơn',
+                        cancelButtonText: 'Đóng (Giữ nguyên)',
+                        confirmButtonColor: '#000',
+                        denyButtonColor: '#d33'
+                    });
+
+                    if (cancelChoice.isConfirmed) {
+                        productItems.value = [];
+                        await clearCartDB(customerId.value || 'GUEST', 'SANPHAM');
+                        setTimeout(() => {
+                            handlePayment();
+                        }, 600);
+                    } else if (cancelChoice.isDenied) {
+                        const doubleConfirm = await Swal.fire({
+                            title: 'Xác nhận hủy tất cả?',
+                            text: 'Bạn có chắc chắn muốn hủy toàn bộ đơn hàng (bao gồm cả lịch hẹn dịch vụ) không?',
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonColor: '#d33',
+                            cancelButtonColor: '#000',
+                            confirmButtonText: 'Đúng, hủy tất cả',
+                            cancelButtonText: 'Không, giữ lại'
+                        });
+
+                        if (doubleConfirm.isConfirmed) {
+                            for (const s of bookingData.value.selectedServices) {
+                                await removeFromCartDB(s.id, 'DICHVU').catch(() => {});
+                            }
+                            bookingData.value.selectedServices = [];
+                            productItems.value = [];
+                            await clearCartDB(customerId.value || 'GUEST');
+                            Swal.fire({
+                                title: 'Đã hủy',
+                                text: 'Giao dịch thanh toán đã bị hủy.',
+                                icon: 'info',
+                                confirmButtonColor: '#000'
+                            });
+                            router.push('/cart');
+                        }
+                    }
+                } else {
+                    Swal.fire({
+                        title: 'Đã hủy',
+                        text: 'Giao dịch thanh toán đã bị hủy.',
+                        icon: 'info',
+                        confirmButtonColor: '#000'
+                    });
+                }
+            }
+            return;
         }
-    } catch (error) {
-        console.error('Lỗi tải danh sách sản phẩm:', error);
-        allProductsFromApi.value = [];
+
+        Swal.fire({
+            title: 'Lỗi thanh toán',
+            text: errData?.message || 'Có lỗi xảy ra khi tạo giao dịch. Vui lòng thử lại!',
+            icon: 'error',
+            confirmButtonColor: '#000'
+        });
+    } finally {
+        isSubmitting.value = false;
     }
 };
 
 onMounted(async () => {
+    // 1. KHÔI PHỤC THÔNG TIN KHÁCH HÀNG SAU KHI ẤN BACK TỪ VNPAY
+    const savedName = localStorage.getItem('temp_name');
+    const savedPhone = localStorage.getItem('temp_phone');
+    const savedEmail = localStorage.getItem('temp_email');
+    const savedNote = localStorage.getItem('temp_note');
+    const savedDate = localStorage.getItem('temp_date');
+    const savedStylistId = localStorage.getItem('temp_stylist_id');
+    const savedReceiveType = localStorage.getItem('temp_receive_type');
+    const savedReceiverName = localStorage.getItem('temp_receiver_name');
+    const savedReceiverPhone = localStorage.getItem('temp_receiver_phone');
+    const savedAddress = localStorage.getItem('temp_address');
+
+    if (savedName) bookingData.value.customerName = savedName;
+    if (savedPhone) bookingData.value.phone = savedPhone;
+    if (savedEmail) bookingData.value.email = savedEmail;
+    if (savedNote) bookingData.value.note = savedNote;
+    if (savedStylistId) bookingData.value.stylistId = savedStylistId;
+
+    if (savedDate && savedDate !== 'Chưa chọn ngày') {
+        const parts = savedDate.split('T');
+        if (parts.length === 2) {
+            tempDate.value = parts[0];
+            tempTime.value = parts[1];
+            bookingData.value.bookingDate = savedDate;
+        }
+    }
+
+    if (savedReceiveType) productData.value.receiveType = savedReceiveType as 'store' | 'home';
+    if (savedReceiverName) productData.value.receiverName = savedReceiverName;
+    if (savedReceiverPhone) productData.value.receiverPhone = savedReceiverPhone;
+    if (savedAddress) productData.value.address = savedAddress;
+
+
     if (customerId.value !== 'GUEST') {
-        // Load từ LocalStorage trước làm dự phòng
         const saved = localStorage.getItem(`favorite_employees_${customerId.value}`);
         if (saved) {
             try {
@@ -765,7 +1102,6 @@ onMounted(async () => {
             }
         }
 
-        // Sau đó gọi API để đồng bộ từ DB (nếu có)
         try {
             const resFav = await axios.get(`${API}/api/YeuThich/employees/${customerId.value}`);
             if (resFav.data && Array.isArray(resFav.data)) {
@@ -778,56 +1114,121 @@ onMounted(async () => {
     }
 
     await loadServices();
-    await loadProducts();
+    await loadProductsWithVariants('');
 
+    // 2. KHÔI PHỤC GIỎ HÀNG (TỪ CHECKOUT MỚI HOẶC TỪ BACKUP BACK TRÌNH DUYỆT)
     const checkoutRaw = localStorage.getItem('checkoutData');
+
     if (checkoutRaw) {
-        const checkoutData = JSON.parse(checkoutRaw);
+        try {
+            const checkoutData = JSON.parse(checkoutRaw);
 
-        bookingData.value.selectedServices = (checkoutData.dichVuItems || []).map((item: any) => ({
-            id: item.id,
-            name: item.tenItem || item.name,
-            price: Number(item.gia || item.price || 0),
-            originalPrice: Number(item.giaGoc || item.originalPrice || item.gia || item.price || 0),
-            icon: item.icon || 'fas fa-check-circle',
-            hinhAnh: item.hinhAnh || '',
-            duration: Number(item.duration || 30)
-        }));
+            bookingData.value.selectedServices = (checkoutData.dichVuItems || []).map((item: any) => ({
+                id: item.id,
+                name: item.tenItem || item.name,
+                price: Number(item.gia || item.price || 0),
+                originalPrice: Number(item.giaGoc || item.originalPrice || item.gia || item.price || 0),
+                icon: item.icon || 'fas fa-check-circle',
+                hinhAnh: item.hinhAnh || '',
+                duration: Number(item.duration || 30)
+            }));
 
-        productItems.value = (checkoutData.sanPhamItems || []).map((item: any) => ({
-            id: item.id,
-            tenItem: item.tenItem || item.name,
-            gia: Number(item.gia || item.price || 0),
-            hinhAnh: item.hinhAnh || item.imageUrl,
-            soLuong: Number(item.soLuong || item.quantity || 1)
-        }));
+            productItems.value = (checkoutData.sanPhamItems || []).map((item: any) => ({
+                id: item.id,
+                tenItem: item.tenItem || item.name,
+                gia: Number(item.gia || item.price || 0),
+                hinhAnh: item.hinhAnh || item.imageUrl,
+                soLuong: Number(item.soLuong || item.quantity || 1),
+                soLuongTon: item.soLuongTon
+            }));
 
-        if (checkoutData.nhanSanPham === 'GIAO_TAN_NHA') productData.value.receiveType = 'home';
-        if (checkoutData.thongTinGiaoHang) {
-            productData.value.receiverName = checkoutData.thongTinGiaoHang.hoTen || productData.value.receiverName;
-            productData.value.receiverPhone = checkoutData.thongTinGiaoHang.soDienThoai || productData.value.receiverPhone;
-            productData.value.address = checkoutData.thongTinGiaoHang.diaChi || '';
-            productData.value.deliveryNote = checkoutData.thongTinGiaoHang.ghiChu || '';
+            if (checkoutData.nhanSanPham === 'GIAO_TAN_NHA') productData.value.receiveType = 'home';
+            if (checkoutData.thongTinGiaoHang) {
+                productData.value.receiverName = checkoutData.thongTinGiaoHang.hoTen || productData.value.receiverName;
+                productData.value.receiverPhone = checkoutData.thongTinGiaoHang.soDienThoai || productData.value.receiverPhone;
+                productData.value.address = checkoutData.thongTinGiaoHang.diaChi || '';
+                productData.value.deliveryNote = checkoutData.thongTinGiaoHang.ghiChu || '';
+            }
+        } catch (e) {
+            console.error("Lỗi parse checkoutData:", e);
         }
     } else {
-        const cartData = await getCartDB(customerId.value || 'GUEST');
+        let cartData: any = null;
+        
+        const bookingStore = useBookingBasketStore();
+        if (bookingStore.items && bookingStore.items.length > 0) {
+            bookingData.value.selectedServices = bookingStore.items.map((item: any) => ({
+                id: item.id,
+                name: item.tenItem,
+                price: Number(item.gia || 0),
+                originalPrice: Number(item.giaGoc || item.gia || 0),
+                icon: item.icon || 'fas fa-check-circle',
+                duration: Number(item.duration || 30),
+                hinhAnh: item.hinhAnh
+            }));
+        } else {
+            if (!cartData) cartData = await getCartDB(customerId.value || 'GUEST');
+            if (cartData && cartData.length > 0) {
+                bookingData.value.selectedServices = cartData
+                    .filter((item: any) => item.type !== 'SANPHAM' && !String(item.id).startsWith('SANPHAM_'))
+                    .map((item: any) => ({
+                        id: item.id,
+                        name: item.tenItem,
+                        price: Number(item.gia || 0),
+                        originalPrice: Number(item.giaGoc || item.gia || 0),
+                        icon: item.icon || 'fas fa-check-circle',
+                        duration: Number(item.duration || 30),
+                        hinhAnh: item.hinhAnh
+                    }));
+            }
+        }
+
+        if (!cartData) cartData = await getCartDB(customerId.value || 'GUEST');
         if (cartData && cartData.length > 0) {
-            bookingData.value.selectedServices = cartData
-                .filter((item: any) => item.type !== 'SANPHAM' && !String(item.id).startsWith('SANPHAM_'))
+            productItems.value = cartData
+                .filter((item: any) => item.type === 'SANPHAM' || String(item.id).startsWith('SANPHAM_'))
                 .map((item: any) => ({
                     id: item.id,
-                    name: item.tenItem,
-                    price: Number(item.gia || 0),
-                    originalPrice: Number(item.giaGoc || item.gia || 0),
-                    icon: item.icon || 'fas fa-check-circle',
-                    duration: Number(item.duration || 30),
-                    hinhAnh: item.hinhAnh
+                    tenItem: item.tenItem,
+                    gia: Number(item.gia || 0),
+                    hinhAnh: item.hinhAnh,
+                    soLuong: Number(item.soLuong || 1),
+                    soLuongTon: item.soLuongTon
                 }));
         }
     }
 
     await loadVouchers();
     await loadAvailableStylists();
+
+    stockPollingTimer = setInterval(async () => {
+        try {
+            const res = await axios.get(`${API}/api/ThanhToanSanPham/search-products-variants`, {
+                params: { keyword: '' }
+            });
+            if (res.data && res.data.success) {
+                const allFresh = res.data.data;
+                productItems.value.forEach(p => {
+                    for (const sp of allFresh) {
+                        const bt = sp.bienthes?.find((b: any) => b.maBienThe === p.id);
+                        if (bt) {
+                            p.soLuongTon = bt.soLuongTon;
+                            if (p.soLuongTon !== undefined && p.soLuong > p.soLuongTon) {
+                                p.soLuong = p.soLuongTon;
+                            }
+                            break;
+                        }
+                    }
+                });
+            }
+        } catch (e) {
+            // Im lặng bỏ qua lỗi polling ngầm
+        }
+    }, 15000);
+});
+
+onUnmounted(() => {
+    if (stockPollingTimer) clearInterval(stockPollingTimer);
 });
 </script>
 
@@ -835,26 +1236,26 @@ onMounted(async () => {
     <div class="booking-container">
         <div class="max-w-6xl mx-auto px-4 py-12">
             <div class="text-center mb-12" data-aos="fade-down">
-                <h1 class="font-playfair gold-metallic-text font-black text-5xl">THANH TOÁN TỔNG HỢP</h1>
-                <div class="gold-accent-line mx-auto mt-4"></div>
-                <p class="text-black mt-2">Đặt lịch dịch vụ và mua sản phẩm kèm theo trong một đơn hàng</p>
+                <h1 class="font-heading tracking-[0.2em] font-medium text-black text-3xl lg:text-4xl uppercase">THANH TOÁN TỔNG HỢP</h1>
+                <p class="text-gray-400 mt-2 text-xs uppercase tracking-widest">Đặt lịch hẹn dịch vụ và mua sắm sản phẩm cao cấp cùng lúc</p>
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <!-- Cột trái: Thông tin biểu mẫu -->
                 <div class="lg:col-span-7 space-y-6" data-aos="fade-right">
                     <div class="glass-card left-main-card">
+                        
                         <!-- BƯỚC 1: Thông tin khách hàng -->
                         <div class="section-heading-wrapper mt-2">
-                            <h3 class="font-playfair section-heading-title font-bold gold-metallic-text">
-                                <i class="fas fa-user-edit me-2"></i> THÔNG TIN KHÁCH HÀNG
+                            <h3 class="font-heading section-heading-title font-bold text-black text-sm uppercase tracking-wider">
+                                <i class="fas fa-user-edit me-2 text-black"></i> THÔNG TIN KHÁCH HÀNG
                             </h3>
                             <div class="heading-line"></div>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                             <div>
                                 <label class="custom-label font-bold">Họ và tên *</label>
-                                <input v-model="bookingData.customerName" type="text" class="booking-input w-full" placeholder="Nguyễn Văn A">
+                                <input v-model="bookingData.customerName" type="text" class="booking-input w-full" placeholder="Tên khách hàng">
                             </div>
                             <div>
                                 <label class="custom-label font-bold">Số điện thoại *</label>
@@ -866,14 +1267,14 @@ onMounted(async () => {
                             </div>
                             <div class="md:col-span-2">
                                 <label class="custom-label font-bold">Ghi chú chung</label>
-                                <textarea v-model="bookingData.note" class="booking-input w-full pt-2" style="height: 80px;" placeholder="Ghi chú yêu cầu đặt lịch hoặc sản phẩm..."></textarea>
+                                <textarea v-model="bookingData.note" class="booking-input w-full pt-2" style="height: 80px;" placeholder="Ghi chú yêu cầu đặt lịch hoặc giao hàng..."></textarea>
                             </div>
                         </div>
 
                         <!-- BƯỚC 2: Chọn Ngày, Giờ & Stylist cho Dịch vụ -->
                         <div class="section-heading-wrapper mt-10">
-                            <h3 class="font-playfair section-heading-title font-bold gold-metallic-text">
-                                <i class="fas fa-calendar-check me-2"></i> ĐẶT LỊCH HẸN DỊCH VỤ
+                            <h3 class="font-heading section-heading-title font-bold text-black text-sm uppercase tracking-wider">
+                                <i class="fas fa-calendar-check me-2 text-black"></i> ĐẶT LỊCH HẸN DỊCH VỤ
                             </h3>
                             <div class="heading-line"></div>
                         </div>
@@ -881,7 +1282,7 @@ onMounted(async () => {
                         <div v-if="bookingData.selectedServices.length === 0" class="soft-message mt-3">
                             <i class="fas fa-info-circle text-gray-500 mt-1"></i>
                             <div>
-                                <span class="font-bold">Chưa có dịch vụ nào được chọn.</span> Hãy tìm và thêm dịch vụ ở cột Chi tiết hóa đơn trước khi chọn thời gian và stylist.
+                                <span class="font-bold">Chưa có dịch vụ nào được chọn.</span> Bạn có thể tìm và thêm dịch vụ ở cột bên phải nếu có nhu cầu làm tóc.
                             </div>
                         </div>
                         
@@ -893,7 +1294,7 @@ onMounted(async () => {
                             <div>
                                 <label class="custom-label font-bold">Giờ hẹn</label>
                                 <select v-model="tempTime" class="booking-input" @change="combineDateTime">
-                                    <option value="">Chọn giờ</option>
+                                    <option value="">Chọn giờ hẹn</option>
                                     <option v-for="hour in availableHours" :key="hour" :value="hour">{{ hour }}</option>
                                 </select>
                                 <div class="summary-line" v-if="tempTime">
@@ -902,7 +1303,7 @@ onMounted(async () => {
                                 </div>
                                 <div class="summary-line" v-if="expectedEndTime">
                                     <span class="font-bold">Dự kiến xong lúc:</span>
-                                    <span class="text-black font-bold" style="font-size: 1.1rem;">{{ expectedEndTime }}</span>
+                                    <span class="text-black font-bold" style="font-size: 1.05rem;">{{ expectedEndTime }}</span>
                                 </div>
                                 <div class="summary-line text-black" v-if="estimatedTotalMinutes > 0">
                                     <span class="font-bold">Tổng thời gian làm:</span>
@@ -912,16 +1313,16 @@ onMounted(async () => {
                         </div>
 
                         <!-- Chọn Stylist -->
-                        <div class="mt-8">
+                        <div class="mt-8" v-if="bookingData.selectedServices.length > 0">
                             <div class="section-heading-wrapper mt-4 mb-3">
-                                <h3 class="font-playfair section-heading-title font-bold text-black">
-                                    <i class="fas fa-cut me-2"></i> CHỌN STYLIST
+                                <h3 class="font-heading section-heading-title font-bold text-black text-sm uppercase tracking-wider">
+                                    <i class="fas fa-cut me-2 text-black"></i> CHỌN STYLIST
                                 </h3>
                                 <div class="heading-line"></div>
                             </div>
                             
-                            <div v-if="loadingStylists" class="mt-4 p-3 text-center text-gray-500 font-bold bg-gray-50 border">
-                                <i class="fas fa-spinner fa-spin me-2 text-black"></i> Đang tìm các thợ rảnh việc trong ca này...
+                            <div v-if="loadingStylists" class="mt-4 p-3 text-center text-gray-500 font-bold bg-gray-50 border border-gray-200">
+                                <i class="fas fa-spinner fa-spin me-2 text-black"></i> Đang tìm stylist phù hợp...
                             </div>
                             
                             <div v-else class="stylist-flex mt-3">
@@ -948,17 +1349,16 @@ onMounted(async () => {
                                     </div>
 
                                     <div class="avatar-box">
-                                        <img :src="stylist.img.startsWith('http') ? stylist.img : (API + stylist.img)"
-                                            alt="Stylist" onerror="this.onerror=null; this.src='/images/no-image.png'">
+                                        <img :src="getImageUrl(stylist.img)" alt="Stylist" onerror="this.onerror=null; this.src='/images/no-image.png'">
                                         <div class="check-badge"><i class="fas fa-check"></i></div>
                                         <div v-if="stylist.isFavorite" class="favorite-heart-badge">
                                             <i class="fas fa-heart"></i>
                                         </div>
                                     </div>
- 
+
                                     <div class="stylist-meta mt-auto">
                                         <span class="s-name font-bold">{{ stylist.name }}</span>
- 
+
                                         <template v-if="stylist.isAvailable">
                                             <span class="s-role text-black">{{ stylist.role }}</span>
                                             <div class="stylist-rating-badge">
@@ -966,19 +1366,17 @@ onMounted(async () => {
                                                 <i class="fas fa-star rating-star-icon"></i>
                                             </div>
                                         </template>
- 
+
                                         <template v-else>
-                                            <span class="font-bold mt-1 text-center"
-                                                style="color: #ef4444; font-size: 10px; line-height: 1.3;">
+                                            <span class="font-bold mt-1 text-center text-red-500 text-xs">
                                                 {{ stylist.unAvailableReason }}
                                             </span>
                                         </template>
                                     </div>
                                 </div>
- 
-                                <div v-if="stylists.length === 0"
-                                    class="w-full p-4 text-center text-red-500 border border-red-200 bg-red-50">
-                                    Hôm nay tiệm không có thợ nào làm việc. Bạn vui lòng chọn ngày khác nhé!
+
+                                <div v-if="stylists.length === 0" class="w-full p-4 text-center text-red-500 border border-red-200 bg-red-50">
+                                    {{ stylistMessage || 'Không có stylist khả dụng. Vui lòng chọn ngày hoặc giờ khác!' }}
                                 </div>
                             </div>
                         </div>
@@ -986,8 +1384,8 @@ onMounted(async () => {
                         <!-- BƯỚC 3: Nhận sản phẩm (Nếu giỏ hàng có sản phẩm) -->
                         <div v-if="productItems.length > 0" class="mt-10">
                             <div class="section-heading-wrapper">
-                                <h3 class="font-playfair section-heading-title font-bold gold-metallic-text">
-                                    <i class="fas fa-shipping-fast me-2"></i> NHẬN SẢN PHẨM MUA KÈM
+                                <h3 class="font-heading section-heading-title font-bold text-black text-sm uppercase tracking-wider">
+                                    <i class="fas fa-shipping-fast me-2 text-black"></i> HÌNH THỨC NHẬN SẢN PHẨM
                                 </h3>
                                 <div class="heading-line"></div>
                             </div>
@@ -997,14 +1395,14 @@ onMounted(async () => {
                                     <i class="fas fa-store"></i> Nhận trực tiếp tại tiệm
                                 </button>
                                 <button type="button" :class="{ active: productData.receiveType === 'home' }" @click="productData.receiveType = 'home'">
-                                    <i class="fas fa-house"></i> Giao hàng tận nhà
+                                    <i class="fas fa-house"></i> Giao hàng tận nơi
                                 </button>
                             </div>
                             
                             <div v-if="productData.receiveType === 'store'" class="store-box mt-4 flex items-start gap-3">
-                                <i class="fas fa-check-circle text-xl mt-1"></i>
+                                <i class="fas fa-check-circle text-xl mt-1 text-black"></i>
                                 <div>
-                                    <h4 class="font-bold text-black mb-1">Nhận sản phẩm tại tiệm</h4>
+                                    <h4 class="font-bold text-black mb-1">Nhận sản phẩm tại tiệm khi đến làm dịch vụ</h4>
                                     <p class="text-sm text-gray-600">Sản phẩm sẽ được chuẩn bị sẵn tại tiệm khi bạn đến làm dịch vụ. Không tính phí vận chuyển.</p>
                                 </div>
                             </div>
@@ -1025,16 +1423,15 @@ onMounted(async () => {
                                     </div>
                                     <div class="md:col-span-2">
                                         <label class="custom-label font-bold text-danger">Địa chỉ giao hàng chi tiết *</label>
-                                        <textarea v-model="productData.address" class="booking-input w-full pt-2" style="height: 80px;" placeholder="Nhập số nhà, tên đường, phường/xã, quận/huyện..."></textarea>
+                                        <textarea v-model="productData.address" class="booking-input w-full pt-2" style="height: 80px;" placeholder="Nhập số nhà, tên đường... Bản đồ sẽ tự động ước tính phí ship."></textarea>
                                     </div>
                                     
-                                    <!-- Google Maps/Thông tin giao hàng ước tính -->
                                     <div class="md:col-span-2" v-if="productData.address">
-                                        <div class="shipping-info-card mt-2">
-                                            <h6 class="font-bold text-gray-900 mb-3"><i class="fas fa-truck me-2 text-[var(--gold-solid)]"></i> THÔNG TIN GIAO HÀNG (ƯỚC TÍNH)</h6>
+                                        <div class="shipping-info-card mt-2 p-3 shadow-sm rounded border border-gray-200 bg-gray-50">
+                                            <h6 class="font-bold text-gray-900 mb-3"><i class="fas fa-truck me-2"></i> THÔNG TIN GIAO HÀNG (ƯỚC TÍNH)</h6>
                                             
                                             <div class="flex mb-2 items-start">
-                                                <div class="me-3 text-success"><i class="fas fa-store-alt mt-1 text-[var(--gold-solid)]"></i></div>
+                                                <div class="me-3 text-success"><i class="fas fa-store-alt mt-1"></i></div>
                                                 <div>
                                                     <div class="font-bold text-xs" style="font-size: 13px;">Địa chỉ Kho hàng:</div>
                                                     <div class="text-black" style="font-size: 13px;">{{ KHO_ORIGIN }}</div>
@@ -1043,8 +1440,8 @@ onMounted(async () => {
                                             
                                             <div class="flex mb-2 items-start border-l-2 ms-2 ps-4 pb-2 pt-2 border-gray-400" style="margin-left: 5px !important;">
                                                 <div>
-                                                    <div class="inline-flex items-center px-2.5 py-1 rounded bg-neutral-800 text-white text-xs font-bold mb-1 shadow-sm">
-                                                        <i class="fas fa-route me-1.5 text-[var(--gold-solid)]"></i> Quãng đường: {{ isCalculatingRoute ? 'Đang tính...' : (distanceText || 'Không xác định') }}
+                                                    <div class="inline-flex items-center px-2.5 py-1 bg-black text-white text-xs font-bold mb-1 shadow-sm">
+                                                        <i class="fas fa-route me-1.5"></i> Quãng đường: {{ isCalculatingRoute ? 'Đang tính...' : (distanceText || 'Không xác định') }}
                                                     </div>
                                                 </div>
                                             </div>
@@ -1067,18 +1464,39 @@ onMounted(async () => {
                             </div>
                         </div>
 
-                        <!-- ƯU ĐÃI: VOUCHER -->
-                        <div class="mt-10">
+                        <!-- HÓA ĐƠN DOANH NGHIỆP -->
+                        <div class="invoice-toggle-line mt-6" @click="showInvoiceCompanyForm = !showInvoiceCompanyForm">
+                            <span class="font-bold text-black" style="font-size: 14px;">
+                                <i class="fas fa-building me-2"></i> Cần hóa đơn công ty (có MST)?
+                            </span>
+                            <i class="fas fa-chevron-down invoice-toggle-arrow" :class="{ open: showInvoiceCompanyForm }"></i>
+                        </div>
+                        <transition name="list-fade">
+                            <div v-if="showInvoiceCompanyForm" class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                                <div>
+                                    <label class="custom-label font-bold">Tên công ty *</label>
+                                    <input v-model="invoiceCompany.tenCongTy" type="text" class="booking-input w-full" placeholder="Công ty TNHH ABC">
+                                </div>
+                                <div>
+                                    <label class="custom-label font-bold">Mã số thuế *</label>
+                                    <input v-model="invoiceCompany.mst" type="text" class="booking-input w-full" @blur="validateMst" placeholder="0301234567">
+                                    <p v-if="mstError" class="text-danger small mt-1 mb-0 font-bold">{{ mstError }}</p>
+                                </div>
+                            </div>
+                        </transition>
+
+                        <!-- KHO VOUCHER -->
+                        <div class="mt-8">
                             <div class="section-heading-wrapper">
-                                <h3 class="font-playfair section-heading-title font-bold gold-metallic-text">
-                                    <i class="fas fa-ticket-alt me-2"></i> KHO VOUCHER CỦA BẠN
+                                <h3 class="font-heading section-heading-title font-bold text-black text-sm uppercase tracking-wider">
+                                    <i class="fas fa-ticket-alt me-2 text-black"></i> KHO VOUCHER CỦA BẠN
                                 </h3>
                                 <div class="heading-line"></div>
                             </div>
 
                             <div v-if="myVouchers.length > 0" class="voucher-list-modern">
                                 <div v-for="v in myVouchers" :key="v.id" class="voucher-ticket-item"
-                                    :class="{ active: bookingData.voucherIds.includes(v.id) }" @click="toggleVoucher(v.id)">
+                                    :class="{ active: bookingData.voucherIds.includes(v.id), disabled: isVoucherDisabled(v) }" @click="toggleVoucher(v.id)">
                                     
                                     <div class="ticket-left">
                                         <span class="ticket-brand-text">LGHAIR</span>
@@ -1114,8 +1532,8 @@ onMounted(async () => {
                     <div class="sticky-bill">
                         <div class="glass-card bill-card">
                             <div class="section-heading-wrapper justify-content-center text-center mb-4">
-                                <h3 class="font-playfair section-heading-title font-bold gold-metallic-text">
-                                    <i class="fas fa-file-invoice-dollar me-2"></i> CHI TIẾT HÓA ĐƠN
+                                <h3 class="font-heading section-heading-title font-bold text-black text-sm uppercase tracking-wider">
+                                    <i class="fas fa-file-invoice-dollar me-2 text-black"></i> CHI TIẾT ĐƠN HÀNG
                                 </h3>
                                 <div class="heading-line mx-auto" style="width: 80px;"></div>
                             </div>
@@ -1123,7 +1541,7 @@ onMounted(async () => {
                             <!-- 1. DỊCH VỤ ĐÃ CHỌN -->
                             <div class="mb-4">
                                 <label class="custom-label font-bold mb-2">
-                                    <i class="fas fa-cut me-1 text-gold"></i> Dịch vụ đã chọn
+                                    <i class="fas fa-cut me-1 text-black"></i> Dịch vụ đã chọn
                                 </label>
                                 <div class="search-box-wrapper mb-3">
                                     <div class="input-wrap">
@@ -1139,15 +1557,15 @@ onMounted(async () => {
                                             <div v-for="service in filteredServices" :key="service.id" class="service-dropdown-item" @click="addService(service)">
                                                 <div class="flex items-center">
                                                     <div class="w-10 h-10 bg-gray-100 flex-shrink-0 overflow-hidden rounded-md border border-gray-200 mr-3">
-                                                        <img :src="service.hinhAnh ? (String(service.hinhAnh).startsWith('http') ? service.hinhAnh : API + service.hinhAnh) : '/images/no-image.png'" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='/images/no-image.png'" />
+                                                        <img :src="getImageUrl(service.hinhAnh)" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='/images/no-image.png'" />
                                                     </div>
                                                     <div class="item-details">
                                                         <span class="item-name-text font-bold" style="font-size: 13px;">{{ service.name }}</span>
                                                         <div class="flex items-center mt-1">
-                                                            <span v-if="service.originalPrice && service.originalPrice > service.price" class="text-black me-2" style="text-decoration: line-through; font-size: 11px;">
+                                                            <span v-if="service.originalPrice && service.originalPrice > service.price" class="text-gray-400 me-2" style="text-decoration: line-through; font-size: 11px;">
                                                                 {{ formatMoney(service.originalPrice) }}
                                                             </span>
-                                                            <span class="item-price-text gold-solid-text font-bold">
+                                                            <span class="item-price-text text-black font-bold">
                                                                 {{ formatMoney(service.price) }}
                                                             </span>
                                                         </div>
@@ -1160,20 +1578,20 @@ onMounted(async () => {
                                     </div>
                                 </div>
 
-                                <div class="selected-items-wrapper">
+                                <div class="selected-items-wrapper" v-if="bookingData.selectedServices.length > 0">
                                     <transition-group name="list-fade">
                                         <div v-for="s in bookingData.selectedServices" :key="s.id" class="item-row">
-                                            <div class="flex items-center">
+                                            <div class="flex items-center flex-grow">
                                                 <div class="w-10 h-10 bg-gray-100 flex-shrink-0 overflow-hidden rounded-md border border-gray-200 mr-3">
-                                                    <img :src="s.hinhAnh ? (String(s.hinhAnh).startsWith('http') ? s.hinhAnh : API + s.hinhAnh) : '/images/no-image.png'" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='/images/no-image.png'" />
+                                                    <img :src="getImageUrl(s.hinhAnh)" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='/images/no-image.png'" />
                                                 </div>
-                                                <div class="item-info">
+                                                <div class="item-info flex-grow">
                                                     <span class="n font-bold d-block text-truncate" style="max-width: 180px;">{{ s.name }}</span>
                                                     <div class="flex items-center mt-1">
-                                                        <span v-if="s.originalPrice && s.originalPrice > s.price" class="text-black me-2" style="text-decoration: line-through; font-size: 11px;">
+                                                        <span v-if="s.originalPrice && s.originalPrice > s.price" class="text-gray-400 me-2" style="text-decoration: line-through; font-size: 11px;">
                                                             {{ formatMoney(s.originalPrice) }}
                                                         </span>
-                                                        <span class="p gold-solid-text font-bold">{{ formatMoney(s.price) }}</span>
+                                                        <span class="p text-black font-bold">{{ formatMoney(s.price) }}</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1186,7 +1604,7 @@ onMounted(async () => {
                             <!-- 2. SẢN PHẨM MUA KÈM -->
                             <div class="mb-4 pt-3 border-t border-gray-100">
                                 <label class="custom-label font-bold mb-2">
-                                    <i class="fas fa-box-open me-1 text-gold"></i> Sản phẩm mua kèm
+                                    <i class="fas fa-box-open me-1 text-black"></i> Sản phẩm mua kèm
                                 </label>
 
                                 <div class="search-box-wrapper mb-3">
@@ -1203,22 +1621,21 @@ onMounted(async () => {
                                             <div v-for="sp in allProductsFromApi" :key="sp.maSp" class="mb-2">
                                                 <div class="dropdown-header font-bold py-1 px-3 bg-gray-100 text-gray-700 text-xs">{{ sp.tenSp }}</div>
                                                 <div v-for="bt in sp.bienthes" :key="bt.maBienThe" class="service-dropdown-item"
-                                                    :class="{ 'opacity-50 pointer-events-none': bt.soLuongTon <= 0 || productItems.some(p => p.id === bt.maBienThe) }"
+                                                    :class="{ 'opacity-50': bt.soLuongTon <= 0 }"
                                                     @click="addProduct(sp, bt)">
                                                     <div class="flex items-center">
                                                         <div class="w-10 h-10 bg-gray-100 flex-shrink-0 overflow-hidden rounded-md border border-gray-200 mr-3">
-                                                            <img :src="bt.hinhAnh ? (String(bt.hinhAnh).startsWith('http') ? bt.hinhAnh : API + bt.hinhAnh) : '/images/no-image.png'" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='/images/no-image.png'" />
+                                                            <img :src="getImageUrl(bt.hinhAnh)" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='/images/no-image.png'" />
                                                         </div>
                                                         <div class="item-details">
                                                             <span class="item-name-text font-bold" style="font-size: 13px;">{{ bt.tenBienThe }}</span>
                                                             <div class="flex items-center mt-1">
-                                                                <span class="item-price-text gold-solid-text font-bold">{{ formatMoney(bt.giaBan) }}</span>
+                                                                <span class="item-price-text text-black font-bold">{{ formatMoney(bt.giaBan) }}</span>
                                                                 <span class="ms-2 text-black" style="font-size: 11px;">(Kho: {{ bt.soLuongTon }})</span>
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    <i v-if="productItems.some(p => p.id === bt.maBienThe)" class="fas fa-check-circle text-success" title="Đã thêm"></i>
-                                                    <span v-else-if="bt.soLuongTon <= 0" class="badge bg-danger text-white px-1 py-0.5 rounded text-xs" style="font-size: 9px;">Hết</span>
+                                                    <span v-if="bt.soLuongTon <= 0" class="badge bg-danger p-1 text-white" style="font-size: 10px;">Hết</span>
                                                     <i v-else class="fas fa-plus-circle add-btn-icon"></i>
                                                 </div>
                                             </div>
@@ -1227,23 +1644,28 @@ onMounted(async () => {
                                     </div>
                                 </div>
 
-                                <div class="selected-items-wrapper">
+                                <div class="selected-items-wrapper" v-if="productItems.length > 0">
                                     <transition-group name="list-fade">
                                         <div v-for="p in productItems" :key="p.id" class="item-row product-checkout-item">
                                             <div class="flex items-center flex-grow">
-                                                <div class="w-10 h-10 bg-gray-100 flex-shrink-0 overflow-hidden rounded-md border border-gray-200 mr-3">
-                                                    <img :src="p.hinhAnh ? (String(p.hinhAnh).startsWith('http') ? p.hinhAnh : API + p.hinhAnh) : '/images/no-image.png'" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='/images/no-image.png'" />
+                                                <div class="w-12 h-12 bg-gray-100 flex-shrink-0 overflow-hidden rounded-md border border-gray-200 mr-3">
+                                                    <img :src="getImageUrl(p.hinhAnh)" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='/images/no-image.png'" />
                                                 </div>
                                                 <div class="item-info flex-grow">
-                                                    <span class="n font-bold d-block text-truncate" style="max-width: 130px;">{{ p.tenItem }}</span>
-                                                    <span class="p gold-solid-text font-bold mt-1 d-block">{{ formatMoney(p.gia) }}</span>
+                                                    <span class="n font-bold d-block text-truncate" style="max-width: 150px;">{{ p.tenItem }}</span>
+                                                    <span class="p text-black font-bold mt-1 d-block">{{ formatMoney(p.gia) }}</span>
+                                                    <div v-if="p.soLuongTon !== undefined" class="mt-1">
+                                                        <span class="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
+                                                            Kho: {{ p.soLuongTon }}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </div>
                                             
-                                            <div class="quantity-pill flex items-center bg-gray-100 rounded-full px-2 py-0.5 mr-2">
-                                                <button type="button" @click="decreaseQuantity(p)" class="qty-btn"><i class="fas fa-minus text-xs"></i></button>
-                                                <input type="number" v-model.number="p.soLuong" min="1" class="qty-input" @input="validateQuantity(p)" />
-                                                <button type="button" @click="increaseQuantity(p)" class="qty-btn"><i class="fas fa-plus text-xs"></i></button>
+                                            <div class="quantity-pill ms-auto me-2">
+                                                <button type="button" @click="decreaseQuantity(p)" class="qty-btn"><i class="fas fa-minus"></i></button>
+                                                <input type="number" v-model.number="p.soLuong" min="1" class="qty-input" @change="validateQuantity(p)" @blur="validateQuantity(p)" />
+                                                <button type="button" @click="increaseQuantity(p)" class="qty-btn"><i class="fas fa-plus"></i></button>
                                             </div>
                                             
                                             <button class="del-btn" @click="removeProduct(p.id)"><i class="fas fa-trash-alt"></i></button>
@@ -1252,11 +1674,11 @@ onMounted(async () => {
                                 </div>
                             </div>
 
-                            <!-- 3. HÌNH THỨC THANH TOÁN (MỨC ĐẶT CỌC DỊCH VỤ & PHƯƠNG THỨC THANH TOÁN) -->
+                            <!-- 3. HÌNH THỨC THANH TOÁN (MỨC ĐẶT CỌC & PHƯƠNG THỨC THANH TOÁN) -->
                             <div class="pt-3 border-t border-gray-100">
-                                <!-- Lựa chọn cọc dịch vụ -->
-                                <div v-if="bookingData.selectedServices.length > 0" class="payment-block mb-3">
-                                    <label class="custom-label font-bold mb-2"><i class="fas fa-wallet text-gold me-1"></i> Mức thanh toán dịch vụ</label>
+                                <!-- Cọc dịch vụ -->
+                                <div v-if="bookingData.selectedServices.length > 0" class="payment-block mb-4">
+                                    <label class="custom-label font-bold mb-2"><i class="fas fa-wallet text-black me-1"></i> Mức thanh toán dịch vụ</label>
                                     <div class="pay-row flex flex-col gap-2">
                                         <div class="pay-btn" :class="{ active: bookingData.paymentMode === '10' }" @click="bookingData.paymentMode = '10'">
                                             <span class="dot"></span> <b>Đặt cọc trước 10%</b>
@@ -1268,8 +1690,8 @@ onMounted(async () => {
                                 </div>
 
                                 <!-- Phương thức thanh toán Dịch vụ -->
-                                <div class="payment-block mb-3">
-                                    <label class="custom-label font-bold mb-2"><i class="fas fa-credit-card text-gold me-1"></i> Thanh toán Dịch vụ</label>
+                                <div class="payment-block mb-4" v-if="bookingData.selectedServices.length > 0">
+                                    <label class="custom-label font-bold mb-2"><i class="fas fa-credit-card text-black me-1"></i> Phương thức thanh toán Dịch vụ</label>
                                     <div class="payment-method-row">
                                         <div class="method-option vnpay" :class="{ active: bookingData.paymentMethod === 'vnpay' }" @click="bookingData.paymentMethod = 'vnpay'">
                                             <div class="method-logo-wrapper">
@@ -1285,20 +1707,10 @@ onMounted(async () => {
                                 </div>
 
                                 <!-- Phương thức thanh toán Sản phẩm -->
-                                <div class="payment-block mb-3" v-if="productItems.length > 0">
-                                    <label class="custom-label font-bold mb-2"><i class="fas fa-credit-card text-gold me-1"></i> Thanh toán Sản phẩm</label>
+                                <div class="payment-block mb-4" v-if="productItems.length > 0 && productData.receiveType === 'home'">
+                                    <label class="custom-label font-bold mb-2"><i class="fas fa-shipping-fast text-black me-1"></i> Phương thức thanh toán Sản phẩm</label>
                                     <div class="payment-method-row">
-                                        <div class="method-option vnpay" :class="{ active: productData.paymentMethod === 'vnpay' }" @click="productData.paymentMethod = 'vnpay'">
-                                            <div class="method-logo-wrapper">
-                                                <img src="/vnpay-logo.png" alt="VNPay" class="method-logo-img">
-                                            </div>
-                                        </div>
-                                        <div class="method-option momo" :class="{ active: productData.paymentMethod === 'momo' }" @click="productData.paymentMethod = 'momo'">
-                                            <div class="method-logo-wrapper">
-                                                <img src="/momo-logo.png" alt="MoMo" class="method-logo-img">
-                                            </div>
-                                        </div>
-                                        <div class="method-option cod" v-if="productData.receiveType !== 'store'" :class="{ active: productData.paymentMethod === 'cod' }" @click="productData.paymentMethod = 'cod'">
+                                        <div class="method-option cod" :class="{ active: productData.paymentMethod === 'cod' }" @click="productData.paymentMethod = 'cod'">
                                             <div class="method-logo-wrapper">
                                                 <div class="cod-icon-wrapper">
                                                     <svg class="cod-svg-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1309,113 +1721,82 @@ onMounted(async () => {
                                                         <path d="M14 4V18" stroke="currentColor" stroke-width="2"/>
                                                     </svg>
                                                 </div>
-                                                <span class="method-label font-bold" style="font-size: 14px;">COD</span>
+                                                <span class="method-label font-bold">COD</span>
+                                            </div>
+                                        </div>
+                                        <div class="method-option vnpay" :class="{ active: productData.paymentMethod === 'vnpay' }" @click="productData.paymentMethod = 'vnpay'">
+                                            <div class="method-logo-wrapper">
+                                                <img src="/vnpay-logo.png" alt="VNPay" class="method-logo-img">
+                                            </div>
+                                        </div>
+                                        <div class="method-option momo" :class="{ active: productData.paymentMethod === 'momo' }" @click="productData.paymentMethod = 'momo'">
+                                            <div class="method-logo-wrapper">
+                                                <img src="/momo-logo.png" alt="MoMo" class="method-logo-img">
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- HÓA ĐƠN CÔNG TY (thu gọn, mặc định đóng) -->
-                            <div class="payment-block mb-3">
-                                <div class="invoice-toggle-line" @click="showInvoiceCompanyForm = !showInvoiceCompanyForm">
-                                    <span class="font-bold text-black" style="font-size: 14px;">
-                                        <i class="fas fa-building me-2"></i> Cần hóa đơn công ty (có MST)?
-                                    </span>
-                                    <i class="fas fa-chevron-down invoice-toggle-arrow" :class="{ open: showInvoiceCompanyForm }"></i>
+                            <!-- 4. CHI TIẾT TIỀN BẠC (TOTAL BOX) -->
+                            <div class="total-box">
+                                <div class="total-line" v-if="bookingData.selectedServices.length > 0">
+                                    <span>Tạm tính dịch vụ</span>
+                                    <b>{{ formatMoney(serviceSubTotal) }}</b>
                                 </div>
-                                <transition name="list-fade">
-                                    <div v-if="showInvoiceCompanyForm" class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                                        <div>
-                                            <label class="custom-label font-bold">Tên công ty *</label>
-                                            <input v-model="invoiceCompany.tenCongTy" type="text" class="booking-input w-full"
-                                                placeholder="Công ty TNHH ABC">
-                                        </div>
-                                        <div>
-                                            <label class="custom-label font-bold">Mã số thuế *</label>
-                                            <input v-model="invoiceCompany.mst" type="text" class="booking-input w-full"
-                                                @blur="validateMst" placeholder="0301234567">
-                                            <p v-if="mstError" class="text-danger small mt-1 mb-0 font-bold">{{ mstError }}</p>
-                                        </div>
-                                    </div>
-                                </transition>
-                            </div>
-
-                            <!-- 4. CHI TIẾT TIỀN BẠC (BILL SUMMARY) -->
-                            <div class="bill-summary">
-                                <div class="summary-line" v-if="bookingData.selectedServices.length > 0">
-                                    <span>Tạm tính dịch vụ:</span>
-                                    <span>{{ formatMoney(serviceSubTotal) }}</span>
+                                <div class="total-line saving" v-if="bookingData.selectedServices.length > 0 && serviceOriginalTotal > serviceSubTotal">
+                                    <span>Ưu đãi Flash Sale dịch vụ</span>
+                                    <b>-{{ formatMoney(serviceOriginalTotal - serviceSubTotal) }}</b>
                                 </div>
-                                <div class="summary-line saving text-success" v-if="bookingData.selectedServices.length > 0 && serviceOriginalTotal > serviceSubTotal">
-                                    <span>Flash Sale dịch vụ:</span>
-                                    <span>-{{ formatMoney(serviceOriginalTotal - serviceSubTotal) }}</span>
+                                <div class="total-line" v-if="productItems.length > 0">
+                                    <span>Tạm tính sản phẩm</span>
+                                    <b>{{ formatMoney(productSubTotal) }}</b>
                                 </div>
-                                <div class="summary-line" v-if="productItems.length > 0">
-                                    <span>Tạm tính sản phẩm:</span>
-                                    <span>{{ formatMoney(productSubTotal) }}</span>
+                                <div class="total-line" v-if="productItems.length > 0 && shippingFee > 0">
+                                    <span>Phí giao hàng</span>
+                                    <b>{{ formatMoney(shippingFee) }}</b>
                                 </div>
-                                <div class="summary-line" v-if="productItems.length > 0 && shippingFee > 0">
-                                    <span>Phí giao hàng:</span>
-                                    <span>{{ formatMoney(shippingFee) }}</span>
+                                <div class="total-line saving" v-if="memberDiscount > 0">
+                                    <span>Giảm giá thành viên ({{ memberRankPercent }}%)</span>
+                                    <b>-{{ formatMoney(memberDiscount) }}</b>
                                 </div>
-                                <div class="summary-line saving text-success" v-if="memberDiscount > 0">
-                                    <span>Giảm giá thành viên ({{ memberRankPercent }}%):</span>
-                                    <span class="font-bold">-{{ formatMoney(memberDiscount) }}</span>
-                                </div>
-                                <div class="summary-line saving text-success" v-if="voucherAmount > 0">
-                                    <span>Voucher giảm giá:</span>
-                                    <span class="font-bold">-{{ formatMoney(voucherAmount) }}</span>
-                                </div>
-                                <div class="summary-line small text-black font-bold" v-if="bookingData.voucherIds.length">
-                                    <span>Mã đã chọn:</span>
-                                    <span>{{ bookingData.voucherIds.join(' → ') }}</span>
+                                <div class="total-line saving" v-if="voucherAmount > 0">
+                                    <span>Giảm voucher</span>
+                                    <b>-{{ formatMoney(voucherAmount) }}</b>
                                 </div>
 
-                                <div class="total-line-final mt-3 pt-3 border-t border-dashed">
-                                    <div class="summary-line">
-                                        <span class="total-lbl font-bold">TỔNG ĐƠN HÀNG:</span>
-                                        <span class="total-val-standard font-bold text-black">{{ formatMoney(grandTotal) }}</span>
-                                    </div>
+                                <div class="grand-line">
+                                    <span>Tổng đơn hàng (đã gồm VAT)</span>
+                                    <b>{{ formatMoney(grandTotal) }}</b>
+                                </div>
 
-                                    <div class="mt-2 text-xs text-gray-500" v-if="bookingData.selectedServices.length > 0 && bookingData.paymentMode === '10'">
-                                        <div class="flex justify-between py-0.5">
-                                            <span>+ Tiền cọc dịch vụ (10%):</span>
-                                            <span>{{ formatMoney(serviceSubTotal * 0.1) }}</span>
-                                        </div>
-                                        <div class="flex justify-between py-0.5" v-if="productItems.length > 0 && productData.paymentMethod !== 'cod'">
-                                            <span>+ Tiền sản phẩm & ship (100%):</span>
-                                            <span>{{ formatMoney(productSubTotal + shippingFee) }}</span>
-                                        </div>
-                                    </div>
+                                <div class="pay-line">
+                                    <span>Thanh toán ngay</span>
+                                    <b>{{ formatMoney(payNow) }}</b>
+                                </div>
 
-                                    <div class="pay-now-alert mt-3">
-                                        <span>THANH TOÁN NGAY:</span>
-                                        <span>{{ formatMoney(payNow) }}</span>
-                                    </div>
-
-                                    <div class="summary-line mt-2" style="color: #e53e3e; font-weight: 600;" v-if="remainAtStore > 0">
-                                        <span style="color: #e53e3e;">Còn lại trả tại tiệm:</span>
-                                        <span class="font-bold" style="color: #e53e3e;">{{ formatMoney(remainAtStore) }}</span>
-                                    </div>
-                                    <div class="summary-line" style="color: #e53e3e; font-weight: 600;" v-if="remainCOD > 0">
-                                        <span style="color: #e53e3e;">Còn lại trả shipper (COD):</span>
-                                        <span class="font-bold" style="color: #e53e3e;">{{ formatMoney(remainCOD) }}</span>
-                                    </div>
+                                <div class="total-line text-danger mt-2" v-if="remainAtStore > 0">
+                                    <span>Còn lại thanh toán tại tiệm:</span>
+                                    <b>{{ formatMoney(remainAtStore) }}</b>
+                                </div>
+                                <div class="total-line text-danger" v-if="remainCOD > 0">
+                                    <span>Còn lại trả shipper (COD):</span>
+                                    <b>{{ formatMoney(remainCOD) }}</b>
                                 </div>
                             </div>
 
-                            <!-- Nút Xác nhận Thanh toán -->
-                            <button type="button" class="btn-confirm-metallic-final mt-4" @click="handlePayment">
-                                <template v-if="activePaymentMethod === 'momo'">
-                                    THANH TOÁN QUA MOMO
-                                </template>
-                                <template v-else-if="activePaymentMethod === 'vnpay'">
-                                    THANH TOÁN QUA VNPAY
-                                </template>
-                                <template v-else>
-                                    XÁC NHẬN THANH TOÁN
-                                </template>
+                            <!-- Nút Xác nhận Thanh toán CÓ HIỆU ỨNG LOADING (SỬ DỤNG SVG XOAY VÒNG BẤT TỬ) -->
+                            <button type="button" class="btn-confirm-metallic-final mt-4" @click="handlePayment" 
+                                    :disabled="isSubmitting || (bookingData.selectedServices.length > 0 && bookingData.stylistId !== null && (!selectedStylist || !selectedStylist.isAvailable))" 
+                                    :class="{ 'opacity-50 pointer-events-none cursor-not-allowed': isSubmitting || (bookingData.selectedServices.length > 0 && bookingData.stylistId !== null && (!selectedStylist || !selectedStylist.isAvailable)) }">
+                                <span v-if="!isSubmitting" class="btn-text-normal">THANH TOÁN NGAY</span>
+                                <span v-else class="btn-text-normal flex items-center justify-center">
+                                    <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    ĐANG XỬ LÝ...
+                                </span>
                             </button>
                         </div>
                     </div>
@@ -1435,12 +1816,6 @@ onMounted(async () => {
     --text-secondary: #4b5563;
     --text-muted: #9ca3af;
     --border-color: #e5e7eb;
-    
-    /* Aliases for template compatibility */
-    --gold-metallic: var(--primary-metallic);
-    --gold-solid: var(--primary-color);
-    --gold-hover: var(--primary-hover);
-    --gold-light: var(--primary-light);
     
     background-color: #ffffff;
     min-height: 100vh;
@@ -1479,8 +1854,7 @@ onMounted(async () => {
     z-index: 10;
 }
 
-/* Typography & Titles */
-.font-playfair, h1, h2, h3, h4, h5, h6, .section-heading-title {
+.font-heading, h1, h2, h3, h4, h5, h6, .section-heading-title {
     font-family: 'Montserrat', sans-serif !important;
 }
 
@@ -1498,15 +1872,6 @@ h1 {
     color: var(--text-primary);
 }
 
-.gold-accent-line {
-    width: 60px;
-    height: 1px;
-    background: var(--gold-metallic);
-    margin: 15px auto;
-    border-radius: 0px;
-}
-
-/* Section headings */
 .section-heading-wrapper {
     position: relative;
     margin-bottom: 24px;
@@ -1528,18 +1893,13 @@ h1 {
     align-items: center;
 }
 
-.section-heading-title i {
-    color: var(--gold-solid);
-    font-size: 1.1rem;
-}
-
 .heading-line {
     position: absolute;
     bottom: -1px;
     left: 0;
     width: 50px;
     height: 2px;
-    background: var(--gold-metallic);
+    background: var(--primary-color);
 }
 
 .section-heading-wrapper.justify-content-center .heading-line {
@@ -1547,20 +1907,6 @@ h1 {
     transform: translateX(-50%);
 }
 
-.gold-metallic-text {
-    background: var(--gold-metallic);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    display: inline-block;
-}
-
-.gold-solid-text {
-    color: var(--gold-solid);
-    font-weight: 600;
-}
-
-/* Main Cards - Premium Glassmorphism style */
 .glass-card {
     background: #ffffff;
     padding: 32px;
@@ -1574,7 +1920,6 @@ h1 {
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.03);
 }
 
-/* Forms & Inputs */
 .custom-label {
     font-size: 12px;
     font-weight: 600;
@@ -1591,7 +1936,7 @@ h1 {
     padding: 0 16px;
     border-radius: 0px;
     border: 1px solid var(--border-color);
-    background: #fcfcfd;
+    background: #ffffff;
     outline: none;
     font-size: 14px;
     color: var(--text-primary);
@@ -1599,7 +1944,7 @@ h1 {
 }
 
 .booking-input:focus {
-    border-color: var(--gold-solid);
+    border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
     background: #ffffff;
 }
@@ -1619,7 +1964,6 @@ textarea.booking-input {
     border-radius: 0px;
 }
 
-/* Booking summary/metadata helper lines */
 .summary-line {
     display: flex;
     justify-content: space-between;
@@ -1673,8 +2017,8 @@ textarea.booking-input {
 }
 
 .stylist-card.active {
-    border-color: var(--gold-solid);
-    background: var(--gold-light);
+    border-color: var(--primary-color);
+    background: var(--primary-light);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
 }
 
@@ -1696,27 +2040,14 @@ textarea.booking-input {
 }
 
 .stylist-card.active .avatar-box img {
-    border-color: var(--gold-solid);
-}
-
-.avatar-placeholder {
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-    background: #f3f4f6;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    color: var(--text-muted);
-    font-size: 24px;
-    border: 2px solid transparent;
+    border-color: var(--primary-color);
 }
 
 .check-badge {
     position: absolute;
     bottom: -2px;
     right: -2px;
-    background: var(--gold-solid);
+    background: var(--primary-color);
     color: #ffffff;
     width: 20px;
     height: 20px;
@@ -1790,22 +2121,86 @@ textarea.booking-input {
     color: var(--text-primary);
 }
 
-/* Shipping info card */
-.shipping-info-card {
-    background: var(--gold-light);
-    border: 1px solid var(--border-color);
-    border-radius: 0px;
-    padding: 16px;
-    margin-top: 12px;
+.favorite-heart-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    color: #ef4444;
+    background: #ffffff;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+    z-index: 2;
 }
 
-.shipping-info-card h6 {
-    font-family: 'Montserrat', sans-serif !important;
+.stylist-schedule-info {
+    position: relative;
+    background-color: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px;
+    margin-bottom: 20px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.stylist-schedule-info::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 5px;
+    border-style: solid;
+    border-color: #ffffff transparent transparent transparent;
+    z-index: 2;
+}
+
+.stylist-schedule-info::before {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 6px;
+    border-style: solid;
+    border-color: var(--border-color) transparent transparent transparent;
+    z-index: 1;
+}
+
+.schedule-header {
+    font-size: 11px;
     font-weight: 700;
     color: var(--text-primary);
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+    border-bottom: 1px dashed var(--border-color);
+    padding-bottom: 4px;
+}
+
+.schedule-line {
+    font-size: 10px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    margin-top: 2px;
+}
+
+.stylist-card.is-disabled {
+    opacity: 0.45;
+    filter: grayscale(100%);
+    cursor: not-allowed;
+    background: #f9fafb;
+}
+
+.stylist-card.is-disabled:hover {
+    border-color: var(--border-color);
+    transform: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.01);
 }
 
 /* Payment Methods */
@@ -1818,8 +2213,7 @@ textarea.booking-input {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
+    border: 1px solid var(--border-color);
     padding: 12px 16px;
     cursor: pointer;
     background: #ffffff;
@@ -1827,7 +2221,7 @@ textarea.booking-input {
 }
 
 .invoice-toggle-line:hover {
-    border-color: var(--gold-solid);
+    border-color: #bfa77a;
 }
 
 .invoice-toggle-arrow {
@@ -1842,9 +2236,9 @@ textarea.booking-input {
 
 .method-option {
     flex: 1;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--border-color);
     padding: 10px 16px;
-    border-radius: 14px;
+    border-radius: 0px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1852,13 +2246,7 @@ textarea.booking-input {
     background: #ffffff;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     height: 80px;
-    overflow: visible;
-}
-
-/* VNPay Branding */
-.method-option.vnpay {
-    position: relative;
-    border: 2px solid #e5e7eb;
+    overflow: hidden;
 }
 
 .method-option.vnpay:hover {
@@ -1868,16 +2256,10 @@ textarea.booking-input {
 
 .method-option.vnpay.active {
     border-color: #006ac2;
-    background-color: #f4f9ff;
-    box-shadow: 0 8px 25px rgba(0, 106, 194, 0.15);
-    border-width: 3px;
-    transform: translateY(-2px) scale(1.02);
-}
-
-/* MoMo Branding */
-.method-option.momo {
-    position: relative;
-    border: 2px solid #e5e7eb;
+    background-color: #ffffff;
+    box-shadow: 0 8px 20px rgba(0, 106, 194, 0.08);
+    border-width: 2px;
+    transform: scale(1.02);
 }
 
 .method-option.momo:hover {
@@ -1887,16 +2269,10 @@ textarea.booking-input {
 
 .method-option.momo.active {
     border-color: #d82d8b;
-    background-color: #fff5fa;
-    box-shadow: 0 8px 25px rgba(216, 45, 139, 0.15);
-    border-width: 3px;
-    transform: translateY(-2px) scale(1.02);
-}
-
-/* COD Branding */
-.method-option.cod {
-    position: relative;
-    border: 2px solid #e5e7eb;
+    background-color: #ffffff;
+    box-shadow: 0 8px 20px rgba(216, 45, 139, 0.08);
+    border-width: 2px;
+    transform: scale(1.02);
 }
 
 .method-option.cod:hover {
@@ -1906,10 +2282,10 @@ textarea.booking-input {
 
 .method-option.cod.active {
     border-color: #16a34a;
-    background-color: #f0fdf4;
-    box-shadow: 0 8px 25px rgba(22, 163, 74, 0.15);
-    border-width: 3px;
-    transform: translateY(-2px) scale(1.02);
+    background-color: #ffffff;
+    box-shadow: 0 8px 20px rgba(22, 163, 74, 0.08);
+    border-width: 2px;
+    transform: scale(1.02);
 }
 
 .cod-icon-wrapper {
@@ -1943,7 +2319,6 @@ textarea.booking-input {
 
 .method-option.cod.active .method-label {
     color: #16a34a;
-    transition: all 0.3s ease;
 }
 
 .method-logo-wrapper {
@@ -1965,13 +2340,6 @@ textarea.booking-input {
 
 .method-option.active .method-logo-img {
     transform: scale(1.08);
-}
-
-.method-label {
-    font-family: 'Montserrat', sans-serif !important;
-    font-weight: 700;
-    font-size: 1.2rem;
-    color: var(--text-primary);
 }
 
 /* Voucher ticket system */
@@ -2005,6 +2373,11 @@ textarea.booking-input {
     border: 2px solid #000000;
     background: #fafafa;
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+}
+
+.voucher-ticket-item.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .ticket-left {
@@ -2105,7 +2478,7 @@ textarea.booking-input {
     font-size: 18px;
 }
 
-/* Service Search Box Dropdown in Invoice card */
+/* Service / Product Search Box Dropdown */
 .search-box-wrapper {
     position: relative;
 }
@@ -2130,8 +2503,8 @@ textarea.booking-input {
 }
 
 .search-input:focus {
-    border-color: var(--gold-solid);
-    box-shadow: 0 0 0 3px rgba(191, 167, 122, 0.15);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
 }
 
 .search-icon {
@@ -2185,12 +2558,7 @@ textarea.booking-input {
 }
 
 .service-dropdown-item:hover {
-    background: var(--gold-light);
-}
-
-.service-dropdown-item img {
-    border-radius: 6px;
-    object-fit: cover;
+    background: #fafafa;
 }
 
 .item-details {
@@ -2212,7 +2580,7 @@ textarea.booking-input {
 }
 
 .add-btn-icon {
-    color: var(--gold-solid);
+    color: var(--primary-color);
     font-size: 18px;
     transition: transform 0.2s ease;
 }
@@ -2240,7 +2608,7 @@ textarea.booking-input {
     color: var(--text-primary);
 }
 
-/* Selected service item row in bill card */
+/* Selected Items in Bill Card */
 .selected-items-wrapper {
     max-height: 220px;
     overflow-y: auto;
@@ -2273,11 +2641,6 @@ textarea.booking-input {
     background: #ffffff;
 }
 
-.item-row img {
-    border-radius: 0px;
-    object-fit: cover;
-}
-
 .item-info {
     display: flex;
     flex-direction: column;
@@ -2295,7 +2658,7 @@ textarea.booking-input {
 .item-info .p {
     font-size: 12px;
     font-weight: 600;
-    color: var(--gold-solid);
+    color: var(--primary-color);
 }
 
 .del-btn {
@@ -2338,7 +2701,7 @@ textarea.booking-input {
 }
 
 .qty-btn:hover {
-    color: var(--gold-solid);
+    color: var(--primary-color);
 }
 
 .qty-input {
@@ -2358,7 +2721,110 @@ textarea.booking-input {
     margin: 0;
 }
 
-/* Invoice / Bill details */
+/* Pay button and tabs */
+.pay-btn {
+    border: 1px solid #e5e7eb;
+    padding: 12px 14px;
+    border-radius: 0px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: all 0.3s ease;
+    background: #ffffff;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.pay-btn:hover {
+    border-color: rgba(0, 0, 0, 0.2);
+}
+
+.pay-btn.active {
+    border-color: var(--primary-color);
+    background: var(--primary-light);
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.pay-btn .dot {
+    width: 14px;
+    height: 14px;
+    border: 2px solid #d1d5db;
+    border-radius: 50%;
+    margin-right: 10px;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.pay-btn.active .dot {
+    border-color: var(--primary-color);
+}
+
+.pay-btn.active .dot::after {
+    content: '';
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background: var(--primary-color);
+    border-radius: 50%;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.receive-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.receive-tabs button {
+    height: 48px;
+    border: 1px solid #e5e7eb;
+    border-radius: 0px;
+    background: #ffffff;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.receive-tabs button.active {
+    background: var(--primary-metallic);
+    color: #ffffff;
+    border-color: transparent;
+}
+
+.soft-message {
+    padding: 16px;
+    border-radius: 0px;
+    background: #fafafa;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.store-box {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+    border-radius: 0px;
+    background: #fafafa;
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+/* Total / Summary Box */
 .total-box {
     margin-top: 20px;
     padding-top: 16px;
@@ -2385,6 +2851,7 @@ textarea.booking-input {
 .total-line.saving {
     color: #16a34a;
 }
+
 .total-line.saving b {
     color: #16a34a;
 }
@@ -2392,6 +2859,7 @@ textarea.booking-input {
 .total-line.text-danger {
     color: #ef4444 !important;
 }
+
 .total-line.text-danger b,
 .total-line.text-danger span {
     color: #ef4444 !important;
@@ -2446,13 +2914,12 @@ textarea.booking-input {
     color: var(--text-primary);
 }
 
-/* Premium Confirmation Button */
 .btn-confirm-metallic-final {
     width: 100%;
     padding: 16px;
-    border: 1px solid var(--gold-solid);
+    border: 1px solid var(--primary-color);
     border-radius: 0px;
-    background: var(--gold-metallic);
+    background: var(--primary-metallic);
     color: #ffffff !important;
     text-transform: uppercase;
     letter-spacing: 2px;
@@ -2460,18 +2927,21 @@ textarea.booking-input {
     font-size: 13px;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: none;
 }
 
-.btn-confirm-metallic-final:hover {
+.btn-confirm-metallic-final:hover:not(:disabled) {
     background: transparent;
-    color: var(--gold-solid) !important;
+    color: var(--primary-color) !important;
     transform: translateY(-2px);
-    box-shadow: none;
 }
 
-.btn-confirm-metallic-final:hover .btn-text-normal {
-    color: var(--gold-solid) !important;
+.btn-confirm-metallic-final:hover:not(:disabled) .btn-text-normal {
+    color: var(--primary-color) !important;
+}
+
+.btn-confirm-metallic-final:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
 }
 
 .btn-text-normal {
@@ -2483,7 +2953,6 @@ textarea.booking-input {
     transition: color 0.3s ease;
 }
 
-/* Animations */
 .list-fade-enter-active,
 .list-fade-leave-active {
     transition: all 0.3s ease;
@@ -2504,224 +2973,14 @@ textarea.booking-input {
     top: 100px;
 }
 
-/* Additional specific styles for ThanhToanTong */
-.btn-load-stylist {
-    height: 36px;
-    padding: 0 16px;
-    border: 1px solid var(--gold-solid);
-    border-radius: 0px;
-    background: var(--gold-metallic);
-    color: #fff;
-    font-weight: 700;
-    cursor: pointer;
-    box-shadow: none;
-    transition: 0.22s ease;
-    font-size: 12px;
-}
-
-.btn-load-stylist i {
-    color: #ffffff;
-    margin-right: 5px;
-}
-
-.btn-load-stylist:hover:not(:disabled) {
-    background: transparent;
-    color: var(--gold-solid);
-}
-
-.btn-load-stylist:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-    box-shadow: none;
-}
-
-.spin {
-    animation: spin 0.85s linear infinite;
-}
-
-@keyframes spin {
+/* Spinner Animation CSS để xoay mượt mà nếu thiếu class Tailwind animate-spin */
+@keyframes custom-spin {
     to { transform: rotate(360deg); }
 }
-
-.soft-message {
-    padding: 16px;
-    border-radius: 0px;
-    background: #fafafa;
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary);
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    font-size: 13px;
-    line-height: 1.5;
+.animate-spin {
+    animation: custom-spin 1s linear infinite;
 }
 
-.soft-message.slim {
-    padding: 10px 14px;
-}
-
-.store-box {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 16px;
-    border-radius: 0px;
-    background: #fafafa;
-    border: 1px solid var(--border-color);
-    color: var(--text-primary);
-}
-
-.store-box i {
-    font-size: 20px;
-    color: var(--text-primary);
-}
-
-.receive-tabs {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-}
-
-.receive-tabs button {
-    height: 48px;
-    border: 1px solid #e5e7eb;
-    border-radius: 0px;
-    background: #ffffff;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    color: var(--text-secondary);
-    font-size: 13px;
-}
-
-.receive-tabs button.active {
-    background: var(--gold-metallic);
-    color: #ffffff;
-    border-color: transparent;
-    box-shadow: none;
-}
-
-.pay-btn {
-    border: 1px solid #e5e7eb;
-    padding: 12px 14px;
-    border-radius: 0px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    transition: all 0.3s ease;
-    background: #ffffff;
-    font-size: 13px;
-    color: var(--text-secondary);
-}
-
-.pay-btn:hover {
-    border-color: rgba(0, 0, 0, 0.2);
-}
-
-.pay-btn.active {
-    border-color: var(--gold-solid);
-    background: var(--gold-light);
-    color: var(--text-primary);
-    font-weight: 600;
-}
-
-.pay-btn .dot {
-    width: 14px;
-    height: 14px;
-    border: 2px solid #d1d5db;
-    border-radius: 50%;
-    margin-right: 10px;
-    position: relative;
-    transition: all 0.3s ease;
-}
-
-.pay-btn.active .dot {
-    border-color: var(--gold-solid);
-}
-
-.pay-btn.active .dot::after {
-    content: '';
-    position: absolute;
-    width: 8px;
-    height: 8px;
-    background: var(--gold-solid);
-    border-radius: 50%;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-}
-
-.pay-now-alert {
-    background: #f0fdf4;
-    padding: 12px;
-    border-radius: 8px;
-    border: 1px solid #bbf7d0;
-    margin-top: 12px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.pay-now-alert span:first-child {
-    font-size: 11px;
-    font-weight: 700;
-    color: #15803d;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.pay-now-alert span:last-child {
-    font-size: 1.35rem;
-    font-weight: 800;
-    color: #16a34a;
-}
-
-.bill-summary {
-    border-top: 1px solid #f3f4f6;
-    padding-top: 16px;
-    margin-top: 16px;
-}
-
-.bill-summary .summary-line {
-    margin-bottom: 8px;
-    font-size: 13px;
-    color: var(--text-secondary);
-}
-
-.bill-summary .summary-line span:first-child {
-    font-weight: 500;
-}
-
-.bill-summary .summary-line span:last-child {
-    font-weight: 600;
-    color: var(--text-primary);
-}
-
-.total-line-final {
-    margin-top: 16px;
-    border-top: 1px dashed #e5e7eb;
-    padding-top: 16px;
-}
-
-.total-lbl {
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--text-primary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.total-val-standard {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--text-primary);
-}
-
-/* Responsive Media Queries */
 @media (max-width: 991px) {
     .sticky-bill {
         position: static;
@@ -2731,96 +2990,5 @@ textarea.booking-input {
     .glass-card {
         padding: 24px;
     }
-}
-
-/* Custom disabled state cho Stylist */
-.stylist-card.is-disabled {
-    opacity: 0.45;
-    filter: grayscale(100%);
-    cursor: not-allowed;
-    background: #f9fafb;
-}
-
-/* Tắt hiệu ứng nhảy lên khi hover vào thợ bận */
-.stylist-card.is-disabled:hover {
-    border-color: var(--border-color);
-    transform: none;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.01);
-}
-
-/* Badge trái tim cho thợ yêu thích */
-.favorite-heart-badge {
-    position: absolute;
-    top: -4px;
-    right: -4px;
-    color: #ef4444;
-    /* Màu đỏ nổi bật */
-    background: #ffffff;
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
-    z-index: 2;
-    transition: transform 0.3s ease;
-}
-
-/* Hiệu ứng đập nhẹ khi hover vào thợ yêu thích */
-.stylist-card:hover .favorite-heart-badge {
-    transform: scale(1.15);
-}
-.stylist-schedule-info {
-    position: relative;
-    background-color: #ffffff;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 8px;
-    margin-bottom: 20px;
-    width: 100%;
-    text-align: center;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-}
-
-.stylist-schedule-info::after {
-    content: '';
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    border-width: 5px;
-    border-style: solid;
-    border-color: #ffffff transparent transparent transparent;
-    z-index: 2;
-}
-
-.stylist-schedule-info::before {
-    content: '';
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    border-width: 6px;
-    border-style: solid;
-    border-color: var(--border-color) transparent transparent transparent;
-    z-index: 1;
-}
-
-.schedule-header {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--text-primary);
-    margin-bottom: 4px;
-    border-bottom: 1px dashed var(--border-color);
-    padding-bottom: 4px;
-}
-
-.schedule-line {
-    font-size: 10px;
-    color: var(--text-secondary);
-    line-height: 1.4;
-    margin-top: 2px;
 }
 </style>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch, reactive } from 'vue'
 import { 
   Search, 
   Trash2, 
@@ -8,13 +8,15 @@ import {
   Activity, 
   CheckCircle2, 
   XCircle, 
-  Filter, 
-  RefreshCw,
+  RotateCcw,
   Clock,
   User,
-  ShieldAlert
+  ShieldAlert,
+  FileText,
+  Eye,
+  Layers,
+  ArrowRight
 } from 'lucide-vue-next'
-import Swal from 'sweetalert2'
 
 interface ActivityLog {
   id: string;
@@ -36,88 +38,235 @@ const endDate = ref('')
 
 const rawLogs = ref<ActivityLog[]>([])
 
-// Generate realistic dummy logs if localStorage is empty
+// Modal Detail State
+const selectedLogDetail = ref<ActivityLog | null>(null)
+const showDetailModal = ref(false)
+
+const openLogDetail = (log: ActivityLog) => {
+  selectedLogDetail.value = log
+  showDetailModal.value = true
+}
+
+const closeLogDetail = () => {
+  showDetailModal.value = false
+  selectedLogDetail.value = null
+}
+
+// Clear Dialog State
+const showClearDialog = ref(false)
+
+// Snackbar
+const snackbar = ref({
+  show: false,
+  text: '',
+  color: 'success'
+})
+const showSnackbar = (text: string, color = 'success') => {
+  snackbar.value = { show: true, text, color }
+}
+
+interface ParsedChangeItem {
+  field: string;
+  oldVal: string;
+  newVal: string;
+  isDiff: boolean;
+}
+
+// Smart parser for activity log detail text
+const logDetailParsed = computed(() => {
+  if (!selectedLogDetail.value?.details) {
+    return { title: '', items: [] as ParsedChangeItem[] }
+  }
+
+  const rawText = selectedLogDetail.value.details.trim()
+  const items: ParsedChangeItem[] = []
+
+  // Case A: Multiline text with bullets (•) or newline changes
+  if (rawText.includes('\n')) {
+    const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean)
+    const title = (lines[0] || '').replace(/^•\s*/, '').replace(/:\s*$/, '')
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = (lines[i] || '').replace(/^•\s*/, '')
+      if (line.includes('➔')) {
+        const parts = line.split('➔')
+        const left = (parts[0] || '').trim()
+        const right = (parts[1] || '').trim()
+        const colonIdx = left.indexOf(':')
+        if (colonIdx !== -1) {
+          items.push({
+            field: left.substring(0, colonIdx).trim(),
+            oldVal: left.substring(colonIdx + 1).trim(),
+            newVal: right,
+            isDiff: true
+          })
+        } else {
+          items.push({ field: 'Thay đổi', oldVal: left, newVal: right, isDiff: true })
+        }
+      } else if (line.includes(':')) {
+        const colonIdx = line.indexOf(':')
+        items.push({
+          field: line.substring(0, colonIdx).trim(),
+          oldVal: '',
+          newVal: line.substring(colonIdx + 1).trim(),
+          isDiff: false
+        })
+      } else {
+        items.push({ field: 'Nội dung', oldVal: '', newVal: line, isDiff: false })
+      }
+    }
+    return { title, items }
+  }
+
+  // Case B: Single line string with hyphen (-) separators
+  if (rawText.includes(' - ')) {
+    const parts = rawText.split(' - ')
+    const title = (parts[0] || '').trim()
+    const rest = parts.slice(1).join(' - ')
+    const pairs = rest.split(',')
+
+    pairs.forEach(pair => {
+      const pTrim = pair.trim()
+      if (pTrim.includes(':')) {
+        const cIdx = pTrim.indexOf(':')
+        const key = pTrim.substring(0, cIdx).trim()
+        const val = pTrim.substring(cIdx + 1).trim()
+        if (val.includes('từ') && val.includes('lên')) {
+          const match = val.match(/từ\s+(.*?)\s+lên\s+(.*)/i)
+          if (match && match[1] !== undefined && match[2] !== undefined) {
+            items.push({ field: key, oldVal: match[1], newVal: match[2], isDiff: true })
+            return
+          }
+        }
+        items.push({ field: key, oldVal: '', newVal: val, isDiff: false })
+      } else {
+        items.push({ field: 'Thông tin', oldVal: '', newVal: pTrim, isDiff: false })
+      }
+    })
+    return { title, items }
+  }
+
+  // Case C: Plain text single line
+  return {
+    title: rawText,
+    items: []
+  }
+})
+
+// Dynamic & comprehensive module options
+const moduleOptions = computed(() => {
+  const fromLogs = Array.from(new Set(rawLogs.value.map(l => (l.module || '').trim()).filter(Boolean)))
+  const defaults = [
+    'Hóa đơn',
+    'Khách hàng',
+    'Hỗ trợ khách hàng',
+    'Dịch vụ',
+    'Sản phẩm',
+    'Quản lý kho',
+    'Lương',
+    'Điểm danh',
+    'Ca làm',
+    'Đánh giá',
+    'Khuyến mãi',
+    'Voucher',
+    'Nhân sự',
+    'Kiểu & Màu tóc',
+    'Nhà cung cấp',
+    'Thông báo',
+    'Tài khoản',
+    'Check-in / Check-out',
+    'Đối soát',
+    'Danh mục'
+  ]
+  const allModules = Array.from(new Set([...fromLogs, ...defaults])).filter(Boolean).sort((a, b) => a.localeCompare(b, 'vi'))
+  return [
+    { value: '', label: 'Tất cả phân hệ' },
+    ...allModules.map(m => ({ value: m, label: m }))
+  ]
+})
+
+// Generate rich, structured dummy logs
 const generateDummyLogs = () => {
   const dummy: ActivityLog[] = [
     {
       id: 'act1',
-      timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(), // 15 mins ago
+      timestamp: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
       username: 'Đinh Hoàng Phúc',
-      role: 'Chủ Salon',
-      action: 'In phiếu lương',
-      details: 'Đã in phiếu lương chi tiết cho nhân viên Nguyễn Minh Tâm (Mã: NV002) - Tháng 7/2026',
-      module: 'Lương',
+      role: 'Chủ Salon / Quản trị viên',
+      action: 'Sửa thông tin khách hàng',
+      details: 'Cập nhật thông tin khách hàng Ngô Bá Khá (Mã KH: KH0836991):\n• Số điện thoại: "0905123456" ➔ "0836286122"\n• Email: "khachhang_old@gmail.com" ➔ "latuthien2005@gmail.com"\n• Điểm tích lũy: "120 điểm" ➔ "0 điểm"\n• Trạng thái tài khoản: "Khóa" ➔ "Hoạt động"',
+      module: 'Khách hàng',
       status: 'Thành công'
     },
     {
       id: 'act2',
-      timestamp: new Date(Date.now() - 1000 * 60 * 45).toISOString(), // 45 mins ago
+      timestamp: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
       username: 'Đinh Hoàng Phúc',
-      role: 'Chủ Salon',
-      action: 'Cập nhật nhân viên',
-      details: 'Đã cập nhật thông tin nhân viên Đinh Hoàng Phúc (Mã: NV001) - Cập nhật ô lương cơ bản',
-      module: 'Nhân sự',
-      status: 'Thành công'
-    },
-    {
-      id: 'act3',
-      timestamp: new Date(Date.now() - 1000 * 3600 * 2).toISOString(), // 2 hours ago
-      username: 'Nguyễn Minh Tâm',
-      role: 'Stylist chính / Quản lý',
-      action: 'Sửa hồ sơ tài khoản',
-      details: 'Đã cập nhật thông tin cá nhân tài khoản Nguyễn Minh Tâm (Mã: NV002)',
-      module: 'Tài khoản',
-      status: 'Thành công'
-    },
-    {
-      id: 'act4',
-      timestamp: new Date(Date.now() - 1000 * 3600 * 4).toISOString(), // 4 hours ago
-      username: 'Đinh Hoàng Phúc',
-      role: 'Chủ Salon',
-      action: 'Xuất Excel bảng lương',
-      details: 'Đã xuất thành công tệp Excel bảng lương Tháng 7/2026 (5 nhân viên)',
+      role: 'Chủ Salon / Quản trị viên',
+      action: 'In phiếu lương',
+      details: 'In phiếu lương chi tiết nhân viên Nguyễn Minh Tâm (Mã: NV002) - Tháng 7/2026:\n• Lương cơ bản: "12.000.000đ"\n• Phụ cấp trách nhiệm: "2.000.000đ"\n• Hoa hồng làm ca: "4.500.000đ" (15% uốn nhuộm)\n• Tổng thực nhận: "18.500.000đ"',
       module: 'Lương',
       status: 'Thành công'
     },
     {
-      id: 'act5',
-      timestamp: new Date(Date.now() - 1000 * 3600 * 24).toISOString(), // 1 day ago
+      id: 'act3',
+      timestamp: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
+      username: 'Phạm Quang Thọ',
+      role: 'Thu ngân / Lễ tân',
+      action: 'Tạo hóa đơn dịch vụ',
+      details: 'Thanh toán thành công hóa đơn #HD-9082 cho KH Nguyễn Thị Mai:\n• Dịch vụ sử dụng: "Cắt tạo kiểu + Nhuộm Balayage Hàn Quốc"\n• Áp dụng Mã Voucher: "HE2026 (Giảm 20%)"\n• Phương thức thanh toán: "Chuyển khoản QR MoMo" (650.000đ)',
+      module: 'Hóa đơn',
+      status: 'Thành công'
+    },
+    {
+      id: 'act4',
+      timestamp: new Date(Date.now() - 1000 * 60 * 55).toISOString(),
       username: 'Đinh Hoàng Phúc',
-      role: 'Chủ Salon',
-      action: 'Thêm nhân viên mới',
-      details: 'Đã thêm tài khoản nhân viên Ronaldo (Mã: NV004) - Chức vụ: Stylist chính',
+      role: 'Chủ Salon / Quản trị viên',
+      action: 'Cập nhật nhân viên',
+      details: 'Cập nhật hồ sơ nhân viên Đinh Hoàng Phúc (Mã: NV001):\n• Lương cơ bản: "12.000.000đ" ➔ "15.000.000đ"\n• Phân quyền hệ thống: "Nhân viên chính" ➔ "Quản trị viên toàn quyền"',
       module: 'Nhân sự',
+      status: 'Thành công'
+    },
+    {
+      id: 'act5',
+      timestamp: new Date(Date.now() - 1000 * 3600 * 1.5).toISOString(),
+      username: 'Nguyễn Minh Tâm',
+      role: 'Stylist chính / Quản lý',
+      action: 'Cập nhật sản phẩm kho',
+      details: 'Nhập kho sản phẩm Dầu gội Olaplex No.4 (Mã SP: SP089):\n• Số lượng tồn kho: "15 chai" ➔ "65 chai (+50 chai mới)"\n• Đơn giá nhập: "450.000đ/chai" từ Nhà cung cấp Mỹ phẩm Minh Anh',
+      module: 'Sản phẩm',
       status: 'Thành công'
     },
     {
       id: 'act6',
-      timestamp: new Date(Date.now() - 1000 * 3600 * 26).toISOString(), // 1 day ago
+      timestamp: new Date(Date.now() - 1000 * 3600 * 2.2).toISOString(),
       username: 'Nguyễn Minh Tâm',
       role: 'Stylist chính / Quản lý',
-      action: 'Xếp ca làm việc',
-      details: 'Xếp lịch làm việc ca Sáng cho nhân viên Phạm Quang Thọ ngày 02/07/2026',
-      module: 'Ca làm',
+      action: 'Sửa hồ sơ tài khoản',
+      details: 'Cập nhật tài khoản quản trị Nguyễn Minh Tâm (Mã: NV002):\n• Ảnh đại diện: "Tải lên ảnh mới avatar_2026.png"\n• Mật khẩu đăng nhập: "Đã cập nhật mật khẩu mới thành công"',
+      module: 'Tài khoản',
       status: 'Thành công'
     },
     {
       id: 'act7',
-      timestamp: new Date(Date.now() - 1000 * 3600 * 48).toISOString(), // 2 days ago
-      username: 'Nguyễn Minh Tâm',
-      role: 'Stylist chính / Quản lý',
-      action: 'Xóa nhân viên',
-      details: 'Xóa thất bại nhân viên Trần Văn B (Mã: NV099) - Lý do: Nhân viên đã có dữ liệu lịch đặt',
-      module: 'Nhân sự',
-      status: 'Thất bại'
+      timestamp: new Date(Date.now() - 1000 * 3600 * 3.8).toISOString(),
+      username: 'Đinh Hoàng Phúc',
+      role: 'Chủ Salon / Quản trị viên',
+      action: 'Tạo Mã Voucher mới',
+      details: 'Khởi tạo chương trình khuyến mãi Hè 2026:\n• Mã Voucher: "HE2026"\n• Mức ưu đãi: "Giảm 20% tổng hóa đơn uốn nhuộm"\n• Thời gian hiệu lực: "01/07/2026 ➔ 31/08/2026"',
+      module: 'Voucher',
+      status: 'Thành công'
     },
     {
       id: 'act8',
-      timestamp: new Date(Date.now() - 1000 * 3600 * 72).toISOString(), // 3 days ago
-      username: 'Đinh Hoàng Phúc',
-      role: 'Chủ Salon',
-      action: 'Cập nhật dịch vụ',
-      details: 'Đã chỉnh sửa giá dịch vụ "Cắt tạo kiểu uốn Hàn Quốc" từ 350.000đ thành 380.000đ',
-      module: 'Dịch vụ',
-      status: 'Thành công'
+      timestamp: new Date(Date.now() - 1000 * 3600 * 48).toISOString(),
+      username: 'Nguyễn Minh Tâm',
+      role: 'Stylist chính / Quản lý',
+      action: 'Xóa nhân viên',
+      details: 'Xóa hồ sơ nhân viên Trần Văn B (Mã: NV099):\n• Trạng thái xử lý: "Thất bại / Hệ thống chặn"\n• Lý do: "Nhân viên đã phát sinh dữ liệu trong 14 hóa đơn và ca làm việc, không được phép xóa để đảm bảo toàn vẹn dữ liệu."',
+      module: 'Nhân sự',
+      status: 'Thất bại'
     }
   ]
   return dummy
@@ -128,7 +277,21 @@ const loadLogs = () => {
   try {
     const stored = localStorage.getItem('lghair_activities')
     if (stored) {
-      rawLogs.value = JSON.parse(stored)
+      const parsed = JSON.parse(stored)
+      if (parsed && Array.isArray(parsed) && parsed.length > 0) {
+        const hasLegacyDummy = parsed.some((l: ActivityLog) => l.id === 'act1' && !l.details.includes('➔'))
+        if (hasLegacyDummy) {
+          const dummy = generateDummyLogs()
+          rawLogs.value = dummy
+          localStorage.setItem('lghair_activities', JSON.stringify(dummy))
+        } else {
+          rawLogs.value = parsed
+        }
+      } else {
+        const dummy = generateDummyLogs()
+        rawLogs.value = dummy
+        localStorage.setItem('lghair_activities', JSON.stringify(dummy))
+      }
     } else {
       const dummy = generateDummyLogs()
       rawLogs.value = dummy
@@ -137,7 +300,9 @@ const loadLogs = () => {
   } catch (e) {
     console.error(e)
   } finally {
-    isLoading.value = false
+    setTimeout(() => {
+      isLoading.value = false
+    }, 200)
   }
 }
 
@@ -154,7 +319,7 @@ const stats = computed(() => {
   return { total, success, failed, today }
 })
 
-// Filtered and searched logs
+// Filtered and searched logs with precise, robust module matching
 const filteredLogs = computed(() => {
   return rawLogs.value.filter(log => {
     // Search filter
@@ -164,8 +329,30 @@ const filteredLogs = computed(() => {
       log.details.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
       log.role.toLowerCase().includes(searchQuery.value.toLowerCase())
 
-    // Module filter
-    const matchesModule = !selectedModule.value || log.module === selectedModule.value
+    // Precise Module filter
+    let matchesModule = true
+    if (selectedModule.value) {
+      const sel = selectedModule.value.trim().toLowerCase()
+      const logMod = (log.module || '').trim().toLowerCase()
+
+      if (logMod === sel) {
+        matchesModule = true
+      } else if (sel === 'khách hàng') {
+        matchesModule = logMod === 'khách hàng' || logMod === 'quản lý khách hàng'
+      } else if (sel === 'hỗ trợ khách hàng') {
+        matchesModule = logMod === 'hỗ trợ khách hàng' || logMod.includes('hỗ trợ') || logMod.includes('chat')
+      } else if (sel === 'điểm danh') {
+        matchesModule = logMod === 'điểm danh'
+      } else if (sel === 'ca làm') {
+        matchesModule = logMod === 'ca làm' || logMod === 'ca làm việc'
+      } else if (sel === 'quản lý kho') {
+        matchesModule = logMod === 'quản lý kho' || logMod === 'kho'
+      } else if (sel === 'lương') {
+        matchesModule = logMod === 'lương' || logMod === 'bảng lương' || logMod === 'quản lý lương'
+      } else {
+        matchesModule = logMod.includes(sel) || sel.includes(logMod)
+      }
+    }
 
     // Status filter
     const matchesStatus = !selectedStatus.value || log.status === selectedStatus.value
@@ -175,58 +362,34 @@ const filteredLogs = computed(() => {
     if (startDate.value) {
       const start = new Date(startDate.value + 'T00:00:00')
       const logDate = new Date(log.timestamp)
-      matchesDate = matchesDate && logDate >= start
+      if (!isNaN(start.getTime()) && !isNaN(logDate.getTime())) {
+        matchesDate = matchesDate && logDate >= start
+      }
     }
     if (endDate.value) {
       const end = new Date(endDate.value + 'T23:59:59')
       const logDate = new Date(log.timestamp)
-      matchesDate = matchesDate && logDate <= end
+      if (!isNaN(end.getTime()) && !isNaN(logDate.getTime())) {
+        matchesDate = matchesDate && logDate <= end
+      }
     }
 
     return matchesSearch && matchesModule && matchesStatus && matchesDate
   })
 })
 
-// Pagination variables
+// Pagination
 const currentPage = ref(1)
 const perPage = ref(10)
 
 const totalPages = computed(() => {
-  return Math.ceil(filteredLogs.value.length / perPage.value)
+  return Math.max(1, Math.ceil(filteredLogs.value.length / perPage.value))
 })
 
 const pagedLogs = computed(() => {
   const start = (currentPage.value - 1) * perPage.value
   return filteredLogs.value.slice(start, start + perPage.value)
 })
-
-const visiblePages = computed(() => {
-  const pages = []
-  const total = totalPages.value
-  const current = currentPage.value
-  
-  let start = Math.max(1, current - 2)
-  let end = Math.min(total, current + 2)
-  
-  if (end - start + 1 < 5) {
-    if (start === 1) {
-      end = Math.min(total, start + 4)
-    } else if (end === total) {
-      start = Math.max(1, end - 4)
-    }
-  }
-  
-  for (let i = start; i <= end; i++) {
-    if (i >= 1 && i <= total) pages.push(i)
-  }
-  return pages
-})
-
-const changePage = (page: number) => {
-  if (page >= 1 && page <= totalPages.value) {
-    currentPage.value = page
-  }
-}
 
 watch([searchQuery, selectedModule, selectedStatus, startDate, endDate], () => {
   currentPage.value = 1
@@ -235,6 +398,7 @@ watch([searchQuery, selectedModule, selectedStatus, startDate, endDate], () => {
 // Format helpers
 const formatDate = (isoString: string) => {
   const date = new Date(isoString)
+  if (isNaN(date.getTime())) return isoString
   const d = date.getDate().toString().padStart(2, '0')
   const m = (date.getMonth() + 1).toString().padStart(2, '0')
   const y = date.getFullYear()
@@ -244,46 +408,46 @@ const formatDate = (isoString: string) => {
   return `${d}/${m}/${y} ${h}:${min}:${sec}`
 }
 
-const getModuleBadgeClass = (module: string) => {
-  switch (module) {
-    case 'Nhân sự':
-      return 'bg-[#1677ff]/15 text-[#0F172A] border-[#1677ff]/25'
-    case 'Lương':
-      return 'bg-emerald-50 text-emerald-600 border-emerald-200'
-    case 'Tài khoản':
-      return 'bg-blue-50 text-blue-600 border-blue-200'
-    case 'Dịch vụ':
-      return 'bg-purple-50 text-purple-600 border-purple-200'
-    case 'Ca làm':
-      return 'bg-amber-50 text-amber-600 border-amber-200'
-    default:
-      return 'bg-slate-50 text-slate-600 border-slate-200'
+const getInitials = (name: string) => {
+  if (!name) return 'AD'
+  const parts = name.trim().split(' ')
+  if (parts.length === 1 && parts[0]) {
+    return parts[0].substring(0, 2).toUpperCase()
   }
+  const first = parts[parts.length - 2]?.substring(0, 1) || ''
+  const second = parts[parts.length - 1]?.substring(0, 1) || ''
+  return (first + second).toUpperCase() || 'AD'
 }
 
-const clearLogs = () => {
-  Swal.fire({
-    title: 'Xác nhận xóa?',
-    text: 'Bạn có chắc chắn muốn xóa toàn bộ nhật ký hoạt động này không?',
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonColor: '#0F172A',
-    cancelButtonColor: '#64748b',
-    confirmButtonText: 'Đồng ý xóa',
-    cancelButtonText: 'Hủy bỏ'
-  }).then((result) => {
-    if (result.isConfirmed) {
-      rawLogs.value = []
-      localStorage.setItem('lghair_activities', '[]')
-      Swal.fire({
-        icon: 'success',
-        title: 'Đã xóa',
-        text: 'Đã dọn dẹp sạch nhật ký hoạt động.',
-        timer: 1500,
-        showConfirmButton: false
-      })
-    }
-  })
+const getModuleColor = (module: string) => {
+  const modLower = (module || '').toLowerCase().trim()
+  if (modLower === 'hỗ trợ khách hàng') return 'indigo'
+  if (modLower.includes('nhân sự') || modLower.includes('chức vụ')) return 'info'
+  if (modLower.includes('lương')) return 'success'
+  if (modLower.includes('tài khoản')) return 'primary'
+  if (modLower.includes('dịch vụ') || modLower.includes('combo')) return 'purple'
+  if (modLower === 'điểm danh') return 'cyan'
+  if (modLower.includes('ca làm')) return 'blue'
+  if (modLower.includes('hóa đơn') || modLower.includes('thanh toán')) return 'teal'
+  if (modLower === 'khách hàng') return 'light-blue'
+  if (modLower.includes('sản phẩm') || modLower.includes('kho')) return 'warning'
+  if (modLower.includes('voucher') || modLower.includes('khuyến mãi') || modLower.includes('sale')) return 'pink'
+  if (modLower.includes('đánh giá')) return 'amber'
+  if (modLower.includes('thông báo')) return 'deep-purple'
+  if (modLower.includes('nhà cung cấp')) return 'orange'
+  if (modLower.includes('kiểu') || modLower.includes('màu tóc')) return 'lime-darken-3'
+  if (modLower.includes('check-in') || modLower.includes('check-out')) return 'light-green-darken-2'
+  if (modLower.includes('đối soát')) return 'deep-orange'
+  if (modLower.includes('danh mục')) return 'brown'
+  return 'blue-grey'
+}
+
+// Clear all logs
+const handleConfirmClear = () => {
+  rawLogs.value = []
+  localStorage.setItem('lghair_activities', '[]')
+  showClearDialog.value = false
+  showSnackbar("Đã dọn sạch toàn bộ nhật ký hoạt động!", "success")
 }
 
 const resetFilters = () => {
@@ -301,314 +465,526 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="activity-container min-h-[calc(100vh-64px)] w-full flex flex-col bg-[#fcfbfc] text-slate-850 overflow-hidden p-4 md:p-6 select-none-print font-sans antialiased relative">
-    
-    <!-- Decorative Ambient Glows for luxury feel -->
-    <div class="absolute top-12 left-1/4 w-[350px] h-[350px] bg-[#1677ff]/8 rounded-full blur-[100px] pointer-events-none -translate-y-1/2"></div>
-    <div class="absolute bottom-24 right-1/4 w-[350px] h-[350px] bg-[#1677ff]/5 rounded-full blur-[120px] pointer-events-none translate-y-1/2"></div>
+  <v-container fluid class="pa-6 fill-height align-start" style="min-height: 100vh;">
+    <div class="d-flex flex-column gap-6 w-100">
+      
+      <!-- Snackbar -->
+      <v-snackbar v-model="snackbar.show" :color="snackbar.color" location="top right" :timeout="3000">
+        {{ snackbar.text }}
+        <template v-slot:actions>
+          <v-btn variant="text" icon density="compact" @click="snackbar.show = false">
+            <X class="w-4 h-4" />
+          </v-btn>
+        </template>
+      </v-snackbar>
 
-    <!-- Header area -->
-    <div class="flex-shrink-0 w-full bg-transparent py-4 px-1 mb-6 print:hidden z-10">
-      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-        <div class="pl-1">
-          <h1 class="text-2xl md:text-3xl font-sans text-[#0F172A] font-black tracking-tight flex items-center gap-3">
-            <Activity class="w-8 h-8 text-[#0F172A] flex-shrink-0" />
-            <span>NHẬT KÝ HOẠT ĐỘNG</span>
-          </h1>
-          <p class="text-[10px] text-slate-500 mt-2 font-sans  tracking-wide">
-            "Hệ thống tự động ghi nhận và lưu vết hoạt động vận hành salon Minh Tâm."
-          </p>
-        </div>
-
-        <div class="flex items-center gap-3 w-full sm:w-auto">
-          <button 
-            @click="clearLogs" 
-            :disabled="rawLogs.length === 0"
-            class="flex-1 sm:flex-initial h-11 px-4 bg-transparent hover:bg-red-50 text-red-600 text-xs font-bold rounded-md border border-red-200 hover:border-red-400 transition-all cursor-pointer shadow-none disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <div class="flex items-center justify-center gap-2">
-              <Trash2 class="w-4 h-4" /> Dọn sạch nhật ký
+      <!-- ── HEADER BANNER CARD ── -->
+      <v-card width="100%" elevation="2" rounded="xl" class="pa-6">
+        <div class="d-flex flex-column flex-md-row align-md-center justify-space-between gap-4">
+          <div class="d-flex align-center gap-3">
+            <v-avatar color="primary" variant="tonal" size="48" rounded="lg">
+              <Activity class="w-6 h-6 text-primary" />
+            </v-avatar>
+            <div>
+              <div class="d-flex align-center gap-2">
+                <h2 class="text-h5 font-weight-bold mb-0">Nhật Ký Hoạt Động</h2>
+                <v-chip size="x-small" color="primary" variant="tonal" class="font-weight-bold">
+                  LGHair Admin
+                </v-chip>
+              </div>
+              <div class="text-subtitle-2 text-medium-emphasis mt-1">
+                Theo dõi, truy vết và ghi nhận lịch sử thao tác hệ thống tự động
+              </div>
             </div>
-          </button>
-        </div>
-      </div>
-    </div>
+          </div>
 
-    <!-- Quick Stats Cards -->
-    <div class="flex-shrink-0 grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 z-10">
-      <!-- Card 1: Today Logs -->
-      <div class="p-5 rounded-md bg-white border border-slate-150 shadow-none flex items-center justify-between relative overflow-hidden transition-all duration-300 hover:scale-[1.01]">
-        <div class="z-10">
-          <p class="text-[9px] font-bold text-slate-400 tracking-wider mb-2">HOẠT ĐỘNG HÔM NAY</p>
-          <h2 class="text-2xl font-bold text-slate-800 leading-tight font-mono">{{ stats.today }} <span class="text-xs font-sans font-normal text-slate-450">mục</span></h2>
-        </div>
-        <div class="p-3 bg-slate-50 border border-slate-150 hidden sm:block">
-          <Clock class="w-5 h-5 text-[#0F172A]" />
-        </div>
-      </div>
+          <div class="d-flex align-center gap-2 flex-wrap">
+            <v-btn
+              variant="outlined"
+              color="grey-darken-1"
+              rounded="lg"
+              class="text-none font-weight-bold"
+              height="40"
+              :loading="isLoading"
+              @click="loadLogs"
+            >
+              <template v-slot:prepend><RotateCcw class="w-4 h-4 mr-1" /></template>
+              Làm mới
+            </v-btn>
 
-      <!-- Card 2: Total Logs -->
-      <div class="p-5 rounded-md bg-white border border-slate-150 shadow-none flex items-center justify-between relative overflow-hidden transition-all duration-300 hover:scale-[1.01]">
-        <div class="z-10">
-          <p class="text-[9px] font-bold text-slate-400 tracking-wider mb-2">TỔNG GHI NHẬN</p>
-          <h2 class="text-2xl font-bold text-[#0F172A] leading-tight font-mono">{{ stats.total }} <span class="text-xs font-sans font-normal text-slate-450">mục</span></h2>
+            <v-btn
+              color="error"
+              variant="tonal"
+              rounded="lg"
+              class="text-none font-weight-bold"
+              height="40"
+              :disabled="rawLogs.length === 0"
+              @click="showClearDialog = true"
+            >
+              <template v-slot:prepend><Trash2 class="w-4 h-4 mr-1" /></template>
+              Dọn sạch nhật ký
+            </v-btn>
+          </div>
         </div>
-        <div class="p-3 bg-slate-50 border border-slate-150 hidden sm:block">
-          <Activity class="w-5 h-5 text-[#0F172A]" />
-        </div>
-      </div>
+      </v-card>
 
-      <!-- Card 3: Success Logs -->
-      <div class="p-5 rounded-md bg-white border border-slate-150 shadow-none flex items-center justify-between relative overflow-hidden transition-all duration-300 hover:scale-[1.01]">
-        <div class="z-10">
-          <p class="text-[9px] font-bold text-slate-400 tracking-wider mb-2">THÀNH CÔNG</p>
-          <h2 class="text-2xl font-bold text-emerald-600 leading-tight font-mono">{{ stats.success }}</h2>
-        </div>
-        <div class="p-3 bg-emerald-50 border border-emerald-100 hidden sm:block">
-          <CheckCircle2 class="w-5 h-5 text-emerald-600" />
-        </div>
-      </div>
+      <!-- ── KPI STATS CARDS ── -->
+      <v-row dense>
+        <!-- Card 1: Today Logs -->
+        <v-col cols="12" sm="6" md="3">
+          <v-card elevation="1" rounded="xl" class="pa-5 border">
+            <div class="d-flex align-center justify-space-between">
+              <div>
+                <div class="text-caption font-weight-bold text-medium-emphasis text-uppercase">Hoạt động hôm nay</div>
+                <div class="d-flex align-baseline gap-2 mt-1">
+                  <span class="text-h4 font-weight-bold font-mono">{{ stats.today }}</span>
+                  <span class="text-caption text-medium-emphasis">bản ghi</span>
+                </div>
+              </div>
+              <v-avatar color="primary" variant="tonal" size="48" rounded="lg">
+                <Activity class="w-6 h-6 text-primary" />
+              </v-avatar>
+            </div>
+          </v-card>
+        </v-col>
 
-      <!-- Card 4: Failed Logs -->
-      <div class="p-5 rounded-md bg-white border border-slate-150 shadow-none flex items-center justify-between relative overflow-hidden transition-all duration-300 hover:scale-[1.01]">
-        <div class="z-10">
-          <p class="text-[9px] font-bold text-slate-400 tracking-wider mb-2">THẤT BẠI / CẢNH BÁO</p>
-          <h2 class="text-2xl font-bold text-red-600 leading-tight font-mono">{{ stats.failed }}</h2>
-        </div>
-        <div class="p-3 bg-red-50 border border-red-100 hidden sm:block">
-          <ShieldAlert class="w-5 h-5 text-red-600" />
-        </div>
-      </div>
-    </div>
+        <!-- Card 2: Total Logs -->
+        <v-col cols="12" sm="6" md="3">
+          <v-card elevation="1" rounded="xl" class="pa-5 border">
+            <div class="d-flex align-center justify-space-between">
+              <div>
+                <div class="text-caption font-weight-bold text-medium-emphasis text-uppercase">Tổng số hoạt động</div>
+                <div class="d-flex align-baseline gap-2 mt-1">
+                  <span class="text-h4 font-weight-bold font-mono">{{ stats.total }}</span>
+                  <span class="text-caption text-medium-emphasis">thao tác</span>
+                </div>
+              </div>
+              <v-avatar color="info" variant="tonal" size="48" rounded="lg">
+                <FileText class="w-6 h-6 text-info" />
+              </v-avatar>
+            </div>
+          </v-card>
+        </v-col>
 
-    <!-- Filters Block -->
-    <div class="flex-shrink-0 bg-white p-5 border border-slate-150 mb-6 z-10">
-      <div class="flex flex-col gap-4">
-        <div class="flex items-center gap-2 border-b border-slate-100 pb-2 mb-1">
-          <Filter class="w-4 h-4 text-[#0F172A]" />
-          <span class="text-xs font-bold text-[#0F172A] uppercase tracking-wider">Bộ lọc tìm kiếm</span>
+        <!-- Card 3: Success Logs -->
+        <v-col cols="12" sm="6" md="3">
+          <v-card elevation="1" rounded="xl" class="pa-5 border">
+            <div class="d-flex align-center justify-space-between">
+              <div>
+                <div class="text-caption font-weight-bold text-medium-emphasis text-uppercase">Thành công</div>
+                <div class="d-flex align-baseline gap-2 mt-1">
+                  <span class="text-h4 font-weight-bold font-mono text-success">{{ stats.success }}</span>
+                  <span class="text-caption text-medium-emphasis">được duyệt</span>
+                </div>
+              </div>
+              <v-avatar color="success" variant="tonal" size="48" rounded="lg">
+                <CheckCircle2 class="w-6 h-6 text-success" />
+              </v-avatar>
+            </div>
+          </v-card>
+        </v-col>
+
+        <!-- Card 4: Failed Logs -->
+        <v-col cols="12" sm="6" md="3">
+          <v-card elevation="1" rounded="xl" class="pa-5 border">
+            <div class="d-flex align-center justify-space-between">
+              <div>
+                <div class="text-caption font-weight-bold text-medium-emphasis text-uppercase">Thất bại / Bị chặn</div>
+                <div class="d-flex align-baseline gap-2 mt-1">
+                  <span class="text-h4 font-weight-bold font-mono text-error">{{ stats.failed }}</span>
+                  <span class="text-caption text-medium-emphasis">cảnh báo</span>
+                </div>
+              </div>
+              <v-avatar color="error" variant="tonal" size="48" rounded="lg">
+                <ShieldAlert class="w-6 h-6 text-error" />
+              </v-avatar>
+            </div>
+          </v-card>
+        </v-col>
+      </v-row>
+
+      <!-- ── FILTERS & TOOLBAR ── -->
+      <v-card variant="outlined" rounded="xl" class="pa-4 bg-surface">
+        <div class="d-flex flex-column flex-md-row align-md-center justify-space-between gap-3 flex-wrap">
+          <div class="d-flex align-center gap-3 flex-wrap flex-grow-1">
+            <!-- Search -->
+            <v-text-field
+              v-model="searchQuery"
+              placeholder="Tìm theo người thực hiện, thao tác, chi tiết..."
+              variant="outlined"
+              density="compact"
+              hide-details
+              clearable
+              rounded="lg"
+              style="min-width: 280px; max-width: 360px;"
+            >
+              <template v-slot:prepend-inner>
+                <Search class="w-4 h-4 text-medium-emphasis mr-1" />
+              </template>
+            </v-text-field>
+
+            <!-- Module Filter -->
+            <v-select
+              v-model="selectedModule"
+              :items="moduleOptions"
+              item-title="label"
+              item-value="value"
+              label="Phân hệ"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              style="min-width: 200px;"
+            ></v-select>
+
+            <!-- Status Filter -->
+            <v-select
+              v-model="selectedStatus"
+              :items="[
+                { label: 'Tất cả trạng thái', value: '' },
+                { label: 'Thành công', value: 'Thành công' },
+                { label: 'Thất bại', value: 'Thất bại' }
+              ]"
+              item-title="label"
+              item-value="value"
+              label="Trạng thái"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              style="width: 170px;"
+            ></v-select>
+
+            <!-- Date Range -->
+            <v-text-field
+              v-model="startDate"
+              type="date"
+              label="Từ ngày"
+              variant="outlined"
+              density="compact"
+              hide-details
+              clearable
+              rounded="lg"
+              style="width: 155px;"
+            ></v-text-field>
+
+            <v-text-field
+              v-model="endDate"
+              type="date"
+              label="Đến ngày"
+              variant="outlined"
+              density="compact"
+              hide-details
+              clearable
+              rounded="lg"
+              style="width: 155px;"
+            ></v-text-field>
+          </div>
+
+          <v-btn
+            variant="text"
+            color="primary"
+            rounded="lg"
+            class="text-none font-weight-bold"
+            height="40"
+            @click="resetFilters"
+          >
+            <template v-slot:prepend><RotateCcw class="w-4 h-4 mr-1" /></template>
+            Đặt lại lọc
+          </v-btn>
         </div>
-        
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
-          <!-- Text Search -->
-          <div class="flex flex-col gap-1.5">
-            <label class="text-[10px] font-bold text-slate-400 uppercase">Tìm kiếm</label>
-            <div class="relative">
-              <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input 
-                v-model="searchQuery" 
-                placeholder="Người thực hiện, mô tả..." 
-                class="w-full h-10 pl-9 pr-7 rounded-md border border-slate-200 text-xs font-medium outline-none focus:border-[#0F172A] bg-slate-50 focus:bg-white text-slate-800"
+      </v-card>
+
+      <!-- ── LOGS DATA TABLE ── -->
+      <v-card variant="outlined" rounded="xl" class="overflow-hidden">
+        <div v-if="isLoading" class="d-flex justify-center align-center py-16">
+          <v-progress-circular indeterminate color="primary" size="48" />
+        </div>
+
+        <div v-else class="overflow-x-auto">
+          <v-table hover>
+            <thead>
+              <tr class="border-b" style="background-color: rgba(var(--v-theme-on-surface), 0.04);">
+                <th class="font-weight-bold text-caption text-left py-3" style="width: 170px;">THỜI GIAN</th>
+                <th class="font-weight-bold text-caption text-left py-3" style="width: 220px;">NGƯỜI THỰC HIỆN</th>
+                <th class="font-weight-bold text-caption text-left py-3" style="width: 160px;">PHÂN HỆ</th>
+                <th class="font-weight-bold text-caption text-left py-3" style="width: 220px;">THAO TÁC</th>
+                <th class="font-weight-bold text-caption text-left py-3" style="min-width: 260px;">CHI TIẾT VẮN TẮT</th>
+                <th class="font-weight-bold text-caption text-center py-3" style="width: 130px;">TRẠNG THÁI</th>
+                <th class="font-weight-bold text-caption text-center py-3" style="width: 100px;">HÀNH ĐỘNG</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="log in pagedLogs"
+                :key="log.id"
+                class="border-b cursor-pointer"
+                @click="openLogDetail(log)"
               >
-              <button v-if="searchQuery" @click="searchQuery = ''" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-450 hover:text-slate-700">
-                <X class="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          <!-- Module Select -->
-          <div class="flex flex-col gap-1.5">
-            <label class="text-[10px] font-bold text-slate-400 uppercase">Phân hệ</label>
-            <div class="relative flex items-center">
-              <select v-model="selectedModule" class="w-full h-10 px-3 rounded-md border border-slate-200 text-xs font-medium outline-none focus:border-[#0F172A] bg-slate-50 appearance-none cursor-pointer text-slate-800">
-                <option value="">Tất cả phân hệ</option>
-                <option value="Nhân sự">Nhân sự</option>
-                <option value="Lương">Lương</option>
-                <option value="Tài khoản">Tài khoản</option>
-                <option value="Dịch vụ">Dịch vụ</option>
-                <option value="Ca làm">Ca làm việc</option>
-              </select>
-              <span class="pointer-events-none absolute right-3 text-[8px] text-[#0F172A]">▼</span>
-            </div>
-          </div>
-
-          <!-- Status Select -->
-          <div class="flex flex-col gap-1.5">
-            <label class="text-[10px] font-bold text-slate-400 uppercase">Trạng thái</label>
-            <div class="relative flex items-center">
-              <select v-model="selectedStatus" class="w-full h-10 px-3 rounded-md border border-slate-200 text-xs font-medium outline-none focus:border-[#0F172A] bg-slate-50 appearance-none cursor-pointer text-slate-800">
-                <option value="">Tất cả trạng thái</option>
-                <option value="Thành công">Thành công</option>
-                <option value="Thất bại">Thất bại / Lỗi</option>
-              </select>
-              <span class="pointer-events-none absolute right-3 text-[8px] text-[#0F172A]">▼</span>
-            </div>
-          </div>
-
-          <!-- Date filters -->
-          <div class="flex flex-col gap-1.5">
-            <label class="text-[10px] font-bold text-slate-400 uppercase">Từ ngày</label>
-            <input type="date" v-model="startDate" class="w-full h-10 px-3 rounded-md border border-slate-200 text-xs font-medium outline-none focus:border-[#0F172A] bg-slate-50 text-slate-800">
-          </div>
-
-          <div class="flex flex-col gap-1.5">
-            <label class="text-[10px] font-bold text-slate-400 uppercase">Đến ngày</label>
-            <input type="date" v-model="endDate" class="w-full h-10 px-3 rounded-md border border-slate-200 text-xs font-medium outline-none focus:border-[#0F172A] bg-slate-50 text-slate-800">
-          </div>
-        </div>
-
-        <div class="flex justify-end gap-3 border-t border-slate-100 pt-3 mt-1">
-          <button 
-            @click="resetFilters" 
-            class="h-9 px-4 text-xs font-bold rounded-md border transition-all cursor-pointer shadow-none hover:opacity-90"
-            style="background-color: #1677ff !important; color: #000000 !important; border-color: #1677ff !important;"
-          >
-            Đặt lại bộ lọc
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Table content -->
-    <div class="flex-1 w-full bg-white rounded-md border border-slate-150 shadow-none relative overflow-hidden flex flex-col z-10">
-      <!-- Loader Overlay -->
-      <div v-if="isLoading" class="absolute inset-0 bg-white/85 backdrop-blur-xs z-50 flex items-center justify-center transition-all">
-        <div class="flex flex-col items-center gap-3">
-          <div class="w-10 h-10 border-2 border-slate-200 border-t-[#0F172A] rounded-full animate-spin"></div>
-          <span class="text-[10px] font-bold text-slate-500 tracking-wider">ĐANG NẠP NHẬT KÝ...</span>
-        </div>
-      </div>
-
-      <!-- Table Body -->
-      <div class="flex-grow overflow-auto custom-scrollbar">
-        <table class="w-full text-left text-xs border-separate border-spacing-0">
-          <thead class="sticky top-0 bg-slate-50/95 backdrop-blur-xs z-10 border-b border-[#1677ff]/20">
-            <tr class="border-b border-[#1677ff]/20">
-              <th class="py-4 px-5 font-bold text-[#0F172A] border-b border-[#1677ff]/20 w-32 bg-slate-50/95 tracking-wider select-none whitespace-nowrap">Thời Gian</th>
-              <th class="py-4 px-5 font-bold text-[#0F172A] border-b border-[#1677ff]/20 w-44 bg-slate-50/95 tracking-wider select-none whitespace-nowrap">Người Thực Hiện</th>
-              <th class="py-4 px-5 font-bold text-[#0F172A] border-b border-[#1677ff]/20 w-36 bg-slate-50/95 tracking-wider select-none whitespace-nowrap">Hành Động</th>
-              <th class="py-4 px-5 font-bold text-[#0F172A] border-b border-[#1677ff]/20 bg-slate-50/95 tracking-wider select-none whitespace-nowrap">Chi Tiết</th>
-              <th class="py-4 px-5 font-bold text-[#0F172A] border-b border-[#1677ff]/20 w-28 text-center bg-slate-50/95 tracking-wider select-none whitespace-nowrap">Phân Hệ</th>
-              <th class="py-4 px-5 font-bold text-[#0F172A] border-b border-[#1677ff]/20 w-24 text-center bg-slate-50/95 tracking-wider select-none whitespace-nowrap">Kết Quả</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100">
-            <tr v-if="!isLoading && pagedLogs.length === 0">
-              <td colspan="6" class="p-16 text-center text-slate-500">
-                <div class="flex flex-col items-center gap-3 max-w-sm mx-auto">
-                  <div class="w-12 h-12 bg-slate-50 rounded-md flex items-center justify-center text-slate-400 border border-slate-200 mb-1">
-                    <Activity class="w-6 h-6 stroke-[1.5px]" />
+                <!-- Timestamp -->
+                <td class="text-caption font-mono text-medium-emphasis">
+                  <div class="d-flex align-center gap-1.5">
+                    <Clock class="w-3.5 h-3.5 text-medium-emphasis" />
+                    {{ formatDate(log.timestamp) }}
                   </div>
-                  <p class="font-bold text-slate-800 text-xs">Không tìm thấy bản ghi nào</p>
-                  <p class="text-[11px] text-slate-400 leading-relaxed">Không tìm thấy hoạt động nào trùng khớp với bộ lọc tìm kiếm hiện tại của bạn.</p>
-                  <button @click="resetFilters" class="mt-2 text-xs font-bold text-[#0F172A] hover:text-[#334155] transition-colors">Đặt lại</button>
+                </td>
+
+                <!-- User & Role -->
+                <td>
+                  <div class="d-flex align-center gap-3">
+                    <v-avatar color="primary" variant="tonal" size="36" rounded="lg" class="font-weight-bold text-caption">
+                      {{ getInitials(log.username) }}
+                    </v-avatar>
+                    <div>
+                      <div class="font-weight-bold text-body-2">{{ log.username }}</div>
+                      <div class="text-caption text-medium-emphasis">{{ log.role }}</div>
+                    </div>
+                  </div>
+                </td>
+
+                <!-- Module -->
+                <td>
+                  <v-chip size="small" :color="getModuleColor(log.module)" variant="tonal" class="font-weight-bold text-caption">
+                    {{ log.module }}
+                  </v-chip>
+                </td>
+
+                <!-- Action -->
+                <td>
+                  <div class="font-weight-bold text-body-2">{{ log.action }}</div>
+                </td>
+
+                <!-- Short Details -->
+                <td>
+                  <div class="text-caption text-medium-emphasis text-truncate font-italic" style="max-width: 320px;" :title="log.details">
+                    {{ log.details.split('\n')[0] }}
+                  </div>
+                </td>
+
+                <!-- Status -->
+                <td class="text-center">
+                  <v-chip
+                    size="small"
+                    :color="log.status === 'Thành công' ? 'success' : 'error'"
+                    variant="tonal"
+                    class="font-weight-bold text-caption text-uppercase"
+                  >
+                    <template v-slot:prepend>
+                      <CheckCircle2 v-if="log.status === 'Thành công'" class="w-3.5 h-3.5 mr-1" />
+                      <XCircle v-else class="w-3.5 h-3.5 mr-1" />
+                    </template>
+                    {{ log.status }}
+                  </v-chip>
+                </td>
+
+                <!-- Actions -->
+                <td class="text-center" @click.stop>
+                  <v-btn
+                    variant="outlined"
+                    color="primary"
+                    size="small"
+                    rounded="lg"
+                    class="text-none font-weight-bold"
+                    @click="openLogDetail(log)"
+                  >
+                    Chi tiết
+                  </v-btn>
+                </td>
+              </tr>
+
+              <tr v-if="pagedLogs.length === 0">
+                <td colspan="7" class="text-center py-16 text-medium-emphasis">
+                  <Activity class="w-10 h-10 mx-auto mb-2 text-slate-300 opacity-50" />
+                  <div class="font-weight-bold text-body-2">Không tìm thấy nhật ký hoạt động nào phù hợp</div>
+                </td>
+              </tr>
+            </tbody>
+          </v-table>
+        </div>
+
+        <!-- Pagination -->
+        <v-divider></v-divider>
+        <div class="pa-4 d-flex align-center justify-space-between flex-wrap gap-2">
+          <div class="text-caption text-medium-emphasis">
+            Hiển thị <strong class="text-high-emphasis">{{ pagedLogs.length }}</strong> trên tổng số <strong class="text-high-emphasis">{{ filteredLogs.length }}</strong> hoạt động
+          </div>
+          <v-pagination
+            v-model="currentPage"
+            :length="totalPages"
+            :total-visible="5"
+            density="comfortable"
+            rounded="lg"
+            size="small"
+          ></v-pagination>
+        </div>
+      </v-card>
+
+      <!-- ── DETAIL DIALOG ── -->
+      <v-dialog v-model="showDetailModal" max-width="640px" scrollable>
+        <v-card v-if="selectedLogDetail" rounded="xl" class="overflow-hidden">
+          <!-- Header -->
+          <v-card-title class="pa-6 border-b d-flex align-center justify-space-between bg-surface">
+            <div class="d-flex align-center gap-3">
+              <v-avatar
+                :color="selectedLogDetail.status === 'Thành công' ? 'success' : 'error'"
+                variant="tonal"
+                size="44"
+                rounded="lg"
+              >
+                <component
+                  :is="selectedLogDetail.status === 'Thành công' ? CheckCircle2 : ShieldAlert"
+                  class="w-5 h-5"
+                />
+              </v-avatar>
+              <div>
+                <h3 class="text-h6 font-weight-bold mb-0">Chi Tiết Hoạt Động</h3>
+                <div class="text-caption font-mono text-medium-emphasis">ID: {{ selectedLogDetail.id }}</div>
+              </div>
+            </div>
+            <v-btn icon variant="text" density="comfortable" @click="closeLogDetail">
+              <X class="w-5 h-5" />
+            </v-btn>
+          </v-card-title>
+
+          <!-- Body -->
+          <v-card-text class="pa-6 d-flex flex-column gap-4">
+            <!-- Metadata Row -->
+            <v-row dense>
+              <v-col cols="12" sm="6">
+                <v-card variant="tonal" rounded="lg" class="pa-3">
+                  <div class="text-caption text-medium-emphasis font-weight-bold text-uppercase mb-1">Người thực hiện</div>
+                  <div class="font-weight-bold text-body-2">{{ selectedLogDetail.username }}</div>
+                  <div class="text-caption text-medium-emphasis">{{ selectedLogDetail.role }}</div>
+                </v-card>
+              </v-col>
+              <v-col cols="12" sm="6">
+                <v-card variant="tonal" rounded="lg" class="pa-3">
+                  <div class="text-caption text-medium-emphasis font-weight-bold text-uppercase mb-1">Thời gian ghi nhận</div>
+                  <div class="font-weight-bold text-body-2 font-mono">{{ formatDate(selectedLogDetail.timestamp) }}</div>
+                  <div class="mt-1">
+                    <v-chip size="x-small" :color="getModuleColor(selectedLogDetail.module)" variant="flat" class="font-weight-bold mr-1">
+                      {{ selectedLogDetail.module }}
+                    </v-chip>
+                    <v-chip size="x-small" :color="selectedLogDetail.status === 'Thành công' ? 'success' : 'error'" variant="flat" class="font-weight-bold">
+                      {{ selectedLogDetail.status }}
+                    </v-chip>
+                  </div>
+                </v-card>
+              </v-col>
+            </v-row>
+
+            <!-- Action Name -->
+            <div>
+              <div class="text-caption font-weight-bold text-medium-emphasis text-uppercase mb-1">Hành động</div>
+              <v-text-field
+                :model-value="selectedLogDetail.action"
+                variant="outlined"
+                density="compact"
+                readonly
+                rounded="lg"
+                hide-details
+              ></v-text-field>
+            </div>
+
+            <!-- Structured Changes / Details -->
+            <div>
+              <div class="text-caption font-weight-bold text-medium-emphasis text-uppercase mb-2">Chi tiết thay đổi</div>
+
+              <!-- If we have parsed diff items -->
+              <div v-if="logDetailParsed.items.length > 0" class="d-flex flex-column gap-2">
+                <div v-if="logDetailParsed.title" class="text-caption font-weight-bold text-high-emphasis mb-1">
+                  {{ logDetailParsed.title }}
                 </div>
-              </td>
-            </tr>
 
-            <tr 
-              v-for="log in pagedLogs" 
-              :key="log.id"
-              class="hover:bg-[#1677ff]/3 border-b border-slate-100 transition-all duration-150"
-            >
-              <!-- Time -->
-              <td class="py-4 px-5 text-slate-450 font-medium font-mono whitespace-nowrap">
-                {{ formatDate(log.timestamp) }}
-              </td>
-
-              <!-- Actor -->
-              <td class="py-4 px-5">
-                <div class="flex items-center gap-2.5">
-                  <div class="w-8 h-8 rounded-md bg-slate-50 border border-slate-200 text-[#0F172A] flex items-center justify-center font-bold text-xs">
-                    <User class="w-4 h-4" />
+                <v-card
+                  v-for="(item, idx) in logDetailParsed.items"
+                  :key="idx"
+                  variant="outlined"
+                  rounded="lg"
+                  class="pa-3"
+                >
+                  <div class="d-flex align-center justify-space-between mb-1">
+                    <span class="text-caption font-weight-bold text-primary">{{ item.field }}</span>
                   </div>
-                  <div>
-                    <div class="font-semibold text-slate-800 text-xs mb-0.5">{{ log.username }}</div>
-                    <div class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{{ log.role }}</div>
+
+                  <div v-if="item.isDiff" class="d-flex align-center gap-2 flex-wrap">
+                    <v-chip size="small" color="error" variant="tonal" class="text-caption text-decoration-line-through">
+                      {{ item.oldVal }}
+                    </v-chip>
+                    <ArrowRight class="w-4 h-4 text-medium-emphasis" />
+                    <v-chip size="small" color="success" variant="tonal" class="text-caption font-weight-bold">
+                      {{ item.newVal }}
+                    </v-chip>
                   </div>
-                </div>
-              </td>
+                  <div v-else class="text-body-2 font-weight-medium">
+                    {{ item.newVal }}
+                  </div>
+                </v-card>
+              </div>
 
-              <!-- Action -->
-              <td class="py-4 px-5 font-bold text-slate-700 whitespace-nowrap">
-                {{ log.action }}
-              </td>
+              <!-- Fallback to plain textarea -->
+              <v-textarea
+                v-else
+                :model-value="selectedLogDetail.details"
+                variant="outlined"
+                density="compact"
+                readonly
+                rounded="lg"
+                rows="4"
+                hide-details
+              ></v-textarea>
+            </div>
+          </v-card-text>
 
-              <!-- Details -->
-              <td class="py-4 px-5 text-slate-550 leading-relaxed font-medium">
-                {{ log.details }}
-              </td>
+          <!-- Footer -->
+          <v-divider></v-divider>
+          <v-card-actions class="pa-4 justify-end">
+            <v-btn variant="outlined" rounded="lg" class="text-none font-weight-bold px-5" @click="closeLogDetail">
+              Đóng
+            </v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
 
-              <!-- Module Badge -->
-              <td class="py-4 px-5 text-center">
-                <span 
-                  class="inline-flex items-center px-2 py-0.5 rounded-md text-[8px] font-extrabold uppercase tracking-widest border"
-                  :class="getModuleBadgeClass(log.module)"
-                >
-                  {{ log.module }}
-                </span>
-              </td>
-
-              <!-- Status -->
-              <td class="py-4 px-5 text-center whitespace-nowrap">
-                <span 
-                  v-if="log.status === 'Thành công'" 
-                  class="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 border border-emerald-100"
-                >
-                  ● Thành công
-                </span>
-                <span 
-                  v-else 
-                  class="inline-flex items-center gap-1 text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 border border-red-100"
-                >
-                  ● Thất bại
-                </span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Pagination Footer -->
-      <div v-if="totalPages > 1" class="flex-shrink-0 bg-slate-50/80 px-6 py-4 flex items-center justify-between border-t border-slate-150 print:hidden">
-        <div class="text-[10px] font-bold text-slate-450 uppercase">
-          Trang {{ currentPage }} / {{ totalPages }} (Tổng {{ filteredLogs.length }} dòng)
-        </div>
-        <div class="flex items-center gap-2">
-          <button 
-            @click="changePage(currentPage - 1)" 
-            :disabled="currentPage === 1"
-            class="h-8 px-3 text-[11px] font-bold text-slate-650 bg-white border border-slate-200 hover:border-slate-350 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            Trước
-          </button>
-          <div class="flex items-center gap-1">
-            <button 
-              v-for="p in visiblePages" 
-              :key="p" 
-              @click="changePage(p)"
-              class="w-8 h-8 text-[11px] font-bold transition-all"
-              :class="currentPage === p ? 'bg-[#0F172A] text-white border border-[#0F172A]' : 'bg-white text-slate-650 border border-slate-200 hover:border-slate-350'"
-            >
-              {{ p }}
-            </button>
+      <!-- ── CONFIRM CLEAR DIALOG ── -->
+      <v-dialog v-model="showClearDialog" max-width="440px">
+        <v-card rounded="xl" class="pa-6">
+          <div class="d-flex align-center gap-3 mb-4">
+            <v-avatar color="error" variant="tonal" size="48" rounded="lg">
+              <Trash2 class="w-6 h-6 text-error" />
+            </v-avatar>
+            <div>
+              <h3 class="text-h6 font-weight-bold mb-0">Xác Nhận Dọn Dẹp?</h3>
+              <p class="text-caption text-medium-emphasis mb-0">Hành động không thể hoàn tác</p>
+            </div>
           </div>
-          <button 
-            @click="changePage(currentPage + 1)" 
-            :disabled="currentPage === totalPages"
-            class="h-8 px-3 text-[11px] font-bold text-slate-655 bg-white border border-slate-200 hover:border-slate-355 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-          >
-            Sau
-          </button>
-        </div>
-      </div>
+
+          <p class="text-body-2 mb-6 text-medium-emphasis">
+            Bạn có chắc chắn muốn xóa toàn bộ lịch sử nhật ký hoạt động này khỏi hệ thống không?
+          </p>
+
+          <div class="d-flex justify-end gap-2">
+            <v-btn
+              variant="outlined"
+              rounded="lg"
+              class="text-none font-weight-bold"
+              @click="showClearDialog = false"
+            >
+              Hủy bỏ
+            </v-btn>
+            <v-btn
+              color="error"
+              variant="flat"
+              rounded="lg"
+              class="text-none font-weight-bold text-white"
+              @click="handleConfirmClear"
+            >
+              Đồng ý xóa
+            </v-btn>
+          </div>
+        </v-card>
+      </v-dialog>
+
     </div>
-  </div>
+  </v-container>
 </template>
-
-<style scoped>
-/* Scoped custom classes for scrollbar */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: #f8fafc;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-</style>

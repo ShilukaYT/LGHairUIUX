@@ -1,6 +1,7 @@
 <template>
-  <div v-if="isOpen" class="fixed inset-0 z-50 flex items-center justify-center transition-opacity" style="background-color: rgba(0, 0, 0, 0.5);">
-    <div class="bg-white max-w-md w-full mx-4 rounded-none shadow-xl overflow-hidden animate-in fade-in zoom-in duration-300">
+  <Teleport to="body">
+    <div v-if="isOpen" class="fixed inset-0 z-[100] flex items-center justify-center transition-opacity" style="background-color: rgba(0, 0, 0, 0.5);">
+      <div class="bg-white max-w-md w-full mx-4 rounded-none shadow-xl overflow-hidden animate-in fade-in zoom-in duration-300">
       <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-[#fcfcfc]">
         <h3 class="font-heading text-sm uppercase tracking-widest font-medium">Tùy chọn thanh toán</h3>
         <button @click="$emit('close')" class="text-gray-400 hover:text-black transition-colors">
@@ -47,6 +48,7 @@
 
           <!-- Chỉ mua sản phẩm -->
           <button 
+            v-if="!hideProductOnly"
             @click="confirmOption('CHI_MUA_SAN_PHAM', null)"
             class="w-full text-left p-4 border border-gray-200 hover:border-black transition-colors group flex items-start gap-4"
           >
@@ -60,8 +62,9 @@
           </button>
         </div>
       </div>
+      </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -69,6 +72,10 @@ import { X, CheckCircle2, Calendar, ShoppingBag } from 'lucide-vue-next';
 
 defineProps({
   isOpen: {
+    type: Boolean,
+    default: false
+  },
+  hideProductOnly: {
     type: Boolean,
     default: false
   }

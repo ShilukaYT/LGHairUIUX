@@ -221,6 +221,7 @@ const attendanceStatusOptions = computed(() => {
     // Nếu đã có mặt thì mới hiện Rời ca
     return [
       { title: 'Rời ca', value: 3 },
+      { title: 'Nghỉ phép', value: 4 },
       { title: 'Vắng mặt', value: 5 },
       { title: 'Muộn', value: 6 }
     ]
@@ -228,6 +229,7 @@ const attendanceStatusOptions = computed(() => {
     // Nếu chưa có mặt thì không thể Rời ca
     return [
       { title: 'Có mặt', value: 2 },
+      { title: 'Nghỉ phép', value: 4 },
       { title: 'Vắng mặt', value: 5 },
       { title: 'Muộn', value: 6 }
     ]
@@ -302,6 +304,7 @@ const submitAttendance = async () => {
   const statusLabels: Record<number, string> = {
     2: "Có mặt",
     3: "Rời ca",
+    4: "Nghỉ phép",
     5: "Vắng mặt",
     6: "Muộn",
     7: "Nghỉ lễ"
@@ -314,9 +317,10 @@ const submitAttendance = async () => {
     })
     
     if (res.data.success) {
+      const reasonStr = attendanceForm.value.ghiChu?.trim() ? ` - Lý do: ${attendanceForm.value.ghiChu.trim()}` : '';
       logActivity(
         "Điểm danh nhân viên",
-        `Đã cập nhật trạng thái điểm danh của nhân viên ${attendanceForm.value.hoTenNv} (Mã: ${attendanceForm.value.maNv}) trong ngày ${attendanceForm.value.ngayLamViec} (Ca: ${attendanceForm.value.caLam}) thành "${label}"`,
+        `Đã cập nhật trạng thái điểm danh của nhân viên ${attendanceForm.value.hoTenNv} (Mã: ${attendanceForm.value.maNv}) trong ngày ${attendanceForm.value.ngayLamViec} (Ca: ${attendanceForm.value.caLam}) thành "${label}"${reasonStr}`,
         "Điểm danh"
       );
       isAttendanceModalOpen.value = false
@@ -324,9 +328,10 @@ const submitAttendance = async () => {
       fetchLichLamViec()
     }
   } catch (error: any) {
+    const reasonStr = attendanceForm.value.ghiChu?.trim() ? ` - Lý do: ${attendanceForm.value.ghiChu.trim()}` : '';
     logActivity(
       "Điểm danh nhân viên",
-      `Thất bại khi cập nhật trạng thái điểm danh của nhân viên ${attendanceForm.value.hoTenNv} (Mã: ${attendanceForm.value.maNv}) thành "${label}" - Lỗi: ${error.message || ''}`,
+      `Thất bại khi cập nhật trạng thái điểm danh của nhân viên ${attendanceForm.value.hoTenNv} (Mã: ${attendanceForm.value.maNv}) thành "${label}"${reasonStr} - Lỗi: ${error.message || ''}`,
       "Điểm danh",
       "Thất bại"
     );
@@ -362,9 +367,14 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
   <v-container fluid class="pa-6 fill-height align-start" style="min-height: 100vh;">
     <v-card width="100%" elevation="2" rounded="xl">
       <v-card-title class="d-flex flex-column flex-md-row align-md-center justify-space-between pa-6" style="white-space: normal;">
-        <div>
-          <h2 class="text-h5 font-weight-bold mb-1">Điểm Danh Ca Làm</h2>
-          <div class="text-subtitle-2 text-medium-emphasis">Điểm danh sự hiện diện của {{ nhanViens.length }} thợ</div>
+        <div class="d-flex align-center gap-3">
+          <v-avatar color="primary" variant="tonal" size="48" rounded="lg">
+            <Fingerprint class="w-6 h-6 text-primary" />
+          </v-avatar>
+          <div>
+            <h2 class="text-h5 font-weight-bold mb-1">Điểm Danh Ca Làm</h2>
+            <div class="text-subtitle-2 text-medium-emphasis">Điểm danh sự hiện diện của {{ nhanViens.length }} thợ</div>
+          </div>
         </div>
         
         <div class="d-flex align-center gap-3 mt-4 mt-md-0 flex-wrap">
@@ -447,7 +457,18 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
                </v-chip>
 
                <v-btn
-                  v-if="getShiftData(item.maNv, date).caLam === 'Nghỉ lễ' || getShiftData(item.maNv, date).trangThai === 7"
+                  v-if="getShiftData(item.maNv, date).caLam === 'Nghỉ phép' || getShiftData(item.maNv, date).trangThai === 4"
+                  color="purple"
+                  variant="flat"
+                  size="40"
+                  class="rounded-lg font-weight-bold text-white elevation-1"
+                  disabled
+                >
+                  Phép
+                </v-btn>
+
+                <v-btn
+                  v-else-if="getShiftData(item.maNv, date).caLam === 'Nghỉ lễ' || getShiftData(item.maNv, date).trangThai === 7"
                   color="error"
                   variant="flat"
                   size="40"

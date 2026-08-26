@@ -46,7 +46,7 @@ const formatDate = (dateStr?: string) => {
 // --- LOGIC CA LÀM ---
 const getEmployeeScheduleInfo = (maNv: string) => {
   const allShifts = lichLamViecs.value.filter(s => s.maNv === maNv);
-  const shifts = allShifts.filter(s => s.caLam !== 'Chưa xếp' && s.caLam !== 'Nghỉ (Chưa xếp)' && s.caLam !== 'Nghỉ lễ');
+  const shifts = allShifts.filter(s => s.caLam !== 'Chưa xếp' && s.caLam !== 'Nghỉ (Chưa xếp)' && s.caLam !== 'Nghỉ lễ' && s.caLam !== 'Nghỉ phép');
   
   if (shifts.length === 0) return { start: null, end: null, status: 'Chưa xếp', shifts: allShifts };
   
@@ -103,6 +103,9 @@ const headers = [
   { title: 'Hành động', key: 'actions', align: 'center', sortable: false },
 ] as const
 
+// --- HÀNH ĐỘNG SỬA / TẠO LỊCH ---
+const isEditModalOpen = ref(false)
+
 const openCreateModal = async (item: any) => {
   editState.value.maNv = item.maNv;
   editState.value.tenNv = item.hoTenNv;
@@ -125,8 +128,6 @@ const openCreateModal = async (item: any) => {
   isEditModalOpen.value = true;
 }
 
-// --- HÀNH ĐỘNG SỬA LỊCH ---
-const isEditModalOpen = ref(false)
 const editState = ref({
   maNv: '',
   tenNv: '',
@@ -135,7 +136,8 @@ const editState = ref({
   caLamApDung: 'Ca sáng (7h-17h)',
   selectedDaysOfWeek: [1, 2, 3, 4, 5, 6, 0] as number[],
   affectedDates: [] as string[],
-  isCreating: false
+  isCreating: false,
+  lyDo: ''
 })
 
 const khoangThoiGianOptions = computed(() => {
@@ -144,10 +146,11 @@ const khoangThoiGianOptions = computed(() => {
       { title: '30 ngày tới', value: 30 }
     ]
   }
-  if (editState.value.caLamApDung === 'Nghỉ lễ') {
+  if (editState.value.caLamApDung === 'Nghỉ phép') {
     return [
       { title: 'Trong ngày (1 ngày)', value: 1 },
-      { title: '7 ngày tới', value: 7 }
+      { title: '3 ngày tới', value: 3 },
+      { title: '7 ngày tới (tối đa)', value: 7 }
     ]
   }
   return [
@@ -163,8 +166,8 @@ watch(() => editState.value.caLamApDung, (newVal) => {
     editState.value.khoangThoiGian = 30;
     return;
   }
-  if (newVal === 'Nghỉ lễ' && editState.value.khoangThoiGian > 7) {
-    editState.value.khoangThoiGian = 7;
+  if (newVal === 'Nghỉ phép' && editState.value.khoangThoiGian > 7) {
+    editState.value.khoangThoiGian = 1;
   }
 })
 
@@ -183,7 +186,7 @@ const caLamOptions = [
   'Ca sáng (Part-time)',
   'Ca chiều (Part-time)',
   'Ca tối (Part-time)',
-  'Nghỉ lễ',
+  'Nghỉ phép',
   'Chưa xếp'
 ]
 
@@ -198,20 +201,22 @@ const generateEditRows = () => {
   
   const dates = [];
   const start = new Date(editState.value.ngayBatDauSua);
+  const isContinuousLeave = editState.value.caLamApDung === 'Nghỉ phép';
+
   for (let i=0; i<editState.value.khoangThoiGian; i++) {
      const d = new Date(start);
      d.setDate(start.getDate() + i);
      
      if (endLimit && d > endLimit) break;
      
-     if (editState.value.khoangThoiGian === 1 || editState.value.selectedDaysOfWeek.includes(d.getDay())) {
+     if (editState.value.khoangThoiGian === 1 || isContinuousLeave || editState.value.selectedDaysOfWeek.includes(d.getDay())) {
          dates.push(d.toLocaleDateString('sv-SE'));
      }
   }
   editState.value.affectedDates = dates;
 }
 
-watch([() => editState.value.ngayBatDauSua, () => editState.value.khoangThoiGian, () => editState.value.selectedDaysOfWeek], () => {
+watch([() => editState.value.ngayBatDauSua, () => editState.value.khoangThoiGian, () => editState.value.selectedDaysOfWeek, () => editState.value.caLamApDung], () => {
   if (isEditModalOpen.value) {
     generateEditRows()
   }
@@ -225,6 +230,7 @@ const openEditModal = (item: any) => {
   editState.value.khoangThoiGian = 1
   editState.value.caLamApDung = 'Ca sáng (7h-17h)'
   editState.value.selectedDaysOfWeek = [1, 2, 3, 4, 5, 6]
+  editState.value.lyDo = ''
   generateEditRows()
   isEditModalOpen.value = true
 }
@@ -232,6 +238,10 @@ const openEditModal = (item: any) => {
 const submitEditSchedule = async () => {
   if (editState.value.ngayBatDauSua < todayStr.value) {
     showSnackbar("Không thể thiết lập ca làm việc cho ngày trong quá khứ.", "error");
+    return;
+  }
+  if (editState.value.caLamApDung === 'Nghỉ phép' && !editState.value.lyDo?.trim()) {
+    showSnackbar("Vui lòng nhập lý do nghỉ phép.", "error");
     return;
   }
   isSubmitting.value = true;
@@ -243,11 +253,13 @@ const submitEditSchedule = async () => {
             return axios.post(`${API_BASE_URL}/tao-moi`, { 
                maNv: editState.value.maNv, 
                ngayLamViec: dateStr, 
-               caLam: editState.value.caLamApDung
+               caLam: editState.value.caLamApDung,
+               ghiChu: editState.value.lyDo,
+               lyDo: editState.value.lyDo
             });
         }));
      }
-     logActivity("Sửa lịch ca làm", `Đã sửa lịch làm việc của thợ ${editState.value.tenNv} (Mã: ${editState.value.maNv}) trong ${editState.value.affectedDates.length} ngày từ ${editState.value.ngayBatDauSua} thành ${editState.value.caLamApDung}`, "Ca làm");
+     logActivity("Sửa lịch ca làm", `Đã sửa lịch làm việc của thợ ${editState.value.tenNv} (Mã: ${editState.value.maNv}) trong ${editState.value.affectedDates.length} ngày từ ${editState.value.ngayBatDauSua} thành ${editState.value.caLamApDung}${editState.value.lyDo ? ' (Lý do: ' + editState.value.lyDo + ')' : ''}`, "Ca làm");
      showSnackbar("Cập nhật lịch làm việc thành công!");
      isEditModalOpen.value = false;
      await fetchLichLamViec();
@@ -375,9 +387,14 @@ watch(() => route.query.search, (newSearch) => {
   <v-container fluid class="pa-6 fill-height align-start" style="min-height: 100vh;">
     <v-card width="100%" elevation="2" rounded="xl">
       <v-card-title class="d-flex flex-column flex-md-row align-md-center justify-space-between pa-6">
-        <div>
-          <h2 class="text-h5 font-weight-bold mb-1">Quản Lý Ca Làm</h2>
-          <div class="text-subtitle-2 text-medium-emphasis">Quản lý lịch làm việc của {{ nhanViens.length }} thợ</div>
+        <div class="d-flex align-center gap-3">
+          <v-avatar color="primary" variant="tonal" size="48" rounded="lg">
+            <CalendarDays class="w-6 h-6 text-primary" />
+          </v-avatar>
+          <div>
+            <h2 class="text-h5 font-weight-bold mb-1">Quản Lý Ca Làm</h2>
+            <div class="text-subtitle-2 text-medium-emphasis">Quản lý lịch làm việc của {{ nhanViens.length }} thợ</div>
+          </div>
         </div>
         
         <div class="d-flex align-center gap-3 mt-4 mt-md-0 flex-wrap">
@@ -547,7 +564,19 @@ watch(() => route.query.search, (newSearch) => {
                   rounded="lg"
                 ></v-select>
               </v-col>
-              <v-col cols="12" class="pb-0" v-if="editState.khoangThoiGian > 1">
+              <v-col cols="12" class="pb-0" v-if="editState.caLamApDung === 'Nghỉ phép'">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Lý do nghỉ phép <span class="text-error">*</span></div>
+                <v-textarea
+                  v-model="editState.lyDo"
+                  placeholder="Nhập lý do nghỉ phép cụ thể (ốm đau, việc bận gia đình...)"
+                  rows="2"
+                  variant="outlined"
+                  density="comfortable"
+                  rounded="lg"
+                  hide-details="auto"
+                ></v-textarea>
+              </v-col>
+              <v-col cols="12" class="pb-0" v-if="editState.khoangThoiGian > 1 && editState.caLamApDung !== 'Nghỉ phép'">
                 <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Các ngày áp dụng trong tuần</div>
                 <v-chip-group
                   v-model="editState.selectedDaysOfWeek"
