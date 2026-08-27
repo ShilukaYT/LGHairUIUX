@@ -7,6 +7,7 @@ import { useRouter, useRoute } from 'vue-router'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useChatStore } from '@/stores/useChatStore'
+import { useBookingBasketStore } from '@/stores/useBookingBasketStore'
 
 // ── Config ──────────────────────────────────────────────
 const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
@@ -20,6 +21,7 @@ const route = useRoute()
 // ── State ───────────────────────────────────────────────
 const isOpen        = ref(false)
 const chatStore     = useChatStore()
+const bookingStore  = useBookingBasketStore()
 // Đồng bộ trạng thái mở/đóng chat vào store để TryOn button né ra
 watch(isOpen, (val) => { chatStore.isChatOpen = val })
 const isConnecting  = ref(false)  // đang tạo phòng chat live
@@ -621,7 +623,14 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="fixed bottom-5 right-5 z-[100] flex flex-col items-end sm:bottom-6 sm:right-6 lg:bottom-10 lg:right-12">
+  <div
+    :class="[
+      'fixed right-5 z-[100] flex flex-col items-end sm:right-6 lg:right-12 transition-all duration-300 ease-out',
+      bookingStore.isEmpty
+        ? 'bottom-5 sm:bottom-6 lg:bottom-10'
+        : 'bottom-[76px] sm:bottom-[80px] lg:bottom-[96px]'
+    ]"
+  >
 
     <transition
       enter-active-class="transition duration-300 ease-out"

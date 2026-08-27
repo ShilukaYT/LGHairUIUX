@@ -3,13 +3,16 @@ import { ref, onMounted, watch, computed, reactive, onUnmounted } from 'vue'
 import axios from 'axios'
 import {
   Search, FileDown, Eye, X, Printer, ShoppingBag, Scissors,
-  FileText, RotateCcw, Filter, CheckCircle, AlertCircle, Clock, XCircle
+  FileText, RotateCcw, Filter, CheckCircle, AlertCircle, Clock, XCircle,
+  PackageCheck, PackageX, AlertTriangle, ChevronDown, QrCode
 } from 'lucide-vue-next'
+import Swal from 'sweetalert2'
 import { logActivity } from '@/utils/activityLogger'
 import ExcelJS from 'exceljs'
 import { saveAs } from 'file-saver'
 import { useTheme } from 'vuetify'
 import { useCustomizerStore } from '@/stores/customizer'
+import ModalVietQRHoanTien from './ModalVietQRHoanTien.vue'
 
 const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
 const API_BASE_URL = `${API}/api/admin/hoa-don`
@@ -85,7 +88,11 @@ const statusFilterOptions = [
   { title: 'Chờ xử lý / Đã cọc 10%', value: '1' },
   { title: 'Đang giao / Đã thanh toán', value: '2' },
   { title: 'Đã giao hàng / Hoàn thành', value: '3' },
-  { title: 'Đã Hủy', value: '0' }
+  { title: 'Đang hoàn hàng (Chờ về kho)', value: '4' },
+  { title: 'Đã nhận hàng (Đã nhập kho - Chờ hoàn tiền)', value: '5' },
+  { title: 'Đã hoàn tiền (Hoàn tất 100%)', value: '6' },
+  { title: 'Đã Hủy (Hủy trước khi gửi)', value: '0' },
+  { title: 'Tất cả đơn Hủy & Hoàn hàng (0, 4, 5, 6)', value: 'CANCEL_GROUP' }
 ]
 
 const getAuthHeaders = () => {
@@ -113,26 +120,6 @@ const fetchHoaDons = async () => {
     })
 
     if (res.data.success) {
-      let dashboardSpMap = new Map()
-      try {
-        const dbRes = await axios.get(`${API}/api/ThongKe/admin-dashboard`, {
-          params: {
-            startDate: filter.value.tuNgay,
-            endDate: filter.value.denNgay,
-            searchMaHd: searchQuery.value
-          },
-          headers: getAuthHeaders()
-        })
-        if (dbRes.data && dbRes.data.hoaDonSanPham) {
-          dbRes.data.hoaDonSanPham.forEach((hd: any) => {
-            const ma = String(hd.maHd || hd.MaHd || '').toUpperCase()
-            dashboardSpMap.set(ma, hd.chiTiet || hd.ChiTiet)
-          })
-        }
-      } catch (err) {
-        console.error('Lỗi khi tải thông tin chi tiết từ dashboard:', err)
-      }
-
       const allData = [
         ...(res.data.hoaDonSanPham || []),
         ...(res.data.hoaDonDichVu || [])
@@ -140,8 +127,9 @@ const fetchHoaDons = async () => {
 
       allData.forEach((h: any) => {
         const ma = String(h.maHd || '').toUpperCase()
-        if (dashboardSpMap.has(ma)) {
-          h.chiTiet = dashboardSpMap.get(ma)
+        const localStatus = localStorage.getItem(`hoan_hang_status_${ma}`)
+        if (localStatus) {
+          h.trangThai = Number(localStatus)
         }
       })
 
@@ -154,6 +142,30 @@ const fetchHoaDons = async () => {
         const ma = String(h.maHd || '').toUpperCase()
         return !ma.startsWith('SP') && !ma.startsWith('HDSP')
       })
+
+      // Tải chi tiết sản phẩm chạy ngầm ở nền sau, hiển thị bảng ngay lập tức không bị giật/chậm
+      axios.get(`${API}/api/ThongKe/admin-dashboard`, {
+        params: {
+          startDate: filter.value.tuNgay,
+          endDate: filter.value.denNgay,
+          searchMaHd: searchQuery.value
+        },
+        headers: getAuthHeaders()
+      }).then((dbRes) => {
+        if (dbRes.data && dbRes.data.hoaDonSanPham) {
+          const dashboardSpMap = new Map()
+          dbRes.data.hoaDonSanPham.forEach((hd: any) => {
+            const ma = String(hd.maHd || hd.MaHd || '').toUpperCase()
+            dashboardSpMap.set(ma, hd.chiTiet || hd.ChiTiet)
+          })
+          hoaDonSanPham.value.forEach((h: any) => {
+            const ma = String(h.maHd || '').toUpperCase()
+            if (dashboardSpMap.has(ma)) {
+              h.chiTiet = dashboardSpMap.get(ma)
+            }
+          })
+        }
+      }).catch(() => {})
     }
   } catch (e: any) {
     console.error(e)
@@ -178,18 +190,112 @@ const getStatusText = (status: number, maHd: string = '') => {
   const map: Record<number, string> = {
     0: 'Đã Hủy',
     1: laDonSp ? 'Chờ xử lý' : 'Đã cọc 10%',
-    2: laDonSp ? 'Đang giao' : 'Đã thanh toán',
-    3: laDonSp ? 'Đã giao hàng' : 'Hoàn thành'
+    2: laDonSp ? 'Đang giao hàng' : 'Đã thanh toán',
+    3: laDonSp ? 'Đã giao hàng' : 'Hoàn thành',
+    4: 'Đang hoàn hàng',
+    5: 'Đã nhận hàng (Chờ hoàn tiền)',
+    6: 'Đã hoàn tiền'
   }
   return map[status] || 'N/A'
 }
 
+const getStatusBadgeConfig = (status: number, maHd: string = '') => {
+  const isDark = theme.global.current.value.dark || document.documentElement.classList.contains('dark')
+  const laDonSp = maHd.startsWith('SP') || maHd.startsWith('HDSP')
+
+  switch (status) {
+    case 0: // Đã Hủy (Đỏ)
+      return {
+        label: 'Đã Hủy',
+        color: 'error',
+        bgColor: isDark ? 'rgba(239, 68, 68, 0.18)' : '#fee2e2',
+        textColor: isDark ? '#fca5a5' : '#b91c1c',
+        borderColor: isDark ? 'rgba(239, 68, 68, 0.35)' : '#fca5a5',
+        dotColor: '#ef4444'
+      }
+    case 1: // Chờ xử lý / Đã cọc (Vàng Cam)
+      return {
+        label: laDonSp ? 'Chờ xử lý' : 'Đã cọc 10%',
+        color: 'warning',
+        bgColor: isDark ? 'rgba(245, 158, 11, 0.18)' : '#fef3c7',
+        textColor: isDark ? '#fde68a' : '#b45309',
+        borderColor: isDark ? 'rgba(245, 158, 11, 0.35)' : '#fde68a',
+        dotColor: '#f59e0b'
+      }
+    case 2: // Đang giao / Đã thanh toán (Xanh dương)
+      return {
+        label: laDonSp ? 'Đang giao hàng' : 'Đã thanh toán',
+        color: 'info',
+        bgColor: isDark ? 'rgba(14, 165, 233, 0.18)' : '#e0f2fe',
+        textColor: isDark ? '#7dd3fc' : '#0369a1',
+        borderColor: isDark ? 'rgba(14, 165, 233, 0.35)' : '#bae6fd',
+        dotColor: '#0ea5e9'
+      }
+    case 3: // Đã giao hàng / Hoàn thành (Xanh lá)
+      return {
+        label: laDonSp ? 'Đã giao hàng' : 'Hoàn thành',
+        color: 'success',
+        bgColor: isDark ? 'rgba(34, 197, 94, 0.18)' : '#dcfce7',
+        textColor: isDark ? '#86efac' : '#15803d',
+        borderColor: isDark ? 'rgba(34, 197, 94, 0.35)' : '#bbf7d0',
+        dotColor: '#22c55e'
+      }
+    case 4: // Đang hoàn hàng (Cam đậm)
+      return {
+        label: 'Đang hoàn hàng',
+        color: 'orange',
+        bgColor: isDark ? 'rgba(249, 115, 22, 0.18)' : '#ffedd5',
+        textColor: isDark ? '#fed7aa' : '#c2410c',
+        borderColor: isDark ? 'rgba(249, 115, 22, 0.35)' : '#fed7aa',
+        dotColor: '#f97316'
+      }
+    case 5: // Đã nhận hàng nhập kho - Chờ hoàn tiền (Tím)
+      return {
+        label: 'Đã nhận hàng',
+        color: 'purple',
+        bgColor: isDark ? 'rgba(168, 85, 247, 0.18)' : '#f3e8ff',
+        textColor: isDark ? '#d8b4fe' : '#7e22ce',
+        borderColor: isDark ? 'rgba(168, 85, 247, 0.35)' : '#e9d5ff',
+        dotColor: '#a855f7'
+      }
+    case 6: // Đã hoàn tiền (Xanh ngọc Emerald)
+      return {
+        label: 'Đã hoàn tiền',
+        color: 'emerald',
+        bgColor: isDark ? 'rgba(16, 185, 129, 0.18)' : '#d1fae5',
+        textColor: isDark ? '#6ee7b7' : '#047857',
+        borderColor: isDark ? 'rgba(16, 185, 129, 0.35)' : '#a7f3d0',
+        dotColor: '#10b981'
+      }
+    default:
+      return {
+        label: 'N/A',
+        color: 'grey',
+        bgColor: isDark ? 'rgba(148, 163, 184, 0.18)' : '#f1f5f9',
+        textColor: isDark ? '#cbd5e1' : '#475569',
+        borderColor: isDark ? 'rgba(148, 163, 184, 0.35)' : '#cbd5e1',
+        dotColor: '#94a3b8'
+      }
+  }
+}
+
 const getStatusSelectOptions = (maHd: string = '') => {
   const laDonSp = maHd.startsWith('SP') || maHd.startsWith('HDSP')
+  if (laDonSp) {
+    return [
+      { title: 'Chờ xử lý', value: 1 },
+      { title: 'Đang giao hàng', value: 2 },
+      { title: 'Đã giao hàng (Hoàn thành)', value: 3 },
+      { title: 'Đang hoàn hàng (Chờ về kho)', value: 4 },
+      { title: 'Đã nhận hàng (Chờ hoàn tiền)', value: 5 },
+      { title: 'Đã hoàn tiền (Hoàn tất 100%)', value: 6 },
+      { title: 'Đã Hủy', value: 0 }
+    ]
+  }
   return [
-    { title: laDonSp ? 'Chờ xử lý' : 'Đã cọc 10%', value: 1 },
-    { title: laDonSp ? 'Đang giao' : 'Đã thanh toán', value: 2 },
-    { title: laDonSp ? 'Đã giao hàng' : 'Hoàn thành', value: 3 },
+    { title: 'Đã cọc 10%', value: 1 },
+    { title: 'Đã thanh toán', value: 2 },
+    { title: 'Hoàn thành', value: 3 },
     { title: 'Đã Hủy', value: 0 }
   ]
 }
@@ -200,23 +306,67 @@ const changeInvoiceStatus = async (maHd: string, newStatus: number) => {
     allData.find((h) => h.maHd === maHd) ||
     (selectedHd.value && selectedHd.value.maHd === maHd ? selectedHd.value : null)
 
-  if (currentHd && (currentHd.trangThai === 3 || currentHd.trangThai === 0)) {
-    showNotification('Đơn hàng đã hoàn thành hoặc đã hủy. Không thể thay đổi trạng thái.', 'warning')
-    return
+  if (currentHd && (currentHd.trangThai === 3 || currentHd.trangThai === 0 || currentHd.trangThai === 6)) {
+    if (newStatus !== currentHd.trangThai) {
+      showNotification('Đơn hàng đã hoàn tất / đã hủy / đã hoàn tiền. Không thể thay đổi.', 'warning')
+      return
+    }
+  }
+
+  let ghiChuLyDo = ''
+
+  if (newStatus === 4) {
+    const { value: reason, isConfirmed } = await Swal.fire({
+      title: 'Xác nhận Đang hoàn hàng?',
+      input: 'text',
+      inputLabel: 'Lý do hoàn hàng (Khách bom hàng, không nghe máy, từ chối nhận...):',
+      inputPlaceholder: 'Nhập lý do quay đầu hàng...',
+      showCancelButton: true,
+      confirmButtonText: 'Xác nhận Đang hoàn',
+      cancelButtonText: 'Đóng',
+      confirmButtonColor: '#d97706',
+      inputValidator: (val) => {
+        if (!val || !val.trim()) return 'Vui lòng nhập lý do hoàn hàng!'
+      }
+    })
+    if (!isConfirmed) return
+    ghiChuLyDo = reason || ''
+  } else if (newStatus === 5) {
+    const result = await Swal.fire({
+      title: 'Xác nhận Đã nhận hàng hoàn?',
+      html: `Bạn xác nhận <b>Salon đã nhận lại kiện hàng #${maHd}</b> từ Shipper và tiến hành <b>tự động nhập lại số lượng vào kho</b>?`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Đã nhận hàng & Nhập kho',
+      cancelButtonText: 'Đóng',
+      confirmButtonColor: '#7c3aed'
+    })
+    if (!result.isConfirmed) return
+    ghiChuLyDo = 'Đã nhận lại kiện hàng hoàn và nhập kho'
+  } else if (newStatus === 0) {
+    const { value: reason, isConfirmed } = await Swal.fire({
+      title: 'Xác nhận Hủy hóa đơn?',
+      input: 'text',
+      inputLabel: 'Lý do hủy đơn hàng:',
+      inputPlaceholder: 'Nhập lý do hủy...',
+      showCancelButton: true,
+      confirmButtonText: 'Xác nhận Hủy đơn',
+      cancelButtonText: 'Đóng',
+      confirmButtonColor: '#dc2626'
+    })
+    if (!isConfirmed) return
+    ghiChuLyDo = reason || 'Hủy đơn hàng'
   }
 
   try {
-    const payload = { trangThai: newStatus }
+    const payload = { 
+      trangThai: newStatus,
+      ghiChu: ghiChuLyDo
+    }
 
-    const res = await axios
-      .patch(`${API_BASE_URL}/doi-trang-thai/${maHd}`, payload, {
-        headers: getAuthHeaders()
-      })
-      .catch(async () => {
-        return await axios.patch(`${API_BASE_URL}/doi-trang-thai/${maHd}`, newStatus, {
-          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }
-        })
-      })
+    const res = await axios.patch(`${API_BASE_URL}/doi-trang-thai/${maHd}`, payload, {
+      headers: getAuthHeaders()
+    })
 
     if (res.data.success) {
       logActivity(
@@ -224,7 +374,14 @@ const changeInvoiceStatus = async (maHd: string, newStatus: number) => {
         `Đã chuyển trạng thái hóa đơn ${maHd} sang "${getStatusText(newStatus, maHd)}"`,
         'Hóa đơn'
       )
-      showNotification(`Đã cập nhật trạng thái hóa đơn ${maHd} sang "${getStatusText(newStatus, maHd)}"`, 'success')
+      await Swal.fire({
+        title: 'Thành công!',
+        text: `Đã cập nhật trạng thái hóa đơn #${maHd} sang "${getStatusText(newStatus, maHd)}"`,
+        icon: 'success',
+        timer: 2000,
+        showConfirmButton: false
+      })
+      showNotification(`Đã cập nhật trạng thái hóa đơn ${maHd} thành công!`, 'success')
       await fetchHoaDons()
       if (selectedHd.value && selectedHd.value.maHd === maHd) {
         selectedHd.value.trangThai = newStatus
@@ -237,7 +394,7 @@ const changeInvoiceStatus = async (maHd: string, newStatus: number) => {
       'Hóa đơn',
       'Thất bại'
     )
-    showNotification('Lỗi khi cập nhật trạng thái đơn hàng. Vui lòng kiểm tra lại quyền hạn tài khoản.', 'error')
+    showNotification(e.response?.data?.message || 'Lỗi khi cập nhật trạng thái đơn hàng.', 'error')
   }
 }
 
@@ -269,6 +426,21 @@ const exportExcel = async () => {
 
 const isModalOpen = ref(false)
 const selectedHd = ref<any>(null)
+
+// ── STATE MODAL VIETQR HOÀN TIỀN RIÊNG BIỆT ──
+const isVietQRModalOpen = ref(false)
+const vietQRSelectedMaHd = ref('')
+const vietQRSelectedAmount = ref(0)
+
+const openVietQRRefundModal = (maHd: string, amount: number = 0) => {
+  vietQRSelectedMaHd.value = maHd
+  vietQRSelectedAmount.value = amount
+  isVietQRModalOpen.value = true
+}
+
+const handleVietQRUpdated = () => {
+  fetchHoaDons()
+}
 
 const viewDetail = async (maHd: string) => {
   try {
@@ -522,7 +694,11 @@ const filteredInvoices = computed(() => {
   const list = activeTab.value === 'dichVu' ? hoaDonDichVu.value : hoaDonSanPham.value
   return list.filter((h) => {
     if (selectedStatusFilter.value !== '') {
-      if (String(h.trangThai) !== selectedStatusFilter.value) return false
+      if (selectedStatusFilter.value === 'CANCEL_GROUP') {
+        if (![0, 4, 5, 6].includes(Number(h.trangThai))) return false
+      } else if (String(h.trangThai) !== selectedStatusFilter.value) {
+        return false
+      }
     }
     return true
   })
@@ -748,33 +924,91 @@ const totalPages = computed(() => {
               </td>
 
               <td class="py-3 text-center">
-                <div class="d-flex justify-center">
-                  <v-select
-                    :model-value="hd.trangThai"
-                    :items="getStatusSelectOptions(hd.maHd)"
-                    item-title="title"
-                    item-value="value"
-                    variant="outlined"
-                    density="compact"
-                    hide-details
-                    style="max-width: 190px;"
-                    :disabled="hd.trangThai === 3 || hd.trangThai === 0"
-                    @update:model-value="(val: any) => changeInvoiceStatus(hd.maHd, Number(val))"
-                  ></v-select>
+                <div class="d-flex justify-center align-center">
+                  <!-- TH 1: Đơn đã chốt (3: Đã giao, 0: Đã hủy, 5: Đã nhập kho) => Chip tĩnh màu sắc rõ nét, không bao giờ bị cắt chữ -->
+                  <div
+                    v-if="hd.trangThai === 3 || hd.trangThai === 0 || hd.trangThai === 5"
+                    class="status-chip d-inline-flex align-center px-3 py-1.5 rounded-pill font-weight-bold text-caption text-no-wrap"
+                    :style="{
+                      backgroundColor: getStatusBadgeConfig(hd.trangThai, hd.maHd).bgColor,
+                      color: getStatusBadgeConfig(hd.trangThai, hd.maHd).textColor,
+                      border: '1px solid ' + getStatusBadgeConfig(hd.trangThai, hd.maHd).borderColor
+                    }"
+                  >
+                    <span class="status-dot mr-1.5" :style="{ backgroundColor: getStatusBadgeConfig(hd.trangThai, hd.maHd).dotColor }"></span>
+                    {{ getStatusText(hd.trangThai, hd.maHd) }}
+                  </div>
+
+                  <!-- TH 2: Đơn có thể đổi trạng thái (1: Chờ xử lý, 2: Đang giao, 4: Đang hoàn hàng) => Nút menu chuyển trạng thái màu sắc nổi bật -->
+                  <v-menu v-else location="bottom center" transition="scale-transition">
+                    <template v-slot:activator="{ props }">
+                      <button
+                        v-bind="props"
+                        type="button"
+                        class="status-btn d-inline-flex align-center px-3 py-1.5 rounded-pill font-weight-bold text-caption text-no-wrap cursor-pointer"
+                        :style="{
+                          backgroundColor: getStatusBadgeConfig(hd.trangThai, hd.maHd).bgColor,
+                          color: getStatusBadgeConfig(hd.trangThai, hd.maHd).textColor,
+                          border: '1px solid ' + getStatusBadgeConfig(hd.trangThai, hd.maHd).borderColor
+                        }"
+                      >
+                        <span class="status-dot mr-1.5" :style="{ backgroundColor: getStatusBadgeConfig(hd.trangThai, hd.maHd).dotColor }"></span>
+                        <span>{{ getStatusText(hd.trangThai, hd.maHd) }}</span>
+                        <ChevronDown class="w-3.5 h-3.5 ml-1 opacity-80" />
+                      </button>
+                    </template>
+
+                    <v-list density="compact" rounded="xl" class="py-1.5 border elevation-4" min-width="200">
+                      <div class="px-3 py-1 text-caption text-medium-emphasis font-weight-bold border-b mb-1">
+                        CHUYỂN TRẠNG THÁI
+                      </div>
+                      <v-list-item
+                        v-for="opt in getStatusSelectOptions(hd.maHd)"
+                        :key="opt.value"
+                        :value="opt.value"
+                        :active="opt.value === hd.trangThai"
+                        @click="changeInvoiceStatus(hd.maHd, Number(opt.value))"
+                        rounded="lg"
+                        class="mx-1 my-0.5"
+                      >
+                        <template v-slot:prepend>
+                          <span class="status-dot mr-2" :style="{ backgroundColor: getStatusBadgeConfig(opt.value, hd.maHd).dotColor }"></span>
+                        </template>
+                        <v-list-item-title class="text-caption font-weight-bold">
+                          {{ opt.title }}
+                        </v-list-item-title>
+                      </v-list-item>
+                    </v-list>
+                  </v-menu>
                 </div>
               </td>
 
               <td class="py-3 text-center">
-                <v-btn
-                  icon
-                  variant="text"
-                  color="primary"
-                  size="small"
-                  title="Xem chi tiết hóa đơn"
-                  @click="viewDetail(hd.maHd)"
-                >
-                  <Eye class="w-4 h-4" />
-                </v-btn>
+                <div class="d-inline-flex align-center gap-1">
+                  <v-btn
+                    icon
+                    variant="text"
+                    color="primary"
+                    size="small"
+                    title="Xem chi tiết hóa đơn"
+                    @click="viewDetail(hd.maHd)"
+                  >
+                    <Eye class="w-4 h-4" />
+                  </v-btn>
+
+                  <!-- Nút mở nhanh Modal VietQR Hoàn tiền cho các đơn 4 hoặc 5 -->
+                  <v-btn
+                    v-if="hd.trangThai === 4 || hd.trangThai === 5"
+                    icon
+                    variant="tonal"
+                    color="amber-darken-3"
+                    size="small"
+                    title="Quét VietQR chuyển tiền hoàn"
+                    @click="openVietQRRefundModal(hd.maHd, hd.thanhTien)"
+                  >
+                    <QrCode class="w-4 h-4" />
+                  </v-btn>
+                </div>
               </td>
             </tr>
           </template>
@@ -871,6 +1105,84 @@ const totalPages = computed(() => {
               PHIẾU THANH TOÁN HÓA ĐƠN
             </div>
 
+            <!-- Cảnh báo trạng thái Hoàn hàng / Đã Hủy -->
+            <v-alert
+              v-if="selectedHd.trangThai === 4"
+              type="warning"
+              variant="tonal"
+              rounded="xl"
+              class="print:hidden my-2"
+            >
+              <div class="d-flex flex-column flex-sm-row align-start align-sm-center justify-space-between gap-3">
+                <div>
+                  <div class="font-weight-black text-subtitle-2 text-amber-900">📦 ĐƠN HÀNG ĐANG HOÀN VỀ (ĐANG QUAY ĐẦU)</div>
+                  <div class="text-caption text-amber-800">
+                    Kiện hàng đang được Shipper vận chuyển quay về Salon. Sau khi đã nhận và kiểm tra hàng, hãy bấm xác nhận để tự động nhập kho lại.
+                  </div>
+                </div>
+                <div class="d-flex align-center gap-2 flex-wrap flex-shrink-0">
+                  <v-btn
+                    color="amber-darken-3"
+                    variant="flat"
+                    rounded="lg"
+                    class="text-none font-weight-bold"
+                    @click="openVietQRRefundModal(selectedHd.maHd, selectedHd.thanhTien)"
+                  >
+                    <QrCode class="w-4 h-4 mr-1.5" />
+                    Quét VietQR Hoàn Tiền
+                  </v-btn>
+                  <v-btn
+                    color="purple"
+                    variant="flat"
+                    rounded="lg"
+                    class="text-none font-weight-bold"
+                    @click="changeInvoiceStatus(selectedHd.maHd, 5)"
+                  >
+                    <PackageCheck class="w-4 h-4 mr-1.5" />
+                    Đã nhận hàng & Nhập kho
+                  </v-btn>
+                </div>
+              </div>
+            </v-alert>
+
+            <v-alert
+              v-else-if="selectedHd.trangThai === 5"
+              color="purple"
+              variant="tonal"
+              rounded="xl"
+              class="print:hidden my-2"
+            >
+              <div class="d-flex align-center justify-space-between flex-wrap gap-2">
+                <div class="d-flex align-center gap-2">
+                  <PackageCheck class="w-5 h-5 text-purple" />
+                  <div>
+                    <div class="font-weight-black text-subtitle-2 text-purple-900">🟣 ĐÃ NHẬN HÀNG HOÀN & NHẬP KHO</div>
+                    <div class="text-caption text-purple-800">Kiện hàng đã được kiểm tra và cộng trả lại số lượng vào kho thành công.</div>
+                  </div>
+                </div>
+                <v-btn
+                  color="purple-darken-1"
+                  variant="outlined"
+                  rounded="lg"
+                  class="text-none font-weight-bold"
+                  @click="openVietQRRefundModal(selectedHd.maHd, selectedHd.thanhTien)"
+                >
+                  <QrCode class="w-4 h-4 mr-1.5" />
+                  Xem VietQR Hoàn Tiền
+                </v-btn>
+              </div>
+            </v-alert>
+
+            <v-alert
+              v-else-if="selectedHd.trangThai === 0"
+              type="error"
+              variant="tonal"
+              rounded="xl"
+              class="print:hidden my-2"
+            >
+              <div class="font-weight-black text-subtitle-2">🔴 ĐƠN HÀNG ĐÃ HỦY</div>
+            </v-alert>
+
             <!-- Info Cards Grid (Desktop View) -->
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-xl border print:hidden" style="background-color: rgba(var(--v-theme-on-surface), 0.03);">
               <div class="d-flex flex-column gap-1">
@@ -937,19 +1249,65 @@ const totalPages = computed(() => {
 
             <!-- Quick Status Update Row in Modal -->
             <div class="print:hidden border-t border-dashed pt-4 d-flex flex-column flex-sm-row align-center justify-space-between gap-3">
-              <span class="text-caption font-weight-bold uppercase text-medium-emphasis">CẬP NHẬT TRẠNG THÁI NHANH:</span>
-              <v-select
-                :model-value="selectedHd.trangThai"
-                :items="getStatusSelectOptions(selectedHd.maHd)"
-                item-title="title"
-                item-value="value"
-                variant="outlined"
-                density="compact"
-                hide-details
-                style="max-width: 220px;"
-                :disabled="selectedHd.trangThai === 3 || selectedHd.trangThai === 0"
-                @update:model-value="(val: any) => changeInvoiceStatus(selectedHd.maHd, Number(val))"
-              ></v-select>
+              <span class="text-caption font-weight-bold uppercase text-medium-emphasis">TRẠNG THÁI HIỆN TẠI:</span>
+              
+              <div class="d-flex align-center gap-2">
+                <!-- Đơn đã chốt (3, 0, 5) -->
+                <div
+                  v-if="selectedHd.trangThai === 3 || selectedHd.trangThai === 0 || selectedHd.trangThai === 5"
+                  class="status-chip d-inline-flex align-center px-4 py-2 rounded-pill font-weight-bold text-body-2"
+                  :style="{
+                    backgroundColor: getStatusBadgeConfig(selectedHd.trangThai, selectedHd.maHd).bgColor,
+                    color: getStatusBadgeConfig(selectedHd.trangThai, selectedHd.maHd).textColor,
+                    border: '1px solid ' + getStatusBadgeConfig(selectedHd.trangThai, selectedHd.maHd).borderColor
+                  }"
+                >
+                  <span class="status-dot mr-2" :style="{ backgroundColor: getStatusBadgeConfig(selectedHd.trangThai, selectedHd.maHd).dotColor }"></span>
+                  {{ getStatusText(selectedHd.trangThai, selectedHd.maHd) }}
+                </div>
+
+                <!-- Đơn có thể đổi (1, 2, 4) -->
+                <v-menu v-else location="bottom end" transition="scale-transition">
+                  <template v-slot:activator="{ props }">
+                    <button
+                      v-bind="props"
+                      type="button"
+                      class="status-btn d-inline-flex align-center px-4 py-2 rounded-pill font-weight-bold text-body-2 cursor-pointer"
+                      :style="{
+                        backgroundColor: getStatusBadgeConfig(selectedHd.trangThai, selectedHd.maHd).bgColor,
+                        color: getStatusBadgeConfig(selectedHd.trangThai, selectedHd.maHd).textColor,
+                        border: '1px solid ' + getStatusBadgeConfig(selectedHd.trangThai, selectedHd.maHd).borderColor
+                      }"
+                    >
+                      <span class="status-dot mr-2" :style="{ backgroundColor: getStatusBadgeConfig(selectedHd.trangThai, selectedHd.maHd).dotColor }"></span>
+                      <span>{{ getStatusText(selectedHd.trangThai, selectedHd.maHd) }}</span>
+                      <ChevronDown class="w-4 h-4 ml-1.5 opacity-80" />
+                    </button>
+                  </template>
+
+                  <v-list density="compact" rounded="xl" class="py-1.5 border elevation-4" min-width="220">
+                    <div class="px-3 py-1 text-caption text-medium-emphasis font-weight-bold border-b mb-1">
+                      CHỌN TRẠNG THÁI MỚI
+                    </div>
+                    <v-list-item
+                      v-for="opt in getStatusSelectOptions(selectedHd.maHd)"
+                      :key="opt.value"
+                      :value="opt.value"
+                      :active="opt.value === selectedHd.trangThai"
+                      @click="changeInvoiceStatus(selectedHd.maHd, Number(opt.value))"
+                      rounded="lg"
+                      class="mx-1 my-0.5"
+                    >
+                      <template v-slot:prepend>
+                        <span class="status-dot mr-2" :style="{ backgroundColor: getStatusBadgeConfig(opt.value, selectedHd.maHd).dotColor }"></span>
+                      </template>
+                      <v-list-item-title class="text-caption font-weight-bold">
+                        {{ opt.title }}
+                      </v-list-item-title>
+                    </v-list-item>
+                  </v-list>
+                </v-menu>
+              </div>
             </div>
 
             <!-- Revenue Totals -->
@@ -992,6 +1350,15 @@ const totalPages = computed(() => {
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- ═══════ MODAL VIETQR HOÀN TIỀN RIÊNG BIỆT ═══════ -->
+    <ModalVietQRHoanTien
+      :is-open="isVietQRModalOpen"
+      :ma-hd="vietQRSelectedMaHd"
+      :tong-tien="vietQRSelectedAmount"
+      @close="isVietQRModalOpen = false"
+      @updated="handleVietQRUpdated"
+    />
   </v-container>
 </template>
 
@@ -1000,6 +1367,41 @@ const totalPages = computed(() => {
 :global(.v-theme--dark .v-main),
 :global(.v-theme--dark .v-application) {
   background-color: #141416 !important;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-chip {
+  line-height: 1.2;
+  transition: all 0.2s ease;
+  user-select: none;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.status-btn {
+  line-height: 1.2;
+  transition: all 0.2s ease;
+  user-select: none;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  outline: none;
+}
+
+.status-btn:hover {
+  filter: brightness(0.95);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+}
+
+.status-btn:active {
+  transform: translateY(0);
 }
 </style>
 

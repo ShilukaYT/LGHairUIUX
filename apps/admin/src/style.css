@@ -149,6 +149,10 @@
   border-bottom-right-radius: 1.25rem !important;
 }
 
+.swal2-container {
+  z-index: 10000000 !important;
+}
+
 .swal2-popup {
   border-radius: 1.25rem !important;
   overflow: hidden !important;

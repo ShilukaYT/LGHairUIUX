@@ -3,7 +3,7 @@ import { ref, computed, onMounted } from "vue";
 import axios from "axios";
 import { Search, RotateCcw, FileText } from "lucide-vue-next";
 
-const API = import.meta.env.VITE_API_URL;
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196';
 
 // ══ SNACKBAR (Vuetify) ══════════════════════════════════════════════
 const snackbar = ref({ show: false, text: "", color: "success" });

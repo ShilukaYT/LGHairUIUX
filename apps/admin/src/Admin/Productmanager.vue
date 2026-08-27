@@ -8,7 +8,7 @@ import {
   Check, X, RotateCcw, Package
 } from "lucide-vue-next";
 
-const API = import.meta.env.VITE_API_URL;
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196';
 
 // ── DARK / LIGHT MODE (đồng bộ với ProfileDD - Cài đặt Sáng/Tối) ──
 const vuetifyTheme = useTheme();

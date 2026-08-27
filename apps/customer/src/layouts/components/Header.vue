@@ -16,9 +16,17 @@ const currentUser = ref<any>(null);
 let checkSessionInterval: ReturnType<typeof setInterval>;
 
 const cartCount = ref(0);
+const searchQuery = ref('');
 const wishlistStore = useWishlistStore();
 const bookingBasketStore = useBookingBasketStore();
 const wishlistCount = computed(() => (wishlistStore.favoriteProducts?.length || 0) + (wishlistStore.favoriteServices?.length || 0) + (wishlistStore.favoriteEmployees?.length || 0));
+
+const handleSearch = () => {
+  if (searchQuery.value.trim()) {
+    router.push({ name: 'shop', query: { q: searchQuery.value.trim() } });
+    mobileMenuOpen.value = false;
+  }
+};
 
 
 
@@ -179,7 +187,6 @@ onUnmounted(() => {
 });
 // ===== TÌM KIẾM SẢN PHẨM INLINE =====
 const dataStore = useDataStore();
-const searchQuery = ref('');
 const showDropdown = ref(false);
 
 // Lọc sản phẩm theo tên khi gõ
@@ -460,7 +467,7 @@ const onSearchBlur = () => { setTimeout(() => { showDropdown.value = false; }, 2
                   <router-link :to="{ name: 'favorite_employees' }" class="block px-6 py-2.5 text-[11px] uppercase tracking-widest text-gray-600 hover:text-black hover:bg-gray-50 transition-colors">
                     Chuyên Viên Yêu Thích
                   </router-link>
-                  <router-link :to="{ name: 'profile' }" class="block px-6 py-2.5 text-[11px] uppercase tracking-widest text-gray-600 hover:text-black hover:bg-gray-50 transition-colors">
+                  <router-link :to="{ name: 'profile', query: { tab: 'orders' } }" class="block px-6 py-2.5 text-[11px] uppercase tracking-widest text-gray-600 hover:text-black hover:bg-gray-50 transition-colors">
                     Đơn Hàng
                   </router-link>
                   <div class="h-px bg-gray-100 my-2"></div>
