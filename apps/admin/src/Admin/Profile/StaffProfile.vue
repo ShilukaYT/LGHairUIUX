@@ -4,6 +4,24 @@ import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import { logActivity } from '@/utils/activityLogger';
+import {
+  Camera,
+  Plus,
+  Mail,
+  Phone,
+  MapPin,
+  User,
+  Briefcase,
+  ShieldCheck,
+  Calendar,
+  Lock,
+  KeyRound,
+  Eye,
+  EyeOff,
+  CreditCard,
+  AtSign,
+  CheckCircle2
+} from 'lucide-vue-next';
 
 interface StaffInfo {
   maNv: string;
@@ -199,40 +217,48 @@ onMounted(fetchProfile);
       <v-card-text class="pa-6">
         <div class="d-flex align-center ga-5 flex-wrap">
           <!-- Avatar -->
-          <div class="avatar-wrapper">
+          <div class="avatar-wrapper" @click="triggerFileSelect" title="Nhấn để đổi ảnh đại diện">
             <v-avatar size="96" class="profile-avatar">
               <v-img :src="displayAvatar" cover />
+              <div class="avatar-overlay">
+                <Camera class="w-6 h-6 text-white" />
+              </div>
             </v-avatar>
-            <v-btn
-              icon
-              size="x-small"
-              color="white"
+            <!-- Nút dấu cộng (+) chỉnh sửa ảnh -->
+            <button
+              type="button"
               class="avatar-edit-btn"
-              elevation="3"
-              @click="triggerFileSelect"
+              title="Chọn ảnh mới"
+              @click.stop="triggerFileSelect"
             >
-              <v-icon size="14" color="grey-darken-2">mdi-camera</v-icon>
-            </v-btn>
+              <Plus class="w-4 h-4 text-white" :stroke-width="2.5" />
+            </button>
           </div>
 
           <!-- Info -->
           <div class="flex-grow-1">
             <div class="d-flex align-center ga-2 flex-wrap mb-1">
               <span class="text-h5 font-weight-bold">{{ staffData.hoTenNv }}</span>
-              <v-chip size="small" color="success" variant="tonal" prepend-icon="mdi-check-circle">
+              <v-chip size="small" color="success" variant="tonal" class="font-weight-medium">
+                <template #prepend>
+                  <CheckCircle2 class="w-3.5 h-3.5 mr-1 text-success" />
+                </template>
                 Hoạt động
+              </v-chip>
+              <v-chip v-if="selectedFile" size="small" color="primary" variant="flat" class="font-weight-medium">
+                Đã chọn ảnh mới (Chưa lưu)
               </v-chip>
             </div>
             <p class="text-body-2 text-medium-emphasis mb-3">
               {{ staffData.tenLoaiNv || 'Nhân viên' }} &bull; #{{ staffData.maNv }}
             </p>
             <div class="d-flex flex-wrap ga-4">
-              <span class="d-flex align-center ga-1 text-body-2 text-medium-emphasis">
-                <v-icon size="16" color="grey">mdi-email-outline</v-icon>
+              <span class="d-flex align-center ga-1.5 text-body-2 text-medium-emphasis">
+                <Mail class="w-4 h-4 text-grey" />
                 {{ staffData.email }}
               </span>
-              <span class="d-flex align-center ga-1 text-body-2 text-medium-emphasis">
-                <v-icon size="16" color="grey">mdi-phone-outline</v-icon>
+              <span class="d-flex align-center ga-1.5 text-body-2 text-medium-emphasis">
+                <Phone class="w-4 h-4 text-grey" />
                 {{ staffData.sdt }}
               </span>
             </div>
@@ -248,7 +274,7 @@ onMounted(fetchProfile);
         <v-card elevation="0" border>
           <v-card-item class="px-5 py-4 border-b">
             <template #prepend>
-              <v-icon color="primary" size="18">mdi-account-outline</v-icon>
+              <User class="w-4.5 h-4.5 text-primary mr-2" />
             </template>
             <v-card-title class="text-body-1 font-weight-bold">Thông tin cá nhân</v-card-title>
           </v-card-item>
@@ -262,9 +288,12 @@ onMounted(fetchProfile);
                   label="Họ và tên"
                   variant="outlined"
                   density="comfortable"
-                  prepend-inner-icon="mdi-account-outline"
                   color="primary"
-                />
+                >
+                  <template #prepend-inner>
+                    <User class="w-4 h-4 text-grey mr-1" />
+                  </template>
+                </v-text-field>
               </v-col>
 
               <!-- Số điện thoại -->
@@ -274,9 +303,12 @@ onMounted(fetchProfile);
                   label="Số điện thoại"
                   variant="outlined"
                   density="comfortable"
-                  prepend-inner-icon="mdi-phone-outline"
                   color="primary"
-                />
+                >
+                  <template #prepend-inner>
+                    <Phone class="w-4 h-4 text-grey mr-1" />
+                  </template>
+                </v-text-field>
               </v-col>
 
               <!-- Địa chỉ -->
@@ -286,9 +318,12 @@ onMounted(fetchProfile);
                   label="Địa chỉ thường trú"
                   variant="outlined"
                   density="comfortable"
-                  prepend-inner-icon="mdi-map-marker-outline"
                   color="primary"
-                />
+                >
+                  <template #prepend-inner>
+                    <MapPin class="w-4 h-4 text-grey mr-1" />
+                  </template>
+                </v-text-field>
               </v-col>
 
               <!-- CCCD -->
@@ -298,12 +333,15 @@ onMounted(fetchProfile);
                   label="Số CCCD"
                   variant="outlined"
                   density="comfortable"
-                  prepend-inner-icon="mdi-card-account-details-outline"
                   readonly
                   bg-color="grey-lighten-4"
                   hint="Không thể thay đổi"
                   persistent-hint
-                />
+                >
+                  <template #prepend-inner>
+                    <CreditCard class="w-4 h-4 text-grey mr-1" />
+                  </template>
+                </v-text-field>
               </v-col>
 
               <!-- Giới tính -->
@@ -314,9 +352,12 @@ onMounted(fetchProfile);
                   :items="['Nam', 'Nữ', 'Khác']"
                   variant="outlined"
                   density="comfortable"
-                  prepend-inner-icon="mdi-gender-male-female"
                   color="primary"
-                />
+                >
+                  <template #prepend-inner>
+                    <User class="w-4 h-4 text-grey mr-1" />
+                  </template>
+                </v-select>
               </v-col>
             </v-row>
           </v-card-text>
@@ -329,7 +370,7 @@ onMounted(fetchProfile);
               variant="elevated"
               :loading="isSaving"
               :disabled="isSaving"
-              class="text-none text-no-wrap"
+              class="text-none text-no-wrap font-weight-bold"
               min-width="220"
               @click="handleUpdateProfile"
             >Lưu thay đổi hồ sơ</v-btn>
@@ -344,7 +385,7 @@ onMounted(fetchProfile);
         <v-card elevation="0" border class="mb-4">
           <v-card-item class="px-5 py-4 border-b">
             <template #prepend>
-              <v-icon color="warning" size="18">mdi-briefcase-outline</v-icon>
+              <Briefcase class="w-4.5 h-4.5 text-warning mr-2" />
             </template>
             <v-card-title class="text-body-1 font-weight-bold">Tài khoản &amp; Công việc</v-card-title>
           </v-card-item>
@@ -355,15 +396,18 @@ onMounted(fetchProfile);
               label="Tên đăng nhập"
               variant="outlined"
               density="comfortable"
-              prepend-inner-icon="mdi-at"
               color="primary"
               class="mb-3"
-            />
+            >
+              <template #prepend-inner>
+                <AtSign class="w-4 h-4 text-grey mr-1" />
+              </template>
+            </v-text-field>
 
             <v-list density="compact" class="pa-0">
               <v-list-item class="px-0">
                 <template #prepend>
-                  <v-icon size="16" color="grey" class="mr-2">mdi-shield-account-outline</v-icon>
+                  <ShieldCheck class="w-4 h-4 text-grey mr-2" />
                 </template>
                 <v-list-item-title class="text-body-2 text-medium-emphasis">Chức vụ</v-list-item-title>
                 <template #append>
@@ -375,7 +419,7 @@ onMounted(fetchProfile);
 
               <v-list-item class="px-0">
                 <template #prepend>
-                  <v-icon size="16" color="grey" class="mr-2">mdi-calendar-check-outline</v-icon>
+                  <Calendar class="w-4 h-4 text-grey mr-2" />
                 </template>
                 <v-list-item-title class="text-body-2 text-medium-emphasis">Ngày vào làm</v-list-item-title>
                 <template #append>
@@ -390,7 +434,7 @@ onMounted(fetchProfile);
         <v-card elevation="0" border>
           <v-card-item class="px-5 py-4 border-b">
             <template #prepend>
-              <v-icon color="error" size="18">mdi-lock-outline</v-icon>
+              <Lock class="w-4.5 h-4.5 text-error mr-2" />
             </template>
             <v-card-title class="text-body-1 font-weight-bold">Thay đổi mật khẩu</v-card-title>
           </v-card-item>
@@ -402,13 +446,21 @@ onMounted(fetchProfile);
               label="Mật khẩu cũ"
               variant="outlined"
               density="comfortable"
-              prepend-inner-icon="mdi-lock-open-outline"
-              :append-inner-icon="showOldPassword ? 'mdi-eye-off' : 'mdi-eye'"
               color="error"
               placeholder="Nhập mật khẩu cũ"
-              @click:append-inner="showOldPassword = !showOldPassword"
               class="mb-3"
-            />
+            >
+              <template #prepend-inner>
+                <KeyRound class="w-4 h-4 text-grey mr-1" />
+              </template>
+              <template #append-inner>
+                <component
+                  :is="showOldPassword ? EyeOff : Eye"
+                  class="w-4 h-4 text-grey cursor-pointer"
+                  @click="showOldPassword = !showOldPassword"
+                />
+              </template>
+            </v-text-field>
 
             <v-text-field
               v-model="newPassword"
@@ -416,13 +468,21 @@ onMounted(fetchProfile);
               label="Mật khẩu mới"
               variant="outlined"
               density="comfortable"
-              prepend-inner-icon="mdi-lock-outline"
-              :append-inner-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
               color="error"
               placeholder="Để trống nếu không muốn đổi"
-              @click:append-inner="showPassword = !showPassword"
               class="mb-3"
-            />
+            >
+              <template #prepend-inner>
+                <Lock class="w-4 h-4 text-grey mr-1" />
+              </template>
+              <template #append-inner>
+                <component
+                  :is="showPassword ? EyeOff : Eye"
+                  class="w-4 h-4 text-grey cursor-pointer"
+                  @click="showPassword = !showPassword"
+                />
+              </template>
+            </v-text-field>
 
             <v-text-field
               v-model="confirmPassword"
@@ -430,12 +490,20 @@ onMounted(fetchProfile);
               label="Xác nhận mật khẩu mới"
               variant="outlined"
               density="comfortable"
-              prepend-inner-icon="mdi-lock-check-outline"
-              :append-inner-icon="showConfirmPassword ? 'mdi-eye-off' : 'mdi-eye'"
               color="error"
               placeholder="Nhập lại mật khẩu mới"
-              @click:append-inner="showConfirmPassword = !showConfirmPassword"
-            />
+            >
+              <template #prepend-inner>
+                <ShieldCheck class="w-4 h-4 text-grey mr-1" />
+              </template>
+              <template #append-inner>
+                <component
+                  :is="showConfirmPassword ? EyeOff : Eye"
+                  class="w-4 h-4 text-grey cursor-pointer"
+                  @click="showConfirmPassword = !showConfirmPassword"
+                />
+              </template>
+            </v-text-field>
             <p class="text-caption text-medium-emphasis mt-2">
               Để thay đổi mật khẩu, vui lòng điền đầy đủ cả 3 thông tin trên. Nếu để trống mật khẩu mới, mật khẩu hiện tại sẽ được giữ nguyên.
             </p>
@@ -455,18 +523,59 @@ onMounted(fetchProfile);
 .avatar-wrapper {
   position: relative;
   display: inline-block;
+  cursor: pointer;
 }
 
 .profile-avatar {
   border: 3px solid #e0e0e0;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.avatar-wrapper:hover .profile-avatar {
+  border-color: #1677ff;
+}
+
+.avatar-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.avatar-wrapper:hover .avatar-overlay {
+  opacity: 1;
 }
 
 .avatar-edit-btn {
   position: absolute;
-  bottom: -4px;
-  right: -4px;
-  border: 2px solid #e0e0e0 !important;
+  bottom: 0px;
+  right: 0px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background-color: #1677ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2.5px solid #ffffff !important;
+  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.35);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+  outline: none;
+  z-index: 2;
+}
+
+.avatar-edit-btn:hover {
+  background-color: #0958d9;
+  transform: scale(1.1);
 }
 
 .border-b {

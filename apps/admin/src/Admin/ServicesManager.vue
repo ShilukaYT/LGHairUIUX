@@ -18,7 +18,7 @@ import {
   Check,
 } from "lucide-vue-next";
 
-const API = import.meta.env.VITE_API_URL;
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196';
 
 function base64ToFile(base64, filename) {
   const arr = base64.split(",");

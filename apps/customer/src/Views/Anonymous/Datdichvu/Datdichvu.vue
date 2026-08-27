@@ -49,6 +49,132 @@ const showInvoiceCompanyForm = ref(false);
 const invoiceCompany = ref({ tenCongTy: '', mst: '' });
 const mstError = ref('');
 
+// BỘ LỖI VALIDATION ĐỒNG BỘ TOÀN FORM
+const errors = ref({
+    customerName: '',
+    phone: '',
+    email: '',
+    bookingDate: '',
+    tempTime: '',
+    services: '',
+    stylist: '',
+    invoice: ''
+});
+
+const validateField = (field: string) => {
+    switch (field) {
+        case 'customerName': {
+            const name = (bookingData.value.customerName || '').trim();
+            if (!name) {
+                errors.value.customerName = 'Vui lòng nhập họ và tên của bạn.';
+            } else if (name.length < 2) {
+                errors.value.customerName = 'Họ và tên phải có tối thiểu 2 ký tự.';
+            } else if (/[0-9]/.test(name)) {
+                errors.value.customerName = 'Họ và tên không được chứa chữ số.';
+            } else {
+                errors.value.customerName = '';
+            }
+            break;
+        }
+        case 'phone': {
+            const phone = (bookingData.value.phone || '').trim();
+            const phoneRegex = /^(0|\+84)(3|5|7|8|9)[0-9]{8}$/;
+            if (!phone) {
+                errors.value.phone = 'Vui lòng nhập số điện thoại liên hệ.';
+            } else if (!phoneRegex.test(phone)) {
+                errors.value.phone = 'Số điện thoại không hợp lệ (gồm 10 số, VD: 0912345678).';
+            } else {
+                errors.value.phone = '';
+            }
+            break;
+        }
+        case 'email': {
+            const email = (bookingData.value.email || '').trim();
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!email) {
+                errors.value.email = 'Vui lòng nhập email nhận mã QR đặt lịch.';
+            } else if (!emailRegex.test(email)) {
+                errors.value.email = 'Email không hợp lệ (VD: example@gmail.com).';
+            } else {
+                errors.value.email = '';
+            }
+            break;
+        }
+        case 'bookingDate': {
+            if (!tempDate.value) {
+                errors.value.bookingDate = 'Vui lòng chọn ngày hẹn.';
+            } else {
+                const todayStr = new Date().toISOString().split('T')[0] || '';
+                if (tempDate.value < todayStr) {
+                    errors.value.bookingDate = 'Ngày hẹn không được ở quá khứ.';
+                } else {
+                    errors.value.bookingDate = '';
+                }
+            }
+            break;
+        }
+        case 'tempTime': {
+            if (!tempTime.value) {
+                errors.value.tempTime = 'Vui lòng chọn khung giờ hẹn.';
+            } else {
+                const todayStr = new Date().toISOString().split('T')[0] || '';
+                if (tempDate.value === todayStr) {
+                    const now = new Date();
+                    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+                    const [h = 0, m = 0] = tempTime.value.split(':').map(Number);
+                    const selectedMinutes = h * 60 + m;
+                    if (selectedMinutes <= currentMinutes + 10) {
+                        errors.value.tempTime = 'Khung giờ này đã qua hoặc quá sát giờ hiện tại.';
+                        break;
+                    }
+                }
+                errors.value.tempTime = '';
+            }
+            break;
+        }
+        case 'services': {
+            if (!bookingData.value.selectedServices || bookingData.value.selectedServices.length === 0) {
+                errors.value.services = 'Vui lòng chọn ít nhất 1 dịch vụ để tiếp tục.';
+            } else {
+                errors.value.services = '';
+            }
+            break;
+        }
+        case 'stylist': {
+            if (!bookingData.value.stylistId) {
+                errors.value.stylist = 'Vui lòng chọn 1 Stylist phục vụ.';
+            } else {
+                const s = stylists.value.find(st => st.id === bookingData.value.stylistId);
+                if (s && !s.isAvailable) {
+                    errors.value.stylist = 'Stylist bạn chọn hiện đang bận khung giờ này, vui lòng chọn thợ khác.';
+                } else {
+                    errors.value.stylist = '';
+                }
+            }
+            break;
+        }
+    }
+};
+
+const validateAllForm = (): boolean => {
+    validateField('customerName');
+    validateField('phone');
+    validateField('email');
+    validateField('bookingDate');
+    validateField('tempTime');
+    validateField('services');
+    validateField('stylist');
+
+    const invoiceErr = validateInvoiceInfo();
+    if (invoiceErr) {
+        errors.value.invoice = invoiceErr;
+    } else {
+        errors.value.invoice = '';
+    }
+
+    return !Object.values(errors.value).some(err => !!err);
+};
+
 const validateMst = (): boolean => {
     if (!showInvoiceCompanyForm.value) {
         mstError.value = '';
@@ -136,8 +262,8 @@ onMounted(async () => {
     if (savedDate) {
         const parts = savedDate.split('T');
         if (parts.length === 2) {
-            tempDate.value = parts[0];
-            tempTime.value = parts[1];
+            tempDate.value = parts[0] || '';
+            tempTime.value = parts[1] || '';
             bookingData.value.bookingDate = savedDate;
         }
     }
@@ -366,14 +492,27 @@ function toggleVoucher(id: string) {
 const handleBooking = async () => {
     if (isSubmitting.value) return;
 
-    if (!bookingData.value.customerName || !bookingData.value.phone || !bookingData.value.email || !bookingData.value.bookingDate) {
-        Swal.fire({ title: 'Thiếu thông tin', text: 'Vui lòng điền đầy đủ thông tin (Bao gồm cả Email để nhận mã QR)!', icon: 'warning', confirmButtonColor: '#d4af37' });
-        return;
-    }
+    if (!validateAllForm()) {
+        const activeErrors = Object.values(errors.value).filter(err => !!err);
+        let errorHtml = '<div style="text-align: left; font-size: 14px; line-height: 1.6; margin-top: 8px;">';
+        if (activeErrors.length === 1) {
+            errorHtml += `<p style="text-align: center; margin: 0;">${activeErrors[0]}</p>`;
+        } else {
+            errorHtml += '<p style="margin-bottom: 8px; font-weight: 600;">Vui lòng kiểm tra và hoàn thiện các thông tin sau:</p><ul style="padding-left: 20px; list-style-type: disc; margin: 0;">';
+            activeErrors.forEach(err => {
+                errorHtml += `<li style="color: #ef4444; margin-bottom: 4px;">${err}</li>`;
+            });
+            errorHtml += '</ul>';
+        }
+        errorHtml += '</div>';
 
-    const invoiceErr = validateInvoiceInfo();
-    if (invoiceErr) {
-        Swal.fire({ title: 'Lỗi hoá đơn', text: invoiceErr, icon: 'warning', confirmButtonColor: '#d4af37' });
+        Swal.fire({
+            title: 'Thông tin chưa hợp lệ',
+            html: errorHtml,
+            icon: 'warning',
+            confirmButtonText: 'Đã hiểu',
+            confirmButtonColor: '#1e293b'
+        });
         return;
     }
 
@@ -384,7 +523,7 @@ const handleBooking = async () => {
     localStorage.setItem('temp_date', bookingData.value.bookingDate);
     localStorage.setItem('temp_stylist_id', bookingData.value.stylistId || '');
     localStorage.setItem('temp_services', JSON.stringify(bookingData.value.selectedServices));
-    if (bookingData.value.voucherIds.length > 0) {
+    if (bookingData.value.voucherIds.length > 0 && bookingData.value.voucherIds[0]) {
         localStorage.setItem('temp_voucher', bookingData.value.voucherIds[0]);
     } else {
         localStorage.removeItem('temp_voucher');
@@ -424,7 +563,7 @@ const handleBooking = async () => {
             useBookingBasketStore().clearAll();
             window.location.href = response.data.url;
         } else {
-            Swal.fire({ title: 'Thành công', text: 'Đặt lịch thành công!', icon: 'success', confirmButtonColor: '#d4af37' }).then(() => {
+            Swal.fire({ title: 'Thành công', text: 'Đặt lịch thành công!', icon: 'success', confirmButtonColor: '#1e293b' }).then(() => {
                 useBookingBasketStore().clearAll();
                 window.location.href = '/';
             });
@@ -432,7 +571,7 @@ const handleBooking = async () => {
     } catch (error: any) {
         console.error("Lỗi đặt lịch:", error);
         const errorMsg = error.response?.data?.message || error.response?.data || 'Có lỗi xảy ra trong quá trình đặt lịch. Vui lòng thử lại!';
-        Swal.fire({ title: 'Không thể đặt lịch', text: errorMsg, icon: 'error', confirmButtonColor: '#d4af37' });
+        Swal.fire({ title: 'Không thể đặt lịch', text: errorMsg, icon: 'error', confirmButtonColor: '#1e293b' });
     } finally {
         isSubmitting.value = false;
     }
@@ -451,10 +590,28 @@ const availableHours = computed(() => {
 });
 
 const combineDateTime = () => {
+    validateField('bookingDate');
+    validateField('tempTime');
     if (tempDate.value && tempTime.value) {
         bookingData.value.bookingDate = `${tempDate.value}T${tempTime.value}`;
+    } else {
+        bookingData.value.bookingDate = '';
     }
 };
+
+watch(
+    () => bookingData.value.selectedServices.length,
+    () => {
+        validateField('services');
+    }
+);
+
+watch(
+    () => bookingData.value.stylistId,
+    () => {
+        validateField('stylist');
+    }
+);
 
 const expectedEndTime = computed(() => {
     if (!tempTime.value || estimatedTotalMinutes.value === 0) return '';
@@ -553,32 +710,54 @@ watch(
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                             <div>
                                 <label class="custom-label font-bold">Họ và tên *</label>
-                                <input v-model="bookingData.customerName" type="text" class="booking-input w-full"
+                                <input v-model="bookingData.customerName" 
+                                    @input="validateField('customerName')" 
+                                    @blur="validateField('customerName')"
+                                    :class="{ 'input-error': errors.customerName }"
+                                    type="text" class="booking-input w-full"
                                     placeholder="Nguyễn Văn A">
+                                <p v-if="errors.customerName" class="error-msg-custom"><i class="fas fa-exclamation-circle me-1"></i>{{ errors.customerName }}</p>
                             </div>
 
                             <div>
                                 <label class="custom-label font-bold">Số điện thoại *</label>
-                                <input v-model="bookingData.phone" type="tel" class="booking-input w-full"
+                                <input v-model="bookingData.phone" 
+                                    @input="validateField('phone')" 
+                                    @blur="validateField('phone')"
+                                    :class="{ 'input-error': errors.phone }"
+                                    type="tel" class="booking-input w-full"
                                     placeholder="090x xxx xxx">
+                                <p v-if="errors.phone" class="error-msg-custom"><i class="fas fa-exclamation-circle me-1"></i>{{ errors.phone }}</p>
                             </div>
                             <div>
                                 <label class="custom-label font-bold">Email nhận mã QR *</label>
-                                <input v-model="bookingData.email" type="email" class="booking-input w-full"
+                                <input v-model="bookingData.email" 
+                                    @input="validateField('email')" 
+                                    @blur="validateField('email')"
+                                    :class="{ 'input-error': errors.email }"
+                                    type="email" class="booking-input w-full"
                                     placeholder="vidu@gmail.com">
+                                <p v-if="errors.email" class="error-msg-custom"><i class="fas fa-exclamation-circle me-1"></i>{{ errors.email }}</p>
                             </div>
                             <div>
                                 <label class="custom-label font-bold">Ngày hẹn *</label>
-                                <input v-model="tempDate" type="date" class="booking-input w-full" :min="minDate"
-                                    @change="combineDateTime">
+                                <input v-model="tempDate" 
+                                    @change="combineDateTime"
+                                    :class="{ 'input-error': errors.bookingDate }"
+                                    type="date" class="booking-input w-full" :min="minDate">
+                                <p v-if="errors.bookingDate" class="error-msg-custom"><i class="fas fa-exclamation-circle me-1"></i>{{ errors.bookingDate }}</p>
                             </div>
 
                             <div>
                                 <label class="custom-label font-bold">Giờ hẹn *</label>
-                                <select v-model="tempTime" class="booking-input" @change="combineDateTime">
+                                <select v-model="tempTime" 
+                                    @change="combineDateTime"
+                                    :class="{ 'input-error': errors.tempTime }"
+                                    class="booking-input">
                                     <option value="" disabled>Chọn giờ</option>
                                     <option v-for="h in availableHours" :key="h" :value="h">{{ h }}</option>
                                 </select>
+                                <p v-if="errors.tempTime" class="error-msg-custom"><i class="fas fa-exclamation-circle me-1"></i>{{ errors.tempTime }}</p>
                                 <div class="summary-line" v-if="tempTime">
                                     <span class="font-bold">Giờ bắt đầu làm:</span>
                                     <span class="font-bold">{{ tempTime }}</span>
@@ -630,6 +809,8 @@ watch(
                             </h3>
                             <div class="heading-line"></div>
                         </div>
+                        <p v-if="errors.stylist" class="error-msg-custom stylist-error-banner mb-3"><i class="fas fa-exclamation-triangle me-1.5"></i>{{ errors.stylist }}</p>
+
                         <div v-if="isSearchingStylist"
                             class="mt-4 p-3 text-center text-gray-500 font-bold bg-gray-50 border">
                             <i class="fas fa-spinner fa-spin me-2 text-black"></i> Đang tìm các thợ rảnh việc trong ca
@@ -640,7 +821,7 @@ watch(
                             <div v-for="stylist in stylists" :key="stylist.id" class="stylist-card" :class="{
                                 'active': bookingData.stylistId === stylist.id,
                                 'is-disabled': !stylist.isAvailable
-                            }" @click="stylist.isAvailable ? bookingData.stylistId = stylist.id : null">
+                            }" @click="stylist.isAvailable ? (bookingData.stylistId = stylist.id, validateField('stylist')) : null">
                                 <div class="stylist-schedule-info" v-if="stylist.lichTrinh && stylist.lichTrinh.length > 0">
                                     <div class="schedule-header">Ca Làm : {{ stylist.caLam }}</div>
                                     <div class="schedule-group mt-2">
@@ -761,6 +942,8 @@ watch(
                                 </h3>
                                 <div class="heading-line mx-auto" style="width: 80px;"></div>
                             </div>
+
+                            <p v-if="errors.services" class="error-msg-custom services-error-banner mb-3"><i class="fas fa-exclamation-triangle me-1.5"></i>{{ errors.services }}</p>
 
                             <div class="search-box-wrapper mb-4">
                                 <div class="input-wrap">
@@ -1097,6 +1280,42 @@ h1 {
     border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
     background: #ffffff;
+}
+
+.booking-input.input-error {
+    border-color: #f43f5e !important;
+    background-color: #fff1f2 !important;
+}
+
+.booking-input.input-error:focus {
+    border-color: #e11d48 !important;
+    box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.15) !important;
+}
+
+.error-msg-custom {
+    color: #e11d48;
+    font-size: 11.5px;
+    font-weight: 600;
+    margin-top: 4px;
+    margin-bottom: 0;
+    display: flex;
+    align-items: center;
+    line-height: 1.35;
+    animation: errorFadeIn 0.2s ease-in-out;
+}
+
+.stylist-error-banner,
+.services-error-banner {
+    background: #fff1f2;
+    border: 1px solid #fecdd3;
+    padding: 10px 14px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+@keyframes errorFadeIn {
+    from { opacity: 0; transform: translateY(-3px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 select.booking-input {

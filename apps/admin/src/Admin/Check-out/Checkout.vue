@@ -4,7 +4,8 @@ import {
     Search, UserCheck, X, Clock, Users,
     Plus, Trash2, ChevronLeft, ChevronRight,
     Calendar as CalendarIcon, CheckCircle2, Phone,
-    Camera, Mail, Package, Minus, ShoppingCart, RefreshCw, CreditCard, Info, RotateCcw
+    Camera, Mail, Package, Minus, ShoppingCart, RefreshCw, CreditCard, Info, RotateCcw,
+    Coins
 } from 'lucide-vue-next'
 import axios from 'axios'
 import { toast } from 'vue-sonner'
@@ -46,6 +47,7 @@ const showProductList = ref(false)
 const originalServices = ref<any[]>([])
 const originalProducts = ref<any[]>([])
 const allProductsFromApi = ref<any[]>([])
+const freshProductVariants = ref<any[]>([])
 const originalStylistId = ref<string | null>(null)
 
 // Tính toán trực tiếp danh sách gợi ý khi gõ chữ (Phân nhóm theo sản phẩm chính giống ThanhToanTong.vue)
@@ -116,6 +118,16 @@ const amountToPay = computed(() => {
     return Math.max(0, total - discount - prePaid);
 });
 
+// Tiền thừa cần hoàn trả lại cho khách (nếu khách trả/giảm bớt sản phẩm dẫn đến tiền cọc > tổng tiền)
+const refundToCustomerAmount = computed(() => {
+    if (!selectedAppointment.value) return 0;
+    const total = currentTotal.value;
+    const discount = Number(selectedAppointment.value.tienGiam || 0);
+    const prePaid = Number(selectedAppointment.value.daThanhToan || 0);
+    const netTotal = Math.max(0, total - discount);
+    return prePaid > netTotal ? (prePaid - netTotal) : 0;
+});
+
 const memberDiscountAmount = computed(() => {
     if (!selectedAppointment.value || !selectedAppointment.value.phanTramGiamVip) return 0;
     return Math.round(selectedAppointment.value.tongTien * (selectedAppointment.value.phanTramGiamVip / 100));
@@ -182,12 +194,12 @@ const totalPages = computed(() => Math.ceil(filteredData.value.length / itemsPer
 const fetchData = async () => {
     isLoading.value = true;
     try {
-        const [resList, resStylists, resServices, resProducts] = await Promise.all([
+        const [resList, resStylists, resServices, resProducts, resVariants] = await Promise.all([
             axios.get(`${API_BASE_URL}/get-checkout-list`, { params: { date: filterDate.value } }),
             axios.get(`${API}/api/NhanVien`, { params: { trangThai: 1 } }),
             axios.get(`${API}/api/CheckIn/all-services-combos`),
-            // THÊM API TẢI SẢN PHẨM VÀO ĐÂY
-            axios.get(`${API_BASE_URL}/get-all-products`) 
+            axios.get(`${API_BASE_URL}/get-all-products`),
+            axios.get(`${API}/api/ThanhToanSanPham/search-products-variants`, { params: { keyword: '' } }).catch(() => ({ data: { data: [] } }))
         ]);
         appointments.value = resList.data;
         stylists.value = resStylists.data.map((nv: any) => ({
@@ -197,7 +209,10 @@ const fetchData = async () => {
             img: nv.hinhAnh || "https://i.pravatar.cc/150"
         }));
         allServicesFromApi.value = resServices.data;
-        allProductsFromApi.value = resProducts.data; // Lưu lại danh sách sản phẩm
+        allProductsFromApi.value = resProducts.data || [];
+        freshProductVariants.value = resVariants.data?.data || [];
+        
+        syncAppointmentStock();
     } catch (error) {
         toast.error("Lỗi tải dữ liệu hệ thống!");
     } finally {
@@ -211,7 +226,42 @@ const handleRefresh = async () => {
     toast.success("Đã làm mới danh sách check-out!");
 };
 
-// (Đã chuyển sang dùng computed productSuggestions ở trên để tìm kiếm local)
+// Đồng bộ tồn kho cho giỏ hàng hiện tại (Số lượng tối đa = Số lượng ban đầu trong đơn + Tồn kho ngoài kệ)
+const getInitialQtyInOrder = (p: any) => {
+    if (p.soLuongGoc !== undefined && Number(p.soLuongGoc) > 0) {
+        return Number(p.soLuongGoc);
+    }
+    if (!originalProducts.value || originalProducts.value.length === 0) {
+        return Number(p.soLuong || 0);
+    }
+    const orig = originalProducts.value.find((o: any) => 
+        (p.id && (String(o.id) === String(p.id) || String(o.maBienThe) === String(p.id))) ||
+        (p.ten && o.ten && o.ten.toLowerCase().trim() === p.ten.toLowerCase().trim())
+    );
+    return orig ? Number(orig.soLuong || 0) : Number(p.soLuong || 0);
+};
+
+const getMaxAllowedQty = (p: any) => {
+    const initialQty = getInitialQtyInOrder(p);
+    const warehouseStock = getMaxInventory(p);
+    const total = initialQty + warehouseStock;
+    // Đảm bảo sản phẩm đã có trong đơn luôn có trần tối đa ít nhất bằng số lượng hiện có
+    return total > 0 ? total : Math.max(1, Number(p.soLuong || 1));
+};
+
+const syncAppointmentStock = () => {
+    if (selectedAppointment.value?.sanPhams) {
+        selectedAppointment.value.sanPhams.forEach((p: any) => {
+            if (p.soLuongGoc === undefined) {
+                p.soLuongGoc = getInitialQtyInOrder(p);
+            }
+            if (p.previousValidQty === undefined) {
+                p.previousValidQty = Number(p.soLuong || 1);
+            }
+            p.soLuongTon = getMaxAllowedQty(p);
+        });
+    }
+};
 
 // --- Chọn hóa đơn ---
 const setSelectedAppointment = async (appt: any) => {
@@ -223,8 +273,19 @@ const setSelectedAppointment = async (appt: any) => {
             selectedStylistId.value = res.data.maNv ? String(res.data.maNv) : null;
             originalStylistId.value = res.data.maNv ? String(res.data.maNv) : null;
             selectedConsultantId.value = null;
+
+            // Lưu dữ liệu gốc để đối chiếu thay đổi và tính trần số lượng cho phép
             originalServices.value = JSON.parse(JSON.stringify(res.data.dichVus ?? []));
             originalProducts.value = JSON.parse(JSON.stringify(res.data.sanPhams ?? []));
+
+            if (selectedAppointment.value.sanPhams) {
+                selectedAppointment.value.sanPhams.forEach((p: any) => {
+                    p.soLuongGoc = Number(p.soLuong || 0);
+                    p.previousValidQty = Number(p.soLuong || 1);
+                });
+            }
+
+            syncAppointmentStock();
         }
     } catch (error: any) {
         toast.error(error.response?.data || "Không tìm thấy chi tiết hóa đơn!");
@@ -243,8 +304,19 @@ const handleScanData = async (qrData: string) => {
             selectedStylistId.value = res.data.maNv ? String(res.data.maNv) : null;
             originalStylistId.value = res.data.maNv ? String(res.data.maNv) : null;
             selectedConsultantId.value = null;
+
             originalServices.value = JSON.parse(JSON.stringify(res.data.dichVus ?? []));
             originalProducts.value = JSON.parse(JSON.stringify(res.data.sanPhams ?? []));
+
+            if (selectedAppointment.value.sanPhams) {
+                selectedAppointment.value.sanPhams.forEach((p: any) => {
+                    p.soLuongGoc = Number(p.soLuong || 0);
+                    p.previousValidQty = Number(p.soLuong || 1);
+                });
+            }
+
+            syncAppointmentStock();
+
             toast.success("Đã tìm thấy hóa đơn từ QR Code!");
         }
     } catch (error) {
@@ -291,35 +363,95 @@ const removeService = (index: number) => {
 
 
 // --- Sản phẩm UI logic ---
-const getMaxInventory = (id: string) => {
-    const prod = allProductsFromApi.value.find(p => p.id === id || p.maBienThe === id);
-    return prod ? (prod.soLuongTon || 0) : 999;
+const getMaxInventory = (pOrId: any) => {
+    if (!pOrId) return 0;
+    const targetId = typeof pOrId === 'object' ? (pOrId.id ?? pOrId.maBienThe ?? pOrId.Id) : pOrId;
+    const targetName = typeof pOrId === 'object' ? (pOrId.ten ?? pOrId.name ?? pOrId.tenSanPham ?? '') : '';
+
+    // 1. Đối chiếu trong freshProductVariants (dữ liệu biến thể trực tiếp từ kho)
+    if (freshProductVariants.value && freshProductVariants.value.length > 0) {
+        for (const sp of freshProductVariants.value) {
+            const bt = sp.bienthes?.find((b: any) => {
+                if (targetId && String(b.maBienThe) === String(targetId)) return true;
+                const fullVariantName = `${sp.tenSp} - ${b.tenBienThe}`.toLowerCase().trim();
+                if (targetName && fullVariantName === targetName.toLowerCase().trim()) return true;
+                if (targetName && targetName.toLowerCase().includes(b.tenBienThe?.toLowerCase()) && targetName.toLowerCase().includes(sp.tenSp?.toLowerCase())) return true;
+                return false;
+            });
+            if (bt && (bt.soLuongTon !== undefined || bt.SoLuongTon !== undefined)) {
+                return Number(bt.soLuongTon ?? bt.SoLuongTon ?? 0);
+            }
+        }
+    }
+
+    // 2. Đối chiếu trong allProductsFromApi
+    if (allProductsFromApi.value && allProductsFromApi.value.length > 0) {
+        const found = allProductsFromApi.value.find((p: any) => {
+            const pId = p.id ?? p.maBienThe ?? p.Id;
+            const pName = p.tenSanPham ?? p.ten ?? '';
+            if (targetId && pId && String(pId) === String(targetId)) return true;
+            if (targetName && pName && (
+                pName.toLowerCase().trim() === targetName.toLowerCase().trim() ||
+                targetName.toLowerCase().includes(pName.toLowerCase()) ||
+                pName.toLowerCase().includes(targetName.toLowerCase())
+            )) return true;
+            return false;
+        });
+        if (found && (found.soLuongTon !== undefined || found.SoLuongTon !== undefined)) {
+            return Number(found.soLuongTon ?? found.SoLuongTon ?? 0);
+        }
+    }
+
+    return 0;
+};
+
+const showStockAlert = (productName: string, maxTon: number) => {
+    Swal.fire({
+        title: 'Giới hạn số lượng kho',
+        html: `Sản phẩm <b>"${productName}"</b> chỉ còn tối đa <b class="text-error" style="font-size: 1.15rem;">${maxTon}</b> sản phẩm cho đơn này (không thể lấy thêm)!`,
+        icon: 'warning',
+        confirmButtonText: 'Đã hiểu',
+        confirmButtonColor: '#1a1a2e'
+    });
 };
 
 const addProduct = (prod: any) => {
     if (!selectedAppointment.value) return;
     if (!selectedAppointment.value.sanPhams) selectedAppointment.value.sanPhams = [];
     
-    const productName = prod.fullName || prod.name;
-    const existing = selectedAppointment.value.sanPhams.find((p: any) => p.id === prod.id);
+    const productName = prod.fullName || prod.name || prod.tenSanPham;
+    const existing = selectedAppointment.value.sanPhams.find((p: any) => String(p.id) === String(prod.id));
+    const maxTon = getMaxAllowedQty(existing || prod);
     
+    if (maxTon <= 0) {
+        Swal.fire({
+            title: 'Hết hàng trong kho',
+            text: `Sản phẩm "${productName}" hiện tại đã hết hàng trong kho!`,
+            icon: 'warning',
+            confirmButtonText: 'Đã hiểu',
+            confirmButtonColor: '#1a1a2e'
+        });
+        return;
+    }
+
     if (existing) {
-        if (existing.soLuong >= prod.soLuongTon) {
-            toast.warning(`Sản phẩm này chỉ còn ${prod.soLuongTon} trong kho!`);
+        if (existing.soLuong >= maxTon) {
+            showStockAlert(productName, maxTon);
             return;
         }
         existing.soLuong += 1;
+        existing.previousValidQty = existing.soLuong;
+        existing.soLuongTon = maxTon;
         toast.success(`Đã tăng số lượng: ${productName}`);
     } else {
-        if (prod.soLuongTon < 1) {
-            toast.warning('Sản phẩm này đã hết hàng!');
-            return;
-        }
         selectedAppointment.value.sanPhams.push({
             id: prod.id,
             ten: productName,
             gia: Number(prod.price || 0),
             soLuong: 1,
+            soLuongGoc: 0,
+            previousValidQty: 1,
+            soLuongTon: maxTon,
             phanTramHoaHong: Number(prod.phanTramHoaHong || prod.PhanTramHoaHong || 10)
         });
         toast.success(`Đã thêm sản phẩm: ${productName}`);
@@ -331,25 +463,52 @@ const addProduct = (prod: any) => {
 const updateProductQty = (index: number, delta: number) => {
     if (!selectedAppointment.value) return;
     const p = selectedAppointment.value.sanPhams[index];
+    const maxTon = getMaxAllowedQty(p);
+    p.soLuongTon = maxTon;
     
     if (delta > 0) {
-        const maxTon = getMaxInventory(p.id);
         if (p.soLuong >= maxTon) {
-            toast.warning(`Chỉ có thể mua tối đa ${maxTon} sản phẩm này!`);
+            showStockAlert(p.ten, maxTon);
             return;
         }
     }
 
     p.soLuong += delta;
     if (p.soLuong <= 0) {
-        selectedAppointment.value.sanPhams.splice(index, 1);
-        toast.info("Đã xóa sản phẩm khỏi giỏ.");
+        p.soLuong = 1; // Nút trừ chỉ dừng ở 1, muốn xóa phải bấm icon Thùng rác
     }
+    p.previousValidQty = p.soLuong;
+};
+
+const onProductQtyInput = (p: any) => {
+    const maxTon = getMaxAllowedQty(p);
+    p.soLuongTon = maxTon;
+    if (p.soLuong > maxTon) {
+        p.soLuong = maxTon;
+        p.previousValidQty = maxTon;
+        showStockAlert(p.ten, maxTon);
+    }
+};
+
+const validateProductQty = (p: any) => {
+    const maxTon = getMaxAllowedQty(p);
+    p.soLuongTon = maxTon;
+    if (!p.soLuong || isNaN(p.soLuong) || p.soLuong < 1) {
+        // Khôi phục lại số lượng trước đó hoặc số lượng gốc, không bao giờ để bằng 0
+        p.soLuong = p.previousValidQty || p.soLuongGoc || 1;
+    } else if (p.soLuong > maxTon) {
+        p.soLuong = maxTon;
+        showStockAlert(p.ten, maxTon);
+    }
+    p.previousValidQty = p.soLuong;
 };
 
 const removeProduct = (index: number) => {
     if (!selectedAppointment.value) return;
+    const p = selectedAppointment.value.sanPhams[index];
+    const name = p?.ten || 'Sản phẩm';
     selectedAppointment.value.sanPhams.splice(index, 1);
+    toast.info(`Đã hủy/trả "${name}" khỏi đơn.`);
 };
 
 // --- Kiểm tra thay đổi ---
@@ -380,41 +539,73 @@ const isOrderModified = computed(() => {
 
 // --- API Gọi Update ---
 const updateOrder = async () => {
-    if (!selectedAppointment.value || !selectedStylistId.value) {
-        toast.error("Vui lòng chọn Stylist phục vụ!");
+    if (!selectedAppointment.value) return;
+
+    const stylistId = selectedStylistId.value || originalStylistId.value || selectedAppointment.value.maNv;
+    if (!stylistId) {
+        toast.warning("Vui lòng chọn 'NV HƯỞNG HH DỊCH VỤ' trước khi bấm Cập nhật đơn!");
         return;
+    }
+    
+    // Kiểm tra tồn kho trước khi gửi update
+    if (selectedAppointment.value.sanPhams) {
+        for (const p of selectedAppointment.value.sanPhams) {
+            const maxTon = getMaxAllowedQty(p);
+            if (p.soLuong > maxTon) {
+                toast.warning(`Sản phẩm "${p.ten}" vượt quá tồn kho (Tối đa ${maxTon} sp)!`);
+                p.soLuong = maxTon;
+                return;
+            }
+        }
     }
 
     try {
         isLoading.value = true;
         const payload = {
             maLd: selectedAppointment.value.maLd,
-            maStylist: selectedStylistId.value,
+            maStylist: stylistId,
+            maNv: stylistId,
             services: (selectedAppointment.value.dichVus || []).map((s: any) => ({ 
                 id: s.id || s.Id, 
                 gia: Number(s.gia || s.Price || 0) 
             })),
-            products: (selectedAppointment.value.sanPhams || []).map((p: any) => ({ 
-                id: p.id || p.maBienThe, 
-                gia: Number(p.gia || p.price || p.GiaBan || 0), 
-                soLuong: Number(p.soLuong || 1) 
-            }))
+            products: (selectedAppointment.value.sanPhams || [])
+                .filter((p: any) => Number(p.soLuong || 0) > 0)
+                .map((p: any) => ({ 
+                    id: p.id || p.maBienThe || p.Id, 
+                    gia: Number(p.gia || p.price || p.GiaBan || 0), 
+                    soLuong: Number(p.soLuong || 1) 
+                }))
         };
-        console.log("Payload sending to update-order:", payload);
-
         const res = await axios.post(`${API_BASE_URL}/update-order`, payload);
-        toast.success(res.data.message || "Cập nhật đơn hàng thành công!");
+        
+        await Swal.fire({
+            title: 'Cập nhật thành công!',
+            text: res.data?.message || 'Đã cập nhật dịch vụ, sản phẩm và tính lại tổng tiền thành công!',
+            icon: 'success',
+            timer: 2000,
+            showConfirmButton: false
+        });
+        toast.success(res.data?.message || "Cập nhật đơn hàng thành công!");
 
         await setSelectedAppointment(selectedAppointment.value);
         await fetchData();
     } catch (error: any) {
-        toast.error(error.response?.data?.message || "Lỗi cập nhật!");
+        console.error("Lỗi updateOrder:", error);
+        await Swal.fire({
+            title: 'Cập nhật thất bại',
+            text: error.response?.data?.message || error.response?.data || "Lỗi khi cập nhật đơn hàng!",
+            icon: 'error',
+            confirmButtonText: 'Đóng',
+            confirmButtonColor: '#dc2626'
+        });
+        toast.error(error.response?.data?.message || error.response?.data || "Lỗi cập nhật!");
     } finally {
         isLoading.value = false;
     }
 };
 
-// --- API Gọi Thanh toán ---
+// --- API Gọi Thanh toán / Hoàn tiền ---
 const confirmPayment = async () => {
     if (!selectedAppointment.value) return;
 
@@ -423,23 +614,40 @@ const confirmPayment = async () => {
         return;
     }
 
-    if (!selectedStylistId.value) {
+    const stylistId = selectedStylistId.value || originalStylistId.value || selectedAppointment.value.maNv;
+    if (!stylistId) {
         toast.error("Vui lòng chọn Stylist phục vụ!");
         return;
     }
 
     const payAmount = amountToPay.value;
-    const methodText = selectedPaymentMethod.value === 'tienmat' ? 'Tiền mặt' : selectedPaymentMethod.value === 'vnpay' ? 'VNPay' : 'MoMo';
+    const refundAmount = refundToCustomerAmount.value;
+    const isRefund = refundAmount > 0;
 
-    const confirmResult = await Swal.fire({
-        title: 'Xác nhận thanh toán?',
-        html: `Thu số tiền <b class="text-error" style="font-size: 1.2rem;">${payAmount.toLocaleString()}đ</b> qua <b>${methodText}</b>?`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Đã thu tiền & Hoàn thành',
-        cancelButtonText: 'Đóng',
-        confirmButtonColor: '#16a34a'
-    });
+    let confirmResult;
+    if (isRefund) {
+        const refundMethod = selectedPaymentMethod.value === 'tienmat' ? 'Tiền mặt' : 'Chuyển khoản';
+        confirmResult = await Swal.fire({
+            title: 'Xác nhận hoàn tiền cho khách?',
+            html: `Tiệm hoàn trả số tiền <b class="text-amber-800" style="font-size: 1.25rem;">${refundAmount.toLocaleString()}đ</b> cho khách qua <b>${refundMethod}</b> và đóng lượt phục vụ?`,
+            icon: 'info',
+            showCancelButton: true,
+            confirmButtonText: 'Đã hoàn tiền & Đóng lượt',
+            cancelButtonText: 'Đóng',
+            confirmButtonColor: '#d97706'
+        });
+    } else {
+        const methodText = selectedPaymentMethod.value === 'tienmat' ? 'Tiền mặt' : selectedPaymentMethod.value === 'vnpay' ? 'VNPay' : 'MoMo';
+        confirmResult = await Swal.fire({
+            title: 'Xác nhận thanh toán?',
+            html: `Thu số tiền <b class="text-error" style="font-size: 1.2rem;">${payAmount.toLocaleString()}đ</b> qua <b>${methodText}</b>?`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Đã thu tiền & Hoàn thành',
+            cancelButtonText: 'Đóng',
+            confirmButtonColor: '#16a34a'
+        });
+    }
 
     if (!confirmResult.isConfirmed) return;
 
@@ -447,7 +655,7 @@ const confirmPayment = async () => {
         isLoading.value = true;
         const payload = {
             maLd: selectedAppointment.value.maLd,
-            maStylist: selectedStylistId.value,
+            maStylist: stylistId,
             paymentMethod: selectedPaymentMethod.value,
             amountToPay: payAmount
         };
@@ -457,7 +665,10 @@ const confirmPayment = async () => {
         if (res.data.payUrl) {
             window.location.href = res.data.payUrl;
         } else {
-            await Swal.fire('Thành công', res.data.message || 'Thanh toán thành công và hóa đơn đã hoàn tất!', 'success');
+            const successMsg = isRefund
+                ? `Đã hoàn trả ${refundAmount.toLocaleString()}đ cho khách và đóng hóa đơn thành công!`
+                : (res.data.message || 'Thanh toán thành công và hóa đơn đã hoàn tất!');
+            await Swal.fire('Thành công', successMsg, 'success');
             selectedAppointment.value = null;
             await fetchData();
         }
@@ -724,14 +935,29 @@ watch(filterDate, fetchData);
                                         <v-btn icon variant="text" color="red" density="compact" @click="removeProduct(Number(index))"><Trash2 class="w-4 h-4" /></v-btn>
                                         <div class="d-flex flex-column">
                                             <span class="font-weight-semibold text-body-2">{{ p.ten }}</span>
-                                            <span class="text-caption text-medium-emphasis">{{ Number(p.gia).toLocaleString() }}đ</span>
+                                            <div class="d-flex align-center gap-1.5 mt-0.5">
+                                                <span class="text-caption text-medium-emphasis">{{ Number(p.gia).toLocaleString() }}đ</span>
+                                                <span v-if="p.soLuongTon !== undefined" class="text-caption font-weight-medium text-medium-emphasis">
+                                                    (Kho: <b :class="p.soLuongTon <= 5 ? 'text-red-600' : 'text-slate-700'">{{ p.soLuongTon }}</b>)
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                     <div class="d-flex align-center gap-2">
-                                        <div class="d-flex align-center border rounded qty-counter-bg">
-                                            <v-btn icon variant="text" size="24" @click="updateProductQty(Number(index), -1)"><Minus class="w-3 h-3" /></v-btn>
-                                            <span class="px-2 text-body-2 font-weight-bold">{{ p.soLuong }}</span>
-                                            <v-btn icon variant="text" size="24" @click="updateProductQty(Number(index), 1)"><Plus class="w-3 h-3" /></v-btn>
+                                        <div class="d-flex align-center border rounded qty-counter-bg px-1">
+                                            <v-btn icon variant="text" size="24" @click="updateProductQty(Number(index), -1)" :disabled="p.soLuong <= 1"><Minus class="w-3 h-3" /></v-btn>
+                                            <input 
+                                                type="number" 
+                                                v-model.number="p.soLuong" 
+                                                min="1" 
+                                                :max="p.soLuongTon"
+                                                class="qty-input text-center font-weight-bold text-body-2" 
+                                                style="width: 44px; border: none; outline: none; background: transparent;"
+                                                @input="onProductQtyInput(p)"
+                                                @change="validateProductQty(p)" 
+                                                @blur="validateProductQty(p)" 
+                                            />
+                                            <v-btn icon variant="text" size="24" @click="updateProductQty(Number(index), 1)" :disabled="p.soLuongTon !== undefined && p.soLuong >= p.soLuongTon"><Plus class="w-3 h-3" /></v-btn>
                                         </div>
                                         <span class="font-weight-bold text-body-2 product-subtotal w-20 text-right">{{ (p.gia * p.soLuong).toLocaleString() }}đ</span>
                                     </div>
@@ -773,7 +999,7 @@ watch(filterDate, fetchData);
                                 <span class="font-weight-bold">-{{ selectedAppointment.daThanhToan.toLocaleString() }}đ</span>
                             </div>
 
-                            <!-- BOX TỔNG KẾT MÀU MÈ -->
+                            <!-- BOX TỔNG KẾT MÀU MÈ THEO TRẠNG THÁI -->
                             <div class="d-flex align-center justify-space-between pa-4 rounded-xl border mb-4"
                                  :class="amountToPay > 0 ? 'bill-due-card' : 'bill-paid-card'">
                                 <div>
@@ -787,7 +1013,7 @@ watch(filterDate, fetchData);
                                 </div>
                             </div>
 
-                            <!-- CHỌN PHƯƠNG THỨC THANH TOÁN (LUÔN HIỂN THỊ CHUẨN) -->
+                            <!-- CHỌN PHƯƠNG THỨC THANH TOÁN -->
                             <div class="mt-2" v-if="amountToPay >= 0">
                                 <label class="text-[10px] font-weight-bold text-medium-emphasis uppercase d-block mb-2 tracking-wider">
                                     CHỌN PHƯƠNG THỨC THANH TOÁN
@@ -816,6 +1042,7 @@ watch(filterDate, fetchData);
                     <!-- Footer actions -->
                     <v-card-actions class="pa-5 border-t">
                         <v-btn
+                            v-if="amountToPay > 0"
                             color="success"
                             variant="flat"
                             block
@@ -825,7 +1052,21 @@ watch(filterDate, fetchData);
                             :disabled="isOrderModified"
                         >
                             <CreditCard class="w-5 h-5 mr-1.5" />
-                            XÁC NHẬN THU TIỀN & HOÀN THÀNH
+                            XÁC NHẬN THU {{ amountToPay.toLocaleString() }}đ & HOÀN TẤT
+                        </v-btn>
+
+                        <v-btn
+                            v-else
+                            color="primary"
+                            variant="flat"
+                            block
+                            height="54px"
+                            class="text-none font-weight-bold text-subtitle-1 rounded-xl"
+                            @click="confirmPayment"
+                            :disabled="isOrderModified"
+                        >
+                            <CreditCard class="w-5 h-5 mr-1.5" />
+                            XÁC NHẬN HOÀN TẤT PHỤC VỤ
                         </v-btn>
                     </v-card-actions>
                 </v-card>
@@ -898,12 +1139,12 @@ watch(filterDate, fetchData);
 }
 
 .product-item-card {
-    background-color: rgba(254, 243, 199, 0.5);
-    border-color: #fde68a !important;
+    background-color: #f8fafc;
+    border-color: #e2e8f0 !important;
 }
 .v-theme--dark .product-item-card {
-    background-color: rgba(69, 53, 27, 0.3);
-    border-color: #45351b !important;
+    background-color: #1e1e2d;
+    border-color: #2d2d3d !important;
 }
 
 .qty-counter-bg {
@@ -913,11 +1154,24 @@ watch(filterDate, fetchData);
     background-color: #151521;
 }
 
+.qty-input {
+    color: #0f172a;
+    -moz-appearance: textfield;
+}
+.qty-input::-webkit-outer-spin-button,
+.qty-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.v-theme--dark .qty-input {
+    color: #f1f5f9;
+}
+
 .product-subtotal {
-    color: #78350f;
+    color: #0f172a;
 }
 .v-theme--dark .product-subtotal {
-    color: #fbbf24;
+    color: #f1f5f9;
 }
 
 .modify-warning-card {
@@ -927,6 +1181,15 @@ watch(filterDate, fetchData);
 .v-theme--dark .modify-warning-card {
     background-color: rgba(239, 68, 68, 0.15);
     border-color: #7f1d1d !important;
+}
+
+.refund-warning-card {
+    background-color: #fffbeb;
+    border-color: #fde68a !important;
+}
+.v-theme--dark .refund-warning-card {
+    background-color: rgba(245, 158, 11, 0.15);
+    border-color: #78350f !important;
 }
 
 .summary-price-text {
@@ -952,6 +1215,15 @@ watch(filterDate, fetchData);
 .v-theme--dark .bill-paid-card {
     background-color: #142c1b;
     border-color: #1b5c30 !important;
+}
+
+.refund-highlight-card {
+    background-color: #fef3c7;
+    border-color: #f59e0b !important;
+}
+.v-theme--dark .refund-highlight-card {
+    background-color: #3b2a14;
+    border-color: #78350f !important;
 }
 
 .primary-btn {

@@ -6,6 +6,10 @@ import { useRouter } from 'vue-router';
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 import Swal from 'sweetalert2';
 
+// Import các Modal nghiệp vụ riêng biệt
+import ModalYeuCauHoanHang from './ModalYeuCauHoanHang.vue';
+import ModalCapNhatVanDon from './ModalCapNhatVanDon.vue';
+
 const router = useRouter();
 
 const profileForm = ref({
@@ -18,6 +22,7 @@ const greetingName = computed(() => {
 });
 
 const customerInfo = ref<any>(null);
+const isPageLoading = ref(true);
 const isLoading = ref(false);
 const isModalLoading = ref(false);
 const invoices = ref<any[]>([]);
@@ -31,7 +36,7 @@ const getLocalDateString = () => {
 };
 
 const searchQuery = ref('');
-const filterDate = ref(getLocalDateString());
+const filterDate = ref('');
 const sortBy = ref('newest');
 const currentTab = ref('all');
 
@@ -59,7 +64,7 @@ const productImagesMap = ref<Record<string, string>>({});
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://localhost:7196';
 
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('access_token') || localStorage.getItem('accessToken') || sessionStorage.getItem('access_token') || sessionStorage.getItem('accessToken');
+  const token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('accessToken') || sessionStorage.getItem('token') || sessionStorage.getItem('access_token') || sessionStorage.getItem('accessToken');
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 
@@ -76,8 +81,11 @@ const statusText = (status?: string) => {
   const map: Record<string, string> = {
     'pending': 'Chờ xử lý',
     'shipping': 'Đang giao hàng',
-    'completed': 'Đã hoàn thành',
-    'cancelled': 'Đã hủy'
+    'completed': 'Đã giao hàng',
+    'cancelled': 'Đã hủy',
+    'returning': 'Đang hoàn hàng',
+    'returned': 'Đã nhận hàng (Chờ hoàn tiền)',
+    'refunded': 'Đã hoàn tiền'
   };
   return map[status?.toLowerCase() || ''] || 'Đang xử lý';
 };
@@ -88,6 +96,9 @@ const getStatusBadgeClass = (status?: string) => {
   if (s === 'shipping') return 'bg-blue-600 text-white border-blue-700/50 shadow-sm font-extrabold';
   if (s === 'completed') return 'bg-green-600 text-white border-green-700/50 shadow-sm font-extrabold';
   if (s === 'cancelled') return 'bg-red-600 text-white border-red-700/50 shadow-sm font-extrabold';
+  if (s === 'returning') return 'bg-orange-600 text-white border-orange-700/50 shadow-sm font-extrabold';
+  if (s === 'returned') return 'bg-purple-600 text-white border-purple-700/50 shadow-sm font-extrabold';
+  if (s === 'refunded') return 'bg-emerald-600 text-white border-emerald-700/50 shadow-sm font-extrabold';
   return 'bg-gray-500 text-white border-gray-600/50 shadow-sm font-extrabold';
 };
 
@@ -106,6 +117,7 @@ const getTabClass = (tabKey: string) => {
   if (tabKey === 'pending') return 'border-yellow-500 text-yellow-600 font-extrabold';
   if (tabKey === 'shipping') return 'border-blue-600 text-blue-600 font-extrabold';
   if (tabKey === 'completed') return 'border-green-600 text-green-600 font-extrabold';
+  if (tabKey === 'returning') return 'border-orange-600 text-orange-600 font-extrabold';
   if (tabKey === 'cancelled') return 'border-red-600 text-red-600 font-extrabold';
   return 'border-black text-black font-extrabold';
 };
@@ -174,24 +186,37 @@ const loadProductCache = async () => {
 };
 
 const fetchPurchaseHistory = async () => {
-  if (!customerInfo.value || customerInfo.value.maKH === 'GUEST') {
+  let maKh = customerInfo.value?.maKH;
+  if (!maKh || maKh === 'GUEST') {
     return;
   }
 
   isLoading.value = true;
   try {
-    const res = await axios.get(`${API_BASE_URL}/api/DonHangSanPham/lich-su/${customerInfo.value.maKH}`, {
+    const res = await axios.get(`${API_BASE_URL}/api/DonHangSanPham/lich-su/${maKh}`, {
       headers: getAuthHeaders()
     });
-    invoices.value = res.data || [];
+    if (Array.isArray(res.data)) {
+      invoices.value = res.data;
+    } else if (res.data && Array.isArray(res.data.data)) {
+      invoices.value = res.data.data;
+    } else {
+      invoices.value = [];
+    }
+
+    // Đồng bộ tức thời từ fallback localStorage nếu có
+    invoices.value.forEach((inv: any) => {
+      const ls = localStorage.getItem(`hoan_hang_status_${inv.id}`);
+      if (ls === '6') {
+        inv.status = 'refunded';
+        inv.trangThai = 6;
+      } else if (ls === '5') {
+        inv.status = 'returned';
+        inv.trangThai = 5;
+      }
+    });
   } catch (error) {
     console.error("Lỗi khi tải lịch sử mua hàng sản phẩm:", error);
-    Swal.fire({
-      icon: 'error',
-      title: 'Lỗi tải dữ liệu',
-      text: 'Không thể kết nối đến hệ thống máy chủ để lấy danh sách đơn hàng.',
-      confirmButtonColor: '#000'
-    });
   } finally {
     isLoading.value = false;
   }
@@ -206,7 +231,11 @@ const filteredData = computed(() => {
   let data = [...invoices.value];
 
   if (currentTab.value !== 'all') {
-    data = data.filter(i => i.status?.toLowerCase() === currentTab.value.toLowerCase());
+    if (currentTab.value === 'returning') {
+      data = data.filter(i => ['returning', 'returned', 'refunded'].includes(i.status?.toLowerCase() || ''));
+    } else {
+      data = data.filter(i => i.status?.toLowerCase() === currentTab.value.toLowerCase());
+    }
   }
 
   if (filterDate.value) {
@@ -266,6 +295,61 @@ const openDetail = async (id: string) => {
 const closeModal = () => {
   isModalOpen.value = false;
   orderDetail.value = null;
+};
+
+// =========================================================================
+// QUẢN LÝ CÁC MODAL HOÀN TIỀN & MÃ VẬN ĐƠN (TÁCH THÀNH COMPONENT RIÊNG)
+// =========================================================================
+const isReturnModalOpen = ref(false);
+const selectedReturnOrder = ref<any>(null);
+
+const isTrackingModalOpen = ref(false);
+const selectedTrackingOrderId = ref('');
+
+const defaultAccountHolderName = computed(() => {
+  return (profileForm.value.firstName + ' ' + profileForm.value.lastName).trim().toUpperCase();
+});
+
+// Kiểm tra điều kiện đơn hàng trong vòng 1-3 ngày (tối đa 72 giờ)
+const isEligibleForReturn = (item: any) => {
+  if (!item || !item.date) return false;
+  const s = String(item.status || '').toLowerCase();
+  if (s !== 'completed') return false;
+  const orderTime = new Date(item.date).getTime();
+  if (isNaN(orderTime)) return false;
+  const diffHours = (Date.now() - orderTime) / (1000 * 60 * 60);
+  return diffHours <= 72; // trong vòng 3 ngày
+};
+
+const getRemainingReturnText = (item: any) => {
+  if (!item || !item.date) return '';
+  const orderTime = new Date(item.date).getTime();
+  const diffHours = 72 - Math.floor((Date.now() - orderTime) / (1000 * 60 * 60));
+  if (diffHours <= 0) return 'Đã quá hạn 3 ngày đổi trả';
+  if (diffHours >= 24) {
+    const days = Math.floor(diffHours / 24);
+    const hrs = diffHours % 24;
+    return `Còn ${days} ngày ${hrs}h đổi trả`;
+  }
+  return `Còn ${diffHours} giờ đổi trả`;
+};
+
+const openReturnModal = (item: any) => {
+  selectedReturnOrder.value = item;
+  isReturnModalOpen.value = true;
+};
+
+const openTrackingModal = (item: any) => {
+  selectedTrackingOrderId.value = item.id;
+  isTrackingModalOpen.value = true;
+};
+
+const handleReturnSuccess = () => {
+  fetchPurchaseHistory();
+};
+
+const handleTrackingSuccess = () => {
+  fetchPurchaseHistory();
 };
 
 const requestCancel = (id: string) => {
@@ -366,22 +450,52 @@ const confirmCancelOrder = async () => {
   }
 };
 
-onMounted(() => {
-  const info = getCustomerInfo();
-  customerInfo.value = info;
+onMounted(async () => {
+  try {
+    isPageLoading.value = true;
+    let info = getCustomerInfo();
+    
+    // Nếu local chưa có nhưng trong storage có token, tự động gọi API lấy thông tin Profile
+    const token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('accessToken') || sessionStorage.getItem('token');
+    if ((!info || info.maKH === 'GUEST') && token) {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/api/Profile/me`, {
+          headers: getAuthHeaders()
+        });
+        if (res.data && res.data.success && res.data.data) {
+          const u = res.data.data;
+          info = {
+            maKH: u.maKh || u.maKH || u.id,
+            hoTen: u.hoTen || 'Khách hàng',
+            email: u.email || '',
+            sdt: u.sdt || '',
+            tenRank: u.tenRank || 'Member',
+            hinhAnh: u.hinhAnh
+          };
+          localStorage.setItem('user', JSON.stringify(info));
+        }
+      } catch (err) {
+        console.warn("Không thể tải profile me:", err);
+      }
+    }
 
-  if (info && info.maKH !== 'GUEST') {
-    const names = info.hoTen.split(' ');
-    profileForm.value.firstName = names[0] || '';
-    profileForm.value.lastName = names.slice(1).join(' ') || '';
+    customerInfo.value = info;
 
-    loadProductCache();
-    fetchPurchaseHistory();
-  } else {
-    profileForm.value = {
-      firstName: 'Khách',
-      lastName: 'Hàng'
-    };
+    if (info && info.maKH && info.maKH !== 'GUEST') {
+      const names = (info.hoTen || '').split(' ');
+      profileForm.value.firstName = names[0] || '';
+      profileForm.value.lastName = names.slice(1).join(' ') || '';
+
+      loadProductCache();
+      await fetchPurchaseHistory();
+    } else {
+      profileForm.value = {
+        firstName: 'Khách',
+        lastName: 'Hàng'
+      };
+    }
+  } finally {
+    isPageLoading.value = false;
   }
 });
 
@@ -461,8 +575,14 @@ const handleLogout = () => {
         <main class="flex-1 min-w-0">
           <div class="bg-white p-6 lg:p-10 border border-gray-200 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500 rounded-sm">
             
+            <!-- Loading state -->
+            <div v-if="isPageLoading" class="flex flex-col items-center justify-center py-24">
+              <div class="w-8 h-8 border-2 border-t-black border-gray-200 rounded-full animate-spin"></div>
+              <p class="mt-4 text-[10px] uppercase tracking-widest text-gray-400 font-semibold">Đang tải lịch sử đơn hàng...</p>
+            </div>
+
             <!-- Guest state -->
-            <div v-if="!customerInfo || customerInfo.maKH === 'GUEST'" class="text-center py-16">
+            <div v-else-if="!customerInfo || customerInfo.maKH === 'GUEST'" class="text-center py-16">
               <Package class="w-12 h-12 mx-auto text-gray-200 mb-6" :stroke-width="1" />
               <h3 class="font-heading text-lg uppercase tracking-widest mb-2">Yêu Cầu Đăng Nhập</h3>
               <p class="text-xs tracking-widest text-gray-400 mb-8">Vui lòng đăng nhập tài khoản để kiểm tra quản lý lịch sử mua hàng cá nhân!</p>
@@ -532,6 +652,7 @@ const handleLogout = () => {
                     { key: 'pending', label: 'Chờ xử lý' },
                     { key: 'shipping', label: 'Đang giao' },
                     { key: 'completed', label: 'Đã giao' },
+                    { key: 'returning', label: 'Hoàn hàng' },
                     { key: 'cancelled', label: 'Đã hủy' }
                   ]"
                   :key="tab.key"
@@ -598,14 +719,51 @@ const handleLogout = () => {
                         <td class="py-5 px-5 text-xs text-right whitespace-nowrap">
                           <button 
                             @click="openDetail(item.id)"
-                            class="border border-black hover:bg-black hover:text-white text-black px-4 py-2 text-[9px] uppercase tracking-widest font-bold transition-all duration-200 rounded-sm"
+                            class="border border-black hover:bg-black hover:text-white text-black px-3.5 py-2 text-[9px] uppercase tracking-widest font-bold transition-all duration-200 rounded-sm"
                           >
                             Chi tiết
                           </button>
+
+                          <!-- Nút Yêu cầu hoàn hàng nếu đơn Đã hoàn thành và trong hạn 1-3 ngày -->
+                          <button 
+                            v-if="isEligibleForReturn(item)"
+                            @click="openReturnModal(item)"
+                            class="border border-amber-500 bg-amber-50/70 hover:bg-amber-500 hover:text-white text-amber-900 px-3 py-2 text-[9px] uppercase tracking-widest font-bold transition-all duration-200 rounded-sm ml-2 shadow-sm"
+                            :title="getRemainingReturnText(item)"
+                          >
+                            Trả hàng / Hoàn tiền
+                          </button>
+
+                          <!-- Nút Cập nhật mã vận đơn khi đơn ở trạng thái 4: Đang hoàn hàng -->
+                          <button 
+                            v-else-if="item.status?.toLowerCase() === 'returning'"
+                            @click="openTrackingModal(item)"
+                            class="border border-orange-500 bg-orange-50/70 hover:bg-orange-500 hover:text-white text-orange-900 px-3 py-2 text-[9px] uppercase tracking-widest font-bold transition-all duration-200 rounded-sm ml-2 shadow-sm"
+                            title="Cập nhật mã vận đơn bưu cục gửi hàng"
+                          >
+                            Mã vận đơn
+                          </button>
+
+                          <!-- Tag khi Đã nhận hàng về kho (Trạng thái 5) -->
+                          <span
+                            v-else-if="item.status?.toLowerCase() === 'returned'"
+                            class="inline-flex items-center px-2.5 py-1 bg-purple-50 text-purple-700 border border-purple-200 rounded text-[9px] font-bold tracking-wider uppercase ml-2"
+                          >
+                            Chờ Salon hoàn tiền
+                          </span>
+
+                          <!-- Tag khi Đã hoàn tiền xong 100% (Trạng thái 6) -->
+                          <span
+                            v-else-if="item.status?.toLowerCase() === 'refunded'"
+                            class="inline-flex items-center px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[9px] font-bold tracking-wider uppercase ml-2"
+                          >
+                            Đã hoàn tiền ✓
+                          </span>
+
                           <button 
                             v-if="item.status?.toLowerCase() === 'pending'" 
                             @click="requestCancel(item.id)"
-                            class="border border-red-200 hover:bg-red-50 hover:border-red-300 text-red-600 px-4 py-2 text-[9px] uppercase tracking-widest font-bold transition-all duration-200 rounded-sm ml-2.5"
+                            class="border border-red-200 hover:bg-red-50 hover:border-red-300 text-red-600 px-3 py-2 text-[9px] uppercase tracking-widest font-bold transition-all duration-200 rounded-sm ml-2"
                           >
                             Hủy đơn
                           </button>
@@ -644,56 +802,56 @@ const handleLogout = () => {
 
   <!-- Modal Xem Chi Tiết Hóa Đơn Sản Phẩm -->
   <Transition name="modal-fade">
-    <div v-if="isModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="closeModal">
-      <div class="bg-white w-full max-w-lg rounded-sm shadow-2xl border border-gray-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div v-if="isModalOpen" class="fixed inset-0 z-[99999] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm overflow-y-auto" @click.self="closeModal">
+      <div class="relative bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-gray-100 flex flex-col max-h-[88vh] my-auto overflow-hidden text-neutral-900 animate-in fade-in duration-200">
         <!-- Modal Header -->
-        <div class="flex justify-between items-center px-6 py-4 border-b border-gray-100">
+        <div class="flex justify-between items-center px-6 py-4 border-b border-gray-100 bg-white sticky top-0 z-10 shrink-0">
           <div>
-            <h3 class="font-heading text-sm uppercase tracking-widest text-black font-bold">Chi Tiết Đơn Hàng</h3>
-            <span class="text-[10px] text-gray-400 font-semibold tracking-wider">MÃ ĐƠN: #{{ selectedOrderId }}</span>
+            <h3 class="text-base font-bold text-gray-900">Chi tiết đơn hàng sản phẩm</h3>
+            <p class="text-xs text-gray-500 mt-0.5">Đơn hàng #{{ selectedOrderId }}</p>
           </div>
-          <button @click="closeModal" class="text-gray-400 hover:text-black transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <button @click="closeModal" class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
 
         <!-- Modal Body -->
-        <div class="p-6">
+        <div class="p-6 space-y-6 overflow-y-auto flex-1">
           <div v-if="isModalLoading" class="flex flex-col items-center justify-center py-8">
             <div class="w-6 h-6 border-2 border-t-black border-gray-200 rounded-full animate-spin"></div>
           </div>
           <div v-else-if="orderDetail" class="space-y-6">
             <!-- Delivery info & Status -->
-            <div class="bg-gray-50/80 p-4 border border-gray-100 rounded-sm flex justify-between items-start">
+            <div class="bg-gray-50/70 p-4 border border-gray-100 rounded-xl flex justify-between items-start">
               <div class="space-y-1">
-                <p class="text-[9px] uppercase tracking-widest text-gray-400 font-bold">Thông tin giao nhận</p>
-                <p class="text-xs text-black font-semibold">
+                <p class="text-[10px] uppercase tracking-wider text-gray-400 font-bold">Thông tin giao nhận</p>
+                <p class="text-xs text-gray-900 font-semibold">
                   Người nhận: {{ orderDetail.tenNguoiNhan }}
                 </p>
                 <p class="text-xs text-gray-500 leading-relaxed">
                   Địa chỉ: {{ orderDetail.diaChiGiao }}
                 </p>
               </div>
-              <span :class="['inline-block px-2.5 py-1 text-[8px] uppercase tracking-widest font-bold rounded-sm border', getStatusBadgeClass(orderDetail.trangThai)]">
+              <span :class="['inline-block px-2.5 py-1 text-[9px] uppercase tracking-wider font-bold rounded-full border shrink-0', getStatusBadgeClass(orderDetail.trangThai)]">
                 {{ statusText(orderDetail.trangThai) }}
               </span>
             </div>
 
             <!-- Product Items -->
             <div>
-              <h6 class="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-3">Danh sách sản phẩm</h6>
-              <div class="border border-gray-100 rounded-sm divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                <div v-for="pro in orderDetail.items" :key="pro.maSP || pro.maSp || pro.id" class="flex justify-between items-center p-3 text-xs">
+              <h6 class="text-xs font-bold text-gray-700 mb-3">Danh sách sản phẩm trong đơn</h6>
+              <div class="border border-gray-100 rounded-xl divide-y divide-gray-100 max-h-64 overflow-y-auto">
+                <div v-for="pro in orderDetail.items" :key="pro.maSP || pro.maSp || pro.id" class="flex justify-between items-center p-3 text-xs hover:bg-gray-50/50 transition-colors">
                   <div class="flex items-center gap-3 max-w-[70%]">
-                    <img :src="getProductImage(pro.tenSP || pro.tenSp || pro.ten || pro.name)" class="w-10 h-10 rounded-sm object-cover border border-gray-200 shrink-0" />
+                    <img :src="getProductImage(pro.tenSP || pro.tenSp || pro.ten || pro.name)" class="w-11 h-11 rounded-lg object-cover border border-gray-200 shrink-0 shadow-sm" />
                     <div class="space-y-0.5 min-w-0">
-                      <span class="text-black font-medium block truncate" :title="pro.tenSP || pro.tenSp || pro.ten || pro.name">{{ pro.tenSP || pro.tenSp || pro.ten || pro.name }}</span>
-                      <span class="text-[10px] text-gray-400 font-medium">Số lượng: x{{ pro.soLuong ?? pro.SoLuong ?? pro.quantity ?? pro.Quantity ?? 1 }}</span>
+                      <span class="text-gray-900 font-medium block truncate" :title="pro.tenSP || pro.tenSp || pro.ten || pro.name">{{ pro.tenSP || pro.tenSp || pro.ten || pro.name }}</span>
+                      <span class="text-[11px] text-gray-400">Số lượng: x{{ pro.soLuong ?? pro.SoLuong ?? pro.quantity ?? pro.Quantity ?? 1 }}</span>
                     </div>
                   </div>
-                  <span class="text-black font-bold">{{ formatPrice(pro.thanhTien ?? pro.ThanhTien ?? ((pro.giaBan || pro.gia || pro.price || 0) * (pro.soLuong ?? pro.SoLuong ?? pro.quantity ?? pro.Quantity ?? 1))) }}</span>
+                  <span class="text-gray-900 font-bold font-mono">{{ formatPrice(pro.thanhTien ?? pro.ThanhTien ?? ((pro.giaBan || pro.gia || pro.price || 0) * (pro.soLuong ?? pro.SoLuong ?? pro.quantity ?? pro.Quantity ?? 1))) }}</span>
                 </div>
               </div>
             </div>
@@ -702,27 +860,27 @@ const handleLogout = () => {
             <div class="border-t border-gray-100 pt-4 space-y-2 text-xs">
               <div class="flex justify-between">
                 <span class="text-gray-500">Tổng tiền hàng:</span>
-                <span class="text-black font-medium">{{ formatPrice(orderDetail.tongTienHang) }}</span>
+                <span class="text-gray-900 font-medium">{{ formatPrice(orderDetail.tongTienHang) }}</span>
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-500">Phí vận chuyển:</span>
-                <span class="text-black font-medium">{{ formatPrice(orderDetail.phiVanChuyen) }}</span>
+                <span class="text-gray-900 font-medium">{{ formatPrice(orderDetail.phiVanChuyen) }}</span>
               </div>
               <div v-if="orderDetail.giamGiaVoucher > 0" class="flex justify-between text-red-600">
                 <span class="font-medium">Voucher giảm giá:</span>
                 <span class="font-bold">-{{ formatPrice(orderDetail.giamGiaVoucher) }}</span>
               </div>
               <div class="flex justify-between items-center border-t border-gray-100 pt-3 mt-1">
-                <span class="text-xs uppercase tracking-widest text-black font-bold">Số tiền thanh toán:</span>
-                <span class="text-lg font-bold text-[#b8860b]">{{ formatPrice(orderDetail.tongThanhToan) }}</span>
+                <span class="text-xs uppercase tracking-wider text-gray-900 font-bold">Số tiền thanh toán:</span>
+                <span class="text-base font-bold text-red-600 font-mono">{{ formatPrice(orderDetail.tongThanhToan) }}</span>
               </div>
             </div>
           </div>
         </div>
         
         <!-- Modal Footer -->
-        <div class="bg-gray-50/50 px-6 py-3 border-t border-gray-100 flex justify-end gap-2">
-          <button @click="closeModal" class="bg-black hover:bg-gray-900 text-white px-5 py-2 text-[10px] uppercase tracking-widest font-semibold rounded-sm transition-colors">
+        <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-2 shrink-0">
+          <button @click="closeModal" class="bg-gray-900 hover:bg-black text-white px-5 py-2 text-xs font-semibold rounded-xl transition-all shadow-sm">
             Đóng
           </button>
         </div>
@@ -802,6 +960,23 @@ const handleLogout = () => {
       </div>
     </div>
   </Transition>
+
+  <!-- Component Modal Yêu Cầu Hoàn Tiền Riêng Biệt -->
+  <ModalYeuCauHoanHang
+    :is-open="isReturnModalOpen"
+    :order="selectedReturnOrder"
+    :default-account-holder="defaultAccountHolderName"
+    @close="isReturnModalOpen = false"
+    @success="handleReturnSuccess"
+  />
+
+  <!-- Component Modal Cập Nhật Mã Vận Đơn Riêng Biệt -->
+  <ModalCapNhatVanDon
+    :is-open="isTrackingModalOpen"
+    :order-id="selectedTrackingOrderId"
+    @close="isTrackingModalOpen = false"
+    @success="handleTrackingSuccess"
+  />
 </template>
 
 <style scoped>

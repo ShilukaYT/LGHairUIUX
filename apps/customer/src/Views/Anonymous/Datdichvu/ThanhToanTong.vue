@@ -23,6 +23,8 @@ type ServiceItem = {
 
 type ProductItem = {
     id: any;
+    tenSp?: string;
+    tenBienThe?: string;
     tenItem: string;
     gia: number;
     hinhAnh?: string;
@@ -33,7 +35,8 @@ type ProductItem = {
 const getImageUrl = (path?: string) => {
     if (!path) return '/images/no-image.png';
     if (path.startsWith('http')) return path;
-    return `${API}${path}`;
+    const clean = path.startsWith('/') ? path : `/${path}`;
+    return `${API}${clean}`;
 };
 
 const customer = getCustomerInfo();
@@ -153,10 +156,252 @@ const expectedEndTime = computed(() => {
 });
 
 const combineDateTime = () => {
+    validateField('bookingDate');
+    validateField('tempTime');
     if (tempDate.value && tempTime.value) {
         bookingData.value.bookingDate = `${tempDate.value}T${tempTime.value}`;
+    } else {
+        bookingData.value.bookingDate = '';
     }
 };
+
+// ==========================================
+// BỘ LỖI VALIDATION TỰ ĐỘNG TOÀN DIỆN (DỊCH VỤ + SẢN PHẨM)
+// ==========================================
+const errors = ref({
+    customerName: '',
+    phone: '',
+    email: '',
+    bookingDate: '',
+    tempTime: '',
+    stylist: '',
+    receiverName: '',
+    receiverPhone: '',
+    receiverEmail: '',
+    address: '',
+    cart: '',
+    invoice: ''
+});
+
+const validateField = (field: string) => {
+    switch (field) {
+        case 'customerName': {
+            const name = (bookingData.value.customerName || '').trim();
+            if (!name) {
+                errors.value.customerName = 'Vui lòng nhập họ và tên khách hàng.';
+            } else if (name.length < 2) {
+                errors.value.customerName = 'Họ và tên phải có tối thiểu 2 ký tự.';
+            } else if (/[0-9]/.test(name)) {
+                errors.value.customerName = 'Họ và tên không được chứa chữ số.';
+            } else {
+                errors.value.customerName = '';
+            }
+            break;
+        }
+        case 'phone': {
+            const phone = (bookingData.value.phone || '').trim();
+            const phoneRegex = /^(0|\+84)(3|5|7|8|9)[0-9]{8}$/;
+            if (!phone) {
+                errors.value.phone = 'Vui lòng nhập số điện thoại.';
+            } else if (!phoneRegex.test(phone)) {
+                errors.value.phone = 'Số điện thoại không hợp lệ (gồm 10 số, VD: 0912345678).';
+            } else {
+                errors.value.phone = '';
+            }
+            break;
+        }
+        case 'email': {
+            const email = (bookingData.value.email || '').trim();
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!email) {
+                errors.value.email = 'Vui lòng nhập email nhận thông báo.';
+            } else if (!emailRegex.test(email)) {
+                errors.value.email = 'Email không hợp lệ (VD: example@gmail.com).';
+            } else {
+                errors.value.email = '';
+            }
+            break;
+        }
+        case 'bookingDate': {
+            if (bookingData.value.selectedServices.length > 0) {
+                if (!tempDate.value) {
+                    errors.value.bookingDate = 'Vui lòng chọn ngày hẹn dịch vụ.';
+                } else {
+                    const todayStr = new Date().toISOString().split('T')[0] || '';
+                    if (tempDate.value < todayStr) {
+                        errors.value.bookingDate = 'Ngày hẹn không được ở quá khứ.';
+                    } else {
+                        errors.value.bookingDate = '';
+                    }
+                }
+            } else {
+                errors.value.bookingDate = '';
+            }
+            break;
+        }
+        case 'tempTime': {
+            if (bookingData.value.selectedServices.length > 0) {
+                if (!tempTime.value) {
+                    errors.value.tempTime = 'Vui lòng chọn khung giờ hẹn.';
+                } else {
+                    const todayStr = new Date().toISOString().split('T')[0] || '';
+                    if (tempDate.value === todayStr) {
+                        const now = new Date();
+                        const currentMinutes = now.getHours() * 60 + now.getMinutes();
+                        const [h = 0, m = 0] = tempTime.value.split(':').map(Number);
+                        const selectedMinutes = h * 60 + m;
+                        if (selectedMinutes <= currentMinutes + 10) {
+                            errors.value.tempTime = 'Khung giờ này đã qua hoặc quá sát giờ hiện tại.';
+                            break;
+                        }
+                    }
+                    errors.value.tempTime = '';
+                }
+            } else {
+                errors.value.tempTime = '';
+            }
+            break;
+        }
+        case 'stylist': {
+            if (bookingData.value.selectedServices.length > 0) {
+                if (!bookingData.value.stylistId) {
+                    errors.value.stylist = 'Vui lòng chọn Stylist phục vụ.';
+                } else {
+                    const found = stylists.value.find(s => String(s.id) === String(bookingData.value.stylistId));
+                    if (found && !found.isAvailable) {
+                        errors.value.stylist = 'Stylist này hiện không khả dụng trong khung giờ đã chọn.';
+                    } else {
+                        errors.value.stylist = '';
+                    }
+                }
+            } else {
+                errors.value.stylist = '';
+            }
+            break;
+        }
+        case 'receiverName': {
+            if (productItems.value.length > 0 && productData.value.receiveType === 'home') {
+                const name = (productData.value.receiverName || '').trim();
+                if (!name) {
+                    errors.value.receiverName = 'Vui lòng nhập họ tên người nhận hàng.';
+                } else if (name.length < 2) {
+                    errors.value.receiverName = 'Họ và tên người nhận phải có tối thiểu 2 ký tự.';
+                } else if (/[0-9]/.test(name)) {
+                    errors.value.receiverName = 'Họ và tên không được chứa chữ số.';
+                } else {
+                    errors.value.receiverName = '';
+                }
+            } else {
+                errors.value.receiverName = '';
+            }
+            break;
+        }
+        case 'receiverPhone': {
+            if (productItems.value.length > 0 && productData.value.receiveType === 'home') {
+                const phone = (productData.value.receiverPhone || '').trim();
+                const phoneRegex = /^(0|\+84)(3|5|7|8|9)[0-9]{8}$/;
+                if (!phone) {
+                    errors.value.receiverPhone = 'Vui lòng nhập số điện thoại người nhận.';
+                } else if (!phoneRegex.test(phone)) {
+                    errors.value.receiverPhone = 'Số điện thoại người nhận không hợp lệ (gồm 10 số, VD: 0912345678).';
+                } else {
+                    errors.value.receiverPhone = '';
+                }
+            } else {
+                errors.value.receiverPhone = '';
+            }
+            break;
+        }
+        case 'receiverEmail': {
+            if (productItems.value.length > 0 && productData.value.receiveType === 'home') {
+                const email = (productData.value.receiverEmail || '').trim();
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!email) {
+                    errors.value.receiverEmail = 'Vui lòng nhập email người nhận hàng.';
+                } else if (!emailRegex.test(email)) {
+                    errors.value.receiverEmail = 'Email người nhận không hợp lệ (VD: example@gmail.com).';
+                } else {
+                    errors.value.receiverEmail = '';
+                }
+            } else {
+                errors.value.receiverEmail = '';
+            }
+            break;
+        }
+        case 'address': {
+            if (productItems.value.length > 0 && productData.value.receiveType === 'home') {
+                const addr = (productData.value.address || '').trim();
+                if (!addr) {
+                    errors.value.address = 'Vui lòng nhập địa chỉ giao hàng chi tiết.';
+                } else if (addr.length < 6) {
+                    errors.value.address = 'Địa chỉ giao hàng quá ngắn (cần số nhà, tên đường, phường/xã, quận/huyện...).';
+                } else {
+                    errors.value.address = '';
+                }
+            } else {
+                errors.value.address = '';
+            }
+            break;
+        }
+        case 'cart': {
+            if (bookingData.value.selectedServices.length === 0 && productItems.value.length === 0) {
+                errors.value.cart = 'Giỏ hàng đang trống! Vui lòng chọn ít nhất 1 dịch vụ hoặc 1 sản phẩm.';
+            } else {
+                errors.value.cart = '';
+            }
+            break;
+        }
+    }
+};
+
+const validateAllForm = (): boolean => {
+    validateField('customerName');
+    validateField('phone');
+    validateField('email');
+    validateField('bookingDate');
+    validateField('tempTime');
+    validateField('stylist');
+    validateField('receiverName');
+    validateField('receiverPhone');
+    validateField('receiverEmail');
+    validateField('address');
+    validateField('cart');
+
+    const invoiceErr = validateInvoiceInfo();
+    if (invoiceErr) {
+        errors.value.invoice = invoiceErr;
+    } else {
+        errors.value.invoice = '';
+    }
+
+    return !Object.values(errors.value).some(err => !!err);
+};
+
+watch(() => bookingData.value.selectedServices.length, () => {
+    validateField('bookingDate');
+    validateField('tempTime');
+    validateField('stylist');
+    validateField('cart');
+});
+
+watch(() => productItems.value.length, () => {
+    validateField('receiverName');
+    validateField('receiverPhone');
+    validateField('receiverEmail');
+    validateField('address');
+    validateField('cart');
+});
+
+watch(() => bookingData.value.stylistId, () => {
+    validateField('stylist');
+});
+
+watch(() => productData.value.receiveType, () => {
+    validateField('receiverName');
+    validateField('receiverPhone');
+    validateField('receiverEmail');
+    validateField('address');
+});
 
 const normalizeStylist = (item: any) => {
     const id = String(item.id ?? item.maNV ?? item.maNhanVien ?? item.maStylist ?? item.userId ?? '');
@@ -481,6 +726,8 @@ const addProduct = (sp: any, bt: any) => {
     } else {
         productItems.value.push({
             id: bt.maBienThe,
+            tenSp: sp.tenSp,
+            tenBienThe: bt.tenBienThe,
             tenItem: `${sp.tenSp} - ${bt.tenBienThe}`,
             gia: Number(bt.giaBan || 0),
             hinhAnh: bt.hinhAnhDaiDien || bt.hinhAnh || sp.hinhAnhDaiDien,
@@ -514,10 +761,12 @@ const removeProduct = (id: any) => {
 const increaseQuantity = (item: ProductItem) => {
     if (item.soLuongTon !== undefined && item.soLuong >= item.soLuongTon) {
         Swal.fire({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 2500,
             icon: 'warning',
-            title: 'Vượt quá số lượng',
-            text: `Chỉ còn ${item.soLuongTon} sản phẩm trong kho!`,
-            confirmButtonColor: '#000'
+            title: `Chỉ còn ${item.soLuongTon} sản phẩm trong kho!`
         });
         return;
     }
@@ -526,6 +775,20 @@ const increaseQuantity = (item: ProductItem) => {
 
 const decreaseQuantity = (item: ProductItem) => {
     if (item.soLuong > 1) item.soLuong--;
+};
+
+const onQuantityInput = (item: ProductItem) => {
+    if (item.soLuongTon !== undefined && Number(item.soLuong) > item.soLuongTon) {
+        item.soLuong = item.soLuongTon;
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 2500,
+            icon: 'warning',
+            title: `Số lượng vượt quá tồn kho (tối đa ${item.soLuongTon} sp)!`
+        });
+    }
 };
 
 const validateQuantity = (item: ProductItem) => {
@@ -537,10 +800,12 @@ const validateQuantity = (item: ProductItem) => {
     if (item.soLuongTon !== undefined && newQty > item.soLuongTon) {
         newQty = item.soLuongTon;
         Swal.fire({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 2500,
             icon: 'warning',
-            title: 'Vượt quá số lượng',
-            text: `Chỉ còn ${item.soLuongTon} sản phẩm trong kho!`,
-            confirmButtonColor: '#000'
+            title: `Số lượng vượt quá tồn kho (tối đa ${item.soLuongTon} sp)!`
         });
     }
 
@@ -716,57 +981,27 @@ watch(() => productData.value.paymentMethod, (newVal) => {
 const handlePayment = async () => {
     if (isSubmitting.value) return;
 
-    if (!bookingData.value.customerName || !bookingData.value.phone) {
-        Swal.fire({
-            title: 'Thiếu thông tin',
-            text: 'Vui lòng nhập đầy đủ thông tin khách hàng (Họ tên, Số điện thoại).',
-            icon: 'warning',
-            confirmButtonColor: '#000'
-        });
-        return;
-    }
-
-    if (bookingData.value.selectedServices.length > 0) {
-        if (!tempDate.value || !tempTime.value || !bookingData.value.bookingDate) {
-            Swal.fire({
-                title: 'Chưa chọn thời gian',
-                text: 'Vui lòng chọn ngày và giờ hẹn cho dịch vụ.',
-                icon: 'warning',
-                confirmButtonColor: '#000'
+    // 1. Validate toàn bộ form tự động
+    if (!validateAllForm()) {
+        const activeErrors = Object.values(errors.value).filter(err => !!err);
+        let errorHtml = '<div style="text-align: left; font-size: 14px; line-height: 1.6; margin-top: 8px;">';
+        if (activeErrors.length === 1) {
+            errorHtml += `<p style="text-align: center; margin: 0;">${activeErrors[0]}</p>`;
+        } else {
+            errorHtml += '<p style="margin-bottom: 8px; font-weight: 600;">Vui lòng kiểm tra và hoàn thiện các thông tin sau:</p><ul style="padding-left: 20px; list-style-type: disc; margin: 0;">';
+            activeErrors.forEach(err => {
+                errorHtml += `<li style="color: #ef4444; margin-bottom: 4px;">${err}</li>`;
             });
-            return;
+            errorHtml += '</ul>';
         }
-    }
+        errorHtml += '</div>';
 
-    if (productItems.value.length > 0 && productData.value.receiveType === 'home') {
-        if (!productData.value.receiverName || !productData.value.receiverPhone || !productData.value.address) {
-            Swal.fire({
-                title: 'Thiếu địa chỉ giao hàng',
-                text: 'Vui lòng nhập đầy đủ thông tin người nhận và địa chỉ giao hàng chi tiết!',
-                icon: 'warning',
-                confirmButtonColor: '#000'
-            });
-            return;
-        }
-    }
-
-    if (bookingData.value.selectedServices.length === 0 && productItems.value.length === 0) {
         Swal.fire({
-            title: 'Giỏ hàng trống',
-            text: 'Giỏ hàng đang trống! Vui lòng chọn ít nhất 1 dịch vụ hoặc 1 sản phẩm.',
+            title: 'Thông tin chưa hợp lệ',
+            html: errorHtml,
             icon: 'warning',
-            confirmButtonColor: '#000'
-        });
-        return;
-    }
-
-    const invoiceErr = validateInvoiceInfo();
-    if (invoiceErr) {
-        Swal.fire({
-            title: 'Lỗi hóa đơn',
-            text: invoiceErr,
-            icon: 'warning',
-            confirmButtonColor: '#000'
+            confirmButtonText: 'Đã hiểu',
+            confirmButtonColor: '#1e293b'
         });
         return;
     }
@@ -1080,8 +1315,8 @@ onMounted(async () => {
     if (savedDate && savedDate !== 'Chưa chọn ngày') {
         const parts = savedDate.split('T');
         if (parts.length === 2) {
-            tempDate.value = parts[0];
-            tempTime.value = parts[1];
+            tempDate.value = parts[0] || '';
+            tempTime.value = parts[1] || '';
             bookingData.value.bookingDate = savedDate;
         }
     }
@@ -1201,7 +1436,7 @@ onMounted(async () => {
     await loadVouchers();
     await loadAvailableStylists();
 
-    stockPollingTimer = setInterval(async () => {
+    const syncStock = async () => {
         try {
             const res = await axios.get(`${API}/api/ThanhToanSanPham/search-products-variants`, {
                 params: { keyword: '' }
@@ -1213,6 +1448,12 @@ onMounted(async () => {
                         const bt = sp.bienthes?.find((b: any) => b.maBienThe === p.id);
                         if (bt) {
                             p.soLuongTon = bt.soLuongTon;
+                            if (sp.tenSp && (!p.tenItem || !p.tenItem.includes(sp.tenSp))) {
+                                p.tenItem = `${sp.tenSp} - ${bt.tenBienThe || p.tenItem}`;
+                            }
+                            if (!p.hinhAnh || p.hinhAnh.includes('no-image')) {
+                                p.hinhAnh = bt.hinhAnhDaiDien || bt.hinhAnh || sp.hinhAnhDaiDien;
+                            }
                             if (p.soLuongTon !== undefined && p.soLuong > p.soLuongTon) {
                                 p.soLuong = p.soLuongTon;
                             }
@@ -1224,7 +1465,10 @@ onMounted(async () => {
         } catch (e) {
             // Im lặng bỏ qua lỗi polling ngầm
         }
-    }, 15000);
+    };
+
+    await syncStock();
+    stockPollingTimer = setInterval(syncStock, 15000);
 });
 
 onUnmounted(() => {
@@ -1255,15 +1499,30 @@ onUnmounted(() => {
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                             <div>
                                 <label class="custom-label font-bold">Họ và tên *</label>
-                                <input v-model="bookingData.customerName" type="text" class="booking-input w-full" placeholder="Tên khách hàng">
+                                <input v-model="bookingData.customerName" 
+                                    @input="validateField('customerName')" 
+                                    @blur="validateField('customerName')"
+                                    :class="{ 'input-error': errors.customerName }"
+                                    type="text" class="booking-input w-full" placeholder="Tên khách hàng">
+                                <p v-if="errors.customerName" class="error-msg-custom"><i class="fas fa-exclamation-circle me-1"></i>{{ errors.customerName }}</p>
                             </div>
                             <div>
                                 <label class="custom-label font-bold">Số điện thoại *</label>
-                                <input v-model="bookingData.phone" type="tel" class="booking-input w-full" placeholder="090x xxx xxx">
+                                <input v-model="bookingData.phone" 
+                                    @input="validateField('phone')" 
+                                    @blur="validateField('phone')"
+                                    :class="{ 'input-error': errors.phone }"
+                                    type="tel" class="booking-input w-full" placeholder="090x xxx xxx">
+                                <p v-if="errors.phone" class="error-msg-custom"><i class="fas fa-exclamation-circle me-1"></i>{{ errors.phone }}</p>
                             </div>
                             <div class="md:col-span-2">
                                 <label class="custom-label font-bold">Email nhận thông báo *</label>
-                                <input v-model="bookingData.email" type="email" class="booking-input w-full" placeholder="vidu@gmail.com">
+                                <input v-model="bookingData.email" 
+                                    @input="validateField('email')" 
+                                    @blur="validateField('email')"
+                                    :class="{ 'input-error': errors.email }"
+                                    type="email" class="booking-input w-full" placeholder="vidu@gmail.com">
+                                <p v-if="errors.email" class="error-msg-custom"><i class="fas fa-exclamation-circle me-1"></i>{{ errors.email }}</p>
                             </div>
                             <div class="md:col-span-2">
                                 <label class="custom-label font-bold">Ghi chú chung</label>
@@ -1289,14 +1548,22 @@ onUnmounted(() => {
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                             <div>
                                 <label class="custom-label font-bold">Ngày hẹn</label>
-                                <input v-model="tempDate" type="date" class="booking-input w-full" :min="minDate" @change="combineDateTime">
+                                <input v-model="tempDate" 
+                                    @change="combineDateTime"
+                                    :class="{ 'input-error': errors.bookingDate }"
+                                    type="date" class="booking-input w-full" :min="minDate">
+                                <p v-if="errors.bookingDate" class="error-msg-custom"><i class="fas fa-exclamation-circle me-1"></i>{{ errors.bookingDate }}</p>
                             </div>
                             <div>
                                 <label class="custom-label font-bold">Giờ hẹn</label>
-                                <select v-model="tempTime" class="booking-input" @change="combineDateTime">
+                                <select v-model="tempTime" 
+                                    @change="combineDateTime"
+                                    :class="{ 'input-error': errors.tempTime }"
+                                    class="booking-input">
                                     <option value="">Chọn giờ hẹn</option>
                                     <option v-for="hour in availableHours" :key="hour" :value="hour">{{ hour }}</option>
                                 </select>
+                                <p v-if="errors.tempTime" class="error-msg-custom"><i class="fas fa-exclamation-circle me-1"></i>{{ errors.tempTime }}</p>
                                 <div class="summary-line" v-if="tempTime">
                                     <span class="font-bold">Giờ bắt đầu:</span>
                                     <span class="font-bold text-black">{{ tempTime }}</span>
@@ -1320,6 +1587,7 @@ onUnmounted(() => {
                                 </h3>
                                 <div class="heading-line"></div>
                             </div>
+                            <p v-if="errors.stylist" class="error-msg-custom stylist-error-banner mb-3"><i class="fas fa-exclamation-triangle me-1.5"></i>{{ errors.stylist }}</p>
                             
                             <div v-if="loadingStylists" class="mt-4 p-3 text-center text-gray-500 font-bold bg-gray-50 border border-gray-200">
                                 <i class="fas fa-spinner fa-spin me-2 text-black"></i> Đang tìm stylist phù hợp...
@@ -1329,7 +1597,7 @@ onUnmounted(() => {
                                 <div v-for="stylist in stylists" :key="stylist.id" class="stylist-card" :class="{
                                     'active': String(bookingData.stylistId) === String(stylist.id),
                                     'is-disabled': !stylist.isAvailable
-                                }" @click="stylist.isAvailable ? bookingData.stylistId = stylist.id : null"
+                                }" @click="stylist.isAvailable ? (bookingData.stylistId = stylist.id, validateField('stylist')) : null"
                                     :title="!stylist.isAvailable ? stylist.unAvailableReason : ''">
                                     
                                     <div class="stylist-schedule-info" v-if="stylist.lichTrinh && stylist.lichTrinh.length > 0">
@@ -1411,19 +1679,39 @@ onUnmounted(() => {
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label class="custom-label font-bold">Họ tên người nhận *</label>
-                                        <input v-model="productData.receiverName" type="text" class="booking-input w-full" placeholder="Họ tên người nhận">
+                                        <input v-model="productData.receiverName" 
+                                            @input="validateField('receiverName')" 
+                                            @blur="validateField('receiverName')"
+                                            :class="{ 'input-error': errors.receiverName }"
+                                            type="text" class="booking-input w-full" placeholder="Họ tên người nhận">
+                                        <p v-if="errors.receiverName" class="error-msg-custom"><i class="fas fa-exclamation-circle me-1"></i>{{ errors.receiverName }}</p>
                                     </div>
                                     <div>
                                         <label class="custom-label font-bold">Số điện thoại *</label>
-                                        <input v-model="productData.receiverPhone" type="tel" class="booking-input w-full" placeholder="090x xxx xxx">
+                                        <input v-model="productData.receiverPhone" 
+                                            @input="validateField('receiverPhone')" 
+                                            @blur="validateField('receiverPhone')"
+                                            :class="{ 'input-error': errors.receiverPhone }"
+                                            type="tel" class="booking-input w-full" placeholder="090x xxx xxx">
+                                        <p v-if="errors.receiverPhone" class="error-msg-custom"><i class="fas fa-exclamation-circle me-1"></i>{{ errors.receiverPhone }}</p>
                                     </div>
                                     <div class="md:col-span-2">
-                                        <label class="custom-label font-bold">Email người nhận</label>
-                                        <input v-model="productData.receiverEmail" type="email" class="booking-input w-full" placeholder="email@example.com">
+                                        <label class="custom-label font-bold">Email người nhận *</label>
+                                        <input v-model="productData.receiverEmail" 
+                                            @input="validateField('receiverEmail')" 
+                                            @blur="validateField('receiverEmail')"
+                                            :class="{ 'input-error': errors.receiverEmail }"
+                                            type="email" class="booking-input w-full" placeholder="email@example.com">
+                                        <p v-if="errors.receiverEmail" class="error-msg-custom"><i class="fas fa-exclamation-circle me-1"></i>{{ errors.receiverEmail }}</p>
                                     </div>
                                     <div class="md:col-span-2">
                                         <label class="custom-label font-bold text-danger">Địa chỉ giao hàng chi tiết *</label>
-                                        <textarea v-model="productData.address" class="booking-input w-full pt-2" style="height: 80px;" placeholder="Nhập số nhà, tên đường... Bản đồ sẽ tự động ước tính phí ship."></textarea>
+                                        <textarea v-model="productData.address" 
+                                            @input="validateField('address')" 
+                                            @blur="validateField('address')"
+                                            :class="{ 'input-error': errors.address }"
+                                            class="booking-input w-full pt-2" style="height: 80px;" placeholder="Nhập số nhà, tên đường... Bản đồ sẽ tự động ước tính phí ship."></textarea>
+                                        <p v-if="errors.address" class="error-msg-custom"><i class="fas fa-exclamation-circle me-1"></i>{{ errors.address }}</p>
                                     </div>
                                     
                                     <div class="md:col-span-2" v-if="productData.address">
@@ -1538,6 +1826,8 @@ onUnmounted(() => {
                                 <div class="heading-line mx-auto" style="width: 80px;"></div>
                             </div>
 
+                            <p v-if="errors.cart" class="error-msg-custom services-error-banner mb-3"><i class="fas fa-exclamation-triangle me-1.5"></i>{{ errors.cart }}</p>
+
                             <!-- 1. DỊCH VỤ ĐÃ CHỌN -->
                             <div class="mb-4">
                                 <label class="custom-label font-bold mb-2">
@@ -1623,15 +1913,23 @@ onUnmounted(() => {
                                                 <div v-for="bt in sp.bienthes" :key="bt.maBienThe" class="service-dropdown-item"
                                                     :class="{ 'opacity-50': bt.soLuongTon <= 0 }"
                                                     @click="addProduct(sp, bt)">
-                                                    <div class="flex items-center">
+                                                    <div class="flex items-center flex-grow min-w-0">
                                                         <div class="w-10 h-10 bg-gray-100 flex-shrink-0 overflow-hidden rounded-md border border-gray-200 mr-3">
-                                                            <img :src="getImageUrl(bt.hinhAnh)" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='/images/no-image.png'" />
+                                                            <img :src="getImageUrl(bt.hinhAnhDaiDien || bt.hinhAnh || sp.hinhAnhDaiDien)" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='/images/no-image.png'" />
                                                         </div>
-                                                        <div class="item-details">
-                                                            <span class="item-name-text font-bold" style="font-size: 13px;">{{ bt.tenBienThe }}</span>
+                                                        <div class="item-details flex-grow min-w-0 pr-2">
+                                                            <!-- Dòng 1: Tên sản phẩm 1 dòng -->
+                                                            <div class="item-name-text font-bold text-neutral-900 truncate leading-tight" style="font-size: 13px;">
+                                                                {{ sp.tenSp }}
+                                                            </div>
+                                                            <!-- Dòng 2: Tên biến thể / phân loại -->
+                                                            <div class="text-xs text-neutral-500 font-medium mt-0.5 truncate" style="font-size: 12px;">
+                                                                <span class="text-neutral-400">Phân loại:</span> {{ bt.tenBienThe }}
+                                                            </div>
+                                                            <!-- Dòng 3: Giá thành 1 dòng riêng -->
                                                             <div class="flex items-center mt-1">
                                                                 <span class="item-price-text text-black font-bold">{{ formatMoney(bt.giaBan) }}</span>
-                                                                <span class="ms-2 text-black" style="font-size: 11px;">(Kho: {{ bt.soLuongTon }})</span>
+                                                                <span class="ms-2 text-neutral-500 font-medium" style="font-size: 11px;">(Kho: {{ bt.soLuongTon }})</span>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1647,28 +1945,48 @@ onUnmounted(() => {
                                 <div class="selected-items-wrapper" v-if="productItems.length > 0">
                                     <transition-group name="list-fade">
                                         <div v-for="p in productItems" :key="p.id" class="item-row product-checkout-item">
-                                            <div class="flex items-center flex-grow">
-                                                <div class="w-12 h-12 bg-gray-100 flex-shrink-0 overflow-hidden rounded-md border border-gray-200 mr-3">
+                                            <!-- 1. Ảnh sản phẩm + Tên + Đơn giá + Kho -->
+                                            <div class="flex items-center flex-grow min-w-0 pr-2">
+                                                <div class="w-10 h-10 bg-gray-100 flex-shrink-0 overflow-hidden rounded-md border border-gray-200 mr-3">
                                                     <img :src="getImageUrl(p.hinhAnh)" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='/images/no-image.png'" />
                                                 </div>
-                                                <div class="item-info flex-grow">
-                                                    <span class="n font-bold d-block text-truncate" style="max-width: 150px;">{{ p.tenItem }}</span>
-                                                    <span class="p text-black font-bold mt-1 d-block">{{ formatMoney(p.gia) }}</span>
-                                                    <div v-if="p.soLuongTon !== undefined" class="mt-1">
-                                                        <span class="text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
-                                                            Kho: {{ p.soLuongTon }}
+                                                <div class="item-info flex-grow min-w-0 pr-2">
+                                                    <!-- Dòng 1: Tên sản phẩm 1 dòng duy nhất -->
+                                                    <div class="n font-bold text-neutral-900 leading-tight truncate" style="font-size: 12px; max-width: 140px;">
+                                                        {{ p.tenSp || (p.tenItem && p.tenItem.includes(' - ') ? p.tenItem.split(' - ')[0] : p.tenItem) }}
+                                                    </div>
+                                                    <!-- Dòng 2: Tên biến thể / phân loại -->
+                                                    <div class="text-xs text-neutral-500 font-medium mt-0.5 truncate" style="font-size: 11px; max-width: 140px;" v-if="p.tenBienThe || (p.tenItem && p.tenItem.includes(' - '))">
+                                                        <span class="text-neutral-400">Phân loại:</span> {{ p.tenBienThe || p.tenItem.split(' - ').slice(1).join(' - ') }}
+                                                    </div>
+                                                    <!-- Dòng 3: Giá thành 1 dòng riêng -->
+                                                    <div class="flex items-center gap-1.5 mt-1 flex-wrap">
+                                                        <span class="p text-black font-bold">{{ formatMoney(p.gia) }}</span>
+                                                        <span v-if="p.soLuongTon !== undefined" class="text-[11px] text-gray-500 font-medium">
+                                                            (Kho: <b :class="p.soLuongTon <= 5 ? 'text-red-600' : 'text-gray-700'">{{ p.soLuongTon }}</b>)
                                                         </span>
                                                     </div>
                                                 </div>
                                             </div>
                                             
-                                            <div class="quantity-pill ms-auto me-2">
-                                                <button type="button" @click="decreaseQuantity(p)" class="qty-btn"><i class="fas fa-minus"></i></button>
-                                                <input type="number" v-model.number="p.soLuong" min="1" class="qty-input" @change="validateQuantity(p)" @blur="validateQuantity(p)" />
-                                                <button type="button" @click="increaseQuantity(p)" class="qty-btn"><i class="fas fa-plus"></i></button>
+                                            <!-- 2. Bộ tăng giảm số lượng có thể nhập trực tiếp -->
+                                            <div class="quantity-pill ms-auto me-2 flex-shrink-0">
+                                                <button type="button" @click="decreaseQuantity(p)" class="qty-btn" :disabled="p.soLuong <= 1"><i class="fas fa-minus"></i></button>
+                                                <input 
+                                                    type="number" 
+                                                    v-model.number="p.soLuong" 
+                                                    min="1" 
+                                                    :max="p.soLuongTon"
+                                                    class="qty-input" 
+                                                    @input="onQuantityInput(p)"
+                                                    @change="validateQuantity(p)" 
+                                                    @blur="validateQuantity(p)" 
+                                                />
+                                                <button type="button" @click="increaseQuantity(p)" class="qty-btn" :disabled="p.soLuongTon !== undefined && p.soLuong >= p.soLuongTon"><i class="fas fa-plus"></i></button>
                                             </div>
                                             
-                                            <button class="del-btn" @click="removeProduct(p.id)"><i class="fas fa-trash-alt"></i></button>
+                                            <!-- 3. Nút xóa thùng rác bên phải -->
+                                            <button class="del-btn flex-shrink-0" @click="removeProduct(p.id)" title="Xóa"><i class="fas fa-trash-alt"></i></button>
                                         </div>
                                     </transition-group>
                                 </div>
@@ -2990,5 +3308,35 @@ textarea.booking-input {
     .glass-card {
         padding: 24px;
     }
+}
+
+/* ==========================================
+   STYLE VALIDATION BẮT LỖI TỰ ĐỘNG
+   ========================================== */
+.booking-input.input-error {
+    border-color: #ef4444 !important;
+    background-color: #fef2f2 !important;
+    box-shadow: 0 0 0 1px #ef4444 !important;
+}
+
+.error-msg-custom {
+    color: #ef4444 !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    margin-top: 4px !important;
+    margin-bottom: 0 !important;
+    display: flex;
+    align-items: center;
+}
+
+.services-error-banner,
+.stylist-error-banner {
+    background-color: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #b91c1c !important;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
 }
 </style>
