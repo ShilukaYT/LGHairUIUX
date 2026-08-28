@@ -48,7 +48,42 @@ const activeHeroSlide = ref<number>(0);
 let heroIntervalId: number | null = null;
 
 const heroSlides: HeroSlide[] = [
-
+  {
+    id: 1,
+    image: '/dich-vu-toc.png',
+    alt: 'Dịch vụ tóc LG Hair',
+    subtitle: 'Premium Hair Services',
+    title: 'LGHAIR SALON',
+    desc: 'Trải nghiệm dịch vụ làm tóc chuyên nghiệp hàng đầu',
+    route: 'datdichvu'
+  },
+  {
+    id: 2,
+    image: '/nhuom-thoi-trang.png',
+    alt: 'Nhuộm thời trang',
+    subtitle: 'Trendy Hair Coloring',
+    title: 'LGHAIR SALON',
+    desc: 'Nhuộm tóc thời trang với màu sắc độc đáo nhất',
+    route: 'datdichvu'
+  },
+  {
+    id: 3,
+    image: '/goi-dau-massage.png',
+    alt: 'Gội đầu massage',
+    subtitle: 'Relaxing Hair Care',
+    title: 'LGHAIR SALON',
+    desc: 'Thư giãn tuyệt đối với dịch vụ gội đầu massage cao cấp',
+    route: 'datdichvu'
+  },
+  {
+    id: 4,
+    image: '/cat-tao-kieu.png',
+    alt: 'Cắt tạo kiểu',
+    subtitle: 'Expert Styling',
+    title: 'LGHAIR SALON',
+    desc: 'Tạo kiểu tóc chuyên nghiệp từ các chuyên gia hàng đầu',
+    route: 'datdichvu'
+  }
 ];
 
 // Flash sale countdown
@@ -193,8 +228,32 @@ const getFallbackImg = (tenDanhMuc: string): string => {
 
 // Testimonials
 const activeTestimonial = ref<number>(0);
+let testimonialIntervalId: number | null = null;
 const testimonials: Testimonial[] = [
- 
+  {
+    id: 1,
+    name: "Nguyễn Mai Phương",
+    role: "Khách hàng thường xuyên",
+    quote: "Dịch vụ cực kỳ chuyên nghiệp! Nhân viên tư vấn màu tóc rất hợp với khuôn mặt mình. Chắc chắn sẽ quay lại LG Hair nhiều lần nữa.",
+    rating: 5,
+    service: "Nhuộm Thời Trang"
+  },
+  {
+    id: 2,
+    name: "Trần Bảo Nam",
+    role: "Khách hàng mới",
+    quote: "Lần đầu đến trải nghiệm dịch vụ gội đầu massage tại salon, thực sự thư giãn sau những ngày làm việc căng thẳng. Không gian tuyệt vời.",
+    rating: 5,
+    service: "Gội Đầu Massage"
+  },
+  {
+    id: 3,
+    name: "Lê Thu Thảo",
+    role: "Khách VIP",
+    quote: "Chất lượng sản phẩm sử dụng ở salon rất tốt, tóc mình phục hồi rõ rệt sau liệu trình phục hồi chuyên sâu. Cảm ơn các chuyên viên của LG Hair.",
+    rating: 5,
+    service: "Phục Hồi Chuyên Sâu"
+  }
 ];
 
 const currentTestimonial = computed(() => {
@@ -237,6 +296,7 @@ const prevTestimonial = (): void => {
 // ===== LIFECYCLE =====
 onMounted(async () => {
   heroIntervalId = window.setInterval(nextHeroSlide, 4200);
+  testimonialIntervalId = window.setInterval(nextTestimonial, 5000);
 
   // Fetch danh mục dịch vụ từ API
   try {
@@ -405,6 +465,10 @@ onUnmounted(() => {
     window.clearInterval(flashTimerInterval);
     flashTimerInterval = null;
   }
+  if (testimonialIntervalId !== null) {
+    window.clearInterval(testimonialIntervalId);
+    testimonialIntervalId = null;
+  }
 });
 
 // ===== THÊM VÀO GIỎ HÀNG =====
@@ -468,7 +532,7 @@ const addProductToCart = async (prod: any) => {
       </div>
       <div class="hm-hero-content">
         <p class="hm-hero-subtitle">{{ heroSlides[activeHeroSlide]?.subtitle }}</p>
-        <h1 class="hm-hero-title">LG HAIR SALON</h1>
+        <h1 class="hm-hero-title">{{ heroSlides[activeHeroSlide]?.title || 'LGHAIR SALON' }}</h1>
         <p class="hm-hero-desc">{{ heroSlides[activeHeroSlide]?.desc }}</p>
         <div class="hm-hero-cta">
           <button class="hm-btn-primary" @click="goToRoute('datdichvu')">Đặt Lịch Ngay</button>
@@ -596,11 +660,15 @@ const addProductToCart = async (prod: any) => {
       </div>
     </section>
 
-    <!-- ===== DỊCH VỤ MỚI ===== -->
     <section class="hm-services-section">
-      <h2 class="hm-section-title" data-aos="fade-up">Dịch Vụ Mới Của Chúng Tôi</h2>
+      <div style="max-width: 1280px; margin: 0 auto; padding: 0 32px;">
+        <div class="hm-stylist-header" data-aos="fade-up">
+          <h2 class="hm-section-title" style="margin-bottom: 0; text-align: left;">Dịch Vụ Mới Của Chúng Tôi</h2>
+        </div>
+        <div class="hm-stylist-divider" data-aos="fade-up"></div>
+      </div>
 
-      <div class="hm-svc-row" v-if="dataStore.SERVICES.length >= 1">
+      <div class="hm-svc-row hm-svc-row-3" v-if="dataStore.SERVICES.length >= 1">
         <div class="hm-svc-big" v-if="dataStore.SERVICES[0]" data-aos="fade-right">
           <img :src="dataStore.SERVICES[0].img" :alt="dataStore.SERVICES[0].name" class="hm-svc-big-img" />
           <div class="hm-svc-big-overlay">
@@ -609,28 +677,31 @@ const addProductToCart = async (prod: any) => {
             <button class="hm-svc-big-btn" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[0].id } })">Xem chi tiết</button>
           </div>
         </div>
-        
         <div class="hm-svc-card" v-if="dataStore.SERVICES[1]" data-aos="fade-up" data-aos-delay="100" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[1].id } })">
           <img :src="dataStore.SERVICES[1].img" :alt="dataStore.SERVICES[1].name" class="hm-svc-card-img" />
           <div class="hm-svc-card-body">
-            <span class="hm-svc-label">Dịch vụ mới</span>
-            <h3 class="hm-svc-card-name" style="text-transform: uppercase;">{{ normalizeVietnamese(dataStore.SERVICES[1].name) }}</h3>
-            <p class="hm-svc-card-desc">{{ dataStore.SERVICES[1].desc }}</p>
+            <div>
+              <span class="hm-svc-label">Dịch vụ mới</span>
+              <h3 class="hm-svc-card-name" style="text-transform: uppercase;">{{ normalizeVietnamese(dataStore.SERVICES[1].name) }}</h3>
+              <p class="hm-svc-card-desc">{{ dataStore.SERVICES[1].desc }}</p>
+            </div>
             <p class="hm-svc-card-price">{{ formatPriceToVND(dataStore.SERVICES[1].price) }}</p>
           </div>
         </div>
         <div class="hm-svc-card" v-if="dataStore.SERVICES[2]" data-aos="fade-up" data-aos-delay="200" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[2].id } })">
           <img :src="dataStore.SERVICES[2].img" :alt="dataStore.SERVICES[2].name" class="hm-svc-card-img" />
           <div class="hm-svc-card-body">
-            <span class="hm-svc-label">Nổi bật</span>
-            <h3 class="hm-svc-card-name" style="text-transform: uppercase;">{{ normalizeVietnamese(dataStore.SERVICES[2].name) }}</h3>
-            <p class="hm-svc-card-desc">{{ dataStore.SERVICES[2].desc }}</p>
+            <div>
+              <span class="hm-svc-label">Nổi bật</span>
+              <h3 class="hm-svc-card-name" style="text-transform: uppercase;">{{ normalizeVietnamese(dataStore.SERVICES[2].name) }}</h3>
+              <p class="hm-svc-card-desc">{{ dataStore.SERVICES[2].desc }}</p>
+            </div>
             <p class="hm-svc-card-price">{{ formatPriceToVND(dataStore.SERVICES[2].price) }}</p>
           </div>
         </div>
       </div>
 
-      <div class="hm-svc-row" style="margin-top: 32px;" v-if="dataStore.SERVICES.length >= 4">
+      <div class="hm-svc-row hm-svc-row-2" style="margin-top: 32px;" v-if="dataStore.SERVICES.length >= 4">
         <div class="hm-svc-card hm-svc-card-large" v-if="dataStore.SERVICES[3]" data-aos="fade-up" data-aos-delay="100" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[3].id } })">
           <img :src="dataStore.SERVICES[3].img" :alt="dataStore.SERVICES[3].name" class="hm-svc-card-img" />
           <div class="hm-svc-card-body">
@@ -651,8 +722,8 @@ const addProductToCart = async (prod: any) => {
         </div>
       </div>
 
-      <div class="hm-center" data-aos="fade-up">
-        <button class="hm-view-all" @click="goToRoute('services')">Xem Tất Cả Dịch Vụ →</button>
+      <div class="hm-center">
+        <button class="hm-view-all" @click="goToRoute('services')">Xem thêm</button>
       </div>
     </section>
 
@@ -723,9 +794,13 @@ const addProductToCart = async (prod: any) => {
       </div>
     </section>
 
-    <!-- ===== CỬA HÀNG / SẢN PHẨM ===== -->
     <section class="hm-shop-section">
-      <h2 class="hm-section-title">Cửa Hàng Của Chúng Tôi</h2>
+      <div style="max-width: 1280px; margin: 0 auto; padding: 0 32px;">
+        <div class="hm-stylist-header" data-aos="fade-up">
+          <h2 class="hm-section-title" style="margin-bottom: 0; text-align: left;">Cửa Hàng Của Chúng Tôi</h2>
+        </div>
+        <div class="hm-stylist-divider" data-aos="fade-up"></div>
+      </div>
 
 
       <div v-if="isLoadingProducts" class="hm-prod-grid">
@@ -883,11 +958,13 @@ const addProductToCart = async (prod: any) => {
 .hm-hero {
   position: relative;
   width: 100%;
-  height: 426px;
+  height: 520px;
   background: #000;
   overflow: hidden;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
 }
 .hm-hero-slides { position: absolute; inset: 0; width: 100%; height: 100%; }
 .hm-hero-slide {
@@ -898,14 +975,18 @@ const addProductToCart = async (prod: any) => {
 .hm-slide-active { opacity: 1; z-index: 10; }
 .hm-slide-hidden { opacity: 0; z-index: 0; }
 .hm-hero-img { width: 100%; height: 100%; object-fit: cover; }
-.hm-hero-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.45); }
+.hm-hero-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.20); }
 
 .hm-hero-content {
   position: relative;
   z-index: 20;
   max-width: 620px;
-  padding: 48px 80px;
+  padding: 0 80px;
   color: #fff;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 .hm-hero-subtitle {
   font-size: 11px;
@@ -1281,7 +1362,7 @@ const addProductToCart = async (prod: any) => {
 .hm-cta-section {
   position: relative;
   width: 100%;
-  height: 420px;
+  height: 540px;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -1311,25 +1392,25 @@ const addProductToCart = async (prod: any) => {
 }
 .hm-cta-title {
   font-family: inherit;
-  font-size: 32px;
-  font-weight: 400;
-  margin-bottom: 20px;
+  font-size: 42px;
+  font-weight: 500;
+  margin-bottom: 24px;
 }
 .hm-cta-desc {
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1.8;
   font-weight: 300;
-  margin-bottom: 36px;
+  margin-bottom: 40px;
   color: rgba(255,255,255,0.9);
-  text-transform: capitalize;
 }
 .hm-cta-btn {
   display: inline-block;
-  padding: 12px 40px;
+  padding: 16px 48px;
   border: 1.5px solid #fff;
   color: #fff;
   background: transparent;
-  font-size: 13px;
+  font-size: 15px;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   cursor: pointer;
@@ -1345,30 +1426,36 @@ const addProductToCart = async (prod: any) => {
 }
 .hm-section-title {
   font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  font-size: 34px;
+  font-size: 28px;
   text-transform: capitalize;
   text-align: center;
-  margin-bottom: 48px;
-  font-weight: 400;
+  margin-bottom: 40px;
+  font-weight: 500;
+  letter-spacing: 0px;
 }
 .hm-svc-row {
-  display: flex;
-  gap: 0;
-  align-items: stretch;
-  margin-bottom: 0;
+  display: grid;
+  gap: 24px;
   max-width: 1280px;
   margin: 0 auto 32px;
   padding: 0 32px;
 }
-.hm-svc-row-rev { flex-direction: row-reverse; }
+.hm-svc-row-3 {
+  grid-template-columns: 2fr 1fr 1fr;
+  align-items: stretch;
+}
+.hm-svc-row-2 {
+  grid-template-columns: 1fr 1fr;
+}
 .hm-svc-big {
-  flex: 3;
   position: relative;
   overflow: hidden;
-  min-height: 372px;
-  border-radius: 4px;
+  border-radius: 8px;
+  /* Removed height and min-height so it adapts to grid naturally without forcing it */
 }
 .hm-svc-big-img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -1403,34 +1490,39 @@ const addProductToCart = async (prod: any) => {
 
 .hm-svc-card {
   border: none;
-  border-radius: 0;
+  border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  transition: opacity 0.3s;
-  flex: 1;
-  max-width: 360px;
-  margin-left: 24px;
+  transition: opacity 0.3s, transform 0.3s;
+  background: #fdfdfd;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+  height: 100%;
 }
-.hm-svc-row-rev .hm-svc-card { margin-left: 0; margin-right: 24px; }
-.hm-svc-card:hover { opacity: 0.85; }
 .hm-svc-card-large {
-  max-width: none !important;
-  margin-left: 12px;
-  margin-right: 12px;
+  background: transparent;
+  box-shadow: none;
 }
+.hm-svc-card:hover { opacity: 0.85; transform: translateY(-4px); }
 .hm-svc-card-img {
   width: 100%;
-  aspect-ratio: 4 / 3;
-  height: auto;
+  aspect-ratio: 1 / 1;
   object-fit: cover;
-  object-position: center 80%;
   display: block;
   flex-shrink: 0;
-  border-radius: 8px;
 }
-.hm-svc-card-body { padding: 16px 0 0; flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.hm-svc-card-large .hm-svc-card-img {
+  aspect-ratio: 16 / 9;
+}
+.hm-svc-card-body { 
+  padding: 24px 20px; 
+  flex: 1; 
+  display: flex; 
+  flex-direction: column; 
+  justify-content: space-between; 
+  gap: 16px; 
+}
 .hm-svc-label {
   font-size: 10px;
   text-transform: uppercase;
