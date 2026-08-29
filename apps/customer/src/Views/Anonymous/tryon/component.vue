@@ -3,8 +3,10 @@ import { ref, onMounted, watch } from 'vue';
 import Swal from 'sweetalert2';
 import axios from 'axios';
 import { useChatStore } from '@/stores/useChatStore';
+import { useBookingBasketStore } from '@/stores/useBookingBasketStore';
 
 const chatStore = useChatStore();
+const basketStore = useBookingBasketStore();
 
 // --- CẤU HÌNH SWEETALERT2 TOAST ---
 const Toast = Swal.mixin({
@@ -232,7 +234,7 @@ const performTryOn = async () => {
 <template>
   <div>
     <button
-      :class="['btn-open-tryon', { 'chat-open': chatStore.isChatOpen }]"
+      :class="['btn-open-tryon', { 'chat-open': chatStore.isChatOpen, 'basket-active': basketStore.itemCount > 0 }]"
       @click="showModalTryOn = !showModalTryOn"
       title="Thử tóc với AI"
     >
@@ -443,7 +445,7 @@ const performTryOn = async () => {
    Chat toggle: bottom-5(20px) + h-14(56px) + gap 8px = bottom: 84px */
 .btn-open-tryon {
   position: fixed;
-  bottom: 84px;
+  bottom: 90px;
   right: 20px;
   z-index: 9998;
   width: 56px;
@@ -455,7 +457,7 @@ const performTryOn = async () => {
   font-size: 22px;
   cursor: pointer;
   box-shadow: 0 4px 15px rgba(12, 8, 0, 0.4);
-  transition: bottom 0.3s ease, all 0.3s ease;
+  transition: bottom 0.3s ease, margin 0.3s ease, all 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -463,38 +465,20 @@ const performTryOn = async () => {
   background-color: #fffdfd;
 }
 
-/* Khi chat đang mở: dịch lên cao hơn (trên phần input của chat popup)
-   Chat popup cao ~ min(520px, 100dvh-104px), ta cần nút nằm ngay trên popup
-   popup bottom edge = toggle(20px+56px) + mb(12px) = 88px
-   popup họn chế bởi max-h: ta đặt nút ở bottom = 88px + popup-height chính xác là khó
-   => Đơn giản: ẩn nút khi chat mở */
+/* Khi chat đang mở: ẩn nút */
 .btn-open-tryon.chat-open {
   opacity: 0;
   pointer-events: none;
   transform: scale(0.8);
 }
 
-/* sm: chatbot bottom-6(24px) */
-@media (min-width: 640px) {
-  .btn-open-tryon {
-    bottom: 88px;
-    right: 24px;
-  }
+.btn-open-tryon.basket-active {
+  margin-bottom: 76px;
 }
 
-/* md: nút chat toggle là 64px (md:h-16) */
 @media (min-width: 768px) {
-  .btn-open-tryon {
-    bottom: 96px;
-    right: 24px;
-  }
-}
-
-/* lg: chatbot bottom-10(40px) right-12(48px) */
-@media (min-width: 1024px) {
-  .btn-open-tryon {
-    bottom: 116px;
-    right: 48px;
+  .btn-open-tryon.basket-active {
+    margin-bottom: 60px;
   }
 }
 

@@ -394,9 +394,7 @@ export default {
                   </div>
                   <div class="combo-footer mt-auto pt-3">
                     <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
-                      <span v-if="c.giaGoc" class="combo-price-old">{{
-                        formatPrice(c.giaGoc)
-                      }}</span>
+                      
                       <span class="combo-price mb-0">
                         <template v-if="c.giaGoc">Chỉ từ </template>{{ formatPrice(c.gia) }}
                       </span>
