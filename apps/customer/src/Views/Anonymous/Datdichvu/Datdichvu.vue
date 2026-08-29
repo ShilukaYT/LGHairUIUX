@@ -393,10 +393,13 @@ onMounted(async () => {
         const queryStylistId = new URLSearchParams(window.location.search).get('stylistId');
         const savedStylistId = localStorage.getItem('temp_stylist_id');
         
-        if (queryStylistId && stylists.value.some(s => s.id === queryStylistId)) {
+        if (queryStylistId && stylists.value.some(s => s.id === queryStylistId && s.isAvailable)) {
             bookingData.value.stylistId = queryStylistId;
-        } else if (savedStylistId && stylists.value.some(s => s.id === savedStylistId)) {
+        } else if (savedStylistId && stylists.value.some(s => s.id === savedStylistId && s.isAvailable)) {
             bookingData.value.stylistId = savedStylistId;
+        } else {
+            bookingData.value.stylistId = null;
+            localStorage.removeItem('temp_stylist_id');
         }
     } catch (error) {
         console.error("Lỗi khi load dữ liệu:", error);
@@ -749,10 +752,10 @@ const loadAvailableStylists = async () => {
 
         stylists.value = mappedStylists;
 
-        // VÁ LỖI TẠI ĐÂY: Ép xóa tick xanh nếu thợ đang bận (isAvailable = false)
+        // Tự động bỏ chọn thợ nếu thợ đang chọn không còn rảnh trong khung giờ mới
         if (bookingData.value.stylistId && !stylists.value.some(s => s.id === bookingData.value.stylistId && s.isAvailable)) {
             bookingData.value.stylistId = null;
-            Swal.fire({ title: 'Lỗi', text: 'Thợ này đã có người đặt. Vui lòng chọn thợ khác!', icon: 'warning', confirmButtonColor: '#d4af37' });
+            localStorage.removeItem('temp_stylist_id');
         }
     } catch (e) {
         console.error("Lỗi tải danh sách thợ:", e);

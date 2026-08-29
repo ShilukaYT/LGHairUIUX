@@ -866,12 +866,7 @@ const loadAvailableStylists = async () => {
 
         if (bookingData.value.stylistId && !stylists.value.some(s => String(s.id) === String(bookingData.value.stylistId) && s.isAvailable)) {
             bookingData.value.stylistId = null;
-            Swal.fire({
-                title: 'Stylist bận',
-                text: 'Stylist bạn chọn đã bận vào khung giờ này do thay đổi thời gian dịch vụ. Vui lòng chọn thợ khác!',
-                icon: 'info',
-                confirmButtonColor: '#000'
-            });
+            localStorage.removeItem('temp_stylist_id');
         }
 
         if (stylists.value.length === 0) {
