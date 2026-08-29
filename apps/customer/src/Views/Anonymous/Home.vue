@@ -576,8 +576,8 @@ const addProductToCart = async (prod: any) => {
         </div>
         <div class="hm-cat-card hm-cat-card-img" @click="goToRoute('services')">
           <img
-            :src="dataStore.SERVICES[0]?.img || 'https://images.unsplash.com/photo-1595476108010-b4d1f10d5e43?q=80&w=400'"
-            alt="Hình ảnh dịch vụ"
+            src="/salon-service-banner.jpg"
+            alt="Xem thêm dịch vụ LGHair"
             class="hm-cat-bg-img"
           />
           <div class="hm-cat-hover-text">Xem Thêm Dịch Vụ</div>
@@ -588,8 +588,8 @@ const addProductToCart = async (prod: any) => {
     <!-- ===== ĐƯỜNG KẺ NGANG MỜ ===== -->
     <div class="hm-divider"></div>
 
-    <!-- ===== FLASH SALE ===== -->
     <section class="hm-flash-section" v-if="activeFlashSale">
+      <div class="hm-flash-inner">
       <div class="hm-flash-top">
         <div class="hm-flash-title-wrap">
           <span class="hm-flash-f">FLASH</span>
@@ -640,6 +640,7 @@ const addProductToCart = async (prod: any) => {
             <button class="hm-flash-btn" @click.stop="router.push({ name: 'datdichvu' })">ĐẶT NGAY</button>
           </div>
         </div>
+      </div>
       </div>
     </section>
 
@@ -921,7 +922,8 @@ const addProductToCart = async (prod: any) => {
   background: #fff;
   font-family: inherit;
   color: #000;
-  overflow-x: hidden;
+  min-width: 1280px;
+  overflow-x: visible;
 }
 
 /* ==================== TOAST ==================== */
@@ -1188,7 +1190,7 @@ const addProductToCart = async (prod: any) => {
   justify-content: center;
   padding: 16px;
 }.hm-divider {
-  width: 100%;
+  width: calc(100% - 64px);
   max-width: 1280px;
   margin: 32px auto;
   height: 1px;
@@ -1198,6 +1200,11 @@ const addProductToCart = async (prod: any) => {
 /* ==================== FLASH SALE ==================== */
 .hm-flash-section {
   background: #fff;
+  width: 100%;
+  padding: 0 32px;
+  box-sizing: border-box;
+}
+.hm-flash-inner {
   max-width: 1280px;
   margin: 16px auto 48px;
   border-radius: 24px;
@@ -1509,11 +1516,12 @@ const addProductToCart = async (prod: any) => {
   width: 100%;
   aspect-ratio: 1 / 1;
   object-fit: cover;
+  object-position: center 15%;
   display: block;
   flex-shrink: 0;
 }
 .hm-svc-card-large .hm-svc-card-img {
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 4 / 3;
 }
 .hm-svc-card-body { 
   padding: 24px 20px; 
@@ -2019,28 +2027,144 @@ const addProductToCart = async (prod: any) => {
 .hm-club-submit:hover { background: #fff; }
 
 /* ==================== RESPONSIVE ==================== */
+
+/* ---- 1400px+: giữ layout tối đa không bị giãn quá rộng ---- */
+@media (min-width: 1400px) {
+  .hm-hero { height: 600px; }
+  .hm-hero-content { padding: 0 120px; max-width: 720px; }
+}
+
+/* ---- Tablet lớn / Desktop thu nhỏ: 1025px – 1280px ---- */
+@media (max-width: 1280px) {
+  .hm-hero-content { padding: 0 60px; }
+  .hm-hero-title { font-size: 40px; }
+  .hm-svc-row { padding: 0 24px; }
+  .hm-prod-grid { gap: 20px; }
+  .hm-flash-section { margin: 16px 24px 48px; }
+}
+
+/* ---- Tablet: 769px – 1024px ---- */
 @media (max-width: 1024px) {
-  .hm-category-inner { grid-template-columns: repeat(3, 1fr); }
-  .hm-flash-cards { grid-template-columns: repeat(2, 1fr); }
+  /* Hero */
+  .hm-hero { height: 420px; }
+  .hm-hero-content { padding: 0 48px; }
+  .hm-hero-title { font-size: 36px; }
+  .hm-hero-desc { font-size: 14px; }
+
+  /* Danh mục */
+  .hm-category-inner { grid-template-columns: repeat(4, 1fr); }
+
+  /* Flash Sale */
   .hm-flash-left { display: none; }
   .hm-flash-vline { display: none; }
-  .hm-prod-grid { grid-template-columns: repeat(2, 1fr); }
-  .hm-stylist-grid { grid-template-columns: repeat(2, 1fr); }
-  .hm-testimonial-img-wrap { flex: 0 0 300px; }
+  .hm-flash-cards { grid-template-columns: repeat(4, 1fr); }
+
+  /* Dịch vụ */
+  .hm-svc-row { padding: 0 20px; gap: 16px; }
+  .hm-svc-row-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+  /* Sản phẩm */
+  .hm-prod-grid { grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+  /* Testimonial */
+  .hm-testimonial-img-wrap { flex: 0 0 280px; }
+
+  /* Stylist */
+  .hm-stylist-section { padding: 40px 24px 36px; }
 }
+
+/* ---- Mobile lớn / Tablet nhỏ: 577px – 768px ---- */
 @media (max-width: 768px) {
-  .hm-hero-content { padding: 32px 28px; }
-  .hm-hero-title { font-size: 32px; }
+  /* Hero */
+  .hm-hero { height: 360px; }
+  .hm-hero-content { padding: 32px 28px; max-width: 100%; }
+  .hm-hero-title { font-size: 28px; }
+  .hm-hero-desc { font-size: 13px; max-width: 100%; }
+  .hm-hero-cta { gap: 10px; }
+  .hm-btn-primary, .hm-btn-outline { padding: 12px 22px; font-size: 10px; }
+
+  /* Danh mục */
   .hm-category-inner { grid-template-columns: repeat(2, 1fr); }
+  .hm-cat-card { min-height: 140px; }
+
+  /* Flash Sale */
   .hm-flash-cards { grid-template-columns: repeat(2, 1fr); }
-  .hm-prod-grid { grid-template-columns: repeat(2, 1fr); gap: 16px; }
-  .hm-svc-row { flex-direction: column; padding: 0 16px; }
-  .hm-svc-row-rev { flex-direction: column; }
-  .hm-svc-card { max-width: none; margin-left: 0 !important; margin-right: 0 !important; margin-top: 16px; }
-  .hm-stylist-grid { grid-template-columns: 1fr; }
+  .hm-flash-section { margin: 16px 12px 32px; border-radius: 16px; }
+
+  /* CTA */
+  .hm-cta-section { height: 400px; }
+  .hm-cta-title { font-size: 28px; }
+  .hm-cta-desc { font-size: 15px; }
+
+  /* Dịch vụ */
+  .hm-svc-row { padding: 0 16px; gap: 12px; }
+  .hm-svc-row-3 { grid-template-columns: 1fr; }
+  .hm-svc-row-2 { grid-template-columns: 1fr; }
+  .hm-svc-big { min-height: 280px; }
+
+  /* Sản phẩm */
+  .hm-prod-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .hm-prod-img-wrap { height: 200px; }
+  .hm-prod-name { font-size: 13px; }
+  .hm-prod-price { font-size: 15px; }
+
+  /* Stylist */
+  .hm-stylist-section { padding: 32px 16px 28px; }
+  .hm-small-card { width: 220px; min-height: 280px; }
+  .hm-stylist-photo-wrap { height: 170px; }
+
+  /* Testimonial */
   .hm-testimonial-section { flex-direction: column; }
-  .hm-testimonial-img-wrap { flex: none; height: 240px; margin: 24px 24px 0; }
-  .hm-testimonial-card { margin: 0 24px 24px; padding: 32px 24px; }
+  .hm-testimonial-img-wrap { flex: none; height: 220px; margin: 20px 16px 0; }
+  .hm-testimonial-card { margin: 0 16px 20px; padding: 28px 20px; }
+  .hm-test-quote { font-size: 15px; }
+
+  /* Newsletter */
+  .hm-club-section { padding: 48px 16px; }
   .hm-club-form { flex-direction: column; }
+  .hm-club-title { font-size: 22px; }
+
+  /* Xem thêm */
+  .hm-xem-them { font-size: 16px; padding: 14px 40px; }
+}
+
+/* ---- Mobile nhỏ: ≤480px ---- */
+@media (max-width: 480px) {
+  /* Hero */
+  .hm-hero { height: 300px; }
+  .hm-hero-content { padding: 20px 18px; }
+  .hm-hero-title { font-size: 22px; }
+  .hm-hero-subtitle { font-size: 9px; letter-spacing: 0.25em; }
+  .hm-hero-desc { display: none; }
+  .hm-btn-primary, .hm-btn-outline { padding: 10px 16px; font-size: 9px; }
+
+  /* Danh mục */
+  .hm-category-inner { grid-template-columns: repeat(2, 1fr); }
+  .hm-cat-card { min-height: 110px; padding: 16px 10px; }
+  .hm-cat-num { font-size: 20px; }
+  .hm-cat-title { font-size: 10px; }
+
+  /* Flash Sale */
+  .hm-flash-cards { grid-template-columns: repeat(2, 1fr); }
+  .hm-flash-section { margin: 12px 8px 24px; }
+
+  /* Sản phẩm */
+  .hm-prod-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .hm-prod-img-wrap { height: 160px; border-radius: 12px; }
+  .hm-prod-card { border-radius: 16px; padding: 8px; }
+  .hm-prod-name { font-size: 12px; }
+  .hm-prod-price { font-size: 13px; }
+  .hm-prod-add { padding: 5px 10px; font-size: 10px; }
+
+  /* Stylist */
+  .hm-small-card { width: 180px; min-height: 240px; }
+  .hm-stylist-photo-wrap { height: 140px; }
+  .hm-stylist-name { font-size: 14px; }
+
+  /* Testimonial */
+  .hm-testimonial-img-wrap { height: 180px; margin: 16px 12px 0; }
+  .hm-testimonial-card { margin: 0 12px 16px; padding: 20px 16px; }
+  .hm-test-quote { font-size: 13px; }
+  .hm-test-author-row { flex-direction: column; gap: 10px; align-items: flex-start; }
 }
 </style>
