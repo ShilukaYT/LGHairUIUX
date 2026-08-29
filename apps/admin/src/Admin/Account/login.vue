@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
-import Swal from 'sweetalert2'
-import { Eye, EyeOff, Sun, Moon } from 'lucide-vue-next'
+import { Eye, EyeOff, Sun, Moon, AlertTriangle, XCircle, CheckCircle2 } from 'lucide-vue-next'
 import { useTheme } from 'vuetify'
 
 const theme = useTheme()
@@ -25,15 +24,51 @@ const showPassword = ref(false)
 const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
 const API_URL = API + '/api/admin/auth/login'
 
+// Hộp thoại thông báo chuẩn Vuetify 3
+const alertModal = reactive({
+  show: false,
+  title: '',
+  text: '',
+  type: 'error' as 'error' | 'warning' | 'success'
+})
+
+const showAlert = (title: string, text: string, type: 'error' | 'warning' | 'success' = 'error') => {
+  alertModal.title = title
+  alertModal.text = text
+  alertModal.type = type
+  alertModal.show = true
+}
+
+const closeAlert = () => {
+  alertModal.show = false
+}
+
+// Lắng nghe phím Enter / Escape để đóng thông báo trực quan
+const handleKeydown = (e: KeyboardEvent) => {
+  if (alertModal.show && (e.key === 'Enter' || e.key === 'Escape' || e.key === ' ')) {
+    e.preventDefault()
+    e.stopPropagation()
+    closeAlert()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
+})
+
 const handleLogin = async () => {
+  // Nếu thông báo đang hiển thị, nhấn Enter chỉ đóng thông báo
+  if (alertModal.show) {
+    closeAlert()
+    return
+  }
+
   if (!email.value || !password.value) {
-    Swal.fire({
-      icon: 'warning',
-      title: 'Thiếu thông tin',
-      text: 'Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu!',
-      confirmButtonText: 'Đóng',
-      confirmButtonColor: '#ff7eb3'
-    })
+    showAlert('Thiếu thông tin', 'Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu!', 'warning')
     return
   }
 
@@ -50,23 +85,35 @@ const handleLogin = async () => {
     if (response.data.success) {
       const data = response.data.data || response.data;
       const accessToken = data.accessToken || data.token || '';
+      const refreshToken = data.refreshToken || '';
       const user = data.user || data;
 
       // Xóa tất cả các phiên đăng nhập cũ để tránh việc 1 trình duyệt lưu 2 tài khoản cùng lúc
       sessionStorage.removeItem('adminToken')
+      sessionStorage.removeItem('adminRefreshToken')
       sessionStorage.removeItem('adminUser')
       sessionStorage.removeItem('staffToken')
+      sessionStorage.removeItem('staffRefreshToken')
       sessionStorage.removeItem('staffUser')
       sessionStorage.removeItem('nhanVienUser')
+      localStorage.removeItem('staffToken')
+      localStorage.removeItem('staffRefreshToken')
       localStorage.removeItem('staffUser')
       localStorage.removeItem('nhanVienUser')
 
       // 2. Kiểm tra Role và lưu trữ session tương ứng
       if (user.maRole === 'R01') {
         sessionStorage.setItem('adminToken', accessToken)
+        if (refreshToken) {
+          sessionStorage.setItem('adminRefreshToken', refreshToken)
+        }
         sessionStorage.setItem('adminUser', JSON.stringify(user))
       } else {
         sessionStorage.setItem('staffToken', accessToken)
+        if (refreshToken) {
+          sessionStorage.setItem('staffRefreshToken', refreshToken)
+          localStorage.setItem('staffRefreshToken', refreshToken)
+        }
         sessionStorage.setItem('staffUser', JSON.stringify(user))
       }
 
@@ -88,14 +135,8 @@ const handleLogin = async () => {
       errorMsg = 'Tài khoản hoặc mật khẩu không chính xác!'
     }
     
-    // Hiển thị thông báo đăng nhập sai bằng SweetAlert2
-    Swal.fire({
-      icon: 'error',
-      title: 'Đăng nhập thất bại',
-      text: errorMsg,
-      confirmButtonText: 'Đóng',
-      confirmButtonColor: '#ff7eb3'
-    })
+    // Hiển thị thông báo đăng nhập sai bằng Vuetify 3 Dialog
+    showAlert('Đăng nhập thất bại', errorMsg, 'error')
   } finally {
     isLoading.value = false
   }
@@ -416,6 +457,51 @@ l-1 -383 42 -42 c24 -24 47 -43 51 -43 4 0 8 200 8 444 0 441 0 444 22 486 13
         </v-form>
       </v-card>
     </div>
+
+    <!-- Hộp thoại thông báo chuẩn Vuetify 3 (v-dialog) -->
+    <v-dialog v-model="alertModal.show" max-width="450px" transition="dialog-transition">
+      <v-card class="rounded-2xl pa-6 elevation-12 text-center" :class="isDark ? 'bg-grey-darken-4' : 'bg-white'">
+        <v-card-item class="pt-2 pb-2">
+          <!-- Icon tròn nổi bật dùng Lucide SVG -->
+          <div class="d-flex justify-center mb-5">
+            <div 
+              class="d-flex align-center justify-center rounded-circle"
+              :class="alertModal.type === 'error' ? 'bg-red-lighten-5' : alertModal.type === 'warning' ? 'bg-amber-lighten-5' : 'bg-green-lighten-5'"
+              style="width: 76px; height: 76px; min-width: 76px;"
+            >
+              <XCircle v-if="alertModal.type === 'error'" :size="44" class="text-red" :stroke-width="2" />
+              <AlertTriangle v-else-if="alertModal.type === 'warning'" :size="44" class="text-amber-darken-2" :stroke-width="2" />
+              <CheckCircle2 v-else :size="44" class="text-green-darken-1" :stroke-width="2" />
+            </div>
+          </div>
+          
+          <!-- Tiêu đề lớn hơn, đậm đà rõ nét -->
+          <v-card-title class="text-h5 font-weight-bold pb-2 text-center" :style="{ color: isDark ? '#fff' : '#1e293b', fontSize: '1.4rem !important' }">
+            {{ alertModal.title }}
+          </v-card-title>
+        </v-card-item>
+
+        <!-- Nội dung text to hơn, dễ đọc -->
+        <v-card-text class="text-body-1 px-4 pb-6 pt-1" :style="{ color: isDark ? '#cbd5e1' : '#475569', fontSize: '16px !important', lineHeight: '1.6' }">
+          {{ alertModal.text }}
+        </v-card-text>
+
+        <v-card-actions class="px-4 pb-2 pt-0">
+          <v-btn
+            block
+            :color="alertModal.type === 'error' ? '#ff4d4f' : '#ff7eb3'"
+            variant="flat"
+            height="48"
+            rounded="lg"
+            class="text-uppercase font-weight-bold tracking-wider text-white text-subtitle-1"
+            @click="closeAlert"
+            @keydown.enter.prevent="closeAlert"
+          >
+            Đóng
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 

@@ -1,5 +1,7 @@
 <template>
   <RouterView />
+  <!-- Hộp thoại xác thực & phiên làm việc Vuetify 3 toàn cục -->
+  <AdminAuthDialogs />
 </template>
 
 <script setup lang="ts">
@@ -7,9 +9,14 @@ import { onMounted, watch } from 'vue';
 import { RouterView } from 'vue-router'
 import { useCustomizerStore } from '@/stores/customizer';
 import { useTheme } from 'vuetify';
+import AdminAuthDialogs from '@/components/AdminAuthDialogs.vue';
+import { useSessionHeartbeat } from '@/composables/useSessionHeartbeat';
 
 const customizer = useCustomizerStore();
 const theme = useTheme();
+
+// Kích hoạt tiến trình theo dõi phiên làm việc ngầm (Heartbeat & Tab Switch)
+useSessionHeartbeat();
 
 function applyThemeMode(themeName: string) {
   const isDark = themeName === 'dark';

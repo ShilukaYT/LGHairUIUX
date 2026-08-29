@@ -5,10 +5,12 @@ import { Search, User, ShoppingBag, Menu, X, Heart } from 'lucide-vue-next';
 import axios from 'axios';
 import { getCartDB } from '@/Views/Anonymous/CSDL/cartDB';
 import { useWishlistStore } from '@/stores/useWishlistStore';
+import { useAuthStore } from '@/stores/useAuthStore';
 
 const API = import.meta.env.VITE_API_URL;
 const route = useRoute();
 const router = useRouter();
+const authStore = useAuthStore();
 const scrolled = ref(false);
 const mobileMenuOpen = ref(false);
 const currentUser = ref<any>(null);
@@ -51,11 +53,26 @@ const checkUser = () => {
   }
 };
 
-const handleLogout = () => {
-  localStorage.removeItem('user');
-  currentUser.value = null;
-  window.dispatchEvent(new Event('user-updated'));
-  router.push({ name: 'login' });
+const handleLogout = async () => {
+  try {
+    const refreshToken = localStorage.getItem('refreshToken') || '';
+    await axios.post(`${API}/api/account/logout`, { refreshToken: refreshToken || undefined }, { withCredentials: true });
+  } catch (err) {
+    console.warn('Lỗi gọi API đăng xuất:', err);
+  } finally {
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('refresh_token');
+    sessionStorage.removeItem('user');
+    sessionStorage.removeItem('token');
+    authStore.setSessionExpiredBanner(false);
+    currentUser.value = null;
+    window.dispatchEvent(new Event('user-updated'));
+    router.push({ name: 'login' });
+  }
 };
 
 
@@ -147,21 +164,25 @@ onMounted(() => {
   window.addEventListener('cart-updated', updateCartCount);
   updateCartCount();
 
-  // Tự động kiểm tra phiên đăng nhập mỗi 5 phút
-  checkSessionInterval = setInterval(async () => {
-    if (!currentUser.value) return; // Chỉ kiểm tra khi có user đăng nhập
-    try {
-      await axios.get(API + '/api/account/verify-session', {
-        withCredentials: true // Quan trọng để gửi kèm cookie HttpOnly
-      });
-    } catch (error: any) {
-      if (error.response && error.response.status === 401) {
-        clearInterval(checkSessionInterval);
-        alert('Phiên đăng nhập đã hết hạn hoặc bạn đã bị đăng xuất từ thiết bị khác. Vui lòng đăng nhập lại!');
-        handleLogout();
+    // Tự động kiểm tra phiên đăng nhập mỗi 1 phút
+    checkSessionInterval = setInterval(async () => {
+      if (!currentUser.value) return; // Chỉ kiểm tra khi có user đăng nhập
+      try {
+        await axios.get(API + '/api/account/verify-session', {
+          withCredentials: true // Quan trọng để gửi kèm cookie HttpOnly
+        });
+      } catch (error: any) {
+        if (error.response && error.response.status === 401) {
+          clearInterval(checkSessionInterval);
+          handleLogout();
+          const currentPath = window.location.pathname.toLowerCase();
+          const isProtectedRoute = currentPath.includes('/profile') || currentPath.includes('/don-hang');
+          if (isProtectedRoute) {
+            authStore.triggerSessionExpired('Phiên đăng nhập đã hết hạn hoặc bạn đã bị đăng xuất từ thiết bị khác. Vui lòng đăng nhập lại.');
+          }
+        }
       }
-    }
-  }, 60000); // 60,000 ms = 1 phút
+    }, 60000); // 60,000 ms = 1 phút
 });
 
 onUnmounted(() => {
@@ -396,7 +417,7 @@ onUnmounted(() => {
                     Đơn Hàng
                   </router-link>
                   <div class="h-px bg-gray-100 my-2"></div>
-                  <button @click="handleLogout" class="w-full text-left block px-6 py-2.5 text-[11px] uppercase tracking-widest text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors">
+                  <button @click="authStore.triggerLogoutConfirm(handleLogout)" class="w-full text-left block px-6 py-2.5 text-[11px] uppercase tracking-widest text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors">
                     Đăng Xuất
                   </button>
                 </template>

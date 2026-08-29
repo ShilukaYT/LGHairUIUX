@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue';
-import { User, Package, Calendar, LogOut, Star } from 'lucide-vue-next';
+import { User, Package, Calendar, LogOut, Star, Award, ShieldAlert } from 'lucide-vue-next';
 import axios from 'axios';
 import { useRouter } from 'vue-router';
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 import Swal from 'sweetalert2';
+import { useAuthStore } from '@/stores/useAuthStore';
 
 const router = useRouter();
+const authStore = useAuthStore();
 
 const profileForm = ref({
   firstName: '',
@@ -18,6 +20,23 @@ const greetingName = computed(() => {
 });
 
 const customerInfo = ref<any>(null);
+
+const rankKey = computed(() => {
+  const r = (customerInfo.value?.tenRank || '').toLowerCase().trim();
+  if (r.includes('kim cương') || r.includes('diamond')) return 'kimcuong';
+  if (r.includes('vàng') || r.includes('gold')) return 'vang';
+  if (r.includes('bạc') || r.includes('silver')) return 'bac';
+  return 'dong';
+});
+
+const sidebarBadgeClass = computed(() => {
+  const key = rankKey.value;
+  if (key === 'kimcuong') return 'bg-[#0284c7] text-white';
+  if (key === 'vang') return 'bg-[#b45309] text-white';
+  if (key === 'bac') return 'bg-slate-600 text-white';
+  return 'bg-[#5c381c] text-white'; // đồng
+});
+
 const isLoading = ref(false);
 const isModalLoading = ref(false);
 const invoices = ref<any[]>([]);
@@ -385,13 +404,59 @@ onMounted(() => {
   }
 });
 
-const handleLogout = () => {
-  if (confirm('Bạn có chắc chắn muốn đăng xuất?')) {
+const executeLogout = async () => {
+  try {
+    const refreshToken = localStorage.getItem('refreshToken') || localStorage.getItem('refresh_token') || '';
+    await axios.post(`${API_BASE_URL}/api/account/logout`, { refreshToken: refreshToken || undefined }, { withCredentials: true });
+  } catch (err) {
+    console.warn('Lỗi gọi API đăng xuất:', err);
+  } finally {
     localStorage.removeItem('user');
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
+    localStorage.removeItem('token');
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    sessionStorage.removeItem('user');
+    sessionStorage.removeItem('token');
+    window.dispatchEvent(new Event('user-updated'));
     window.location.href = '/login';
   }
+};
+
+const handleLogout = () => {
+  authStore.triggerLogoutConfirm(
+    executeLogout,
+    'Xác Nhận Đăng Xuất',
+    'Bạn có chắc chắn muốn đăng xuất khỏi tài khoản trên thiết bị này không?'
+  );
+};
+
+const executeLogoutAll = async () => {
+  try {
+    await axios.post(`${API_BASE_URL}/api/account/logout-all`, {}, { withCredentials: true });
+  } catch (err) {
+    console.warn('Lỗi gọi API đăng xuất tất cả thiết bị:', err);
+  } finally {
+    localStorage.removeItem('user');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('token');
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    sessionStorage.removeItem('user');
+    sessionStorage.removeItem('token');
+    window.dispatchEvent(new Event('user-updated'));
+    window.location.href = '/login';
+  }
+};
+
+const handleLogoutAll = () => {
+  authStore.triggerLogoutConfirm(
+    executeLogoutAll,
+    'Đăng Xuất Mọi Thiết Bị',
+    'Bạn có chắc chắn muốn đăng xuất khỏi tất cả các thiết bị đang đăng nhập không? Tất cả các phiên làm việc trên trình duyệt và thiết bị khác sẽ kết thúc ngay lập tức.'
+  );
 };
 </script>
 
@@ -400,32 +465,37 @@ const handleLogout = () => {
     <div class="max-w-[1440px] mx-auto px-4 lg:px-8">
       
       <!-- Breadcrumbs -->
-      <div class="text-[10px] uppercase tracking-widest text-gray-400 mb-8">
-        <router-link to="/" class="hover:text-black transition-colors">Trang chủ</router-link>
-        <span class="mx-2">/</span>
-        <router-link to="/profile" class="hover:text-black transition-colors">Hồ sơ cá nhân</router-link>
-        <span class="mx-2">/</span>
-        <span class="text-black font-semibold">Lịch sử mua hàng</span>
-      </div>
+      
 
       <div class="flex flex-col lg:flex-row gap-8 lg:gap-12">
 
         <!-- Sidebar Navigation (Consistent with Profile.vue) -->
         <aside class="w-full lg:w-64 shrink-0">
           <div class="mb-8 hidden lg:block">
-            <h2 class="font-heading text-xl uppercase tracking-widest text-black mb-2">Xin chào, {{ greetingName }}</h2>
-            <div class="inline-block px-3 py-1 bg-black text-white text-[9px] uppercase tracking-widest font-medium">
-              BEFOR {{ customerInfo?.tenRank || 'Member' }}</div>
+            <h2 class="font-heading text-base uppercase tracking-widest text-black mb-1.5 font-bold truncate">
+              {{ customerInfo?.hoTen || 'Khách Hàng' }}
+            </h2>
+            <div :class="['inline-flex items-center gap-1.5 px-3 py-1 text-[9px] uppercase tracking-widest font-semibold rounded-sm shadow-sm transition-colors duration-300', sidebarBadgeClass]">
+              <Award :size="10" />
+              <span>{{ customerInfo?.tenRank || 'Mới' }}</span>
+            </div>
           </div>
 
           <!-- Mobile Profile Header -->
           <div class="mb-6 lg:hidden flex items-center justify-between border-b border-gray-200 pb-4">
-            <h2 class="font-heading text-lg uppercase tracking-widest text-black">Hồ sơ</h2>
-            <div class="inline-block px-2 py-1 bg-black text-white text-[8px] uppercase tracking-widest font-medium">
-              {{ customerInfo?.tenRank || 'Member' }}</div>
+            <div>
+              <span class="text-[9px] text-gray-400 uppercase tracking-widest font-bold">Xin chào</span>
+              <h2 class="font-heading text-sm uppercase tracking-widest text-black font-bold">
+                {{ customerInfo?.hoTen || 'Khách' }}
+              </h2>
+            </div>
+            <div :class="['inline-flex items-center gap-1 px-2.5 py-1 text-[8px] uppercase tracking-widest font-semibold rounded-sm shadow-sm transition-colors duration-300', sidebarBadgeClass]">
+              <Award :size="10" />
+              <span>{{ customerInfo?.tenRank || 'Mới' }}</span>
+            </div>
           </div>
 
-          <nav class="flex flex-row lg:flex-col gap-2 overflow-x-auto pb-4 lg:pb-0 scrollbar-hide whitespace-nowrap">
+          <nav class="flex flex-row lg:flex-col gap-1 overflow-x-auto pb-4 lg:pb-0 scrollbar-hide whitespace-nowrap border-b border-gray-200 lg:border-b-0">
             <button @click="router.push({ name: 'profile', query: { tab: 'profile' } })"
               class="flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest transition-all rounded-sm text-gray-500 hover:text-black hover:bg-gray-100/50 border-l-2 border-transparent">
               <User :size="15" :stroke-width="1.8" />
@@ -447,12 +517,18 @@ const handleLogout = () => {
               Đánh Giá Của Tôi
             </button>
 
-            <div class="w-px h-6 lg:w-full lg:h-px bg-gray-200 my-auto lg:my-3 shrink-0"></div>
+            <div class="w-px h-6 lg:w-full lg:h-px bg-gray-200 my-auto lg:my-3 shrink-0 mx-2 lg:mx-0"></div>
 
             <button @click="handleLogout"
-              class="flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors border-l-2 border-transparent rounded-sm">
-              <LogOut :size="16" :stroke-width="1.5" />
+              class="flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest text-gray-700 hover:text-black hover:bg-gray-100 transition-colors border-l-2 border-transparent rounded-sm">
+              <LogOut :size="15" :stroke-width="1.8" />
               Đăng Xuất
+            </button>
+
+            <button @click="handleLogoutAll"
+              class="flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors border-l-2 border-transparent rounded-sm">
+              <ShieldAlert :size="15" :stroke-width="1.8" />
+              Đăng Xuất Mọi Thiết Bị
             </button>
           </nav>
         </aside>

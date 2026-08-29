@@ -57,6 +57,24 @@ axios.interceptors.request.use(
   }
 );
 
+// --- Cơ chế xếp hàng đợi (Queue) khi đang Refresh Token để tránh Race Condition ---
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (token: string) => void;
+  reject: (error: any) => void;
+}> = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else if (token) {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
 // 2. Trạm gác chặn các Response trả về từ Server (ĐÃ NÂNG CẤP HỖ TRỢ ADMIN, NHÂN VIÊN VÀ KHÁCH)
 axios.interceptors.response.use(
   (response) => {
@@ -64,7 +82,11 @@ axios.interceptors.response.use(
   },
   async (error) => {
     const originalRequest = error.config;
-    const requestUrl = originalRequest.url || '';
+    if (!originalRequest) {
+      return Promise.reject(error);
+    }
+
+    const requestUrl = (originalRequest.url || '').toLowerCase();
 
     // Bỏ qua trạm gác nếu request đang gọi là /login hoặc /refresh-token
     if (requestUrl.includes('/login') || requestUrl.includes('/refresh-token')) {
@@ -72,71 +94,122 @@ axios.interceptors.response.use(
     }
 
     if (error.response && error.response.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true; 
+      if (isRefreshing) {
+        // Đã có 1 request đang refresh -> xếp hàng đợi request này
+        return new Promise<string>((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((token) => {
+            if (originalRequest.headers.set) {
+              originalRequest.headers.set('Authorization', `Bearer ${token}`);
+            } else {
+              originalRequest.headers['Authorization'] = `Bearer ${token}`;
+            }
+            return axios(originalRequest);
+          })
+          .catch((err) => Promise.reject(err));
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
 
       // KIỂM TRA CHÍNH XÁC LOẠI API ĐANG GỌI
-      const urlLower = requestUrl.toLowerCase();
-      const isAdminApi = urlLower.includes('/api/admin');
-      const isStaffApi = urlLower.includes('/api/nhan-vien') || urlLower.includes('/api/nhanvien'); // Bổ sung API nhân viên
+      const isAdminApi = requestUrl.includes('/api/admin');
+      const isStaffApi = requestUrl.includes('/api/nhan-vien') || requestUrl.includes('/api/nhanvien');
 
-      try {
-        let refreshRes;
-        if (isAdminApi) {
-          refreshRes = await axios.post(`${API}/api/admin/auth/refresh-token`);
-        } else if (isStaffApi) {
-          refreshRes = await axios.post(`${API}/api/admin/auth/refresh-token`); 
-        } else {
-          refreshRes = await axios.post(`${API}/api/account/refresh-token`);
+      const storedRefreshToken =
+        sessionStorage.getItem('adminRefreshToken') ||
+        sessionStorage.getItem('staffRefreshToken') ||
+        localStorage.getItem('staffRefreshToken') ||
+        sessionStorage.getItem('userRefreshToken') ||
+        localStorage.getItem('refreshToken') ||
+        '';
+
+      return new Promise((resolve, reject) => {
+        let refreshUrl = `${API}/api/admin/auth/refresh-token`;
+        if (!isAdminApi && !isStaffApi) {
+          refreshUrl = `${API}/api/account/refresh-token`;
         }
 
-        // Cập nhật Token mới vào Storage & Header nếu API trả về Token
-        if (refreshRes && refreshRes.data) {
-          const data = refreshRes.data.data || refreshRes.data;
-          const newAccessToken = data.accessToken || data.token;
-          if (newAccessToken) {
-            if (isAdminApi) {
-              sessionStorage.setItem('adminToken', newAccessToken);
-            } else if (isStaffApi) {
-              localStorage.setItem('staffToken', newAccessToken);
-              sessionStorage.setItem('staffToken', newAccessToken);
+        axios
+          .post(
+            refreshUrl,
+            { refreshToken: storedRefreshToken || undefined },
+            { withCredentials: true }
+          )
+          .then((res) => {
+            const data = res.data?.data || res.data || {};
+            const newAccessToken = data.accessToken || data.token;
+            const newRefreshToken = data.refreshToken;
+
+            if (newAccessToken) {
+              if (isAdminApi) {
+                sessionStorage.setItem('adminToken', newAccessToken);
+                if (newRefreshToken) sessionStorage.setItem('adminRefreshToken', newRefreshToken);
+              } else if (isStaffApi) {
+                sessionStorage.setItem('staffToken', newAccessToken);
+                localStorage.setItem('staffToken', newAccessToken);
+                if (newRefreshToken) {
+                  sessionStorage.setItem('staffRefreshToken', newRefreshToken);
+                  localStorage.setItem('staffRefreshToken', newRefreshToken);
+                }
+              } else {
+                localStorage.setItem('userToken', newAccessToken);
+                sessionStorage.setItem('userToken', newAccessToken);
+                if (newRefreshToken) {
+                  localStorage.setItem('refreshToken', newRefreshToken);
+                }
+              }
+
+              if (originalRequest.headers.set) {
+                originalRequest.headers.set('Authorization', `Bearer ${newAccessToken}`);
+              } else {
+                originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
+              }
+
+              processQueue(null, newAccessToken);
+              resolve(axios(originalRequest));
             } else {
-              localStorage.setItem('userToken', newAccessToken);
-              sessionStorage.setItem('userToken', newAccessToken);
+              processQueue(new Error('Không nhận được Token mới'), null);
+              reject(error);
             }
-            originalRequest.headers.set('Authorization', `Bearer ${newAccessToken}`);
-          }
-        }
-        
-        // Xin thành công -> tự động gọi lại API cũ
-        return axios(originalRequest); 
-        
-      } catch (refreshError) {
-        console.error("Phiên đăng nhập đã kết thúc hoặc không có quyền.");
-        
-        // XỬ LÝ ĐÁ VĂNG VỀ ĐÚNG TRANG LOGIN
-        if (isAdminApi) {
-          sessionStorage.removeItem('adminUser');
-          sessionStorage.removeItem('adminToken');
-          router.push('/admin/login');
-        } 
-        else if (isStaffApi) {
-          // Xóa sạch dữ liệu liên quan đến nhân viên và đá về đúng login của nhân viên
-          sessionStorage.removeItem('staffUser');
-          sessionStorage.removeItem('nhanVienUser');
-          sessionStorage.removeItem('adminUser'); // Đề phòng lưu nhầm
-          router.push('/nhanvien/login');
-        } 
-        else {
-          localStorage.removeItem('user');
-          sessionStorage.removeItem('user');
-          
-          if (!originalRequest.url.includes('/api/account/get-profile')) {
-            router.push('/login');
-          }
-        }
-        
-        return Promise.reject(refreshError);
-      }
+          })
+          .catch(async (refreshError) => {
+            processQueue(refreshError, null);
+            console.error("Phiên đăng nhập đã kết thúc hoặc không có quyền:", refreshError);
+
+            sessionStorage.removeItem('adminUser');
+            sessionStorage.removeItem('adminToken');
+            sessionStorage.removeItem('adminRefreshToken');
+            sessionStorage.removeItem('staffUser');
+            sessionStorage.removeItem('staffToken');
+            sessionStorage.removeItem('staffRefreshToken');
+            sessionStorage.removeItem('nhanVienUser');
+            localStorage.removeItem('staffToken');
+            localStorage.removeItem('staffRefreshToken');
+            localStorage.removeItem('staffUser');
+            localStorage.removeItem('nhanVienUser');
+
+            try {
+              const { useAdminAuthDialogStore } = await import('@/stores/adminAuthDialog');
+              const authDialogStore = useAdminAuthDialogStore();
+              authDialogStore.triggerSessionExpired('Phiên làm việc của bạn đã hết hạn. Vui lòng đăng nhập lại.');
+            } catch (dialogErr) {
+              if (isAdminApi) {
+                router.push('/admin/login');
+              } else if (isStaffApi) {
+                router.push('/nhanvien/login');
+              } else {
+                router.push('/login');
+              }
+            }
+
+            reject(refreshError);
+          })
+          .finally(() => {
+            isRefreshing = false;
+          });
+      });
     }
 
     return Promise.reject(error);

@@ -437,7 +437,7 @@ const performTryOn = async () => {
   position: fixed;
   bottom: 88px; 
   right: 20px;  
-  z-index: 9998; 
+  z-index: 90; 
   width: 56px;  /* Chiều rộng cố định */
   height: 56px; /* Chiều cao cố định */
   background: linear-gradient(135deg, var(--color-gold), #e8c37c); 
@@ -494,7 +494,7 @@ const performTryOn = async () => {
 
 .modal-overlay {
   position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.75); z-index: 1000;
+  background: rgba(0, 0, 0, 0.75); z-index: 9999;
   display: flex; align-items: center; justify-content: center; overflow: hidden;
   padding: 20px;
 }

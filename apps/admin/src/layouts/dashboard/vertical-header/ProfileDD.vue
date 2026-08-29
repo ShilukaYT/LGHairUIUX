@@ -17,7 +17,10 @@ import {
 
 import { useCustomizerStore } from '../../../stores/customizer';
 import { useTheme } from 'vuetify';
+import { useAdminAuthDialogStore } from '@/stores/adminAuthDialog';
+import axios from 'axios';
 
+const authDialogStore = useAdminAuthDialogStore();
 const customizer = useCustomizerStore();
 const theme = useTheme();
 
@@ -98,14 +101,42 @@ onUnmounted(() => {
   window.removeEventListener('update-staff-sidebar', loadUserFromStorage);
 });
 
-const handleLogout = () => {
-  sessionStorage.removeItem('adminToken');
-  sessionStorage.removeItem('adminUser');
-  sessionStorage.removeItem('staffUser');
-  sessionStorage.removeItem('nhanVienUser');
-  
-  // Chuyển hướng về trang đăng nhập
-  router.push('/admin/login');
+const handleLogout = async () => {
+  try {
+    const API = import.meta.env.VITE_API_URL || 'https://localhost:7196';
+    const storedRefreshToken =
+      sessionStorage.getItem('adminRefreshToken') ||
+      sessionStorage.getItem('staffRefreshToken') ||
+      localStorage.getItem('staffRefreshToken') ||
+      '';
+    await axios.post(
+      `${API}/api/admin/auth/logout`,
+      { refreshToken: storedRefreshToken || undefined },
+      { withCredentials: true }
+    );
+  } catch (e) {
+    console.warn('Lỗi gọi API đăng xuất admin:', e);
+  } finally {
+    sessionStorage.removeItem('adminToken');
+    sessionStorage.removeItem('adminRefreshToken');
+    sessionStorage.removeItem('adminUser');
+    sessionStorage.removeItem('staffUser');
+    sessionStorage.removeItem('staffToken');
+    sessionStorage.removeItem('staffRefreshToken');
+    sessionStorage.removeItem('nhanVienUser');
+    localStorage.removeItem('staffToken');
+    localStorage.removeItem('staffRefreshToken');
+    localStorage.removeItem('staffUser');
+    localStorage.removeItem('nhanVienUser');
+    
+    // Chuyển hướng về trang đăng nhập
+    router.push('/admin/login');
+  }
+};
+
+const onLogoutClick = () => {
+  emit('close');
+  authDialogStore.triggerLogoutConfirm(handleLogout);
 };
 
 const emit = defineEmits(['close']);
@@ -135,7 +166,7 @@ const navigateToProfile = () => {
         <p class="text-caption mb-0">{{ userRole }}</p>
       </div>
       <div class="ml-auto">
-        <v-btn variant="text" color="primary" rounded="sm" icon size="large" @click="handleLogout">
+        <v-btn variant="text" color="primary" rounded="sm" icon size="large" @click="onLogoutClick">
           <LogoutOutlined :style="{ fontSize: '20px' }" />
         </v-btn>
       </div>
@@ -189,7 +220,7 @@ const navigateToProfile = () => {
           <v-list-item-title class="text-body-1"> Cài đặt tài khoản</v-list-item-title>
         </v-list-item>
 
-        <v-list-item @click="handleLogout" color="error" rounded="0">
+        <v-list-item @click="onLogoutClick" color="error" rounded="0">
           <template v-slot:prepend>
             <LogoutOutlined :style="{ fontSize: '14px' }" class="mr-4" />
           </template>

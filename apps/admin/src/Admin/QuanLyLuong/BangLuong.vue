@@ -425,9 +425,6 @@ onMounted(() => {
             <div>
               <p class="text-caption font-weight-bold uppercase text-medium-emphasis mb-1">Tổng Số Nhân Viên</p>
               <h3 class="text-h4 font-weight-black">{{ payrollSummary.tongNhanVien || 0 }}</h3>
-              <p class="text-caption text-primary font-weight-medium mt-2 d-flex align-center gap-1 mb-0">
-                <UserCheck class="w-3.5 h-3.5" /> <span>Đang hoạt động tháng {{ month }}</span>
-              </p>
             </div>
             <v-avatar color="primary" variant="tonal" size="52" rounded="xl">
               <Users class="w-6 h-6" />
@@ -445,9 +442,6 @@ onMounted(() => {
               <h3 class="text-h5 font-weight-black text-success truncate max-w-[180px]">
                 {{ formatVND(payrollSummary.tongQuyLuong) }}
               </h3>
-              <p class="text-caption text-success font-weight-medium mt-2 d-flex align-center gap-1 mb-0">
-                <Coins class="w-3.5 h-3.5" /> <span>Theo ca làm &amp; hoa hồng</span>
-              </p>
             </div>
             <v-avatar color="success" variant="tonal" size="52" rounded="xl">
               <Coins class="w-6 h-6" />
@@ -465,9 +459,6 @@ onMounted(() => {
               <h3 class="text-h5 font-weight-black text-warning truncate max-w-[180px]">
                 {{ formatVND(averageSalary) }}
               </h3>
-              <p class="text-caption text-warning font-weight-medium mt-2 d-flex align-center gap-1 mb-0">
-                <TrendingUp class="w-3.5 h-3.5" /> <span>Tính theo nhân sự xếp ca</span>
-              </p>
             </div>
             <v-avatar color="warning" variant="tonal" size="52" rounded="xl">
               <TrendingUp class="w-6 h-6" />
@@ -483,9 +474,6 @@ onMounted(() => {
             <div>
               <p class="text-caption font-weight-bold uppercase text-medium-emphasis mb-1">Kỳ Quyết Toán</p>
               <h3 class="text-h4 font-weight-black text-info">T{{ month }}/{{ year }}</h3>
-              <p class="text-caption text-info font-weight-medium mt-2 d-flex align-center gap-1 mb-0">
-                <Calendar class="w-3.5 h-3.5" /> <span>Chu kỳ tính lương</span>
-              </p>
             </div>
             <v-avatar color="info" variant="tonal" size="52" rounded="xl">
               <Calendar class="w-6 h-6" />

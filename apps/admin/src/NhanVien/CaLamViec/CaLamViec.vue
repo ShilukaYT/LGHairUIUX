@@ -558,19 +558,19 @@ const showSnackbar = (msg: string, color = 'success') => {
     </v-row>
 
     <!-- Dialog Xin nghỉ/đổi ca -->
-    <v-dialog v-model="isRequestModalOpen" max-width="500" persistent>
-      <v-card rounded="xl">
-        <v-card-title class="d-flex align-center justify-space-between pt-4 px-6">
-          <span class="text-h6 font-weight-bold">Xin đổi ca / Nghỉ phép</span>
-          <v-btn icon="mdi-close" variant="text" size="small" @click="isRequestModalOpen = false"></v-btn>
+    <v-dialog v-model="isRequestModalOpen" max-width="500" scrollable persistent>
+      <v-card rounded="xl" class="overflow-hidden">
+        <v-card-title class="d-flex align-center justify-space-between pa-3 px-sm-5 border-b bg-surface">
+          <span class="text-subtitle-1 text-sm-h6 font-weight-bold">Xin đổi ca / Nghỉ phép</span>
+          <v-btn icon="mdi-close" variant="text" size="small" density="comfortable" @click="isRequestModalOpen = false"></v-btn>
         </v-card-title>
         
-        <v-card-text class="px-6 pb-2">
-          <p class="text-body-2 text-medium-emphasis mb-4 pb-4 border-b">
+        <v-card-text class="pa-4 px-sm-5" style="max-height: min(65vh, 420px); overflow-y: auto;">
+          <p class="text-body-2 text-medium-emphasis mb-3 pb-3 border-b">
             Ca hiện tại: <span class="font-weight-bold text-high-emphasis">{{ todayShift.caLam }} ({{ todayShift.ngay }})</span>
           </p>
 
-          <div class="text-caption font-weight-bold text-uppercase text-medium-emphasis mb-2">Bạn muốn đổi sang ca nào?</div>
+          <div class="text-caption font-weight-bold text-uppercase text-medium-emphasis mb-1">Bạn muốn đổi sang ca nào?</div>
           <v-select
             v-model="selectedNewShift"
             :items="[
@@ -585,24 +585,26 @@ const showSnackbar = (msg: string, color = 'success') => {
             item-value="value"
             placeholder="-- Chọn ca muốn làm bù --"
             variant="outlined"
-            density="comfortable"
-            class="mb-4"
+            density="compact"
+            class="mb-3"
+            hide-details="auto"
           ></v-select>
 
-          <div class="text-caption font-weight-bold text-uppercase text-medium-emphasis mb-2">Lý do cụ thể</div>
+          <div class="text-caption font-weight-bold text-uppercase text-medium-emphasis mb-1">Lý do cụ thể</div>
           <v-textarea
             v-model="requestReason"
             placeholder="Ví dụ: Em có việc gia đình đột xuất..."
             variant="outlined"
             rows="3"
             auto-grow
-            density="comfortable"
+            density="compact"
+            hide-details="auto"
           ></v-textarea>
         </v-card-text>
         
-        <v-card-actions class="px-6 pb-6 pt-0 d-flex gap-3">
-          <v-btn @click="isRequestModalOpen = false" variant="tonal" color="blue-grey" class="flex-grow-1 font-weight-bold text-none" rounded="lg">Hủy bỏ</v-btn>
-          <v-btn @click="submitRequest" color="primary" variant="flat" class="flex-grow-1 font-weight-bold text-none" rounded="lg">Gửi yêu cầu</v-btn>
+        <v-card-actions class="pa-3 px-sm-5 d-flex gap-3 border-t bg-surface">
+          <v-btn @click="isRequestModalOpen = false" variant="tonal" color="blue-grey" size="small" class="flex-grow-1 font-weight-bold text-none" rounded="lg">Hủy bỏ</v-btn>
+          <v-btn @click="submitRequest" color="primary" variant="flat" size="small" class="flex-grow-1 font-weight-bold text-none" rounded="lg">Gửi yêu cầu</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
