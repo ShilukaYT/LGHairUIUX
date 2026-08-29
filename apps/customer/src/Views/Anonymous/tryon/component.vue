@@ -6,7 +6,7 @@ import { useChatStore } from '@/stores/useChatStore';
 import { useBookingBasketStore } from '@/stores/useBookingBasketStore';
 
 const chatStore = useChatStore();
-const bookingStore = useBookingBasketStore();
+const basketStore = useBookingBasketStore();
 
 // --- CẤU HÌNH SWEETALERT2 TOAST ---
 const Toast = Swal.mixin({
@@ -234,7 +234,7 @@ const performTryOn = async () => {
 <template>
   <div>
     <button
-      :class="['btn-open-tryon', { 'chat-open': chatStore.isChatOpen, 'has-basket-bar': !bookingStore.isEmpty }]"
+      :class="['btn-open-tryon', { 'chat-open': chatStore.isChatOpen, 'basket-active': basketStore.itemCount > 0 }]"
       @click="showModalTryOn = !showModalTryOn"
       title="Thử tóc với AI"
     >
@@ -445,7 +445,7 @@ const performTryOn = async () => {
    Chat toggle: bottom-5(20px) + h-14(56px) + gap 8px = bottom: 84px */
 .btn-open-tryon {
   position: fixed;
-  bottom: 84px;
+  bottom: 90px;
   right: 20px;
   z-index: 9998;
   width: 56px;
@@ -457,7 +457,7 @@ const performTryOn = async () => {
   font-size: 22px;
   cursor: pointer;
   box-shadow: 0 4px 15px rgba(12, 8, 0, 0.4);
-  transition: bottom 0.3s cubic-bezier(0.22, 1, 0.36, 1), transform 0.3s ease, opacity 0.3s ease;
+  transition: bottom 0.3s ease, margin 0.3s ease, all 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -465,50 +465,20 @@ const performTryOn = async () => {
   background-color: #fffdfd;
 }
 
-/* Khi có thanh đặt lịch ở dưới (cao ~56px) -> dịch chuyển lên đồng bộ */
-.btn-open-tryon.has-basket-bar {
-  bottom: 140px;
-}
-
-/* Khi chat đang mở: ẩn nút để không che popup */
+/* Khi chat đang mở: ẩn nút */
 .btn-open-tryon.chat-open {
   opacity: 0;
   pointer-events: none;
   transform: scale(0.8);
 }
 
-/* sm: chatbot bottom-6(24px) + 56px + 8px gap = 88px */
-@media (min-width: 640px) {
-  .btn-open-tryon {
-    bottom: 88px;
-    right: 24px;
-  }
-  .btn-open-tryon.has-basket-bar {
-    bottom: 144px;
-  }
+.btn-open-tryon.basket-active {
+  margin-bottom: 76px;
 }
 
-/* md: nút chat toggle là 64px (md:h-16), bottom-6(24px) + 64px + 10px gap = 98px.
-   Căn giữa tuyệt đối trục dọc: right: 28px (vì 24px + (64px - 56px)/2 = 28px) */
 @media (min-width: 768px) {
-  .btn-open-tryon {
-    bottom: 98px;
-    right: 28px;
-  }
-  .btn-open-tryon.has-basket-bar {
-    bottom: 154px;
-  }
-}
-
-/* lg: chatbot bottom-10(40px) right-12(48px) + 64px + 10px gap = 114px.
-   Căn giữa tuyệt đối trục dọc: right: 52px (vì 48px + (64px - 56px)/2 = 52px) */
-@media (min-width: 1024px) {
-  .btn-open-tryon {
-    bottom: 114px;
-    right: 52px;
-  }
-  .btn-open-tryon.has-basket-bar {
-    bottom: 170px;
+  .btn-open-tryon.basket-active {
+    margin-bottom: 60px;
   }
 }
 
