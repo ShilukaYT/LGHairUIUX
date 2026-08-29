@@ -30,6 +30,8 @@ import LichSuDanhGia from './Profile/lichsudanhgia.vue';
 import LichSuDanhGiaSanPham from './Profile/lichsudanhgiasanpham.vue';
 // @ts-ignore
 import LichSuHoaDon from './Profile/LichSuHoaDon.vue';
+// @ts-ignore
+import LichSuDonHangSanPham from './Profile/LichSuDonHangSanPham.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -37,9 +39,30 @@ const authStore = useAuthStore();
 const activeTab = ref('profile');
 const reviewSubTab = ref('services_staff');
 
+// Tự động đồng bộ tab từ URL query (?tab=orders / ?tab=appointments ...)
+watch(
+  () => route.query.tab,
+  (newTab) => {
+    if (newTab && typeof newTab === 'string') {
+      activeTab.value = newTab;
+    } else {
+      activeTab.value = 'profile';
+    }
+  },
+  { immediate: true }
+);
+
 const changeTab = (tab: string) => {
   activeTab.value = tab;
-  router.push({ name: 'profile', query: { tab } });
+  if (tab === 'profile') {
+    if (route.query.tab) {
+      router.push({ name: 'profile' });
+    }
+  } else {
+    if (route.query.tab !== tab) {
+      router.push({ name: 'profile', query: { tab } });
+    }
+  }
 };
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://localhost:7196';
@@ -362,17 +385,9 @@ onMounted(async () => {
   const info = getCustomerInfo();
   customerInfo.value = info;
 
-  // Read tab from query parameters
   if (route.query.tab) {
     activeTab.value = route.query.tab as string;
   }
-
-  // Watch for changes in route query to update active tab
-  watch(() => route.query.tab, (newTab) => {
-    if (newTab) {
-      activeTab.value = newTab as string;
-    }
-  });
 
   if (info && info.maKH !== 'GUEST') {
     await fetchRanks();
@@ -663,11 +678,15 @@ const handleLogoutAll = () => {
 </script>
 
 <template>
-  <div class="w-full bg-[#fcfcfc] min-h-screen py-10 lg:py-16 animate-in fade-in duration-500">
-    <div class="max-w-[1280px] mx-auto px-4 lg:px-8">
+  <div class="w-full bg-[#fcfcfc] min-h-screen py-8 lg:py-12 animate-in fade-in duration-500">
+    <div class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
       
       <!-- Breadcrumbs -->
-      
+      <div class="text-[10px] uppercase tracking-widest text-gray-400 mb-6 font-semibold">
+        <router-link to="/" class="hover:text-black transition-colors">Trang chủ</router-link>
+        <span class="mx-2">/</span>
+        <span class="text-black">Hồ sơ cá nhân</span>
+      </div>
       <!-- Guest / Not logged in State -->
       <div v-if="!customerInfo || customerInfo.maKH === 'GUEST'" class="bg-white p-12 border border-gray-200 shadow-sm text-center py-20 rounded-sm">
         <ShieldAlert class="w-14 h-14 mx-auto text-gray-300 mb-6" :stroke-width="1.2" />
@@ -680,10 +699,10 @@ const handleLogoutAll = () => {
       </div>
 
       <!-- Logged In User Layout -->
-      <div v-else class="flex flex-col lg:flex-row gap-8 lg:gap-12">
+      <div v-else class="flex flex-col lg:flex-row gap-6 lg:gap-8 items-start">
 
         <!-- Sidebar Navigation -->
-        <aside class="w-full lg:w-64 shrink-0">
+        <aside class="w-full lg:w-56 shrink-0">
           <div class="mb-8 hidden lg:block">
             <h2 class="font-heading text-base uppercase tracking-widest text-black mb-1.5 font-bold truncate">
               {{ profileData?.hoTen || customerInfo?.hoTen || 'Khách Hàng' }}
@@ -715,8 +734,8 @@ const handleLogoutAll = () => {
               <User :size="15" :stroke-width="1.8" />
               Hồ Sơ Của Tôi
             </button>
-            <button @click="router.push({ name: 'lich_su_mua_hang' })"
-              class="flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest transition-all rounded-sm text-gray-500 hover:text-black hover:bg-gray-100/50 border-l-2 border-transparent">
+            <button @click="changeTab('orders')"
+              :class="['flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest transition-all rounded-sm', activeTab === 'orders' ? 'bg-white border-l-2 border-black text-black shadow-sm font-semibold' : 'text-gray-500 hover:text-black hover:bg-gray-100/50 border-l-2 border-transparent']">
               <Package :size="15" :stroke-width="1.8" />
               Lịch Sử Đơn Hàng
             </button>
@@ -1088,16 +1107,23 @@ const handleLogoutAll = () => {
               </div>
             </div>
 
+            <!-- Tab: Orders (Lịch sử đơn hàng sản phẩm) -->
+            <div v-else-if="activeTab === 'orders'">
+              <div class="bg-white p-5 sm:p-7 lg:p-8 border border-gray-200 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500 rounded-sm">
+                <LichSuDonHangSanPham />
+              </div>
+            </div>
+
             <!-- Tab: Appointments (Lịch hẹn & Hóa đơn) -->
             <div v-else-if="activeTab === 'appointments'">
-              <div class="bg-white p-6 lg:p-10 border border-gray-200 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500 rounded-sm">
+              <div class="bg-white p-5 sm:p-7 lg:p-8 border border-gray-200 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500 rounded-sm">
                 <LichSuHoaDon />
               </div>
             </div>
 
             <!-- Tab: Reviews (Đánh giá của tôi) -->
             <div v-else-if="activeTab === 'reviews'">
-              <div class="bg-white p-6 lg:p-10 border border-gray-200 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500 rounded-sm">
+              <div class="bg-white p-5 sm:p-7 lg:p-8 border border-gray-200 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500 rounded-sm">
                 <div class="mb-8 border-b border-gray-100 pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                   <div>
                     <h2 class="font-heading text-lg uppercase tracking-widest text-black mb-1 font-semibold">Đánh Giá Của Tôi</h2>

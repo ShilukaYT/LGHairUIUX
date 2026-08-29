@@ -4,7 +4,7 @@ import axios from 'axios'
 import { Search, RotateCcw, Eye, Receipt, CheckCircle2, XCircle, Clock, Ban, Check, X } from 'lucide-vue-next'
 
 // --- CẤU HÌNH API ---
-const API = import.meta.env.VITE_API_URL
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
 
 // --- STATE QUẢN LÝ DỮ LIỆU ---
 const doiSoatList = ref<any[]>([])

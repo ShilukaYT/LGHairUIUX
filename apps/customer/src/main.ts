@@ -1,3 +1,20 @@
+// ===== CỐ ĐỊNH LAYOUT: CHỐNG ZOOM TRÌNH DUYỆT =====
+// Khi người dùng zoom trình duyệt (Ctrl+/-), script sẽ tự động
+// counteract lại để trang luôn hiển thị ở kích cỡ gốc 100%
+const _INITIAL_DPR = window.devicePixelRatio || 1;
+
+function _applyCounterZoom() {
+  const currentDPR = window.devicePixelRatio || 1;
+  const relativeZoom = currentDPR / _INITIAL_DPR;
+  // Nếu user zoom out 50% → relativeZoom=0.5 → ta scale body lên 2x để bù lại
+  // Kết quả: 0.5 (browser) × 2 (body) = 1 → trông như 100%
+  (document.body as HTMLElement).style.zoom = String(1 / relativeZoom);
+}
+
+_applyCounterZoom();
+// 'resize' event cũng bắn ra khi thay đổi zoom mức trình duyệt
+window.addEventListener('resize', _applyCounterZoom);
+// ===== END ZOOM FIX =====
 if (window.location.hostname === '127.0.0.1' || window.location.port === '3000') {
   let newUrl = window.location.href;
   if (window.location.hostname === '127.0.0.1') {

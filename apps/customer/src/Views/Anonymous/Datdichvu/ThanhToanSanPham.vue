@@ -15,10 +15,11 @@ const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY;
 // ==========================================
 // STATE DỮ LIỆU CƠ BẢN
 // ==========================================
-const getImageUrl = (path: string) => {
+const getImageUrl = (path?: string) => {
     if (!path) return '/images/no-image.png';
     if (path.startsWith('http')) return path;
-    return `${API}${path}`;
+    const clean = path.startsWith('/') ? path : `/${path}`;
+    return `${API}${clean}`;
 };
 
 const customer = getCustomerInfo();
@@ -32,6 +33,9 @@ const orderData = ref({
     voucherIds: [] as string[]
 });
 
+const productItems = ref<any[]>([]);
+const allProductsFromApi = ref<any[]>([]);
+
 // ==========================================
 // HÓA ĐƠN ĐIỆN TỬ
 // Mặc định luôn xuất hóa đơn cá nhân, dùng Email + Địa chỉ đã nhập ở trên (không hỏi lại).
@@ -40,6 +44,94 @@ const orderData = ref({
 const showInvoiceCompanyForm = ref(false);
 const invoiceCompany = ref({ tenCongTy: '', mst: '' });
 const mstError = ref('');
+
+// BỘ LỖI VALIDATION TỰ ĐỘNG TOÀN FORM (GIỐNG ĐẶT DỊCH VỤ)
+const errors = ref({
+    customerName: '',
+    phone: '',
+    email: '',
+    address: '',
+    products: '',
+    invoice: ''
+});
+
+const validateField = (field: string) => {
+    switch (field) {
+        case 'customerName': {
+            const name = (orderData.value.customerName || '').trim();
+            if (!name) {
+                errors.value.customerName = 'Vui lòng nhập họ và tên người nhận.';
+            } else if (name.length < 2) {
+                errors.value.customerName = 'Họ và tên phải có tối thiểu 2 ký tự.';
+            } else if (/[0-9]/.test(name)) {
+                errors.value.customerName = 'Họ và tên không được chứa chữ số.';
+            } else {
+                errors.value.customerName = '';
+            }
+            break;
+        }
+        case 'phone': {
+            const phone = (orderData.value.phone || '').trim();
+            const phoneRegex = /^(0|\+84)(3|5|7|8|9)[0-9]{8}$/;
+            if (!phone) {
+                errors.value.phone = 'Vui lòng nhập số điện thoại nhận hàng.';
+            } else if (!phoneRegex.test(phone)) {
+                errors.value.phone = 'Số điện thoại không hợp lệ (gồm 10 số, VD: 0912345678).';
+            } else {
+                errors.value.phone = '';
+            }
+            break;
+        }
+        case 'email': {
+            const email = (orderData.value.email || '').trim();
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!email) {
+                errors.value.email = 'Vui lòng nhập email nhận thông báo đơn hàng.';
+            } else if (!emailRegex.test(email)) {
+                errors.value.email = 'Email không hợp lệ (VD: example@gmail.com).';
+            } else {
+                errors.value.email = '';
+            }
+            break;
+        }
+        case 'address': {
+            const addr = (orderData.value.address || '').trim();
+            if (!addr) {
+                errors.value.address = 'Vui lòng nhập địa chỉ giao hàng chi tiết.';
+            } else if (addr.length < 6) {
+                errors.value.address = 'Địa chỉ giao hàng quá ngắn (cần số nhà, tên đường, phường/xã, quận/huyện...).';
+            } else {
+                errors.value.address = '';
+            }
+            break;
+        }
+        case 'products': {
+            if (!productItems.value || productItems.value.length === 0) {
+                errors.value.products = 'Giỏ hàng của bạn đang trống! Vui lòng chọn ít nhất 1 sản phẩm.';
+            } else {
+                errors.value.products = '';
+            }
+            break;
+        }
+    }
+};
+
+const validateAllForm = (): boolean => {
+    validateField('customerName');
+    validateField('phone');
+    validateField('email');
+    validateField('address');
+    validateField('products');
+
+    const invoiceErr = validateInvoiceInfo();
+    if (invoiceErr) {
+        errors.value.invoice = invoiceErr;
+    } else {
+        errors.value.invoice = '';
+    }
+
+    return !Object.values(errors.value).some(err => !!err);
+};
 
 const validateMst = (): boolean => {
     if (!showInvoiceCompanyForm.value) {
@@ -70,8 +162,9 @@ function buildInvoiceInfoPayload() {
     };
 }
 
-const productItems = ref<any[]>([]);
-const allProductsFromApi = ref<any[]>([]);
+watch(() => productItems.value.length, () => {
+    validateField('products');
+});
 
 // ==========================================
 // LOGIC BẢN ĐỒ ĐỘNG 
@@ -136,6 +229,8 @@ const addProduct = (sp: any, bt: any) => {
         // Thêm mới nếu chưa có
         productItems.value.push({
             id: bt.maBienThe,
+            tenSp: sp.tenSp,
+            tenBienThe: bt.tenBienThe,
             tenItem: `${sp.tenSp} - ${bt.tenBienThe}`,
             gia: bt.giaBan,
             hinhAnh: bt.hinhAnhDaiDien || bt.hinhAnh || sp.hinhAnhDaiDien,
@@ -155,13 +250,13 @@ const removeProduct = (id: string | number) => {
 
 const increaseQuantity = (item: any) => {
     if (item.soLuongTon !== undefined && item.soLuong >= item.soLuongTon) {
-        import('sweetalert2').then((Swal) => {
-            Swal.default.fire({
-                icon: 'warning',
-                title: 'Vượt quá số lượng',
-                text: `Chỉ còn ${item.soLuongTon} sản phẩm trong kho!`,
-                confirmButtonColor: '#000'
-            });
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 2500,
+            icon: 'warning',
+            title: `Chỉ còn ${item.soLuongTon} sản phẩm trong kho!`
         });
         return;
     }
@@ -172,6 +267,20 @@ const decreaseQuantity = (item: any) => {
     if (item.soLuong > 1) item.soLuong--;
 };
 
+const onQuantityInput = (item: any) => {
+    if (item.soLuongTon !== undefined && Number(item.soLuong) > item.soLuongTon) {
+        item.soLuong = item.soLuongTon;
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 2500,
+            icon: 'warning',
+            title: `Số lượng vượt quá tồn kho (tối đa ${item.soLuongTon} sp)!`
+        });
+    }
+};
+
 const validateQuantity = (item: any) => {
     let newQty = Number(item.soLuong);
     if (isNaN(newQty) || newQty < 1) {
@@ -180,13 +289,13 @@ const validateQuantity = (item: any) => {
 
     if (item.soLuongTon !== undefined && newQty > item.soLuongTon) {
         newQty = item.soLuongTon;
-        import('sweetalert2').then((Swal) => {
-            Swal.default.fire({
-                icon: 'warning',
-                title: 'Vượt quá số lượng',
-                text: `Chỉ còn ${item.soLuongTon} sản phẩm trong kho!`,
-                confirmButtonColor: '#000'
-            });
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 2500,
+            icon: 'warning',
+            title: `Số lượng vượt quá tồn kho (tối đa ${item.soLuongTon} sp)!`
         });
     }
 
@@ -447,21 +556,25 @@ onMounted(async () => {
     // 3. Load danh sách sản phẩm mặc định ban đầu
     await loadProductsWithVariants('');
       
-    // 4. Polling 15s cập nhật tồn kho để nhảy số tự động
-    stockPollingTimer = setInterval(async () => {
+    // 4. Đồng bộ số lượng tồn kho tức thì và Polling 15s
+    const syncStock = async () => {
         try {
             const res = await axios.get(`${API}/api/ThanhToanSanPham/search-products-variants`, {
                 params: { keyword: '' }
             });
             if (res.data && res.data.success) {
                 const allFreshProducts = res.data.data;
-                // Cập nhật tồn kho cho các item đang ở trang Thanh Toán
                 productItems.value.forEach(p => {
                     for (const sp of allFreshProducts) {
                         const bt = sp.bienthes?.find((b: any) => b.maBienThe === p.id);
                         if (bt) {
                             p.soLuongTon = bt.soLuongTon;
-                            // Ép số lượng nhảy lùi nếu kho bị hụt
+                            if (sp.tenSp && (!p.tenItem || !p.tenItem.includes(sp.tenSp))) {
+                                p.tenItem = `${sp.tenSp} - ${bt.tenBienThe || p.tenItem}`;
+                            }
+                            if (!p.hinhAnh || p.hinhAnh.includes('no-image')) {
+                                p.hinhAnh = bt.hinhAnhDaiDien || bt.hinhAnh || sp.hinhAnhDaiDien;
+                            }
                             if (p.soLuongTon !== undefined && p.soLuong > p.soLuongTon) {
                                 p.soLuong = p.soLuongTon;
                             }
@@ -473,7 +586,10 @@ onMounted(async () => {
         } catch (e) {
             // Im lặng bỏ qua
         }
-    }, 15000);
+    };
+
+    await syncStock();
+    stockPollingTimer = setInterval(syncStock, 15000);
 });
 
 onUnmounted(() => {
@@ -488,20 +604,28 @@ onUnmounted(() => {
 // XỬ LÝ THANH TOÁN
 // ==========================================
 const handleCheckout = async () => {
-    // 1. Validate dữ liệu cơ bản
-    if (!orderData.value.customerName || !orderData.value.phone || !orderData.value.address) {
-        Swal.fire({ title: 'Thiếu thông tin', text: 'Vui lòng điền đầy đủ Họ tên, Số điện thoại và Địa chỉ giao hàng chi tiết!', icon: 'warning', confirmButtonColor: '#d4af37' });
-        return;
-    }
+    // 1. Validate toàn bộ form tự động
+    if (!validateAllForm()) {
+        const activeErrors = Object.values(errors.value).filter(err => !!err);
+        let errorHtml = '<div style="text-align: left; font-size: 14px; line-height: 1.6; margin-top: 8px;">';
+        if (activeErrors.length === 1) {
+            errorHtml += `<p style="text-align: center; margin: 0;">${activeErrors[0]}</p>`;
+        } else {
+            errorHtml += '<p style="margin-bottom: 8px; font-weight: 600;">Vui lòng kiểm tra và hoàn thiện các thông tin sau:</p><ul style="padding-left: 20px; list-style-type: disc; margin: 0;">';
+            activeErrors.forEach(err => {
+                errorHtml += `<li style="color: #ef4444; margin-bottom: 4px;">${err}</li>`;
+            });
+            errorHtml += '</ul>';
+        }
+        errorHtml += '</div>';
 
-    if (productItems.value.length === 0) {
-        Swal.fire({ title: 'Giỏ hàng trống', text: 'Giỏ hàng của bạn đang trống! Vui lòng chọn sản phẩm.', icon: 'warning', confirmButtonColor: '#d4af37' });
-        return;
-    }
-
-    const invoiceErr = validateInvoiceInfo();
-    if (invoiceErr) {
-        Swal.fire({ title: 'Lỗi hoá đơn', text: invoiceErr, icon: 'warning', confirmButtonColor: '#d4af37' });
+        Swal.fire({
+            title: 'Thông tin chưa hợp lệ',
+            html: errorHtml,
+            icon: 'warning',
+            confirmButtonText: 'Đã hiểu',
+            confirmButtonColor: '#1e293b'
+        });
         return;
     }
 
@@ -683,26 +807,46 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                             <div>
                                 <label class="custom-label font-bold">Họ và tên *</label>
-                                <input v-model="orderData.customerName" type="text" class="booking-input w-full"
+                                <input v-model="orderData.customerName" 
+                                    @input="validateField('customerName')" 
+                                    @blur="validateField('customerName')"
+                                    :class="{ 'input-error': errors.customerName }"
+                                    type="text" class="booking-input w-full"
                                     placeholder="Tên người nhận">
+                                <p v-if="errors.customerName" class="error-msg-custom"><i class="fas fa-exclamation-circle me-1"></i>{{ errors.customerName }}</p>
                             </div>
 
                             <div>
                                 <label class="custom-label font-bold">Số điện thoại *</label>
-                                <input v-model="orderData.phone" type="tel" class="booking-input w-full"
+                                <input v-model="orderData.phone" 
+                                    @input="validateField('phone')" 
+                                    @blur="validateField('phone')"
+                                    :class="{ 'input-error': errors.phone }"
+                                    type="tel" class="booking-input w-full"
                                     placeholder="090x xxx xxx">
+                                <p v-if="errors.phone" class="error-msg-custom"><i class="fas fa-exclamation-circle me-1"></i>{{ errors.phone }}</p>
                             </div>
                             
                             <div class="md:col-span-2">
-                                <label class="custom-label font-bold">Email nhận thông báo</label>
-                                <input v-model="orderData.email" type="email" class="booking-input w-full"
+                                <label class="custom-label font-bold">Email nhận thông báo *</label>
+                                <input v-model="orderData.email" 
+                                    @input="validateField('email')" 
+                                    @blur="validateField('email')"
+                                    :class="{ 'input-error': errors.email }"
+                                    type="email" class="booking-input w-full"
                                     placeholder="vidu@gmail.com">
+                                <p v-if="errors.email" class="error-msg-custom"><i class="fas fa-exclamation-circle me-1"></i>{{ errors.email }}</p>
                             </div>
                             
                             <div class="md:col-span-2">
                                 <label class="custom-label font-bold text-danger">Địa chỉ giao hàng chi tiết *</label>
-                                <textarea v-model="orderData.address" class="booking-input w-full pt-2" style="height: 80px;"
-                                    placeholder="Nhập số nhà, tên đường... Bản đồ sẽ tự động cập nhật."></textarea>
+                                <textarea v-model="orderData.address" 
+                                    @input="validateField('address')" 
+                                    @blur="validateField('address')"
+                                    :class="{ 'input-error': errors.address }"
+                                    class="booking-input w-full pt-2" style="height: 80px;"
+                                    placeholder="Nhập số nhà, tên đường, phường/xã, quận/huyện..."></textarea>
+                                <p v-if="errors.address" class="error-msg-custom"><i class="fas fa-exclamation-circle me-1"></i>{{ errors.address }}</p>
                             </div>
                             
                             <div class="md:col-span-2" v-if="orderData.address">
@@ -847,6 +991,8 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
                                 <div class="heading-line mx-auto" style="width: 80px;"></div>
                             </div>
 
+                            <p v-if="errors.products" class="error-msg-custom services-error-banner mb-3"><i class="fas fa-exclamation-triangle me-1.5"></i>{{ errors.products }}</p>
+
                             <div class="search-box-wrapper mb-4">
                                 <div class="input-wrap">
                                     <i class="fas fa-search search-icon"></i>
@@ -861,29 +1007,35 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
                                         </div>
 
                                         <div v-for="sp in searchResults" :key="sp.maSp" class="mb-2">
-                                            <div class="dropdown-header"
-                                                style="background-color: #f1f1f1; color: #333;">{{ sp.tenSp }}</div>
+                                            <div class="dropdown-header font-bold py-1 px-3 bg-gray-100 text-gray-700 text-xs">{{ sp.tenSp }}</div>
 
                                             <div v-for="bt in sp.bienthes" :key="bt.maBienThe"
                                                 class="service-dropdown-item"
                                                 :class="{ 'opacity-50': bt.soLuongTon <= 0 }"
                                                 @click="addProduct(sp, bt)">
 
-                                                <div class="flex items-center">
+                                                <div class="flex items-center flex-grow min-w-0">
                                                     <div class="w-10 h-10 bg-gray-100 flex-shrink-0 overflow-hidden rounded-md border border-gray-200 mr-3">
-                                                         <img :src="getImageUrl(bt.hinhAnh)" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='/images/no-image.png'" />
+                                                         <img :src="getImageUrl(bt.hinhAnhDaiDien || bt.hinhAnh || sp.hinhAnhDaiDien)" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='/images/no-image.png'" />
                                                      </div>
-                                                    <div class="item-details">
-                                                        <span class="item-name-text font-bold"
-                                                            style="font-size: 13px;">{{ bt.tenBienThe }}</span>
+                                                    <div class="item-details flex-grow min-w-0 pr-2">
+                                                        <!-- Dòng 1: Tên sản phẩm 1 dòng -->
+                                                        <div class="item-name-text font-bold text-neutral-900 truncate leading-tight" style="font-size: 13px;">
+                                                            {{ sp.tenSp }}
+                                                        </div>
+                                                        <!-- Dòng 2: Tên biến thể / phân loại -->
+                                                        <div class="text-xs text-neutral-500 font-medium mt-0.5 truncate" style="font-size: 12px;">
+                                                            <span class="text-neutral-400">Phân loại:</span> {{ bt.tenBienThe }}
+                                                        </div>
+                                                        <!-- Dòng 3: Giá thành 1 dòng riêng -->
                                                         <div class="d-flex align-items-center mt-1">
                                                             <span class="item-price-text text-black font-bold">{{ formatMoney(bt.giaBan) }}</span>
-                                                            <span class="ms-2 text-black" style="font-size: 11px;">(Kho: {{ bt.soLuongTon }})</span>
+                                                            <span class="ms-2 text-neutral-500 font-medium" style="font-size: 11px;">(Kho: {{ bt.soLuongTon }})</span>
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                <span v-if="bt.soLuongTon <= 0" class="badge bg-danger p-1"
+                                                <span v-if="bt.soLuongTon <= 0" class="badge bg-danger p-1 text-white"
                                                     style="font-size: 10px;">Hết</span>
                                                 <i v-else class="fas fa-plus-circle add-btn-icon"></i>
                                             </div>
@@ -896,28 +1048,48 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
                             <div class="selected-items-wrapper mb-4 border-bottom pb-3">
                                 <transition-group name="list-fade">
                                     <div v-for="p in productItems" :key="p.id" class="item-row product-checkout-item">
-                                        <div class="flex items-center flex-grow-1">
-                                            <div class="w-12 h-12 bg-gray-100 flex-shrink-0 overflow-hidden rounded-md border border-gray-200 mr-3">
+                                        <!-- 1. Ảnh sản phẩm + Tên + Đơn giá + Kho -->
+                                        <div class="flex items-center flex-grow min-w-0 pr-2">
+                                            <div class="w-10 h-10 bg-gray-100 flex-shrink-0 overflow-hidden rounded-md border border-gray-200 mr-3">
                                                 <img :src="getImageUrl(p.hinhAnh)" class="w-full h-full object-cover" onerror="this.onerror=null; this.src='/images/no-image.png'" />
                                             </div>
-                                            <div class="item-info flex-grow-1">
-                                                <span class="n font-bold d-block text-truncate" style="max-width: 170px;">{{ p.tenItem }}</span>
-                                                <div class="p text-black font-bold mt-1">{{ formatMoney(p.gia) }}</div>
-                                                <div v-if="p.soLuongTon !== undefined" class="mt-1">
-                                                    <span class="text-[10px] font-bold uppercase tracking-widest px-2 py-1 bg-gray-100 text-gray-600 rounded">
-                                                        Còn lại: {{ p.soLuongTon }}
+                                            <div class="item-info flex-grow min-w-0 pr-2">
+                                                <!-- Dòng 1: Tên sản phẩm 1 dòng duy nhất -->
+                                                <div class="n font-bold text-neutral-900 leading-tight truncate" style="font-size: 12px; max-width: 140px;">
+                                                    {{ p.tenSp || (p.tenItem && p.tenItem.includes(' - ') ? p.tenItem.split(' - ')[0] : p.tenItem) }}
+                                                </div>
+                                                <!-- Dòng 2: Tên biến thể / phân loại -->
+                                                <div class="text-xs text-neutral-500 font-medium mt-0.5 truncate" style="font-size: 11px; max-width: 140px;" v-if="p.tenBienThe || (p.tenItem && p.tenItem.includes(' - '))">
+                                                    <span class="text-neutral-400">Phân loại:</span> {{ p.tenBienThe || p.tenItem.split(' - ').slice(1).join(' - ') }}
+                                                </div>
+                                                <!-- Dòng 3: Giá thành 1 dòng riêng -->
+                                                <div class="flex items-center gap-1.5 mt-1 flex-wrap">
+                                                    <span class="p text-black font-bold">{{ formatMoney(p.gia) }}</span>
+                                                    <span v-if="p.soLuongTon !== undefined" class="text-[11px] text-gray-500 font-medium">
+                                                        (Kho: <b :class="p.soLuongTon <= 5 ? 'text-red-600' : 'text-gray-700'">{{ p.soLuongTon }}</b>)
                                                     </span>
                                                 </div>
                                             </div>
                                         </div>
-
-                                        <div class="quantity-pill ms-auto me-3">
-                                            <button @click="decreaseQuantity(p)" class="qty-btn"><i class="fas fa-minus"></i></button>
-                                            <input type="number" v-model.number="p.soLuong" min="1" class="qty-input hide-arrows" @change="validateQuantity(p)" @blur="validateQuantity(p)" />
-                                            <button @click="increaseQuantity(p)" class="qty-btn"><i class="fas fa-plus"></i></button>
+                                        
+                                        <!-- 2. Bộ tăng giảm số lượng có thể nhập trực tiếp -->
+                                        <div class="quantity-pill ms-auto me-2 flex-shrink-0">
+                                            <button type="button" @click="decreaseQuantity(p)" class="qty-btn" :disabled="p.soLuong <= 1"><i class="fas fa-minus"></i></button>
+                                            <input 
+                                                type="number" 
+                                                v-model.number="p.soLuong" 
+                                                min="1" 
+                                                :max="p.soLuongTon"
+                                                class="qty-input" 
+                                                @input="onQuantityInput(p)"
+                                                @change="validateQuantity(p)" 
+                                                @blur="validateQuantity(p)" 
+                                            />
+                                            <button type="button" @click="increaseQuantity(p)" class="qty-btn" :disabled="p.soLuongTon !== undefined && p.soLuong >= p.soLuongTon"><i class="fas fa-plus"></i></button>
                                         </div>
-
-                                        <button class="del-btn" @click="removeProduct(p.id)"><i class="fas fa-trash"></i></button>
+                                        
+                                        <!-- 3. Nút xóa thùng rác bên phải -->
+                                        <button class="del-btn flex-shrink-0" @click="removeProduct(p.id)" title="Xóa"><i class="fas fa-trash-alt"></i></button>
                                     </div>
                                 </transition-group>
                             </div>
@@ -1126,6 +1298,41 @@ h1 {
     border-color: var(--primary-color);
     box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
     background: #ffffff;
+}
+
+.booking-input.input-error {
+    border-color: #f43f5e !important;
+    background-color: #fff1f2 !important;
+}
+
+.booking-input.input-error:focus {
+    border-color: #e11d48 !important;
+    box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.15) !important;
+}
+
+.error-msg-custom {
+    color: #e11d48;
+    font-size: 11.5px;
+    font-weight: 600;
+    margin-top: 4px;
+    margin-bottom: 0;
+    display: flex;
+    align-items: center;
+    line-height: 1.35;
+    animation: errorFadeIn 0.2s ease-in-out;
+}
+
+.services-error-banner {
+    background: #fff1f2;
+    border: 1px solid #fecdd3;
+    padding: 10px 14px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+@keyframes errorFadeIn {
+    from { opacity: 0; transform: translateY(-3px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 select.booking-input {

@@ -6,8 +6,8 @@ import axios from 'axios';
 import { syncCartAfterLoginDB } from '@/Views/Anonymous/CSDL/cartDB';
 import { useAuthStore } from '@/stores/useAuthStore';
 
-const authStore = useAuthStore();
 const route = useRoute();
+const authStore = useAuthStore();
 
 
 const isLogin = ref(true);

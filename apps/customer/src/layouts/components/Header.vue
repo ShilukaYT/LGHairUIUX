@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Search, User, ShoppingBag, Menu, X, Heart } from 'lucide-vue-next';
+import { Search, User, ShoppingBag, Menu, X, Heart, Scissors } from 'lucide-vue-next';
 import axios from 'axios';
-import { getCartDB } from '@/Views/Anonymous/CSDL/cartDB';
+import { getProductCartDB } from '@/Views/Anonymous/CSDL/cartDB';
 import { useWishlistStore } from '@/stores/useWishlistStore';
 import { useAuthStore } from '@/stores/useAuthStore';
-
+import { useBookingBasketStore } from '@/stores/useBookingBasketStore';
+import { useDataStore } from '@/stores/useDataStore';
 const API = import.meta.env.VITE_API_URL;
 const route = useRoute();
 const router = useRouter();
@@ -17,8 +18,17 @@ const currentUser = ref<any>(null);
 let checkSessionInterval: ReturnType<typeof setInterval>;
 
 const cartCount = ref(0);
+const searchQuery = ref('');
 const wishlistStore = useWishlistStore();
+const bookingBasketStore = useBookingBasketStore();
 const wishlistCount = computed(() => (wishlistStore.favoriteProducts?.length || 0) + (wishlistStore.favoriteServices?.length || 0) + (wishlistStore.favoriteEmployees?.length || 0));
+
+const handleSearch = () => {
+  if (searchQuery.value.trim()) {
+    router.push({ name: 'shop', query: { q: searchQuery.value.trim() } });
+    mobileMenuOpen.value = false;
+  }
+};
 
 
 
@@ -32,8 +42,9 @@ const updateCartCount = async () => {
       maKH = 'GUEST';
     }
   }
-  const items = await getCartDB(maKH);
-  cartCount.value = items.length;
+  // Chỉ đếm sản phẩm vật lý (SANPHAM/BIENTHE), không đếm dịch vụ/combo
+  const productItems = await getProductCartDB(maKH);
+  cartCount.value = productItems.length;
 };
 
 watch(currentUser, () => {
@@ -195,6 +206,28 @@ onUnmounted(() => {
     clearInterval(checkSessionInterval);
   }
 });
+// ===== TÌM KIẾM SẢN PHẨM INLINE =====
+const dataStore = useDataStore();
+const showDropdown = ref(false);
+
+// Lọc sản phẩm theo tên khi gõ
+const searchResults = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase();
+  if (!q || q.length < 1) return [];
+  return dataStore.PRODUCTS
+    .filter((p: any) => (p.name || '').toLowerCase().includes(q))
+    .slice(0, 8); // tối đa 8 kết quả
+});
+
+const selectProduct = (prod: any) => {
+  router.push({ name: 'product_detail', params: { id: prod.id } });
+  searchQuery.value = '';
+  showDropdown.value = false;
+  mobileMenuOpen.value = false;
+};
+
+const onSearchFocus = () => { showDropdown.value = true; };
+const onSearchBlur = () => { setTimeout(() => { showDropdown.value = false; }, 200); };
 </script>
 
 <template>
@@ -216,11 +249,13 @@ onUnmounted(() => {
       <div class="px-6 pt-10 pb-6">
         <div class="flex items-center relative w-full">
           <input 
+            v-model="searchQuery"
             type="text" 
             placeholder="TÌM KIẾM" 
+            @keyup.enter="handleSearch"
             class="w-full bg-transparent border-0 border-b border-gray-200 focus:border-black focus:ring-0 outline-none px-0 py-2 pr-8 text-[12px] uppercase tracking-[0.15em] text-black placeholder:text-gray-400 transition-colors"
           />
-          <button class="absolute right-0 text-black hover:text-gray-500 transition-colors" aria-label="Search">
+          <button @click="handleSearch" class="absolute right-0 text-black hover:text-gray-500 transition-colors" aria-label="Search">
             <Search :size="20" :stroke-width="1.5" />
           </button>
         </div>
@@ -367,16 +402,56 @@ onUnmounted(() => {
 
         <!-- Desktop Icons -->
         <div class="flex-1 flex justify-end items-center space-x-5 lg:space-x-6">
-          <div class="flex items-center relative group">
+          <!-- Desktop Search with Dropdown -->
+          <div class="flex items-center relative" @focusout="onSearchBlur">
             <input 
+              v-model="searchQuery"
               type="text" 
               placeholder="TÌM KIẾM SẢN PHẨM..." 
-              class="w-32 lg:w-64 bg-transparent border-b border-gray-300 focus:border-black outline-none px-0 py-2 pr-4 text-[10px] lg:text-[10px] uppercase tracking-[0.15em] text-black placeholder:text-gray-500 transition-all duration-300 focus:w-20 lg:focus:w-60"
+              @focus="onSearchFocus"
+              autocomplete="off"
+              class="w-32 lg:w-64 bg-transparent border-b border-gray-300 focus:border-black outline-none px-0 py-2 pr-6 text-[10px] lg:text-[10px] uppercase tracking-[0.15em] text-black placeholder:text-gray-500 transition-all duration-300"
             />
-            <button class="absolute right-0 text-black hover:text-gray-500 transition-colors" aria-label="Search">
-              <Search :size="16" :stroke-width="1.5" />
-            </button>
+            <Search :size="16" :stroke-width="1.5" class="absolute right-0 text-black opacity-50" />
+
+            <!-- Dropdown kết quả -->
+            <transition
+              enter-active-class="transition duration-150 ease-out"
+              enter-from-class="opacity-0 translate-y-1"
+              enter-to-class="opacity-100 translate-y-0"
+              leave-active-class="transition duration-100 ease-in"
+              leave-from-class="opacity-100 translate-y-0"
+              leave-to-class="opacity-0 translate-y-1"
+            >
+              <div
+                v-if="showDropdown && searchQuery.trim().length > 0"
+                class="absolute top-full right-0 mt-2 w-72 bg-white border border-gray-100 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.12)] rounded-sm z-[200] overflow-hidden"
+              >
+                <template v-if="searchResults.length > 0">
+                  <button
+                    v-for="prod in searchResults"
+                    :key="prod.id"
+                    @mousedown.prevent="selectProduct(prod)"
+                    class="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left border-b border-gray-50 last:border-0"
+                  >
+                    <img
+                      :src="prod.img || 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?q=80&w=100'"
+                      :alt="prod.name"
+                      class="w-10 h-10 object-cover rounded-sm flex-shrink-0"
+                    />
+                    <div class="flex-1 min-w-0">
+                      <p class="text-[11px] uppercase tracking-widest text-black truncate">{{ prod.name }}</p>
+                      <p class="text-[10px] text-gray-400 mt-0.5">{{ prod.price ? Number(prod.price).toLocaleString('vi-VN') + ' đ' : '' }}</p>
+                    </div>
+                  </button>
+                </template>
+                <div v-else class="px-4 py-5 text-center">
+                  <p class="text-[11px] uppercase tracking-widest text-gray-400">Không tìm thấy sản phẩm</p>
+                </div>
+              </div>
+            </transition>
           </div>
+
           <router-link :to="{ name: 'wishlist' }" class="text-black hover:text-gray-500 transition-colors relative" aria-label="Wishlist">
             <Heart :size="20" :stroke-width="1.5" />
             <span class="absolute -top-1 -right-1 w-3 h-3 text-white text-[8px] flex items-center justify-center rounded-full" :class="wishlistCount > 0 ? 'bg-red-500' : 'bg-black'">{{ wishlistCount }}</span>
@@ -413,7 +488,7 @@ onUnmounted(() => {
                   <router-link :to="{ name: 'favorite_employees' }" class="block px-6 py-2.5 text-[11px] uppercase tracking-widest text-gray-600 hover:text-black hover:bg-gray-50 transition-colors">
                     Chuyên Viên Yêu Thích
                   </router-link>
-                  <router-link :to="{ name: 'profile' }" class="block px-6 py-2.5 text-[11px] uppercase tracking-widest text-gray-600 hover:text-black hover:bg-gray-50 transition-colors">
+                  <router-link :to="{ name: 'profile', query: { tab: 'orders' } }" class="block px-6 py-2.5 text-[11px] uppercase tracking-widest text-gray-600 hover:text-black hover:bg-gray-50 transition-colors">
                     Đơn Hàng
                   </router-link>
                   <div class="h-px bg-gray-100 my-2"></div>
@@ -455,6 +530,10 @@ onUnmounted(() => {
             <Heart :size="20" :stroke-width="1.5" />
             <span class="absolute -top-1 -right-1 w-3 h-3 text-white text-[8px] flex items-center justify-center rounded-full" :class="wishlistCount > 0 ? 'bg-red-500' : 'bg-black'">{{ wishlistCount }}</span>
           </router-link>
+          <button @click="bookingBasketStore.openDrawer()" class="text-black hover:text-gray-500 transition-colors relative" aria-label="Khay dịch vụ">
+            <Scissors :size="18" :stroke-width="1.5" />
+            <span v-if="bookingBasketStore.itemCount > 0" class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 text-white text-[8px] flex items-center justify-center rounded-full">{{ bookingBasketStore.itemCount }}</span>
+          </button>
           <router-link :to="{ name: currentUser ? 'profile' : 'login' }" class="text-black hover:text-gray-500 transition-colors flex items-center justify-center" aria-label="Account">
             <template v-if="currentUser">
               <div class="w-5 h-5 rounded-full overflow-hidden border border-gray-200 shrink-0 flex items-center justify-center bg-gray-50">

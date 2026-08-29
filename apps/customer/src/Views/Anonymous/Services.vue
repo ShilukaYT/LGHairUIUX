@@ -6,11 +6,13 @@ import { ref, computed, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import axios from "axios";
 import { useWishlistStore, showToast } from "@/stores/useWishlistStore";
+import { useBookingBasketStore } from "@/stores/useBookingBasketStore";
 import { Heart } from "lucide-vue-next";
 
 const route = useRoute();
 const routerInstance = useRouter();
 const wishlistStore = useWishlistStore();
+const bookingBasketStore = useBookingBasketStore();
 const cartItems = ref<any[]>([]);
 const cartRef = ref<any>(null);
 const userMaKH = ref<string | null>(null);
@@ -213,6 +215,14 @@ const addToCart = async (rawItem: any) => {
   await updateCartBadge();
   window.dispatchEvent(new Event("cart-updated"));
   showToast("Đã thêm dịch vụ vào giỏ hàng!", "success");
+};
+
+// =====================================================================
+// THÊM DỊCH VỤ VÀO KHAY ĐẶT LỊCH (Booking Basket)
+// =====================================================================
+const addToBasket = (rawItem: any) => {
+  bookingBasketStore.addItem(rawItem);
+  bookingBasketStore.openDrawer();
 };
 // =======================
 // MOUNT
@@ -428,10 +438,11 @@ const formatPrice = (price: number) => {
                   </button>
 
                   <button
-                    @click.stop.prevent="addToCart(s)"
+                    @click.stop.prevent="addToBasket(s)"
                     class="btn-order-now"
+                    :class="{ 'is-selected': bookingBasketStore.hasItem(s.maDv) }"
                   >
-                    ĐẶT NGAY
+                    {{ bookingBasketStore.hasItem(s.maDv) ? 'ĐÃ CHỌN ✓' : 'CHỌN DỊCH VỤ' }}
                   </button>
                 </div>
               </div>
@@ -592,8 +603,8 @@ const formatPrice = (price: number) => {
                     </li>
                   </ul>
                 </div>
-                <button @click="addToCart(c)" class="btn-booking-luxury">
-                  Đặt lịch Ngay
+                <button @click="addToBasket(c)" class="btn-booking-luxury" :class="{ 'is-selected': bookingBasketStore.hasItem(c.maCb) }">
+                  {{ bookingBasketStore.hasItem(c.maCb) ? 'Đã chọn ✓' : 'Chọn gói' }}
                 </button>
               </div>
             </router-link>
@@ -601,10 +612,6 @@ const formatPrice = (price: number) => {
         </div>
       </div>
     </section>
-    <div class="floating-cart-btn" @click="openCart">
-      <i class="fas fa-shopping-bag"></i>
-      <span class="cart-count">{{ cartItems.length }}</span>
-    </div>
 
     <!-- <CartSidebar ref="cartRef" /> -->
   </div>
@@ -1450,50 +1457,6 @@ const formatPrice = (price: number) => {
 .combo-white-section .col-md-6 {
   display: flex !important;
   flex-direction: column !important;
-}
-
-/* =========================================================
-   FLOATING CART
-   ========================================================= */
-.floating-cart-btn {
-  position: fixed;
-  bottom: 160px;
-  right: 20px;
-  width: 56px;
-  height: 56px;
-  background: var(--ink);
-  border-radius: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  color: #fff;
-  font-size: 22px;
-  cursor: pointer;
-  box-shadow: none;
-  z-index: 9999999;
-  transition: 0.3s;
-}
-
-.floating-cart-btn:hover {
-  transform: scale(1.05);
-  background: var(--ink-soft);
-}
-
-.cart-count {
-  position: absolute;
-  top: -6px;
-  right: -6px;
-  background: #fff;
-  color: var(--ink);
-  font-size: 10px;
-  font-weight: 600;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  border: 1px solid var(--ink);
 }
 
 /* Misc legacy helpers (kept for compatibility) */

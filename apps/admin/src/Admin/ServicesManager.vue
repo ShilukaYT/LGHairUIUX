@@ -18,7 +18,7 @@ import {
   Check,
 } from "lucide-vue-next";
 
-const API = import.meta.env.VITE_API_URL;
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196';
 
 function base64ToFile(base64, filename) {
   const arr = base64.split(",");
@@ -756,13 +756,19 @@ function sameMaDv(a, b) {
 async function loadTieudeDichVu(maDv) {
   try {
     const res = await axios.get(`${API}/api/TieudeDichvu/bydv/${maDv}`);
-    tieudes.value = res.data.map((t) => ({
+    const newTieudes = res.data.map((t) => ({
       ...t,
       chiTiet: t.chiTiet.map((ct) => ({
         ...ct,
         hinhAnh: toAbsUrl(ct.hinhAnh),
       })),
     }));
+    // Chỉ thay thế tiêu đề của đúng dịch vụ này, giữ nguyên data của các
+    // dịch vụ khác đang mở cùng lúc (tránh ghi đè mất dữ liệu).
+    tieudes.value = [
+      ...tieudes.value.filter((t) => !sameMaDv(t.maDv, maDv)),
+      ...newTieudes,
+    ];
   } catch (err) {
     console.error("Lỗi tải tiêu đề dịch vụ:", err);
     showToast("Lỗi tải tiêu đề dịch vụ!", "error");

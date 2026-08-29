@@ -2,6 +2,11 @@
 import { ref, onMounted, watch } from 'vue';
 import Swal from 'sweetalert2';
 import axios from 'axios';
+import { useChatStore } from '@/stores/useChatStore';
+import { useBookingBasketStore } from '@/stores/useBookingBasketStore';
+
+const chatStore = useChatStore();
+const basketStore = useBookingBasketStore();
 
 // --- CẤU HÌNH SWEETALERT2 TOAST ---
 const Toast = Swal.mixin({
@@ -228,7 +233,11 @@ const performTryOn = async () => {
 
 <template>
   <div>
-    <button class="btn-open-tryon" @click="showModalTryOn = !showModalTryOn" title="Thử tóc với AI">
+    <button
+      :class="['btn-open-tryon', { 'chat-open': chatStore.isChatOpen, 'basket-active': basketStore.itemCount > 0 }]"
+      @click="showModalTryOn = !showModalTryOn"
+      title="Thử tóc với AI"
+    >
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512" fill="currentColor" width="24" height="24">
         <path d="M234.7 42.7L197 56.8c-3 1.1-5 4-5 7.2s2 6.1 5 7.2l37.7 14.1L248.8 123c1.1 3 4 5 7.2 5s6.1-2 7.2-5l14.1-37.7L315 71.2c3-1.1 5-4 5-7.2s-2-6.1-5-7.2L277.3 42.7 263.2 5c-1.1-3-4-5-7.2-5s-6.1 2-7.2 5L234.7 42.7zM46.1 395.4c-18.7 18.7-18.7 49.1 0 67.9l34.6 34.6c18.7 18.7 49.1 18.7 67.9 0L529.9 116.5c18.7-18.7 18.7-49.1 0-67.9L495.3 14.1c-18.7-18.7-49.1-18.7-67.9 0L46.1 395.4zM484.6 82.6l-105 105-23.3-23.3 105-105 23.3 23.3zM7.5 117.2C3 118.9 0 123.2 0 128s3 9.1 7.5 10.8L64 160l21.2 56.5c1.7 4.5 6 7.5 10.8 7.5s9.1-3 10.8-7.5L128 160l56.5-21.2c4.5-1.7 7.5-6 7.5-10.8s-3-9.1-7.5-10.8L128 96 106.8 39.5C105.1 35 100.8 32 96 32s-9.1 3-10.8 7.5L64 96 7.5 117.2zm352 256c-4.5 1.7-7.5 6-7.5 10.8s3 9.1 7.5 10.8L416 416l21.2 56.5c1.7 4.5 6 7.5 10.8 7.5s9.1-3 10.8-7.5L480 416l56.5-21.2c4.5-1.7 7.5-6 7.5-10.8s-3-9.1-7.5-10.8L480 352l-21.2-56.5c-1.7-4.5-6-7.5-10.8-7.5s-9.1 3-10.8 7.5L416 352l-56.5 21.2z"/>
       </svg>
@@ -432,50 +441,44 @@ const performTryOn = async () => {
 .flex-1 { flex: 1; }
 
 /* SỬA LẠI THÀNH NÚT TRÒN NHỎ GỌN */
+/* Mobile mặc định: xếp DỌC ngay trên nút chat toggle
+   Chat toggle: bottom-5(20px) + h-14(56px) + gap 8px = bottom: 84px */
 .btn-open-tryon {
-  /* Mobile mặc định: chatbot bottom-5 right-5 (20px,20px), nút chatbot 56px -> tâm right = 20+28=48 */
   position: fixed;
-  bottom: 88px; 
-  right: 20px;  
-  z-index: 90; 
-  width: 56px;  /* Chiều rộng cố định */
-  height: 56px; /* Chiều cao cố định */
-  background: linear-gradient(135deg, var(--color-gold), #e8c37c); 
-  color: var(--color-gold) ; 
-  border: 1px solid rgb(218, 211, 19); 
-  border-radius: 50%; /* Ép thành hình tròn xoe */
-  font-size: 22px; /* Phóng to icon lên chút cho cân đối */
+  bottom: 90px;
+  right: 20px;
+  z-index: 9998;
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, var(--color-gold), #e8c37c);
+  color: var(--color-gold);
+  border: 1px solid rgb(218, 211, 19);
+  border-radius: 50%;
+  font-size: 22px;
   cursor: pointer;
-  box-shadow: 0 4px 15px rgba(12, 8, 0, 0.4); 
-  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(12, 8, 0, 0.4);
+  transition: bottom 0.3s ease, margin 0.3s ease, all 0.3s ease;
   display: flex;
   align-items: center;
-  justify-content: center; /* Căn giữa icon */
-  animation: pulse-gold 2s infinite; 
+  justify-content: center;
+  animation: pulse-gold 2s infinite;
   background-color: #fffdfd;
 }
 
-/* sm: từ 640px - chatbot: bottom-6 right-6 (24px,24px), nút vẫn 56px (md:h-16 chỉ áp từ 768px) -> tâm right = 24+28=52 */
-@media (min-width: 640px) {
-  .btn-open-tryon {
-    bottom: 92px;
-    right: 24px;
-  }
+/* Khi chat đang mở: ẩn nút */
+.btn-open-tryon.chat-open {
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.8);
 }
 
-/* md: từ 768px - chatbot đổi nút thành 64px (md:h-16 md:w-16), right vẫn 24px -> tâm right = 24+32=56 */
+.btn-open-tryon.basket-active {
+  margin-bottom: 76px;
+}
+
 @media (min-width: 768px) {
-  .btn-open-tryon {
-    bottom: 96px;
-    right: 28px;
-  }
-}
-
-/* lg: từ 1024px - chatbot: bottom-10 right-12 (40px,48px), nút 64px -> tâm right = 48+32=80 -> tryon right = 80-28=52 */
-@media (min-width: 1024px) {
-  .btn-open-tryon {
-    bottom: 116px;
-    right: 52px;
+  .btn-open-tryon.basket-active {
+    margin-bottom: 60px;
   }
 }
 
