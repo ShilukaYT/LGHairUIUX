@@ -2,6 +2,11 @@
 @import './tailwind.css';
 @import './theme.css';
 
+/* Cố định layout tối thiểu 1280px - không bị vỡ khi thu nhỏ trình duyệt */
+html, body {
+  min-width: 1280px;
+}
+
 .swal2-container {
   z-index: 1000000 !important;
 }

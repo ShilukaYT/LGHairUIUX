@@ -18,7 +18,7 @@ const handleCheckoutOption = (payload: { loaiCheckout: string }) => {
 </script>
 
 <template>
-  <div class="flex flex-col min-h-screen w-full relative">
+  <div class="flex flex-col min-h-screen w-full relative" style="min-width: 1280px;">
 
 
     <Header />
