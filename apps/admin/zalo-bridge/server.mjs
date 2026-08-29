@@ -254,6 +254,28 @@ const server = http.createServer(async (req, res) => {
         }
         return;
     }
+    /* ── API: Logout ── */
+    if (req.method === "POST" && url.pathname === "/api/logout") {
+        try {
+            if (fs.existsSync(CRED_PATH)) {
+                fs.unlinkSync(CRED_PATH);
+            }
+            apiInstance = null;
+            loginPromise = null;
+            loginError = null;
+            qrStatus = "idle";
+            isQrLoginRunning = false;
+            currentQrDataUrl = null;
+            console.log("🔌 [ZaloBridge] Đã nhận yêu cầu đăng xuất. Xóa credentials.json.");
+            res.statusCode = 200;
+            res.end(JSON.stringify({ ok: true, message: "Đã đăng xuất" }));
+        } catch (e) {
+            console.error("❌ [ZaloBridge] Lỗi khi đăng xuất:", e);
+            res.statusCode = 500;
+            res.end(JSON.stringify({ ok: false, error: e?.message || String(e) }));
+        }
+        return;
+    }
 
     /* ── API: Check Phone Zalo ── */
     if (req.method === "POST" && (url.pathname === "/api/check-phone" || url.pathname === "/check-phone")) {

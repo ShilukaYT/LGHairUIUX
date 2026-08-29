@@ -1,9 +1,10 @@
-<script setup>
+<script setup lang="ts">
 import { ref, watch, onMounted } from 'vue';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import { X, AlertTriangle, Loader2 } from 'lucide-vue-next';
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
+import { DANH_SACH_NGAN_HANG_VN, fetchDanhSachNganHangLive } from "@/Views/Anonymous/CSDL/danhSachNganHang";
 
 const props = defineProps({
   isOpen: {
@@ -24,25 +25,7 @@ const formData = ref({
   name: ''
 });
 
-const danhSachNganHang = ref([
-  "Vietcombank (VCB)",
-  "Techcombank (TCB)",
-  "MBBank (MB)",
-  "VietinBank (CTG)",
-  "BIDV",
-  "Agribank",
-  "Sacombank (STB)",
-  "ACB",
-  "VPBank",
-  "TPBank",
-  "VIB",
-  "HDBank",
-  "SHB",
-  "SeABank",
-  "MSB",
-  "Timo",
-  "Khác..."
-]);
+const danhSachNganHang = ref(DANH_SACH_NGAN_HANG_VN);
 
 const isSubmitting = ref(false);
 const errorMessage = ref('');
@@ -64,8 +47,9 @@ watch(() => props.isOpen, (newVal) => {
   }
 });
 
-onMounted(() => {
+onMounted(async () => {
   fillCustomerName();
+  danhSachNganHang.value = await fetchDanhSachNganHangLive();
 });
 
 const submitRefund = async () => {
@@ -94,7 +78,7 @@ const submitRefund = async () => {
     });
     
     emit('success'); 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Lỗi khi hủy đơn:", error);
     if (error.response?.data?.errors) {
       errorMessage.value = "Dữ liệu nhập vào chưa hợp lệ, vui lòng kiểm tra lại chữ và số.";
@@ -143,10 +127,10 @@ const submitRefund = async () => {
             <!-- Bank Select -->
             <div class="space-y-1.5">
               <label class="block text-[10px] uppercase tracking-widest text-gray-500 font-bold">Ngân hàng nhận tiền *</label>
-              <select v-model="formData.bank" class="w-full bg-white border border-gray-200 focus:border-black outline-none px-3 py-2.5 text-xs transition-all rounded-sm text-black cursor-pointer appearance-none">
+              <select v-model="formData.bank" class="w-full bg-white border border-gray-200 focus:border-black outline-none px-3 py-2.5 text-xs transition-all rounded-sm text-black cursor-pointer">
                 <option value="" disabled selected>-- Vui lòng chọn ngân hàng --</option>
-                <option v-for="bank in danhSachNganHang" :key="bank" :value="bank">
-                  {{ bank }}
+                <option v-for="bank in danhSachNganHang" :key="bank.code" :value="bank.displayName || bank.name">
+                  {{ bank.displayName || bank.name }}
                 </option>
               </select>
             </div>

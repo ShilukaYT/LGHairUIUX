@@ -357,6 +357,17 @@ function stopQrPolling() {
   }
 }
 
+/* ── Zalo Logout Method ── */
+async function logoutZalo() {
+  try {
+    await axios.post(`${BRIDGE_URL}/api/logout`)
+    showNotification('Đã đăng xuất Zalo thành công!', 'success')
+    await loadZaloTrangThai()
+  } catch (e: any) {
+    showNotification(e.response?.data?.error || e.message || 'Lỗi khi đăng xuất Zalo', 'error')
+  }
+}
+
 /* ── Zalo Phone Check Methods ── */
 async function checkZaloPhone(phone: string | null | undefined, id: string) {
   if (!phone || !phone.trim()) {
@@ -884,19 +895,37 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <v-btn
-          color="success"
-          variant="flat"
-          size="large"
-          rounded="xl"
-          class="text-none font-weight-bold shadow-xs px-6"
-          @click="openQrLoginModal"
-        >
-          <template v-slot:prepend>
-            <QrCode class="w-5 h-5 mr-2" />
-          </template>
-          Đăng Nhập Zalo (QR)
-        </v-btn>
+        <div class="d-flex gap-2">
+          <v-btn
+            color="success"
+            variant="flat"
+            size="large"
+            rounded="xl"
+            class="text-none font-weight-bold shadow-xs px-6"
+            @click="openQrLoginModal"
+            v-if="!zaloTrangThai?.personalLoggedIn"
+          >
+            <template v-slot:prepend>
+              <QrCode class="w-5 h-5 mr-2" />
+            </template>
+            Đăng Nhập Zalo (QR)
+          </v-btn>
+
+          <v-btn
+            color="error"
+            variant="flat"
+            size="large"
+            rounded="xl"
+            class="text-none font-weight-bold shadow-xs px-6"
+            @click="logoutZalo"
+            v-if="zaloTrangThai?.personalLoggedIn"
+          >
+            <template v-slot:prepend>
+              <XCircle class="w-5 h-5 mr-2" />
+            </template>
+            Đăng Xuất Zalo
+          </v-btn>
+        </div>
       </div>
     </v-card>
 

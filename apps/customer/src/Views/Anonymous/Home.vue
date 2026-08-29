@@ -48,7 +48,42 @@ const activeHeroSlide = ref<number>(0);
 let heroIntervalId: number | null = null;
 
 const heroSlides: HeroSlide[] = [
-
+  {
+    id: 1,
+    image: '/dich-vu-toc.png',
+    alt: 'Dịch vụ tóc LG Hair',
+    subtitle: 'Premium Hair Services',
+    title: 'LGHAIR SALON',
+    desc: 'Trải nghiệm dịch vụ làm tóc chuyên nghiệp hàng đầu',
+    route: 'datdichvu'
+  },
+  {
+    id: 2,
+    image: '/nhuom-thoi-trang.png',
+    alt: 'Nhuộm thời trang',
+    subtitle: 'Trendy Hair Coloring',
+    title: 'LGHAIR SALON',
+    desc: 'Nhuộm tóc thời trang với màu sắc độc đáo nhất',
+    route: 'datdichvu'
+  },
+  {
+    id: 3,
+    image: '/goi-dau-massage.png',
+    alt: 'Gội đầu massage',
+    subtitle: 'Relaxing Hair Care',
+    title: 'LGHAIR SALON',
+    desc: 'Thư giãn tuyệt đối với dịch vụ gội đầu massage cao cấp',
+    route: 'datdichvu'
+  },
+  {
+    id: 4,
+    image: '/cat-tao-kieu.png',
+    alt: 'Cắt tạo kiểu',
+    subtitle: 'Expert Styling',
+    title: 'LGHAIR SALON',
+    desc: 'Tạo kiểu tóc chuyên nghiệp từ các chuyên gia hàng đầu',
+    route: 'datdichvu'
+  }
 ];
 
 // Flash sale countdown
@@ -193,8 +228,32 @@ const getFallbackImg = (tenDanhMuc: string): string => {
 
 // Testimonials
 const activeTestimonial = ref<number>(0);
+let testimonialIntervalId: number | null = null;
 const testimonials: Testimonial[] = [
- 
+  {
+    id: 1,
+    name: "Nguyễn Mai Phương",
+    role: "Khách hàng thường xuyên",
+    quote: "Dịch vụ cực kỳ chuyên nghiệp! Nhân viên tư vấn màu tóc rất hợp với khuôn mặt mình. Chắc chắn sẽ quay lại LG Hair nhiều lần nữa.",
+    rating: 5,
+    service: "Nhuộm Thời Trang"
+  },
+  {
+    id: 2,
+    name: "Trần Bảo Nam",
+    role: "Khách hàng mới",
+    quote: "Lần đầu đến trải nghiệm dịch vụ gội đầu massage tại salon, thực sự thư giãn sau những ngày làm việc căng thẳng. Không gian tuyệt vời.",
+    rating: 5,
+    service: "Gội Đầu Massage"
+  },
+  {
+    id: 3,
+    name: "Lê Thu Thảo",
+    role: "Khách VIP",
+    quote: "Chất lượng sản phẩm sử dụng ở salon rất tốt, tóc mình phục hồi rõ rệt sau liệu trình phục hồi chuyên sâu. Cảm ơn các chuyên viên của LG Hair.",
+    rating: 5,
+    service: "Phục Hồi Chuyên Sâu"
+  }
 ];
 
 const currentTestimonial = computed(() => {
@@ -237,6 +296,7 @@ const prevTestimonial = (): void => {
 // ===== LIFECYCLE =====
 onMounted(async () => {
   heroIntervalId = window.setInterval(nextHeroSlide, 4200);
+  testimonialIntervalId = window.setInterval(nextTestimonial, 5000);
 
   // Fetch danh mục dịch vụ từ API
   try {
@@ -405,6 +465,10 @@ onUnmounted(() => {
     window.clearInterval(flashTimerInterval);
     flashTimerInterval = null;
   }
+  if (testimonialIntervalId !== null) {
+    window.clearInterval(testimonialIntervalId);
+    testimonialIntervalId = null;
+  }
 });
 
 // ===== THÊM VÀO GIỎ HÀNG =====
@@ -468,7 +532,7 @@ const addProductToCart = async (prod: any) => {
       </div>
       <div class="hm-hero-content">
         <p class="hm-hero-subtitle">{{ heroSlides[activeHeroSlide]?.subtitle }}</p>
-        <h1 class="hm-hero-title">LG HAIR SALON</h1>
+        <h1 class="hm-hero-title">{{ heroSlides[activeHeroSlide]?.title || 'LGHAIR SALON' }}</h1>
         <p class="hm-hero-desc">{{ heroSlides[activeHeroSlide]?.desc }}</p>
         <div class="hm-hero-cta">
           <button class="hm-btn-primary" @click="goToRoute('datdichvu')">Đặt Lịch Ngay</button>
@@ -512,8 +576,8 @@ const addProductToCart = async (prod: any) => {
         </div>
         <div class="hm-cat-card hm-cat-card-img" @click="goToRoute('services')">
           <img
-            :src="dataStore.SERVICES[0]?.img || 'https://images.unsplash.com/photo-1595476108010-b4d1f10d5e43?q=80&w=400'"
-            alt="Hình ảnh dịch vụ"
+            src="/salon-service-banner.jpg"
+            alt="Xem thêm dịch vụ LGHair"
             class="hm-cat-bg-img"
           />
           <div class="hm-cat-hover-text">Xem Thêm Dịch Vụ</div>
@@ -524,8 +588,8 @@ const addProductToCart = async (prod: any) => {
     <!-- ===== ĐƯỜNG KẺ NGANG MỜ ===== -->
     <div class="hm-divider"></div>
 
-    <!-- ===== FLASH SALE ===== -->
     <section class="hm-flash-section" v-if="activeFlashSale">
+      <div class="hm-flash-inner">
       <div class="hm-flash-top">
         <div class="hm-flash-title-wrap">
           <span class="hm-flash-f">FLASH</span>
@@ -577,6 +641,7 @@ const addProductToCart = async (prod: any) => {
           </div>
         </div>
       </div>
+      </div>
     </section>
 
     <!-- ===== CTA SẴN SÀNG CHIA SẺ CÂU CHUYỆN ===== -->
@@ -596,11 +661,15 @@ const addProductToCart = async (prod: any) => {
       </div>
     </section>
 
-    <!-- ===== DỊCH VỤ MỚI ===== -->
     <section class="hm-services-section">
-      <h2 class="hm-section-title" data-aos="fade-up">Dịch Vụ Mới Của Chúng Tôi</h2>
+      <div style="max-width: 1280px; margin: 0 auto; padding: 0 32px;">
+        <div class="hm-stylist-header" data-aos="fade-up">
+          <h2 class="hm-section-title" style="margin-bottom: 0; text-align: left;">Dịch Vụ Mới Của Chúng Tôi</h2>
+        </div>
+        <div class="hm-stylist-divider" data-aos="fade-up"></div>
+      </div>
 
-      <div class="hm-svc-row" v-if="dataStore.SERVICES.length >= 1">
+      <div class="hm-svc-row hm-svc-row-3" v-if="dataStore.SERVICES.length >= 1">
         <div class="hm-svc-big" v-if="dataStore.SERVICES[0]" data-aos="fade-right">
           <img :src="dataStore.SERVICES[0].img" :alt="dataStore.SERVICES[0].name" class="hm-svc-big-img" />
           <div class="hm-svc-big-overlay">
@@ -609,28 +678,31 @@ const addProductToCart = async (prod: any) => {
             <button class="hm-svc-big-btn" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[0].id } })">Xem chi tiết</button>
           </div>
         </div>
-        
         <div class="hm-svc-card" v-if="dataStore.SERVICES[1]" data-aos="fade-up" data-aos-delay="100" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[1].id } })">
           <img :src="dataStore.SERVICES[1].img" :alt="dataStore.SERVICES[1].name" class="hm-svc-card-img" />
           <div class="hm-svc-card-body">
-            <span class="hm-svc-label">Dịch vụ mới</span>
-            <h3 class="hm-svc-card-name" style="text-transform: uppercase;">{{ normalizeVietnamese(dataStore.SERVICES[1].name) }}</h3>
-            <p class="hm-svc-card-desc">{{ dataStore.SERVICES[1].desc }}</p>
+            <div>
+              <span class="hm-svc-label">Dịch vụ mới</span>
+              <h3 class="hm-svc-card-name" style="text-transform: uppercase;">{{ normalizeVietnamese(dataStore.SERVICES[1].name) }}</h3>
+              <p class="hm-svc-card-desc">{{ dataStore.SERVICES[1].desc }}</p>
+            </div>
             <p class="hm-svc-card-price">{{ formatPriceToVND(dataStore.SERVICES[1].price) }}</p>
           </div>
         </div>
         <div class="hm-svc-card" v-if="dataStore.SERVICES[2]" data-aos="fade-up" data-aos-delay="200" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[2].id } })">
           <img :src="dataStore.SERVICES[2].img" :alt="dataStore.SERVICES[2].name" class="hm-svc-card-img" />
           <div class="hm-svc-card-body">
-            <span class="hm-svc-label">Nổi bật</span>
-            <h3 class="hm-svc-card-name" style="text-transform: uppercase;">{{ normalizeVietnamese(dataStore.SERVICES[2].name) }}</h3>
-            <p class="hm-svc-card-desc">{{ dataStore.SERVICES[2].desc }}</p>
+            <div>
+              <span class="hm-svc-label">Nổi bật</span>
+              <h3 class="hm-svc-card-name" style="text-transform: uppercase;">{{ normalizeVietnamese(dataStore.SERVICES[2].name) }}</h3>
+              <p class="hm-svc-card-desc">{{ dataStore.SERVICES[2].desc }}</p>
+            </div>
             <p class="hm-svc-card-price">{{ formatPriceToVND(dataStore.SERVICES[2].price) }}</p>
           </div>
         </div>
       </div>
 
-      <div class="hm-svc-row" style="margin-top: 32px;" v-if="dataStore.SERVICES.length >= 4">
+      <div class="hm-svc-row hm-svc-row-2" style="margin-top: 32px;" v-if="dataStore.SERVICES.length >= 4">
         <div class="hm-svc-card hm-svc-card-large" v-if="dataStore.SERVICES[3]" data-aos="fade-up" data-aos-delay="100" @click="router.push({ name: 'serviceDetail', params: { id: dataStore.SERVICES[3].id } })">
           <img :src="dataStore.SERVICES[3].img" :alt="dataStore.SERVICES[3].name" class="hm-svc-card-img" />
           <div class="hm-svc-card-body">
@@ -651,8 +723,8 @@ const addProductToCart = async (prod: any) => {
         </div>
       </div>
 
-      <div class="hm-center" data-aos="fade-up">
-        <button class="hm-view-all" @click="goToRoute('services')">Xem Tất Cả Dịch Vụ →</button>
+      <div class="hm-center">
+        <button class="hm-view-all" @click="goToRoute('services')">Xem thêm</button>
       </div>
     </section>
 
@@ -723,9 +795,13 @@ const addProductToCart = async (prod: any) => {
       </div>
     </section>
 
-    <!-- ===== CỬA HÀNG / SẢN PHẨM ===== -->
     <section class="hm-shop-section">
-      <h2 class="hm-section-title">Cửa Hàng Của Chúng Tôi</h2>
+      <div style="max-width: 1280px; margin: 0 auto; padding: 0 32px;">
+        <div class="hm-stylist-header" data-aos="fade-up">
+          <h2 class="hm-section-title" style="margin-bottom: 0; text-align: left;">Cửa Hàng Của Chúng Tôi</h2>
+        </div>
+        <div class="hm-stylist-divider" data-aos="fade-up"></div>
+      </div>
 
 
       <div v-if="isLoadingProducts" class="hm-prod-grid">
@@ -846,7 +922,8 @@ const addProductToCart = async (prod: any) => {
   background: #fff;
   font-family: inherit;
   color: #000;
-  overflow-x: hidden;
+  min-width: 1280px;
+  overflow-x: visible;
 }
 
 /* ==================== TOAST ==================== */
@@ -883,11 +960,13 @@ const addProductToCart = async (prod: any) => {
 .hm-hero {
   position: relative;
   width: 100%;
-  height: 426px;
+  height: 520px;
   background: #000;
   overflow: hidden;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
 }
 .hm-hero-slides { position: absolute; inset: 0; width: 100%; height: 100%; }
 .hm-hero-slide {
@@ -898,14 +977,18 @@ const addProductToCart = async (prod: any) => {
 .hm-slide-active { opacity: 1; z-index: 10; }
 .hm-slide-hidden { opacity: 0; z-index: 0; }
 .hm-hero-img { width: 100%; height: 100%; object-fit: cover; }
-.hm-hero-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.45); }
+.hm-hero-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.20); }
 
 .hm-hero-content {
   position: relative;
   z-index: 20;
   max-width: 620px;
-  padding: 48px 80px;
+  padding: 0 80px;
   color: #fff;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 .hm-hero-subtitle {
   font-size: 11px;
@@ -1107,7 +1190,7 @@ const addProductToCart = async (prod: any) => {
   justify-content: center;
   padding: 16px;
 }.hm-divider {
-  width: 100%;
+  width: calc(100% - 64px);
   max-width: 1280px;
   margin: 32px auto;
   height: 1px;
@@ -1117,6 +1200,11 @@ const addProductToCart = async (prod: any) => {
 /* ==================== FLASH SALE ==================== */
 .hm-flash-section {
   background: #fff;
+  width: 100%;
+  padding: 0 32px;
+  box-sizing: border-box;
+}
+.hm-flash-inner {
   max-width: 1280px;
   margin: 16px auto 48px;
   border-radius: 24px;
@@ -1281,7 +1369,7 @@ const addProductToCart = async (prod: any) => {
 .hm-cta-section {
   position: relative;
   width: 100%;
-  height: 420px;
+  height: 540px;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -1311,25 +1399,25 @@ const addProductToCart = async (prod: any) => {
 }
 .hm-cta-title {
   font-family: inherit;
-  font-size: 32px;
-  font-weight: 400;
-  margin-bottom: 20px;
+  font-size: 42px;
+  font-weight: 500;
+  margin-bottom: 24px;
 }
 .hm-cta-desc {
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1.8;
   font-weight: 300;
-  margin-bottom: 36px;
+  margin-bottom: 40px;
   color: rgba(255,255,255,0.9);
-  text-transform: capitalize;
 }
 .hm-cta-btn {
   display: inline-block;
-  padding: 12px 40px;
+  padding: 16px 48px;
   border: 1.5px solid #fff;
   color: #fff;
   background: transparent;
-  font-size: 13px;
+  font-size: 15px;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   cursor: pointer;
@@ -1345,30 +1433,36 @@ const addProductToCart = async (prod: any) => {
 }
 .hm-section-title {
   font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  font-size: 34px;
+  font-size: 28px;
   text-transform: capitalize;
   text-align: center;
-  margin-bottom: 48px;
-  font-weight: 400;
+  margin-bottom: 40px;
+  font-weight: 500;
+  letter-spacing: 0px;
 }
 .hm-svc-row {
-  display: flex;
-  gap: 0;
-  align-items: stretch;
-  margin-bottom: 0;
+  display: grid;
+  gap: 24px;
   max-width: 1280px;
   margin: 0 auto 32px;
   padding: 0 32px;
 }
-.hm-svc-row-rev { flex-direction: row-reverse; }
+.hm-svc-row-3 {
+  grid-template-columns: 2fr 1fr 1fr;
+  align-items: stretch;
+}
+.hm-svc-row-2 {
+  grid-template-columns: 1fr 1fr;
+}
 .hm-svc-big {
-  flex: 3;
   position: relative;
   overflow: hidden;
-  min-height: 372px;
-  border-radius: 4px;
+  border-radius: 8px;
+  /* Removed height and min-height so it adapts to grid naturally without forcing it */
 }
 .hm-svc-big-img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -1403,34 +1497,40 @@ const addProductToCart = async (prod: any) => {
 
 .hm-svc-card {
   border: none;
-  border-radius: 0;
+  border-radius: 8px;
   overflow: hidden;
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  transition: opacity 0.3s;
-  flex: 1;
-  max-width: 360px;
-  margin-left: 24px;
+  transition: opacity 0.3s, transform 0.3s;
+  background: #fdfdfd;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+  height: 100%;
 }
-.hm-svc-row-rev .hm-svc-card { margin-left: 0; margin-right: 24px; }
-.hm-svc-card:hover { opacity: 0.85; }
 .hm-svc-card-large {
-  max-width: none !important;
-  margin-left: 12px;
-  margin-right: 12px;
+  background: transparent;
+  box-shadow: none;
 }
+.hm-svc-card:hover { opacity: 0.85; transform: translateY(-4px); }
 .hm-svc-card-img {
   width: 100%;
-  aspect-ratio: 4 / 3;
-  height: auto;
+  aspect-ratio: 1 / 1;
   object-fit: cover;
-  object-position: center 80%;
+  object-position: center 15%;
   display: block;
   flex-shrink: 0;
-  border-radius: 8px;
 }
-.hm-svc-card-body { padding: 16px 0 0; flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.hm-svc-card-large .hm-svc-card-img {
+  aspect-ratio: 4 / 3;
+}
+.hm-svc-card-body { 
+  padding: 24px 20px; 
+  flex: 1; 
+  display: flex; 
+  flex-direction: column; 
+  justify-content: space-between; 
+  gap: 16px; 
+}
 .hm-svc-label {
   font-size: 10px;
   text-transform: uppercase;
@@ -1927,28 +2027,144 @@ const addProductToCart = async (prod: any) => {
 .hm-club-submit:hover { background: #fff; }
 
 /* ==================== RESPONSIVE ==================== */
+
+/* ---- 1400px+: giữ layout tối đa không bị giãn quá rộng ---- */
+@media (min-width: 1400px) {
+  .hm-hero { height: 600px; }
+  .hm-hero-content { padding: 0 120px; max-width: 720px; }
+}
+
+/* ---- Tablet lớn / Desktop thu nhỏ: 1025px – 1280px ---- */
+@media (max-width: 1280px) {
+  .hm-hero-content { padding: 0 60px; }
+  .hm-hero-title { font-size: 40px; }
+  .hm-svc-row { padding: 0 24px; }
+  .hm-prod-grid { gap: 20px; }
+  .hm-flash-section { margin: 16px 24px 48px; }
+}
+
+/* ---- Tablet: 769px – 1024px ---- */
 @media (max-width: 1024px) {
-  .hm-category-inner { grid-template-columns: repeat(3, 1fr); }
-  .hm-flash-cards { grid-template-columns: repeat(2, 1fr); }
+  /* Hero */
+  .hm-hero { height: 420px; }
+  .hm-hero-content { padding: 0 48px; }
+  .hm-hero-title { font-size: 36px; }
+  .hm-hero-desc { font-size: 14px; }
+
+  /* Danh mục */
+  .hm-category-inner { grid-template-columns: repeat(4, 1fr); }
+
+  /* Flash Sale */
   .hm-flash-left { display: none; }
   .hm-flash-vline { display: none; }
-  .hm-prod-grid { grid-template-columns: repeat(2, 1fr); }
-  .hm-stylist-grid { grid-template-columns: repeat(2, 1fr); }
-  .hm-testimonial-img-wrap { flex: 0 0 300px; }
+  .hm-flash-cards { grid-template-columns: repeat(4, 1fr); }
+
+  /* Dịch vụ */
+  .hm-svc-row { padding: 0 20px; gap: 16px; }
+  .hm-svc-row-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+  /* Sản phẩm */
+  .hm-prod-grid { grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+  /* Testimonial */
+  .hm-testimonial-img-wrap { flex: 0 0 280px; }
+
+  /* Stylist */
+  .hm-stylist-section { padding: 40px 24px 36px; }
 }
+
+/* ---- Mobile lớn / Tablet nhỏ: 577px – 768px ---- */
 @media (max-width: 768px) {
-  .hm-hero-content { padding: 32px 28px; }
-  .hm-hero-title { font-size: 32px; }
+  /* Hero */
+  .hm-hero { height: 360px; }
+  .hm-hero-content { padding: 32px 28px; max-width: 100%; }
+  .hm-hero-title { font-size: 28px; }
+  .hm-hero-desc { font-size: 13px; max-width: 100%; }
+  .hm-hero-cta { gap: 10px; }
+  .hm-btn-primary, .hm-btn-outline { padding: 12px 22px; font-size: 10px; }
+
+  /* Danh mục */
   .hm-category-inner { grid-template-columns: repeat(2, 1fr); }
+  .hm-cat-card { min-height: 140px; }
+
+  /* Flash Sale */
   .hm-flash-cards { grid-template-columns: repeat(2, 1fr); }
-  .hm-prod-grid { grid-template-columns: repeat(2, 1fr); gap: 16px; }
-  .hm-svc-row { flex-direction: column; padding: 0 16px; }
-  .hm-svc-row-rev { flex-direction: column; }
-  .hm-svc-card { max-width: none; margin-left: 0 !important; margin-right: 0 !important; margin-top: 16px; }
-  .hm-stylist-grid { grid-template-columns: 1fr; }
+  .hm-flash-section { margin: 16px 12px 32px; border-radius: 16px; }
+
+  /* CTA */
+  .hm-cta-section { height: 400px; }
+  .hm-cta-title { font-size: 28px; }
+  .hm-cta-desc { font-size: 15px; }
+
+  /* Dịch vụ */
+  .hm-svc-row { padding: 0 16px; gap: 12px; }
+  .hm-svc-row-3 { grid-template-columns: 1fr; }
+  .hm-svc-row-2 { grid-template-columns: 1fr; }
+  .hm-svc-big { min-height: 280px; }
+
+  /* Sản phẩm */
+  .hm-prod-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .hm-prod-img-wrap { height: 200px; }
+  .hm-prod-name { font-size: 13px; }
+  .hm-prod-price { font-size: 15px; }
+
+  /* Stylist */
+  .hm-stylist-section { padding: 32px 16px 28px; }
+  .hm-small-card { width: 220px; min-height: 280px; }
+  .hm-stylist-photo-wrap { height: 170px; }
+
+  /* Testimonial */
   .hm-testimonial-section { flex-direction: column; }
-  .hm-testimonial-img-wrap { flex: none; height: 240px; margin: 24px 24px 0; }
-  .hm-testimonial-card { margin: 0 24px 24px; padding: 32px 24px; }
+  .hm-testimonial-img-wrap { flex: none; height: 220px; margin: 20px 16px 0; }
+  .hm-testimonial-card { margin: 0 16px 20px; padding: 28px 20px; }
+  .hm-test-quote { font-size: 15px; }
+
+  /* Newsletter */
+  .hm-club-section { padding: 48px 16px; }
   .hm-club-form { flex-direction: column; }
+  .hm-club-title { font-size: 22px; }
+
+  /* Xem thêm */
+  .hm-xem-them { font-size: 16px; padding: 14px 40px; }
+}
+
+/* ---- Mobile nhỏ: ≤480px ---- */
+@media (max-width: 480px) {
+  /* Hero */
+  .hm-hero { height: 300px; }
+  .hm-hero-content { padding: 20px 18px; }
+  .hm-hero-title { font-size: 22px; }
+  .hm-hero-subtitle { font-size: 9px; letter-spacing: 0.25em; }
+  .hm-hero-desc { display: none; }
+  .hm-btn-primary, .hm-btn-outline { padding: 10px 16px; font-size: 9px; }
+
+  /* Danh mục */
+  .hm-category-inner { grid-template-columns: repeat(2, 1fr); }
+  .hm-cat-card { min-height: 110px; padding: 16px 10px; }
+  .hm-cat-num { font-size: 20px; }
+  .hm-cat-title { font-size: 10px; }
+
+  /* Flash Sale */
+  .hm-flash-cards { grid-template-columns: repeat(2, 1fr); }
+  .hm-flash-section { margin: 12px 8px 24px; }
+
+  /* Sản phẩm */
+  .hm-prod-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .hm-prod-img-wrap { height: 160px; border-radius: 12px; }
+  .hm-prod-card { border-radius: 16px; padding: 8px; }
+  .hm-prod-name { font-size: 12px; }
+  .hm-prod-price { font-size: 13px; }
+  .hm-prod-add { padding: 5px 10px; font-size: 10px; }
+
+  /* Stylist */
+  .hm-small-card { width: 180px; min-height: 240px; }
+  .hm-stylist-photo-wrap { height: 140px; }
+  .hm-stylist-name { font-size: 14px; }
+
+  /* Testimonial */
+  .hm-testimonial-img-wrap { height: 180px; margin: 16px 12px 0; }
+  .hm-testimonial-card { margin: 0 12px 16px; padding: 20px 16px; }
+  .hm-test-quote { font-size: 13px; }
+  .hm-test-author-row { flex-direction: column; gap: 10px; align-items: flex-start; }
 }
 </style>

@@ -85,6 +85,16 @@ const currentStock = computed(() => {
 // Trạng thái nút action
 const canOrder = computed(() => currentStock.value > 0 && selectedBienThe.value != null);
 
+// Hiện khối chọn biến thể khi: có từ 2 biến thể trở lên, HOẶC chỉ có 1 biến thể nhưng biến
+// thể đó có tên riêng (Màu/Dung tích do người dùng nhập) thay vì tên "Mặc định" tự sinh.
+// Chỉ ẩn hẳn khi đúng 1 biến thể VÀ tên là "Mặc định" — lúc đó không có gì đáng hiện.
+const showBienTheSelector = computed(() => {
+  const bienThes = product.value?.bienThes;
+  if (!bienThes || bienThes.length === 0) return false;
+  if (bienThes.length > 1) return true;
+  return bienThes[0]?.tenBienThe?.trim() !== "Mặc định";
+});
+
 // ======================================================
 // METHODS
 // ======================================================
@@ -309,13 +319,15 @@ watch(
             </p>
 
             <!-- CHỌN BIẾN THỂ (kiểu LV: "Kích cỡ")
-                 Chỉ hiển thị khi sản phẩm có TỪ 2 biến thể trở lên.
-                 Sản phẩm chỉ có 1 biến thể (biến thể mặc định) đã được auto-select
-                 ở fetchProduct() nên không cần bắt khách "chọn" gì cả — giống Shopify. -->
-            <div class="mb-6" v-if="product.bienThes?.length > 1">
+                 Hiển thị khi: có TỪ 2 biến thể trở lên, HOẶC chỉ có 1 biến thể nhưng biến thể
+                 đó có tên riêng (Màu/Dung tích do người dùng nhập) thay vì tên "Mặc định" —
+                 trường hợp này vẫn cần hiện tên biến thể + khung chọn (dù chỉ có 1 nút) để
+                 khách biết sản phẩm này thuộc biến thể gì.
+                 Chỉ ẩn hẳn khi đúng 1 biến thể VÀ tên là "Mặc định" (không có gì đáng hiện). -->
+            <div class="mb-6" v-if="showBienTheSelector">
               <div class="flex items-baseline justify-between text-[12px] uppercase tracking-[0.08em] text-neutral-700 mb-3">
-                <span>Kích cỡ</span>
-                <span class="normal-case tracking-normal text-black font-medium" v-if="selectedBienThe">{{ selectedBienThe.tenBienThe }}</span>
+                <span>Kích cỡ/Màu sắc</span>
+                <!-- <span class="normal-case tracking-normal text-black font-medium" v-if="selectedBienThe">{{ selectedBienThe.tenBienThe }}</span> -->
               </div>
 
               <div class="grid grid-cols-2 gap-2">
@@ -331,7 +343,7 @@ watch(
                   @click="selectBienThe(bt)"
                 >
                   <div class="text-[12.5px] tracking-wide truncate">{{ bt.tenBienThe }}</div>
-                  <div class="text-[11px] text-neutral-500 mt-0.5">
+                  <div class="text-[11px] text-neutral-500 mt-0.5" v-if="bt.soLuongTon === 0 || product.bienThes?.length > 1">
                     {{ bt.soLuongTon > 0 ? formatSinglePrice(bt.giaBan) : 'Hết hàng' }}
                   </div>
                 </button>

@@ -170,6 +170,29 @@ const fetchNhanViens = async () => {
   }
 }
 
+// Hàm tự động sinh mã NV ngẫu nhiên không trùng lặp: bắt đầu từ NV + 6 chữ số, nếu đầy tự tăng lên 7 chữ số...
+const generateUniqueStaffCode = () => {
+  const existingCodes = new Set(
+    (nhanViens.value || []).map(n => String(n.maNv || '').trim().toUpperCase())
+  )
+  
+  // Bắt đầu với 6 chữ số (100000 - 999999), nếu đầy thì tăng lên 7, 8 chữ số...
+  for (let digits = 6; digits <= 10; digits++) {
+    const min = Math.pow(10, digits - 1)
+    const max = Math.pow(10, digits) - 1
+    
+    // Thử random trong khoảng chữ số hiện tại
+    for (let attempt = 0; attempt < 50; attempt++) {
+      const randomNum = Math.floor(min + Math.random() * (max - min + 1))
+      const candidate = `NV${randomNum}`
+      if (!existingCodes.has(candidate)) {
+        return candidate
+      }
+    }
+  }
+  return `NV${Date.now().toString().slice(-6)}`
+}
+
 const openAddForm = () => {
   isEditMode.value = false
   originalStaffData.value = null
@@ -177,7 +200,8 @@ const openAddForm = () => {
   imagePreviewUrl.value = null
   errors.value = {}
   formData.value = {
-    maNv: '', hoTenNv: '', 
+    maNv: generateUniqueStaffCode(), 
+    hoTenNv: '', 
     maRole: roles.value[0]?.maRole || roles.value[0]?.MaRole || '', 
     maLoaiNv: loaiNvs.value[0]?.maLoaiNv || loaiNvs.value[0]?.MaLoaiNv || '', 
     gioiTinh: 'Nam', cccd: '', namSinh: '', sdt: '', 
@@ -963,7 +987,26 @@ onMounted(() => {
                 <div class="text-subtitle-2 font-weight-bold text-uppercase text-primary mb-3">Thông Tin Công Việc</div>
                 <v-row dense>
                   <v-col cols="12" sm="6">
-                    <v-text-field v-model="formData.maNv" label="Mã NV *" :disabled="isEditMode" :error-messages="errors.maNv" variant="outlined" density="compact" rounded="lg"></v-text-field>
+                    <v-text-field 
+                      v-model="formData.maNv" 
+                      label="Mã NV *" 
+                      :disabled="isEditMode" 
+                      :error-messages="errors.maNv" 
+                      variant="outlined" 
+                      density="compact" 
+                      rounded="lg"
+                      placeholder="VD: NV123456"
+                    >
+                      <template v-if="!isEditMode" #append-inner>
+                        <v-tooltip text="Tạo lại mã ngẫu nhiên mới" location="top">
+                          <template v-slot:activator="{ props }">
+                            <v-btn v-bind="props" icon size="x-small" variant="text" color="primary" @click="formData.maNv = generateUniqueStaffCode()">
+                              <RotateCcw class="w-3.5 h-3.5" />
+                            </v-btn>
+                          </template>
+                        </v-tooltip>
+                      </template>
+                    </v-text-field>
                   </v-col>
                   <v-col cols="12" sm="6">
                     <v-select v-model="formData.maRole" :items="roles" :item-title="item => item.tenChucVu || item.TenChucVu" :item-value="item => item.maRole || item.MaRole" label="Chức vụ" variant="outlined" density="compact" rounded="lg"></v-select>

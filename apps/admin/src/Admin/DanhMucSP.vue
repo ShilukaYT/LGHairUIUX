@@ -8,7 +8,7 @@ import {
   ChevronDown, ImagePlus, Images, FolderTree
 } from "lucide-vue-next";
 
-const API = import.meta.env.VITE_API_URL;
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196';
 
 // ── DARK / LIGHT MODE (đồng bộ với ProfileDD - Cài đặt Sáng/Tối) ──
 const vuetifyTheme = useTheme();
@@ -124,6 +124,8 @@ async function loadData() {
       hinhAnh: toAbsUrl(d.hinhAnh),
       trangThai: d.trangThai ?? 1,
       soSanPham: d.soSanPham ?? 0,
+      coBanner: d.coBanner ?? false,
+      thuTu: d.thuTu ?? null,
     }));
   } catch { showToast("Lỗi tải danh sách danh mục!", "error"); }
   finally { isLoading.value = false; }
@@ -162,6 +164,7 @@ const headers = [
   { title: "Ảnh", key: "hinhAnh", align: "center", sortable: false, width: 70 },
   { title: "Mã DM", key: "maDMSP", align: "start", sortable: true },
   { title: "Tên danh mục", key: "tenDanhMuc", align: "start", sortable: true },
+  { title: "STT hiển thị", key: "thuTu", align: "center", sortable: true, width: 130 },
   { title: "Số SP", key: "soSanPham", align: "center", sortable: true },
   { title: "Trạng thái", key: "trangThai", align: "center", sortable: true },
   { title: "Banner", key: "banner", align: "center", sortable: false, width: 90 },
@@ -312,7 +315,9 @@ async function confirmDelete() {
       await axios.delete(`${API}/api/QuanLyDanhMucSP/banner/${banner.maBanner}`);
       logActivity("Xóa banner danh mục", `Đã xóa banner ${banner.maBanner}`, "Sản phẩm");
       showToast("Đã xóa banner!");
-      await loadBanners(maDMSP);
+      // Xóa banner cuối cùng làm "coBanner" chuyển true -> false (khóa lại ô đổi STT) và
+      // STT hiển thị biến mất -> phải refresh cả bảng chính, không chỉ danh sách banner.
+      await Promise.all([loadBanners(maDMSP), loadData()]);
     } catch (err) {
       const msg = err.response?.data?.message ?? "Lỗi khi xóa banner!";
       logActivity("Xóa banner danh mục", `Thất bại khi xóa banner ${banner.maBanner} - Lỗi: ${msg}`, "Sản phẩm", "Thất bại");
@@ -343,6 +348,58 @@ async function toggleStatus(dm) {
       "Thất bại"
     );
     showToast("Lỗi cập nhật trạng thái!", "error");
+  }
+}
+
+// ══ SỐ THỨ TỰ HIỂN THỊ (chỉ áp dụng cho danh mục đang có banner) ═══
+// Số này không có cột riêng trong DB — nó được lưu bằng hậu tố "-<số>" gắn vào TÊN
+// của banner đầu tiên (mã "<maDMSP>-1") của danh mục. Vì vậy chỉ danh mục có banner
+// mới sửa được, và chỉ banner đầu tiên bị đổi tên khi lưu.
+const thuTuEditing = reactive({}); // { [maDMSP]: boolean } — ô đang ở chế độ sửa
+const thuTuDraft = reactive({});   // { [maDMSP]: number|string } — giá trị đang nhập
+const thuTuSaving = reactive({});  // { [maDMSP]: boolean }
+
+function openThuTuEdit(dm) {
+  if (!dm.coBanner) return;
+  if (dm.thuTu != null) {
+    thuTuDraft[dm.maDMSP] = dm.thuTu;
+  } else {
+    // Chưa từng đặt STT -> gợi ý số tiếp theo (max hiện có + 1) thay vì để trống,
+    // tránh việc ô input trông như "không hiện gì".
+    const maxThuTu = danhMucs.value.reduce(
+      (max, x) => (x.thuTu != null && x.thuTu > max ? x.thuTu : max),
+      0
+    );
+    thuTuDraft[dm.maDMSP] = maxThuTu + 1;
+  }
+  thuTuEditing[dm.maDMSP] = true;
+}
+
+function cancelThuTuEdit(maDMSP) {
+  thuTuEditing[maDMSP] = false;
+}
+
+async function saveThuTu(dm) {
+  const val = Number(thuTuDraft[dm.maDMSP]);
+  if (!Number.isInteger(val) || val < 1) {
+    showToast("Số thứ tự phải là số nguyên dương.", "error");
+    return;
+  }
+  thuTuSaving[dm.maDMSP] = true;
+  try {
+    await axios.patch(`${API}/api/QuanLyDanhMucSP/${dm.maDMSP}/thu-tu`, { thuTu: val });
+    logActivity("Đổi số thứ tự danh mục", `Đã đổi số thứ tự hiển thị của danh mục ${dm.tenDanhMuc} (Mã: ${dm.maDMSP}) thành ${val}`, "Sản phẩm");
+    showToast("Cập nhật số thứ tự thành công!");
+    thuTuEditing[dm.maDMSP] = false;
+    // Tên MỌI banner của danh mục vừa đổi đồng loạt -> banner cache có thể đang mở, tải lại cho khớp.
+    if (bannerCache[dm.maDMSP]) await loadBanners(dm.maDMSP);
+    await loadData();
+  } catch (err) {
+    const msg = err.response?.data?.message ?? "Lỗi khi đổi số thứ tự!";
+    logActivity("Đổi số thứ tự danh mục", `Thất bại khi đổi số thứ tự danh mục ${dm.tenDanhMuc} (Mã: ${dm.maDMSP}) - Lỗi: ${msg}`, "Sản phẩm", "Thất bại");
+    showToast(msg, "error");
+  } finally {
+    thuTuSaving[dm.maDMSP] = false;
   }
 }
 
@@ -411,7 +468,9 @@ async function onBannerFileChange(e, maDMSP) {
     });
     logActivity("Thêm banner danh mục", `Đã thêm banner cho danh mục (Mã: ${maDMSP})`, "Sản phẩm");
     showToast("Thêm banner thành công!");
-    await loadBanners(maDMSP);
+    // Thêm banner đầu tiên của danh mục làm "coBanner" chuyển false -> true (mở khóa ô đổi
+    // STT), nên phải refresh cả bảng chính, không chỉ danh sách banner đang mở.
+    await Promise.all([loadBanners(maDMSP), loadData()]);
   } catch (err) {
     const msg = err.response?.data?.message ?? "Lỗi khi thêm banner!";
     logActivity("Thêm banner danh mục", `Thất bại khi thêm banner cho danh mục (Mã: ${maDMSP}) - Lỗi: ${msg}`, "Sản phẩm", "Thất bại");
@@ -444,7 +503,9 @@ async function replaceBannerImg(e, banner, maDMSP) {
     });
     logActivity("Cập nhật banner danh mục", `Đã cập nhật banner ${banner.maBanner}`, "Sản phẩm");
     showToast("Cập nhật banner thành công!");
-    await loadBanners(maDMSP);
+    // Đổi ảnh không ảnh hưởng STT/coBanner, nhưng refresh luôn bảng chính cho nhất quán
+    // với 2 thao tác thêm/xóa banner còn lại — tránh phải nhớ trường hợp nào cần trường hợp nào không.
+    await Promise.all([loadBanners(maDMSP), loadData()]);
   } catch (err) {
     const msg = err.response?.data?.message ?? "Lỗi khi cập nhật banner!";
     logActivity("Cập nhật banner danh mục", `Thất bại khi cập nhật banner ${banner.maBanner} - Lỗi: ${msg}`, "Sản phẩm", "Thất bại");
@@ -562,6 +623,46 @@ onMounted(loadData);
           </v-chip>
         </template>
 
+        <template v-slot:item.thuTu="{ item }">
+          <div class="d-flex justify-center">
+            <template v-if="!item.coBanner">
+              <v-tooltip text="Danh mục chưa có banner nên chưa thể đặt số thứ tự" location="top">
+                <template v-slot:activator="{ props: tProps }">
+                  <span v-bind="tProps" class="text-caption text-medium-emphasis">—</span>
+                </template>
+              </v-tooltip>
+            </template>
+            <template v-else-if="thuTuEditing[item.maDMSP]">
+              <div class="d-flex align-center gap-1 thutu-edit-wrap" @click.stop>
+                <v-text-field
+                  v-model="thuTuDraft[item.maDMSP]"
+                  type="number" min="1" density="compact" variant="outlined" hide-details
+                  rounded="lg" class="thutu-input"
+                  placeholder="STT"
+                  autofocus
+                  @keyup.enter="saveThuTu(item)"
+                ></v-text-field>
+                <v-btn icon variant="text" size="x-small" color="success" :loading="thuTuSaving[item.maDMSP]" title="Lưu" @click="saveThuTu(item)">
+                  <Check class="w-3 h-3" />
+                </v-btn>
+                <v-btn icon variant="text" size="x-small" color="grey-darken-1" title="Hủy" @click="cancelThuTuEdit(item.maDMSP)">
+                  <X class="w-3 h-3" />
+                </v-btn>
+              </div>
+            </template>
+            <template v-else>
+              <v-chip
+                size="small" variant="tonal" :color="item.thuTu ? 'deep-purple' : 'grey'"
+                class="font-weight-medium cursor-pointer" title="Nhấn để đổi số thứ tự"
+                @click="openThuTuEdit(item)"
+              >
+                {{ item.thuTu ?? "Chưa đặt" }}
+                <Pencil class="w-3 h-3 ml-1" />
+              </v-chip>
+            </template>
+          </div>
+        </template>
+
         <template v-slot:item.soSanPham="{ item }">
           <v-chip size="small" variant="tonal" color="info" class="font-weight-medium">
             {{ item.soSanPham }} sản phẩm
@@ -633,7 +734,7 @@ onMounted(loadData);
                       </v-avatar>
                       <div class="banner-info">
                         <span class="text-caption font-weight-medium code-chip">{{ b.maBanner }}</span>
-                        <span class="text-caption text-truncate d-block" style="max-width: 140px;">{{ b.tieuDe }}</span>
+                        <!-- <span class="text-caption text-truncate d-block" style="max-width: 140px;">{{ b.tieuDe }}</span> -->
                       </div>
                       <div class="d-flex align-center gap-1">
                         <input
@@ -916,6 +1017,26 @@ onMounted(loadData);
 /* Detail view rows */
 .detail-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .detail-label { font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.7); min-width: 120px; }
+
+/* Ô nhập số thứ tự hiển thị (bảng Danh mục) */
+.thutu-edit-wrap { min-width: 150px; }
+.thutu-input { width: 84px; flex: 0 0 84px; }
+.thutu-input :deep(input) {
+  text-align: center;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+/* Ẩn hẳn spinner tăng/giảm mặc định của input number — trên Chrome/Edge/Safari (WebKit)
+   spinner chiếm gần hết bề rộng ô 72-84px, đẩy chữ số ra ngoài tầm nhìn nên nhìn như ô
+   trống dù đã có giá trị. Rule -moz-appearance cũ chỉ ẩn được spinner trên Firefox. */
+.thutu-input :deep(input[type="number"]) {
+  -moz-appearance: textfield;
+}
+.thutu-input :deep(input[type="number"]::-webkit-outer-spin-button),
+.thutu-input :deep(input[type="number"]::-webkit-inner-spin-button) {
+  -webkit-appearance: none;
+  margin: 0;
+}
 
 /* Upload zone */
 .upload-zone {

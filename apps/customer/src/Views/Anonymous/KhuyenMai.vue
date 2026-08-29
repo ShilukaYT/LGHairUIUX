@@ -21,7 +21,7 @@ const API = import.meta.env.VITE_API_URL || 'https://localhost:7196';
 
 const vouchers = ref<any[]>([]);
 const vouchersLoading = ref(true);
-const activeTab = ref<'vouchers' | 'salon-promos' | 'membership'>('vouchers');
+const activeTab = ref<'vouchers' | 'membership'>('vouchers');
 const activeFaq = ref<number | null>(null);
 
 const fetchVouchers = async () => {
@@ -135,9 +135,22 @@ const salonPromos = ref([
 // Mock data for Membership privileges
 const memberTiers = ref([
   {
-    name: 'Hạng Bạc (Silver Member)',
-    colorClass: 'from-slate-400 to-slate-600 border-slate-300',
-    textGold: 'text-slate-100',
+    name: 'Hạng Đồng',
+    enName: '(Bronze Member)',
+    colorClass: 'from-[#cd7f32] via-[#a66324] to-[#704214] border-[#cd7f32]/40',
+    textGold: 'text-[#ffefe3]',
+    req: 'Khách hàng mới / Tích lũy dưới 2.000.000đ',
+    benefits: [
+      'Tích lũy 1% giá trị hóa đơn cho mỗi lần sử dụng dịch vụ.',
+      'Nhận ưu đãi bất ngờ vào các dịp đặc biệt.',
+      'Nhận thông báo sớm nhất về các chương trình khuyến mãi.'
+    ]
+  },
+  {
+    name: 'Hạng Bạc',
+    enName: '(Silver Member)',
+    colorClass: 'from-[#9ca3af] via-[#6b7280] to-[#374151] border-[#9ca3af]/40',
+    textGold: 'text-[#f3f4f6]',
     req: 'Tích lũy từ 2.000.000đ',
     benefits: [
       'Giảm trực tiếp 5% cho tất cả các dịch vụ cắt, gội, sấy.',
@@ -146,9 +159,10 @@ const memberTiers = ref([
     ]
   },
   {
-    name: 'Hạng Vàng (Gold Member)',
-    colorClass: 'from-[#bfa77a] via-[#e5c07b] to-[#b08b26] border-[#d6ad43]/50',
-    textGold: 'text-[#4a360a]',
+    name: 'Hạng Vàng',
+    enName: '(Gold Member)',
+    colorClass: 'from-[#d4af37] via-[#b8860b] to-[#8a6300] border-[#d4af37]/40',
+    textGold: 'text-[#fffdf5]',
     req: 'Tích lũy từ 5.000.000đ',
     benefits: [
       'Giảm trực tiếp 10% toàn bộ dịch vụ và sản phẩm chăm sóc tóc.',
@@ -158,9 +172,10 @@ const memberTiers = ref([
     ]
   },
   {
-    name: 'Hạng Kim Cương (Diamond Member)',
-    colorClass: 'from-[#1a1a1a] via-[#3d3321] to-[#111111] border-[#aa7c11]/60',
-    textGold: 'text-[#dfb85b]',
+    name: 'Hạng Kim Cương',
+    enName: '(Diamond Member)',
+    colorClass: 'from-[#020617] via-[#06b6d4] to-[#020617] border-[#06b6d4]/50 shadow-[0_0_30px_rgba(6,182,212,0.3)] ring-1 ring-cyan-300/30',
+    textGold: 'text-[#cffafe]',
     req: 'Tích lũy từ 15.000.000đ',
     benefits: [
       'Giảm trực tiếp 15% toàn bộ hóa đơn dịch vụ & sản phẩm.',
@@ -202,90 +217,48 @@ const toggleFaq = (index: number) => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#faf9f6] font-sans pb-24 text-neutral-800">
-    
-    <!-- Hero Banner (Luxury Golden Theme) -->
-    <div class="relative bg-gradient-to-b from-neutral-950 via-neutral-900 to-neutral-950 py-24 text-white overflow-hidden border-b border-[#aa7c11]/25">
-      <!-- Golden Ambient Glows -->
-      <div class="absolute -top-40 -left-40 w-96 h-96 bg-[#d4af37]/10 rounded-full blur-[100px] pointer-events-none"></div>
-      <div class="absolute -bottom-40 -right-40 w-96 h-96 bg-[#d4af37]/10 rounded-full blur-[100px] pointer-events-none"></div>
-      
-      <!-- Luxury Geometric Grid Background Overlay -->
-      <div class="absolute inset-0 opacity-[0.03] bg-[linear-gradient(to_right,#808080_1px,transparent_1px),linear-gradient(to_bottom,#808080_1px,transparent_1px)] bg-[size:32px_32px]"></div>
-
-      <div class="max-w-[1280px] mx-auto px-6 relative z-10 flex flex-col items-center text-center">
-        <!-- Decorative Top Badge -->
-        <div class="flex justify-center items-center gap-3 mb-6">
-          <div class="w-10 h-[1px] bg-gradient-to-r from-transparent to-[#d4af37]"></div>
-          <Sparkles class="w-4 h-4 text-[#d4af37] animate-pulse" />
-          <div class="w-10 h-[1px] bg-gradient-to-l from-transparent to-[#d4af37]"></div>
-        </div>
-
-        <h1 class="text-4xl md:text-6xl font-playfair tracking-[0.18em] text-transparent bg-clip-text bg-gradient-to-r from-[#ecd38e] via-[#dfb85b] to-[#b08b26] py-3 mb-4 uppercase drop-shadow-sm font-semibold">
-          Đặc Quyền Ưu Đãi
-        </h1>
-        <p class="text-neutral-400 text-xs md:text-sm font-light tracking-[0.3em] uppercase max-w-xl leading-relaxed">
-          Nâng tầm phong cách cùng các đặc quyền & quà tặng thiết kế riêng cho bạn tại LGHair Salon
-        </p>
-
-        <!-- Breadcrumbs inside banner -->
-        <div class="mt-8 flex items-center gap-2 text-[10px] tracking-widest uppercase text-neutral-500 font-medium">
-          <router-link to="/" class="hover:text-[#dfb85b] transition-colors">Trang chủ</router-link>
-          <span>/</span>
-          <span class="text-[#dfb85b]">Khuyến mãi</span>
-        </div>
-      </div>
-    </div>
+  <div class="min-h-screen bg-white font-sans pb-24 text-neutral-800">
 
     <!-- Main Navigation Tabs -->
-    <div class="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-neutral-200/80 shadow-sm">
+    <div class="sticky top-0 z-30 bg-white border-b border-neutral-200 shadow-sm">
       <div class="max-w-[1280px] mx-auto px-6">
         <div class="flex justify-center md:justify-start space-x-8 overflow-x-auto py-4 scrollbar-none">
           <button 
             @click="activeTab = 'vouchers'" 
             :class="[
               'pb-2 text-xs md:text-sm font-semibold tracking-widest uppercase border-b-2 transition-all duration-300 whitespace-nowrap flex items-center gap-2',
-              activeTab === 'vouchers' ? 'border-[#b08b26] text-[#b08b26]' : 'border-transparent text-neutral-500 hover:text-neutral-900'
+              activeTab === 'vouchers' ? 'border-black text-black' : 'border-transparent text-neutral-400 hover:text-neutral-800'
             ]"
           >
             <Gift class="w-4 h-4" />
             Mã Giảm Giá Online
-          </button>
-          
-          <button 
-            @click="activeTab = 'salon-promos'" 
-            :class="[
-              'pb-2 text-xs md:text-sm font-semibold tracking-widest uppercase border-b-2 transition-all duration-300 whitespace-nowrap flex items-center gap-2',
-              activeTab === 'salon-promos' ? 'border-[#b08b26] text-[#b08b26]' : 'border-transparent text-neutral-500 hover:text-neutral-900'
-            ]"
-          >
-            <Tag class="w-4 h-4" />
-            Khuyến Mãi Tại Tiệm
           </button>
 
           <button 
             @click="activeTab = 'membership'" 
             :class="[
               'pb-2 text-xs md:text-sm font-semibold tracking-widest uppercase border-b-2 transition-all duration-300 whitespace-nowrap flex items-center gap-2',
-              activeTab === 'membership' ? 'border-[#b08b26] text-[#b08b26]' : 'border-transparent text-neutral-500 hover:text-neutral-900'
+              activeTab === 'membership' ? 'border-black text-black' : 'border-transparent text-neutral-400 hover:text-neutral-800'
             ]"
           >
             <Award class="w-4 h-4" />
             Đặc Quyền Thành Viên
           </button>
+
         </div>
       </div>
     </div>
 
     <!-- Page Content Container -->
-    <div class="max-w-[1280px] mx-auto px-6 py-12 md:py-16">
+    <div class="max-w-[1440px] mx-auto px-4 lg:px-8 py-12 md:py-16">
       
+
       <!-- Tab 1: Claimable Vouchers -->
       <div v-if="activeTab === 'vouchers'">
         <div class="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <p class="text-xs uppercase text-[#b08b26] tracking-widest font-semibold mb-1">Mã ưu đãi trực tuyến</p>
-            <h2 class="text-2xl md:text-3xl font-playfair tracking-wide text-neutral-900">Sưu tầm mã giảm giá</h2>
+            <p class="text-xs uppercase text-neutral-400 tracking-widest font-semibold mb-1">Mã ưu đãi trực tuyến</p>
+            <h2 class="text-2xl md:text-3xl font-semibold tracking-wide text-neutral-900">Sưu tầm mã giảm giá</h2>
           </div>
           <p class="text-neutral-500 text-xs md:text-sm max-w-md">
             Lưu trực tiếp mã ưu đãi vào ví tài khoản của bạn để áp dụng nhanh chóng khi đặt lịch hẹn dịch vụ hoặc mua sắm sản phẩm.
@@ -293,21 +266,18 @@ const toggleFaq = (index: number) => {
         </div>
 
         <div v-if="vouchersLoading" class="flex flex-col items-center justify-center py-20">
-          <div class="w-10 h-10 border-4 border-[#b08b26] border-t-transparent rounded-full animate-spin mb-4"></div>
+          <div class="w-10 h-10 border-4 border-black border-t-transparent rounded-full animate-spin mb-4"></div>
           <p class="text-neutral-400 text-xs tracking-wider uppercase animate-pulse">Đang tải mã giảm giá...</p>
         </div>
 
-        <div v-else-if="vouchers.length === 0" class="text-center py-16 bg-white border border-neutral-200/80 rounded-2xl shadow-sm max-w-xl mx-auto flex flex-col items-center px-8">
-          <div class="w-16 h-16 rounded-full bg-neutral-50 flex items-center justify-center mb-4 text-[#bfa77a]">
+        <div v-else-if="vouchers.length === 0" class="text-center py-16 bg-white border border-neutral-200 rounded-2xl shadow-sm max-w-xl mx-auto flex flex-col items-center px-8">
+          <div class="w-16 h-16 rounded-full bg-neutral-100 flex items-center justify-center mb-4 text-neutral-400">
             <Gift class="w-8 h-8" />
           </div>
           <p class="text-neutral-800 font-semibold mb-1">Chưa có Mã Giảm Giá trực tuyến khả dụng</p>
           <p class="text-neutral-400 text-xs leading-relaxed max-w-sm mb-6">
-            Hệ thống hiện không có mã voucher trực tiếp nào. Vui lòng quay lại sau hoặc xem qua các ưu đãi độc quyền tại cửa hàng của chúng tôi.
+            Hệ thống hiện không có mã voucher trực tiếp nào. Vui lòng quay lại sau.
           </p>
-          <button @click="activeTab = 'salon-promos'" class="px-6 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-semibold tracking-widest uppercase transition-all rounded-lg flex items-center gap-2">
-            Xem khuyến mãi tại tiệm <ArrowRight class="w-3.5 h-3.5" />
-          </button>
         </div>
 
         <!-- Vouchers Grid -->
@@ -315,74 +285,74 @@ const toggleFaq = (index: number) => {
           <div 
             v-for="v in vouchers" 
             :key="v.maCode" 
-            class="relative flex flex-col justify-between bg-white rounded-2xl overflow-hidden border border-neutral-200/80 shadow-md hover:shadow-xl transition-all duration-300 group hover:-translate-y-1"
+            class="relative flex bg-white rounded-2xl overflow-hidden border border-neutral-200 shadow-sm hover:shadow-lg transition-all duration-500 group hover:-translate-y-1"
           >
-            <!-- Voucher Top Decorative Header -->
-            <div class="bg-gradient-to-r from-neutral-900 to-neutral-800 px-6 py-4 flex justify-between items-center text-white border-b border-[#dfb85b]/30">
-              <div class="flex items-center gap-2">
-                <Tag class="w-4 h-4 text-[#dfb85b]" />
-                <span class="text-[10px] tracking-[0.2em] font-semibold text-[#ecd38e] uppercase">LGHAIR SALON</span>
-              </div>
-              <span class="text-[9px] bg-[#dfb85b]/20 text-[#ecd38e] border border-[#dfb85b]/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-widest">
-                {{ v.phanTramGiam ? 'Giảm %' : 'Giảm Tiền' }}
+            <!-- Left discount panel -->
+            <div class="bg-black text-white flex flex-col items-center justify-center px-6 py-8 min-w-[110px] relative">
+              <!-- Notch top -->
+              <div class="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-5 h-5 bg-neutral-100 rounded-full border border-neutral-200 z-10"></div>
+              <!-- Notch bottom -->
+              <div class="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 w-5 h-5 bg-neutral-100 rounded-full border border-neutral-200 z-10"></div>
+
+              <span class="text-3xl font-black tracking-tight leading-none">
+                {{ v.phanTramGiam ? `${v.phanTramGiam}%` : `${(v.soTienGiam / 1000).toLocaleString()}K` }}
+              </span>
+              <span class="text-[9px] tracking-widest uppercase text-white/60 mt-1.5 font-medium text-center">
+                {{ v.phanTramGiam ? 'giảm ngay' : 'giảm tiền' }}
               </span>
             </div>
 
-            <!-- Card Inner Area (Tear-off line look) -->
-            <div class="p-6 flex-1 flex flex-col justify-between relative bg-gradient-to-b from-white to-[#faf9f6]">
-              
-              <!-- Content Info -->
-              <div class="mb-4">
-                <div class="flex items-baseline gap-2 mb-2">
-                  <span class="text-3xl font-extrabold text-neutral-900 tracking-tight">
-                    {{ v.phanTramGiam ? `-${v.phanTramGiam}%` : `${(v.soTienGiam / 1000).toLocaleString()}K` }}
+            <!-- Dashed divider -->
+            <div class="border-l border-dashed border-neutral-300 my-4"></div>
+
+            <!-- Right info panel -->
+            <div class="flex-1 p-5 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-[10px] tracking-[0.2em] font-bold uppercase text-neutral-400">LGHair Salon</span>
+                  <span class="text-[9px] border border-neutral-300 text-neutral-500 px-2 py-0.5 rounded font-bold uppercase tracking-widest">
+                    {{ v.phanTramGiam ? 'Giảm %' : 'Giảm Tiền' }}
                   </span>
-                  <span class="text-xs text-neutral-500 font-medium">Giảm giá trị đơn hàng</span>
                 </div>
 
-                <h3 class="text-[#bfa77a] font-playfair text-sm font-semibold tracking-wider uppercase mb-2">
-                  CODE: {{ v.maCode }}
+                <h3 class="text-sm font-bold text-neutral-900 tracking-widest uppercase mb-1">
+                  {{ v.maCode }}
                 </h3>
-
-                <p class="text-neutral-600 text-xs leading-relaxed line-clamp-2 mb-4">
-                  {{ v.moTa || `Áp dụng giảm giá cho đơn dịch vụ có giá trị từ ${(v.giaTriToiThieu || 0).toLocaleString()}đ` }}
+                <p class="text-neutral-400 text-xs leading-relaxed line-clamp-2">
+                  {{ v.moTa || `Áp dụng cho đơn từ ${(v.giaTriToiThieu || 0).toLocaleString()}đ` }}
                 </p>
               </div>
 
-              <!-- Bottom details & Claim button -->
-              <div class="pt-4 border-t border-dashed border-neutral-300/80 flex items-center justify-between">
-                <div class="flex items-center gap-1.5 text-[10px] text-neutral-500 font-semibold uppercase">
-                  <Clock class="w-3.5 h-3.5 text-neutral-400" />
-                  <span>HSD: {{ formatDate(v.ngayKetThuc) }}</span>
+              <!-- Bottom -->
+              <div class="flex items-center justify-between mt-4 pt-4 border-t border-neutral-100">
+                <div class="flex items-center gap-1.5 text-[10px] text-neutral-400 uppercase tracking-wide font-medium">
+                  <Clock class="w-3 h-3" />
+                  <span>{{ formatDate(v.ngayKetThuc) }}</span>
                 </div>
 
                 <button 
                   @click="collectVoucher(v)" 
                   :disabled="v.isCollected" 
                   :class="[
-                    'px-4 py-2 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-all duration-300 border flex items-center gap-1.5',
+                    'px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded transition-all duration-300 flex items-center gap-1',
                     v.isCollected 
-                      ? 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100/60' 
-                      : 'bg-neutral-900 text-white border-neutral-900 hover:bg-neutral-800'
+                      ? 'bg-neutral-100 text-neutral-400 border border-neutral-200 cursor-default' 
+                      : 'bg-black text-white hover:bg-neutral-800'
                   ]"
                 >
                   <span v-if="v.isCollected" class="flex items-center gap-1">
-                    <Check class="w-3 h-3" /> Đã Lưu
+                    <Check class="w-3 h-3" /> Đã lưu
                   </span>
-                  <span v-else>Lưu Mã</span>
+                  <span v-else>Lưu mã</span>
                 </button>
               </div>
             </div>
-
-            <!-- Left and Right circles to make it look like a ticket coupon -->
-            <div class="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1.5 w-3 h-6 bg-[#faf9f6] rounded-r-full border-r border-y border-neutral-200/80"></div>
-            <div class="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1.5 w-3 h-6 bg-[#faf9f6] rounded-l-full border-l border-y border-neutral-200/80"></div>
           </div>
         </div>
       </div>
 
-      <!-- Tab 2: Salon Service Promotions -->
-      <div v-if="activeTab === 'salon-promos'" class="space-y-10">
+      <!-- Tab 2: Salon Service Promotions (Deleted) -->
+      <div v-if="false" class="space-y-10">
         <div class="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
             <p class="text-xs uppercase text-[#b08b26] tracking-widest font-semibold mb-1">Chương trình tại Salon</p>
@@ -434,7 +404,7 @@ const toggleFaq = (index: number) => {
                   <span>{{ p.conditions }}</span>
                 </div>
 
-                <router-link to="/dat-lich" class="w-full block text-center bg-neutral-900 hover:bg-neutral-800 text-white py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all">
+                <router-link :to="{ name: 'datdichvu' }" class="w-full block text-center bg-neutral-900 hover:bg-neutral-800 text-white py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all">
                   Đặt Lịch Ngay
                 </router-link>
               </div>
@@ -453,22 +423,25 @@ const toggleFaq = (index: number) => {
           </p>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 xl:gap-6">
           <div 
             v-for="t in memberTiers" 
             :key="t.name"
             class="bg-white rounded-3xl overflow-hidden border border-neutral-200/80 shadow-md hover:shadow-xl transition-all duration-300 flex flex-col"
           >
             <!-- VIP Card Graphic -->
-            <div class="p-6">
-              <div :class="['w-full h-44 rounded-2xl bg-gradient-to-br p-6 text-white flex flex-col justify-between shadow-lg border relative overflow-hidden', t.colorClass]">
+            <div class="p-4 xl:p-5">
+              <div :class="['w-full h-44 rounded-2xl bg-gradient-to-br p-4 xl:p-5 text-white flex flex-col justify-between shadow-lg border relative overflow-hidden', t.colorClass]">
                 <!-- Sparkle background effects inside card -->
                 <div class="absolute -right-12 -top-12 w-32 h-32 bg-white/5 rounded-full pointer-events-none"></div>
                 
                 <div class="flex justify-between items-start z-10">
                   <div>
                     <p class="text-[9px] uppercase tracking-[0.2em] font-medium opacity-80">LGHair Membership</p>
-                    <h3 class="text-base font-bold uppercase tracking-wider mt-1">{{ t.name }}</h3>
+                    <h3 class="text-sm xl:text-base font-bold uppercase tracking-wider mt-1 leading-snug">
+                      {{ t.name }}<br/>
+                      <span class="text-[10px] xl:text-xs opacity-90">{{ t.enName }}</span>
+                    </h3>
                   </div>
                   <Award class="w-6 h-6 text-[#ecd38e]" />
                 </div>
@@ -481,7 +454,7 @@ const toggleFaq = (index: number) => {
             </div>
 
             <!-- Benefits List -->
-            <div class="px-8 pb-8 pt-2 flex-1 flex flex-col justify-between">
+            <div class="px-5 pb-6 pt-2 flex-1 flex flex-col justify-between">
               <div>
                 <p class="text-xs font-bold text-neutral-900 uppercase tracking-widest mb-4 flex items-center gap-2">
                   <UserCheck class="w-4 h-4 text-[#bfa77a]" />
@@ -508,18 +481,18 @@ const toggleFaq = (index: number) => {
       </div>
 
       <!-- General Accordion FAQ Section -->
-      <section class="mt-24 border-t border-neutral-200/80 pt-16 max-w-3xl mx-auto">
+      <section class="mt-24 border-t border-neutral-200 pt-16 max-w-3xl mx-auto">
         <div class="text-center mb-12">
-          <HelpCircle class="w-8 h-8 text-[#bfa77a] mx-auto mb-3" />
-          <h2 class="text-2xl font-playfair text-neutral-900 tracking-wide uppercase">Hỏi Đáp Khuyến Mãi</h2>
-          <p class="text-neutral-500 text-xs mt-2">Giải đáp nhanh các thắc mắc về điều kiện và quy trình sử dụng ưu đãi tại hệ thống</p>
+          <HelpCircle class="w-8 h-8 text-neutral-400 mx-auto mb-3" />
+          <h2 class="text-2xl font-semibold text-neutral-900 tracking-wide">Hỏi đáp khuyến mãi</h2>
+          <p class="text-neutral-400 text-xs mt-2">Giải đáp nhanh các thắc mắc về điều kiện và quy trình sử dụng ưu đãi tại hệ thống</p>
         </div>
 
-        <div class="space-y-4">
+        <div class="space-y-3">
           <div 
             v-for="(faq, idx) in faqs" 
             :key="idx" 
-            class="bg-white rounded-xl border border-neutral-200/60 overflow-hidden transition-all duration-300"
+            class="bg-white rounded-xl border border-neutral-200 overflow-hidden transition-all duration-300"
           >
             <button 
               @click="toggleFaq(idx)" 
@@ -529,7 +502,7 @@ const toggleFaq = (index: number) => {
               <ChevronDown 
                 :class="[
                   'w-4 h-4 text-neutral-400 transition-transform duration-300 shrink-0',
-                  activeFaq === idx ? 'rotate-180 text-[#bfa77a]' : ''
+                  activeFaq === idx ? 'rotate-180 text-black' : ''
                 ]" 
               />
             </button>
@@ -537,7 +510,7 @@ const toggleFaq = (index: number) => {
             <!-- Slide down content container -->
             <div 
               v-show="activeFaq === idx" 
-              class="px-6 pb-5 pt-1 text-xs text-neutral-500 leading-relaxed border-t border-neutral-100 bg-[#faf9f6]/40"
+              class="px-6 pb-5 pt-1 text-xs text-neutral-500 leading-relaxed border-t border-neutral-100"
             >
               {{ faq.a }}
             </div>
@@ -550,10 +523,16 @@ const toggleFaq = (index: number) => {
 </template>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+* {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif !important;
+}
 
-.font-playfair {
-  font-family: 'Playfair Display', serif;
+.result-fade-enter-active {
+  animation: resultPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+@keyframes resultPop {
+  0%   { opacity: 0; transform: scale(0.85) translateY(20px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 /* Custom styled scrollbars hide */

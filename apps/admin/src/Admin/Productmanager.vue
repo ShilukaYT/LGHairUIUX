@@ -8,7 +8,7 @@ import {
   Check, X, RotateCcw, Package
 } from "lucide-vue-next";
 
-const API = import.meta.env.VITE_API_URL;
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196';
 
 // ── DARK / LIGHT MODE (đồng bộ với ProfileDD - Cài đặt Sáng/Tối) ──
 const vuetifyTheme = useTheme();
@@ -63,7 +63,9 @@ const btSaving = ref(false);
 const spModal = reactive({ open: false, mode: "", title: "" });
 const editingSpId = ref(null);
 const spForm = reactive({
-  maSP: "", tenSP: "", maDanhMuc: "", maTH: "", hinhAnhDaiDien: "", trangThai: 1,
+  maSP: "", tenSP: "", maDanhMuc: "", maTH: "",
+  moTa: "", thanhPhan: "", huongDanSuDung: "",
+  hinhAnhDaiDien: "", trangThai: 1,
   _newAvatarFile: null,
   _newGalleryFiles: [],    // [{ file, preview }]
   _deleteGalleryIds: [],   // maHa cần xóa
@@ -367,7 +369,8 @@ function onFilterChange() { page.value = 1; loadSanPham(); }
 function resetSpForm() {
   Object.assign(spForm, {
     maSP: "", tenSP: "", maDanhMuc: danhMucSPs.value[0]?.maDMSP ?? "",
-    maTH: "", hinhAnhDaiDien: "", trangThai: 1,
+    maTH: "", moTa: "", thanhPhan: "", huongDanSuDung: "",
+    hinhAnhDaiDien: "", trangThai: 1,
     _newAvatarFile: null, _newGalleryFiles: [], _deleteGalleryIds: [],
     // Để trống, không ép "Mặc định" cứng ở đây — placeholder đã gợi ý sẵn,
     // và lúc submit nếu vẫn để trống thì tự điền "Mặc định" (xem saveSP()).
@@ -385,18 +388,37 @@ async function openEditSP(sp) {
   editingSpId.value = sp.maSP; clearSpErrors();
   Object.assign(spForm, {
     maSP: sp.maSP, tenSP: sp.tenSP, maDanhMuc: sp.maDanhMuc, maTH: sp.maTH,
+    moTa: "", thanhPhan: "", huongDanSuDung: "",
     hinhAnhDaiDien: sp.hinhAnhDaiDien, trangThai: sp.trangThai,
     _newAvatarFile: null, _newGalleryFiles: [], _deleteGalleryIds: [],
   });
-  await loadGallerySP(sp.maSP);
   spModal.mode = "form"; spModal.title = "Chỉnh sửa sản phẩm"; spModal.open = true;
+  await loadGallerySP(sp.maSP);
+  // Danh sách (GetAll) không trả MoTa/ThanhPhan/HuongDanSuDung để tránh cõng dữ liệu dài,
+  // nên phải gọi riêng GetById để lấy đủ thông tin đổ vào form sửa.
+  try {
+    const res = await axios.get(`${API}/api/QuanLySanPham/${sp.maSP}`);
+    if (editingSpId.value === sp.maSP) {
+      spForm.moTa = res.data?.moTa ?? "";
+      spForm.thanhPhan = res.data?.thanhPhan ?? "";
+      spForm.huongDanSuDung = res.data?.huongDanSuDung ?? "";
+    }
+  } catch { showToast("Không tải được mô tả/thành phần sản phẩm!", "error"); }
 }
 
-function openViewSP(sp) {
+async function openViewSP(sp) {
   spModal.mode = "view"; spModal.title = "Chi tiết sản phẩm"; spModal.open = true;
-  Object.assign(spForm, sp);
+  Object.assign(spForm, sp, { moTa: "", thanhPhan: "", huongDanSuDung: "" });
   if (editingSpId.value !== sp.maSP) loadGallerySP(sp.maSP);
   editingSpId.value = sp.maSP;
+  try {
+    const res = await axios.get(`${API}/api/QuanLySanPham/${sp.maSP}`);
+    if (spModal.open && editingSpId.value === sp.maSP) {
+      spForm.moTa = res.data?.moTa ?? "";
+      spForm.thanhPhan = res.data?.thanhPhan ?? "";
+      spForm.huongDanSuDung = res.data?.huongDanSuDung ?? "";
+    }
+  } catch { /* im lặng: chỉ ảnh hưởng phần mô tả chi tiết, không chặn xem cơ bản */ }
 }
 
 function closeSpModal() { spModal.open = false; }
@@ -409,6 +431,9 @@ async function saveSP() {
     fd.append("MaDanhMuc", spForm.maDanhMuc);
     fd.append("TenSp", spForm.tenSP.trim());
     fd.append("MaTh", spForm.maTH || "");
+    fd.append("MoTa", spForm.moTa?.trim() || "");
+    fd.append("ThanhPhan", spForm.thanhPhan?.trim() || "");
+    fd.append("HuongDanSuDung", spForm.huongDanSuDung?.trim() || "");
     fd.append("TrangThai", spForm.trangThai);
 
     if (spForm._newAvatarFile) {
@@ -935,6 +960,21 @@ onMounted(async () => {
               </v-col>
             </v-row>
 
+            <v-row v-if="spForm.moTa || spForm.thanhPhan || spForm.huongDanSuDung">
+              <v-col cols="12" v-if="spForm.moTa">
+                <div class="mb-1 text-subtitle-2 font-weight-bold text-grey-darken-2">Mô tả</div>
+                <div class="text-body-2" style="white-space: pre-line;">{{ spForm.moTa }}</div>
+              </v-col>
+              <v-col cols="12" v-if="spForm.thanhPhan">
+                <div class="mb-1 text-subtitle-2 font-weight-bold text-grey-darken-2">Thành phần</div>
+                <div class="text-body-2" style="white-space: pre-line;">{{ spForm.thanhPhan }}</div>
+              </v-col>
+              <v-col cols="12" v-if="spForm.huongDanSuDung">
+                <div class="mb-1 text-subtitle-2 font-weight-bold text-grey-darken-2">Hướng dẫn sử dụng</div>
+                <div class="text-body-2" style="white-space: pre-line;">{{ spForm.huongDanSuDung }}</div>
+              </v-col>
+            </v-row>
+
             <!-- Gallery xem -->
             <div v-if="spGallery[spForm.maSP]?.length" class="mt-4">
               <div class="text-subtitle-2 font-weight-bold mb-2">Ảnh gallery ({{ spGallery[spForm.maSP].length }})</div>
@@ -989,6 +1029,36 @@ onMounted(async () => {
                   :items="[{ title: 'Đang bán', value: 1 }, { title: 'Ngừng bán', value: 0 }]"
                   variant="outlined" density="comfortable" rounded="lg"
                 ></v-select>
+              </v-col>
+            </v-row>
+
+            <v-row>
+              <v-col cols="12">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Mô tả</div>
+                <v-textarea
+                  v-model="spForm.moTa"
+                  variant="outlined" density="comfortable" rounded="lg"
+                  placeholder="Mô tả ngắn gọn về sản phẩm"
+                  rows="3" auto-grow
+                ></v-textarea>
+              </v-col>
+              <v-col cols="12">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Thành phần</div>
+                <v-textarea
+                  v-model="spForm.thanhPhan"
+                  variant="outlined" density="comfortable" rounded="lg"
+                  placeholder="Thành phần sản phẩm"
+                  rows="3" auto-grow
+                ></v-textarea>
+              </v-col>
+              <v-col cols="12">
+                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Hướng dẫn sử dụng</div>
+                <v-textarea
+                  v-model="spForm.huongDanSuDung"
+                  variant="outlined" density="comfortable" rounded="lg"
+                  placeholder="Hướng dẫn sử dụng sản phẩm"
+                  rows="3" auto-grow
+                ></v-textarea>
               </v-col>
             </v-row>
 

@@ -7,7 +7,7 @@ import {
   ChevronDown, Package, AlertTriangle, DollarSign, Ban, Warehouse
 } from "lucide-vue-next";
 
-const API = import.meta.env.VITE_API_URL;
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196';
 
 function toAbsUrl(path) {
   if (!path) return "";

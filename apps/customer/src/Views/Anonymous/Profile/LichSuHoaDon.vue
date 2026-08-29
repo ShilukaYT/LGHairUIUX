@@ -249,16 +249,16 @@ const handleRescheduleSuccess = async () => {
 
     <!-- Table content -->
     <div v-else>
-      <div class="overflow-x-auto">
-        <table class="w-full text-left border-collapse min-w-[750px]">
+      <div class="overflow-x-auto w-full">
+        <table class="w-full text-left border-collapse">
           <thead>
-            <tr class="border-b border-gray-200 bg-gray-50/30">
-              <th class="py-4 px-5 text-[10px] font-bold uppercase tracking-widest text-gray-500">Mã đơn hàng</th>
-              <th class="py-4 px-5 text-[10px] font-bold uppercase tracking-widest text-gray-500">Ngày đặt</th>
-              <th class="py-4 px-5 text-[10px] font-bold uppercase tracking-widest text-gray-500">Dịch vụ</th>
-              <th class="py-4 px-5 text-[10px] font-bold uppercase tracking-widest text-gray-500">Tổng tiền</th>
-              <th class="py-4 px-5 text-[10px] font-bold uppercase tracking-widest text-gray-500">Trạng thái</th>
-              <th class="py-4 px-5 text-[10px] font-bold uppercase tracking-widest text-gray-500 text-right">Thao tác</th>
+            <tr class="border-b border-gray-200 bg-gray-50/40 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+              <th class="py-3.5 px-4 whitespace-nowrap">Mã đơn hàng</th>
+              <th class="py-3.5 px-4 whitespace-nowrap">Ngày đặt</th>
+              <th class="py-3.5 px-4 min-w-[200px]">Dịch vụ</th>
+              <th class="py-3.5 px-4 whitespace-nowrap">Tổng tiền</th>
+              <th class="py-3.5 px-4 whitespace-nowrap">Trạng thái</th>
+              <th class="py-3.5 px-4 text-right whitespace-nowrap">Thao tác</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100">
@@ -269,32 +269,32 @@ const handleRescheduleSuccess = async () => {
               </td>
             </tr>
             
-            <tr v-for="item in paginatedData" :key="item.id" class="hover:bg-gray-50/30 transition-colors cursor-pointer" @click="viewDetail(item)">
-              <td class="py-5 px-5 text-xs font-bold text-black tracking-wider">#{{ item.id }}</td>
-              <td class="py-5 px-5 text-xs text-gray-500">{{ formatDate(item.date) }}</td>
-              <td class="py-5 px-5 text-xs text-gray-900 max-w-[300px] truncate font-medium" :title="item.service">
+            <tr v-for="item in paginatedData" :key="item.id" class="hover:bg-gray-50/50 transition-colors cursor-pointer" @click="viewDetail(item)">
+              <td class="py-4 px-4 text-xs font-bold text-black whitespace-nowrap tracking-wider">#{{ item.id }}</td>
+              <td class="py-4 px-4 text-xs text-gray-500 whitespace-nowrap">{{ formatDate(item.date) }}</td>
+              <td class="py-4 px-4 text-xs text-gray-900 max-w-[300px] truncate font-medium" :title="item.service">
                 {{ item.service }}
               </td>
-              <td class="py-5 px-5 text-xs font-bold text-black">{{ formatPrice(item.amount) }}</td>
-              <td class="py-5 px-5 text-xs">
+              <td class="py-4 px-4 text-xs font-bold text-black whitespace-nowrap font-mono">{{ formatPrice(item.amount) }}</td>
+              <td class="py-4 px-4 text-xs whitespace-nowrap">
                 <span :class="['inline-flex items-center px-3 py-1 text-[9px] uppercase tracking-widest font-bold rounded-full border', getStatusBadgeClass(item.status)]">
                   <span class="w-1.5 h-1.5 rounded-full mr-1.5 shrink-0" :class="getStatusDotClass(item.status)"></span>
                   {{ statusText(item.status) }}
                 </span>
               </td>
-              <td class="py-5 px-5 text-xs text-right whitespace-nowrap">
-                <div class="flex items-center justify-end gap-2">
+              <td class="py-4 px-4 text-xs text-right whitespace-nowrap">
+                <div class="flex items-center justify-end gap-1.5">
                   <button 
                     v-if="item.status === 'pending' || item.status === 'paid-full'" 
                     @click.stop="rescheduleOrder(item.id)"
-                    class="inline-flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 px-3 py-1.5 text-[9px] uppercase tracking-widest font-bold transition-all duration-200 rounded-sm whitespace-nowrap"
+                    class="inline-flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 px-2.5 py-1.5 text-[9px] uppercase tracking-wider font-bold transition-all duration-200 rounded-sm whitespace-nowrap shrink-0"
                   >
                     <CalendarClock :size="12" /> Dời lịch
                   </button>
                   <button 
                     v-if="item.status === 'pending'" 
                     @click.stop="cancelOrder(item.id)"
-                    class="inline-flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-3 py-1.5 text-[9px] uppercase tracking-widest font-bold transition-all duration-200 rounded-sm whitespace-nowrap"
+                    class="inline-flex items-center gap-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-2.5 py-1.5 text-[9px] uppercase tracking-wider font-bold transition-all duration-200 rounded-sm whitespace-nowrap shrink-0"
                   >
                     <XCircle :size="12" /> Hủy đơn
                   </button>

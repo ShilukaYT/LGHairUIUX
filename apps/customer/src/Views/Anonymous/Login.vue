@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, reactive } from 'vue';
+import { useRoute } from 'vue-router';
 import { CheckCircle, AlertCircle, X } from 'lucide-vue-next';
 import axios from 'axios';
 import { syncCartAfterLoginDB } from '@/Views/Anonymous/CSDL/cartDB';
 import { useAuthStore } from '@/stores/useAuthStore';
 
+const route = useRoute();
 const authStore = useAuthStore();
 
 
@@ -135,7 +137,8 @@ const handleLogin = async () => {
       }
 
       setTimeout(() => {
-        window.location.href = '/';
+        const target = (route.query.redirect as string) || '/';
+        window.location.href = target;
       }, 1000);
     }
   } catch (err: any) {
@@ -168,7 +171,8 @@ const submitRegistration = async (otpCode: string) => {
       localStorage.setItem('user', JSON.stringify(response.data.user));
       showStatus("Chào mừng gia nhập!", "Bạn đã đăng ký thành công. Hệ thống đang tự động đăng nhập...", "success");
       setTimeout(() => {
-        window.location.href = '/';
+        const target = (route.query.redirect as string) || '/';
+        window.location.href = target;
       }, 2000);
     }
   } catch (error: any) {
