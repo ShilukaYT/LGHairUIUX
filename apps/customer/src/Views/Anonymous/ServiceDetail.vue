@@ -1276,15 +1276,6 @@ export default {
   overflow: hidden;
 }
 
-/* Giới hạn tối đa 2 items hiển thị */
-.combo-items-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  max-height: 52px; /* ← ~2 dòng */
-  overflow: hidden;
-}
-
 .combo-items-list i {
   color: var(--ink);
   margin-right: 10px;

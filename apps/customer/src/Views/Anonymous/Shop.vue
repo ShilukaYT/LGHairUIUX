@@ -2,10 +2,13 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import axios from "axios";
+import { Heart } from "lucide-vue-next";
+import { useWishlistStore } from "@/stores/useWishlistStore";
 
 const API = import.meta.env.VITE_API_URL;
 const route = useRoute();
 const router = useRouter();
+const wishlistStore = useWishlistStore();
 
 // Vị trí "neo" đầu danh sách sản phẩm — dùng để auto scroll khi đổi trang / vào lại trang
 const productsListRef = ref<HTMLElement | null>(null);
@@ -819,6 +822,21 @@ onUnmounted(() => {
                     Sắp hết
                   </span>
 
+                  <!-- NÚT YÊU THÍCH -->
+                  <button
+                    type="button"
+                    class="btn-favorite-card"
+                    :class="{ 'is-favorite': wishlistStore.isProductFavorite(p.maSp) }"
+                    :title="wishlistStore.isProductFavorite(p.maSp) ? 'Xóa khỏi yêu thích' : 'Thêm vào yêu thích'"
+                    @click.stop="wishlistStore.toggleProductFavorite(p)"
+                  >
+                    <Heart
+                      :size="16"
+                      :stroke-width="wishlistStore.isProductFavorite(p.maSp) ? 0 : 2"
+                      :fill="wishlistStore.isProductFavorite(p.maSp) ? '#ffffff' : 'none'"
+                    />
+                  </button>
+
                   <img
                     :src="getImageUrl(getProductImages(p)[getActiveIndex(p.maSp)])"
                     :alt="p.tenSp"
@@ -958,6 +976,21 @@ onUnmounted(() => {
             >
               Hết hàng
             </span> -->
+
+            <!-- NÚT YÊU THÍCH -->
+            <button
+              type="button"
+              class="btn-favorite-card"
+              :class="{ 'is-favorite': wishlistStore.isProductFavorite(p.maSp) }"
+              :title="wishlistStore.isProductFavorite(p.maSp) ? 'Xóa khỏi yêu thích' : 'Thêm vào yêu thích'"
+              @click.stop="wishlistStore.toggleProductFavorite(p)"
+            >
+              <Heart
+                :size="16"
+                :stroke-width="wishlistStore.isProductFavorite(p.maSp) ? 0 : 2"
+                :fill="wishlistStore.isProductFavorite(p.maSp) ? '#ffffff' : 'none'"
+              />
+            </button>
 
             <img
               :src="getImageUrl(getProductImages(p)[getActiveIndex(p.maSp)])"
@@ -1462,6 +1495,44 @@ onUnmounted(() => {
 .dv-filter-font,
 .dv-filter-font::placeholder {
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+/* NÚT YÊU THÍCH trên ảnh sản phẩm — góc phải trên, đồng bộ màu với ServiceDetail.vue */
+.btn-favorite-card {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 11;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background-color: #fef2f2;
+  color: #ef4444;
+  border: 1px solid #fca5a5;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.btn-favorite-card:hover {
+  background-color: #fee2e2;
+  border-color: #ef4444;
+  transform: scale(1.08);
+}
+
+.btn-favorite-card.is-favorite {
+  background-color: #ef4444;
+  color: #ffffff;
+  border-color: #ef4444;
+}
+
+.btn-favorite-card.is-favorite:hover {
+  background-color: #dc2626;
+  border-color: #dc2626;
+  transform: scale(1.08);
 }
 
 /* HOT badge — đồng bộ với Services.vue */
