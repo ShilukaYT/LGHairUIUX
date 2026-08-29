@@ -493,6 +493,32 @@ watch(
                 class="group flex flex-col"
               >
                 <div class="aspect-square overflow-hidden bg-[#f6f6f6] mb-4 relative">
+                  <!-- HOT BADGE -->
+                  <div v-if="sp.isHot" class="hot-badge">
+                    <i class="fas fa-fire"></i> HOT
+                  </div>
+                  <span
+                    v-else-if="sp.soLuongTon > 0 && sp.soLuongTon <= 10"
+                    class="absolute top-3 left-3 z-10 bg-black text-white text-[10px] uppercase tracking-widest px-3 py-1.5"
+                  >
+                    Sắp hết
+                  </span>
+
+                  <!-- NÚT YÊU THÍCH -->
+                  <button
+                    type="button"
+                    class="btn-favorite-card"
+                    :class="{ 'is-favorite': wishlistStore.isProductFavorite(sp.maSp) }"
+                    :title="wishlistStore.isProductFavorite(sp.maSp) ? 'Xóa khỏi yêu thích' : 'Thêm vào yêu thích'"
+                    @click.stop.prevent="wishlistStore.toggleProductFavorite(sp)"
+                  >
+                    <Heart
+                      :size="16"
+                      :stroke-width="wishlistStore.isProductFavorite(sp.maSp) ? 0 : 2"
+                      :fill="wishlistStore.isProductFavorite(sp.maSp) ? '#ffffff' : 'none'"
+                    />
+                  </button>
+
                   <img :src="getImageUrl(sp.hinhAnhDaiDien)" :alt="sp.tenSp" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.03]" />
                   <div v-if="!sp.giaTu" class="absolute bottom-2 left-2 bg-white text-black text-[10px] uppercase tracking-[0.1em] px-2.5 py-1 border border-black">Hết hàng</div>
                 </div>
@@ -532,6 +558,68 @@ watch(
 </template>
 
 <style scoped>
+/* HOT badge + nút yêu thích trên card "Có Thể Bạn Cũng Thích" — đồng bộ y hệt Shop.vue */
+.hot-badge {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 10;
+  background: #d92d20;
+  color: #fff;
+  padding: 7px 14px;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 0;
+  box-shadow: none;
+  animation: none;
+}
+.hot-badge i {
+  font-size: 10px;
+}
+
+.btn-favorite-card {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 11;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background-color: #fef2f2;
+  color: #ef4444;
+  border: 1px solid #fca5a5;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.btn-favorite-card:hover {
+  background-color: #fee2e2;
+  border-color: #ef4444;
+  transform: scale(1.08);
+}
+
+.btn-favorite-card.is-favorite {
+  background-color: #ef4444;
+  color: #ffffff;
+  border-color: #ef4444;
+}
+
+.btn-favorite-card.is-favorite:hover {
+  background-color: #dc2626;
+  border-color: #dc2626;
+  transform: scale(1.08);
+}
+
 .pd-spinner {
   width: 32px;
   height: 32px;
