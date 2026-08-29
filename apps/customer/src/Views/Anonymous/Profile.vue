@@ -22,6 +22,7 @@ import axios from 'axios';
 import { useRouter, useRoute } from 'vue-router';
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 import Swal from 'sweetalert2';
+import { useAuthStore } from '@/stores/useAuthStore';
 
 // @ts-ignore
 import LichSuDanhGia from './Profile/lichsudanhgia.vue';
@@ -34,6 +35,7 @@ import LichSuDonHangSanPham from './Profile/LichSuDonHangSanPham.vue';
 
 const router = useRouter();
 const route = useRoute();
+const authStore = useAuthStore();
 const activeTab = ref('profile');
 const reviewSubTab = ref('services_staff');
 
@@ -619,21 +621,59 @@ const handleAvatarChange = async (event: Event) => {
   }
 };
 
-const forceLogout = () => {
-  localStorage.removeItem('user');
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('refresh_token');
-  localStorage.removeItem('token');
-  localStorage.removeItem('accessToken');
-  sessionStorage.removeItem('user');
-  sessionStorage.removeItem('token');
-  window.location.href = '/login';
+const forceLogout = async () => {
+  try {
+    const refreshToken = localStorage.getItem('refreshToken') || localStorage.getItem('refresh_token') || '';
+    await axios.post(`${API_BASE_URL}/api/account/logout`, { refreshToken: refreshToken || undefined }, { withCredentials: true });
+  } catch (err) {
+    console.warn('Lỗi gọi API đăng xuất:', err);
+  } finally {
+    localStorage.removeItem('user');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('token');
+    sessionStorage.removeItem('user');
+    sessionStorage.removeItem('token');
+    authStore.setSessionExpiredBanner(false);
+    window.dispatchEvent(new Event('user-updated'));
+    window.location.href = '/login';
+  }
 };
 
 const handleLogout = () => {
-  if (confirm('Bạn có chắc chắn muốn đăng xuất?')) {
-    forceLogout();
+  authStore.triggerLogoutConfirm(
+    forceLogout,
+    'Xác Nhận Đăng Xuất',
+    'Bạn có chắc chắn muốn đăng xuất khỏi tài khoản trên thiết bị này không?'
+  );
+};
+
+const forceLogoutAll = async () => {
+  try {
+    await axios.post(`${API_BASE_URL}/api/account/logout-all`, {}, { withCredentials: true });
+  } catch (err) {
+    console.warn('Lỗi gọi API đăng xuất tất cả thiết bị:', err);
+  } finally {
+    localStorage.removeItem('user');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('token');
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    sessionStorage.removeItem('user');
+    sessionStorage.removeItem('token');
+    authStore.setSessionExpiredBanner(false);
+    window.dispatchEvent(new Event('user-updated'));
+    window.location.href = '/login';
   }
+};
+
+const handleLogoutAll = () => {
+  authStore.triggerLogoutConfirm(
+    forceLogoutAll,
+    'Đăng Xuất Mọi Thiết Bị',
+    'Bạn có chắc chắn muốn đăng xuất khỏi tất cả các thiết bị đang đăng nhập không? Tất cả các phiên làm việc trên trình duyệt và thiết bị khác sẽ kết thúc ngay lập tức.'
+  );
 };
 </script>
 
@@ -647,7 +687,6 @@ const handleLogout = () => {
         <span class="mx-2">/</span>
         <span class="text-black">Hồ sơ cá nhân</span>
       </div>
-
       <!-- Guest / Not logged in State -->
       <div v-if="!customerInfo || customerInfo.maKH === 'GUEST'" class="bg-white p-12 border border-gray-200 shadow-sm text-center py-20 rounded-sm">
         <ShieldAlert class="w-14 h-14 mx-auto text-gray-300 mb-6" :stroke-width="1.2" />
@@ -714,9 +753,15 @@ const handleLogout = () => {
             <div class="w-px h-6 lg:w-full lg:h-px bg-gray-200 my-auto lg:my-3 shrink-0 mx-2 lg:mx-0"></div>
 
             <button @click="handleLogout"
-              class="flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors border-l-2 border-transparent rounded-sm">
+              class="flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest text-gray-700 hover:text-black hover:bg-gray-100 transition-colors border-l-2 border-transparent rounded-sm">
               <LogOut :size="15" :stroke-width="1.8" />
               Đăng Xuất
+            </button>
+
+            <button @click="handleLogoutAll"
+              class="flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors border-l-2 border-transparent rounded-sm">
+              <ShieldAlert :size="15" :stroke-width="1.8" />
+              Đăng Xuất Mọi Thiết Bị
             </button>
           </nav>
         </aside>
@@ -891,6 +936,26 @@ const handleLogout = () => {
                       <Loader2 v-if="isSavingProfile" class="w-3.5 h-3.5 animate-spin" />
                       Lưu thay đổi
                     </button>
+                  </div>
+
+                  <!-- Session & Device Management Section -->
+                  <div class="pt-8 border-t border-gray-150">
+                    <h3 class="font-heading text-xs uppercase tracking-widest text-black font-bold mb-2">Quản lý phiên đăng nhập</h3>
+                    <p class="text-xs text-gray-400 font-light mb-5">Bảo vệ tài khoản của bạn bằng cách đăng xuất khỏi thiết bị này hoặc hủy bỏ phiên làm việc trên mọi thiết bị khác.</p>
+
+                    <div class="flex flex-wrap gap-4">
+                      <button type="button" @click="handleLogout"
+                        class="bg-transparent border border-gray-300 text-gray-800 hover:border-black hover:text-black px-6 py-3 text-[10px] uppercase tracking-widest font-semibold transition-all hover:bg-gray-50 rounded-sm flex items-center gap-2">
+                        <LogOut class="w-3.5 h-3.5" />
+                        Đăng xuất thiết bị này
+                      </button>
+
+                      <button type="button" @click="handleLogoutAll"
+                        class="bg-[#852121] text-white px-6 py-3 text-[10px] uppercase tracking-widest font-semibold transition-all hover:bg-[#6b1a1a] rounded-sm flex items-center gap-2 hover:shadow-md">
+                        <ShieldAlert class="w-3.5 h-3.5" />
+                        Đăng xuất trên mọi thiết bị
+                      </button>
+                    </div>
                   </div>
                 </form>
               </div>

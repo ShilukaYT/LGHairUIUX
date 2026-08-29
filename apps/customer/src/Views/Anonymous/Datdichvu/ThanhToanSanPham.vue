@@ -6,6 +6,7 @@ import Swal from 'sweetalert2';
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 import { KHO_ORIGIN, calculateShippingFee } from './shippingCalculator';
 import { clearCartDB, removeFromCartDB } from '@/Views/Anonymous/CSDL/cartDB';
+import { useAuthStore } from '@/stores/useAuthStore';
 
 const router = useRouter();
 const API = import.meta.env.VITE_API_URL;
@@ -460,10 +461,82 @@ const remainCOD = computed(() => {
     return 0;
 });
 
-// ==========================================
-// KHỞI TẠO DỮ LIỆU
+const authStore = useAuthStore();
+const isSessionExpired = computed({
+    get: () => authStore.sessionExpiredBanner,
+    set: (val: boolean) => authStore.setSessionExpiredBanner(val)
+});
+const isLoggedIn = ref(false);
+
+const checkAndSyncCustomerSession = async () => {
+    const token = localStorage.getItem('token') || localStorage.getItem('accessToken');
+    const savedUser = localStorage.getItem('user');
+
+    if (token || savedUser) {
+        try {
+            const res = await axios.get(`${API}/api/account/get-profile`, { withCredentials: true });
+            if (res.data?.success && res.data?.user) {
+                const u = res.data.user;
+                localStorage.setItem('user', JSON.stringify(u));
+                orderData.value.customerName = u.hoTen || '';
+                orderData.value.email = u.email || '';
+                orderData.value.phone = u.sdt || '';
+                isLoggedIn.value = true;
+                isSessionExpired.value = false;
+            }
+        } catch (err: any) {
+            if (err.response?.status === 401) {
+                localStorage.removeItem('user');
+                localStorage.removeItem('token');
+                localStorage.removeItem('accessToken');
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('refreshToken');
+                localStorage.removeItem('refresh_token');
+                sessionStorage.removeItem('user');
+                isLoggedIn.value = false;
+                isSessionExpired.value = true;
+
+                orderData.value.customerName = '';
+                orderData.value.email = '';
+                orderData.value.phone = '';
+                orderData.value.address = '';
+                orderData.value.voucherIds = [];
+
+                window.dispatchEvent(new Event('user-updated'));
+            }
+        }
+    } else {
+        isLoggedIn.value = false;
+        const customer = getCustomerInfo();
+        if (customer.maKH === 'GUEST' || customer.hoTen === 'Khách vãng lai') {
+            orderData.value.customerName = '';
+            orderData.value.email = '';
+            orderData.value.phone = '';
+        } else {
+            orderData.value.customerName = customer.hoTen || '';
+            orderData.value.email = customer.email || '';
+            orderData.value.phone = customer.sdt || '';
+        }
+    }
+};
+
+const onVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+        checkAndSyncCustomerSession();
+    }
+};
+
 // ==========================================
 onMounted(async () => {
+    // 0. Xác thực phiên và tự động nạp thông tin người dùng mới nhất
+    await checkAndSyncCustomerSession();
+
+    // Đăng ký các sự kiện phản ứng nhanh
+    window.addEventListener('user-updated', checkAndSyncCustomerSession);
+    window.addEventListener('storage', checkAndSyncCustomerSession);
+    window.addEventListener('focus', checkAndSyncCustomerSession);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
     // 1. Nhận hàng từ Giỏ hàng Sidebar
     const checkoutRaw = localStorage.getItem("checkoutData");
     if (checkoutRaw) {
@@ -521,6 +594,10 @@ onMounted(async () => {
 
 onUnmounted(() => {
     if (stockPollingTimer) clearInterval(stockPollingTimer);
+    window.removeEventListener('user-updated', checkAndSyncCustomerSession);
+    window.removeEventListener('storage', checkAndSyncCustomerSession);
+    window.removeEventListener('focus', checkAndSyncCustomerSession);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
 });
 
 // ==========================================
@@ -668,6 +745,58 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <div class="lg:col-span-7 space-y-6" data-aos="fade-right">
                     <div class="glass-card left-main-card">
+                        <!-- BANNER HẾT HẠN PHIÊN ĐĂNG NHẬP -->
+                        <div v-if="isSessionExpired" class="mb-5 p-4 rounded-xl border border-amber-200/90 bg-gradient-to-r from-amber-50/90 via-orange-50/40 to-amber-50/60 shadow-sm transition-all duration-300">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="flex items-start gap-3.5">
+                                    <div class="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 text-amber-700 mt-0.5">
+                                        <i class="fas fa-exclamation-circle text-base"></i>
+                                    </div>
+                                    <div>
+                                        <div class="text-[11px] uppercase tracking-wider font-bold text-amber-950 flex items-center gap-2">
+                                            Phiên đăng nhập đã hết hạn
+                                            <span class="px-2 py-0.5 text-[9px] font-semibold bg-amber-200/80 text-amber-900 rounded-full">Cần đăng nhập lại</span>
+                                        </div>
+                                        <p class="text-xs text-amber-800/90 font-normal mt-1 leading-relaxed">
+                                            Đăng nhập lại để tự động điền địa chỉ giao hàng, tích điểm đơn hàng và áp dụng mã giảm giá thành viên. Bạn vẫn có thể mua sắm tiếp tục với tư cách khách.
+                                        </p>
+                                        <div class="mt-3 flex flex-wrap items-center gap-3">
+                                            <router-link :to="{ name: 'login', query: { redirect: '/thanh-toan-san-pham' } }" class="inline-flex items-center gap-2 px-4 py-2 bg-black text-white text-[10px] uppercase tracking-[0.15em] font-medium hover:bg-gray-800 transition-all rounded shadow-sm">
+                                                <i class="fas fa-sign-in-alt text-[9px]"></i> Đăng Nhập Lại
+                                            </router-link>
+                                            <button type="button" @click="isSessionExpired = false" class="text-xs text-amber-900/80 hover:text-black font-medium underline underline-offset-4 transition-colors">
+                                                Tiếp tục với tư cách khách
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="button" @click="isSessionExpired = false" class="text-amber-400 hover:text-amber-800 text-sm p-1 transition-colors" title="Đóng thông báo">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- GỢI Ý ĐĂNG NHẬP TÍCH ĐIỂM CHO KHÁCH -->
+                        <div v-else-if="!isLoggedIn" class="mb-5 p-4 rounded-xl border border-gray-200/80 bg-gradient-to-r from-zinc-50 via-white to-gray-50/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 transition-all duration-300">
+                            <div class="flex items-center gap-3.5">
+                                <div class="w-9 h-9 rounded-full bg-black/5 flex items-center justify-center flex-shrink-0 text-black">
+                                    <i class="fas fa-crown text-amber-500 text-sm"></i>
+                                </div>
+                                <div>
+                                    <div class="text-[11px] uppercase tracking-wider font-bold text-gray-900 flex items-center gap-2">
+                                        Ưu đãi thành viên LGHair
+                                        <span class="px-2 py-0.5 text-[9px] font-semibold bg-amber-100 text-amber-800 rounded-full">Tích điểm</span>
+                                    </div>
+                                    <p class="text-xs text-gray-500 font-light mt-0.5 leading-normal">
+                                        Đăng nhập để tự động điền địa chỉ giao hàng, áp dụng voucher và tích điểm thành viên khi mua hàng.
+                                    </p>
+                                </div>
+                            </div>
+                            <router-link :to="{ name: 'login', query: { redirect: '/thanh-toan-san-pham' } }" class="self-start sm:self-center flex-shrink-0 px-4 py-2 bg-black text-white text-[10px] uppercase tracking-[0.15em] font-medium hover:bg-gray-800 transition-all rounded shadow-sm">
+                                Đăng Nhập
+                            </router-link>
+                        </div>
+
                         <div class="section-heading-wrapper mt-2">
                             <h3 class="font-heading section-heading-title font-bold text-black text-sm uppercase tracking-wider">
                                 <i class="fas fa-shipping-fast me-2 text-black"></i> THÔNG TIN NGƯỜI NHẬN

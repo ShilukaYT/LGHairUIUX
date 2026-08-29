@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { getCartDB, removeFromCartDB, addToCartDB } from "@/Views/Anonymous/CSDL/cartDB";
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import axios from 'axios';
 import Swal from 'sweetalert2';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { useBookingBasketStore } from '@/stores/useBookingBasketStore';
 
 declare const AOS: any;
@@ -12,8 +13,9 @@ const API = import.meta.env.VITE_API_URL;
 const allItemsFromApi = ref<any[]>([]);
 const stylists = ref<any[]>([]); 
 const isSearchingStylist = ref(false);
-const myVouchers = ref<any[]>([]); 
-const customerId = ref('');
+const myVouchers = ref<any[]>([]); // Đổi thành ref trống
+const customer = getCustomerInfo();
+const customerId = ref(customer.maKH || 'GUEST');
 const tempDate = ref('');
 const tempTime = ref('');
 
@@ -33,9 +35,9 @@ const estimatedTotalMinutes = computed(() => {
 });
 
 const bookingData = ref({
-    customerName: '',
-    phone: '',
-    email: '',
+    customerName: customer.maKH !== 'GUEST' && customer.hoTen !== 'Khách vãng lai' ? customer.hoTen : '',
+    phone: customer.sdt || '',
+    email: customer.email || '',
     bookingDate: '',
     stylistId: null as string | null,
     selectedServices: [] as Array<{ id: any, name: string, price: number, originalPrice: number, icon: string, duration: number, hinhAnh?: string }>,
@@ -238,27 +240,107 @@ const isVoucherDisabled = (v: any) => {
     return false;
 };
 
-onMounted(async () => {
-    const customer = getCustomerInfo();
-    customerId.value = customer.maKH;
+const authStore = useAuthStore();
+const isSessionExpired = computed({
+    get: () => authStore.sessionExpiredBanner,
+    set: (val: boolean) => authStore.setSessionExpiredBanner(val)
+});
 
-    // ===================================================================
-    // KHÔI PHỤC DỮ LIỆU TỪ LOCAL STORAGE (NẾU KHÁCH ẤN BACK TRÌNH DUYỆT)
-    // ===================================================================
+const loadFavoriteEmployees = async (cId: string) => {
+    if (!cId || cId === 'GUEST') {
+        favoriteStylistIds.value = [];
+        return;
+    }
+    const saved = localStorage.getItem(`favorite_employees_${cId}`);
+    if (saved) {
+        try {
+            favoriteStylistIds.value = JSON.parse(saved).map((id: string) => String(id).trim());
+        } catch (e) {
+            favoriteStylistIds.value = [];
+        }
+    }
+    try {
+        const resFav = await axios.get(`${API}/api/YeuThich/employees/${cId}`);
+        if (resFav.data && Array.isArray(resFav.data)) {
+            const apiFavs = resFav.data.map((id: string) => String(id).trim());
+            favoriteStylistIds.value = Array.from(new Set([...favoriteStylistIds.value, ...apiFavs]));
+        }
+    } catch (error) {
+        console.error("Lỗi khi load thợ yêu thích từ DB:", error);
+    }
+};
+
+const checkAndSyncCustomerSession = async () => {
+    const token = localStorage.getItem('token') || localStorage.getItem('accessToken');
+    const savedUser = localStorage.getItem('user');
+
+    if (token || savedUser) {
+        try {
+            // Xác thực phiên và lấy thông tin tài khoản mới nhất
+            const res = await axios.get(`${API}/api/account/get-profile`, { withCredentials: true });
+            if (res.data?.success && res.data?.user) {
+                const u = res.data.user;
+                localStorage.setItem('user', JSON.stringify(u));
+                customerId.value = u.maKH || 'GUEST';
+                bookingData.value.customerName = u.hoTen || '';
+                bookingData.value.email = u.email || '';
+                bookingData.value.phone = u.sdt || '';
+                isSessionExpired.value = false;
+                await loadFavoriteEmployees(customerId.value);
+            }
+        } catch (err: any) {
+            console.warn('Lỗi xác thực phiên tại trang đặt lịch:', err);
+            if (err.response?.status === 401) {
+                localStorage.removeItem('user');
+                localStorage.removeItem('token');
+                localStorage.removeItem('accessToken');
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('refreshToken');
+                localStorage.removeItem('refresh_token');
+                sessionStorage.removeItem('user');
+                sessionStorage.removeItem('token');
+                customerId.value = 'GUEST';
+                isSessionExpired.value = true;
+
+                // Xóa sạch nội dung textbox khi phiên hết hạn
+                bookingData.value.customerName = '';
+                bookingData.value.email = '';
+                bookingData.value.phone = '';
+                bookingData.value.voucherIds = [];
+                favoriteStylistIds.value = [];
+
+                window.dispatchEvent(new Event('user-updated'));
+            }
+        }
+    } else {
+        const customer = getCustomerInfo();
+        customerId.value = customer.maKH;
+        if (customer.maKH !== 'GUEST') {
+            bookingData.value.customerName = customer.hoTen || '';
+            bookingData.value.email = customer.email || '';
+            bookingData.value.phone = customer.sdt || '';
+            isSessionExpired.value = false;
+            await loadFavoriteEmployees(customerId.value);
+        } else {
+            // Khách vãng lai / đã đăng xuất -> luôn làm sạch dữ liệu trong textbox
+            customerId.value = 'GUEST';
+            bookingData.value.customerName = '';
+            bookingData.value.email = '';
+            bookingData.value.phone = '';
+            bookingData.value.voucherIds = [];
+            favoriteStylistIds.value = [];
+        }
+    }
+
+    // Khôi phục dữ liệu từ localStorage nếu có (khi khách ấn back trình duyệt)
     const savedName = localStorage.getItem('temp_name');
     const savedPhone = localStorage.getItem('temp_phone');
     const savedEmail = localStorage.getItem('temp_email');
     const savedDate = localStorage.getItem('temp_date'); 
     
     if (savedName) bookingData.value.customerName = savedName;
-    else if (customer.maKH !== 'GUEST') bookingData.value.customerName = customer.hoTen;
-
     if (savedPhone) bookingData.value.phone = savedPhone;
-    else if (customer.maKH !== 'GUEST') bookingData.value.phone = customer.sdt;
-
     if (savedEmail) bookingData.value.email = savedEmail;
-    else if (customer.maKH !== 'GUEST') bookingData.value.email = customer.email;
-
     if (savedDate) {
         const parts = savedDate.split('T');
         if (parts.length === 2) {
@@ -267,29 +349,25 @@ onMounted(async () => {
             bookingData.value.bookingDate = savedDate;
         }
     }
-    // ===================================================================
+};
 
-    if (customerId.value !== 'GUEST') {
-        const savedFav = localStorage.getItem(`favorite_employees_${customerId.value}`);
-        if (savedFav) {
-            try {
-                favoriteStylistIds.value = JSON.parse(savedFav).map((id: string) => String(id).trim());
-            } catch (e) {
-                favoriteStylistIds.value = [];
-            }
-        }
-
-        try {
-            const resFav = await axios.get(`${API}/api/YeuThich/employees/${customerId.value}`);
-            if (resFav.data && Array.isArray(resFav.data)) {
-                const apiFavs = resFav.data.map((id: string) => String(id).trim());
-                favoriteStylistIds.value = Array.from(new Set([...favoriteStylistIds.value, ...apiFavs]));
-            }
-        } catch (error) {
-            console.error("Lỗi khi load thợ yêu thích từ DB:", error);
-        }
+const onVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+        checkAndSyncCustomerSession();
     }
+};
 
+onMounted(async () => {
+    // 1. Tự động kiểm tra phiên và điền thông tin khách hàng
+    await checkAndSyncCustomerSession();
+
+    // 2. Lắng nghe các sự kiện đăng xuất / thay đổi phiên từ tab khác hoặc khi quay lại trang
+    window.addEventListener('user-updated', checkAndSyncCustomerSession);
+    window.addEventListener('storage', checkAndSyncCustomerSession);
+    window.addEventListener('focus', checkAndSyncCustomerSession);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    // 3. Fetch Dịch vụ, Combo & Stylist
     try {
         const [resBooking, resStylists] = await Promise.all([
             axios.get(`${API}/api/DatDichVu/data-booking`),
@@ -353,7 +431,24 @@ onMounted(async () => {
                 hinhAnh: item.hinhAnh
             }));
         } else {
-            bookingData.value.selectedServices = [];
+            // Nếu không có dữ liệu từ giỏ hàng thì fallback lấy từ IndexedDB
+            const cartData = await getCartDB(customerId.value);
+
+            if (cartData && cartData.length > 0) {
+                bookingData.value.selectedServices = cartData
+                    .filter((item: any) => item.type !== "SANPHAM" && !String(item.id).startsWith("SANPHAM_"))
+                    .map((item: any) => ({
+                        id: item.id,
+                        name: item.tenItem,
+                        price: Number(item.gia || 0),
+                        originalPrice: Number(item.giaGoc || item.gia || 0),
+                        icon: 'fas fa-check-circle',
+                        duration: Number(item.duration || 30),
+                        hinhAnh: item.hinhAnh
+                    }));
+            } else {
+                bookingData.value.selectedServices = [];
+            }
         }
     }
 
@@ -687,6 +782,12 @@ watch(
     },
     { deep: true, immediate: true }
 );
+onUnmounted(() => {
+    window.removeEventListener('user-updated', checkAndSyncCustomerSession);
+    window.removeEventListener('storage', checkAndSyncCustomerSession);
+    window.removeEventListener('focus', checkAndSyncCustomerSession);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+});
 </script>
 
 <template>
@@ -700,6 +801,58 @@ watch(
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <div class="lg:col-span-7 space-y-6" data-aos="fade-right">
                     <div class="glass-card left-main-card">
+                        <!-- BANNER HẾT HẠN PHIÊN ĐĂNG NHẬP -->
+                        <div v-if="isSessionExpired" class="mb-5 p-4 rounded-xl border border-amber-200/90 bg-gradient-to-r from-amber-50/90 via-orange-50/40 to-amber-50/60 shadow-sm transition-all duration-300">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="flex items-start gap-3.5">
+                                    <div class="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 text-amber-700 mt-0.5">
+                                        <i class="fas fa-exclamation-circle text-base"></i>
+                                    </div>
+                                    <div>
+                                        <div class="text-[11px] uppercase tracking-wider font-bold text-amber-950 flex items-center gap-2">
+                                            Phiên đăng nhập đã hết hạn
+                                            <span class="px-2 py-0.5 text-[9px] font-semibold bg-amber-200/80 text-amber-900 rounded-full">Cần đăng nhập lại</span>
+                                        </div>
+                                        <p class="text-xs text-amber-800/90 font-normal mt-1 leading-relaxed">
+                                            Đăng nhập lại để tự động điền thông tin, tiếp tục tích điểm và hưởng trọn ưu đãi thành viên. Hoặc bạn vẫn có thể tiếp tục đặt lịch với tư cách khách bên dưới.
+                                        </p>
+                                        <div class="mt-3 flex flex-wrap items-center gap-3">
+                                            <router-link :to="{ name: 'login', query: { redirect: '/dat-dich-vu' } }" class="inline-flex items-center gap-2 px-4 py-2 bg-black text-white text-[10px] uppercase tracking-[0.15em] font-medium hover:bg-gray-800 transition-all rounded shadow-sm">
+                                                <i class="fas fa-sign-in-alt text-[9px]"></i> Đăng Nhập Lại
+                                            </router-link>
+                                            <button type="button" @click="isSessionExpired = false" class="text-xs text-amber-900/80 hover:text-black font-medium underline underline-offset-4 transition-colors">
+                                                Tiếp tục với tư cách khách
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="button" @click="isSessionExpired = false" class="text-amber-400 hover:text-amber-800 text-sm p-1 transition-colors" title="Đóng thông báo">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- GỢI Ý ĐĂNG NHẬP TÍCH ĐIỂM CHO KHÁCH -->
+                        <div v-else-if="customerId === 'GUEST' || !customerId" class="mb-5 p-4 rounded-xl border border-gray-200/80 bg-gradient-to-r from-zinc-50 via-white to-gray-50/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 transition-all duration-300">
+                            <div class="flex items-center gap-3.5">
+                                <div class="w-9 h-9 rounded-full bg-black/5 flex items-center justify-center flex-shrink-0 text-black">
+                                    <i class="fas fa-crown text-amber-500 text-sm"></i>
+                                </div>
+                                <div>
+                                    <div class="text-[11px] uppercase tracking-wider font-bold text-gray-900 flex items-center gap-2">
+                                        Ưu đãi thành viên LGHair
+                                        <span class="px-2 py-0.5 text-[9px] font-semibold bg-amber-100 text-amber-800 rounded-full">Tích điểm</span>
+                                    </div>
+                                    <p class="text-xs text-gray-500 font-light mt-0.5 leading-normal">
+                                        Đăng nhập để tự động điền thông tin, lưu thợ quen và tích điểm thành viên khi hoàn tất.
+                                    </p>
+                                </div>
+                            </div>
+                            <router-link :to="{ name: 'login', query: { redirect: '/dat-dich-vu' } }" class="self-start sm:self-center flex-shrink-0 px-4 py-2 bg-black text-white text-[10px] uppercase tracking-[0.15em] font-medium hover:bg-gray-800 transition-all rounded shadow-sm">
+                                Đăng Nhập
+                            </router-link>
+                        </div>
+
                         <div class="section-heading-wrapper mt-2">
                             <h3 class="font-playfair section-heading-title font-bold text-black">
                                 <i class="fas fa-user-edit me-2"></i> THÔNG TIN KHÁCH HÀNG

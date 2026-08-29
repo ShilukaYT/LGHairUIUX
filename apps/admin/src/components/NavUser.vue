@@ -51,6 +51,10 @@ const adminUser = ref({
 })
 
 // 1. LẤY THÔNG TIN TỪ LOCALSTORAGE KHI COMPONENT MOUNT
+import { useAdminAuthDialogStore } from '@/stores/adminAuthDialog';
+
+const authDialogStore = useAdminAuthDialogStore();
+
 onMounted(() => {
   const storedData = sessionStorage.getItem('adminUser')
   if (storedData) {
@@ -67,8 +71,7 @@ onMounted(() => {
   }
   if (adminUser.value.chucVu != "Quản trị viên" )
   {
-    alert("Bạn không có quyền truy cập vào trang này!");
-    handleLogout()
+    authDialogStore.triggerSessionExpired("Bạn không có quyền truy cập vào trang này!");
   }
 })
 const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
@@ -142,7 +145,7 @@ const handleLogout = async () => {
           
           <DropdownMenuSeparator />
 
-          <DropdownMenuItem @click="handleLogout" class="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50">
+          <DropdownMenuItem @click="authDialogStore.triggerLogoutConfirm(handleLogout)" class="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50">
             <LogOut class="mr-2 h-4 w-4" />
             <span>Đăng xuất</span>
           </DropdownMenuItem>

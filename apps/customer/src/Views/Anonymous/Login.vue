@@ -108,7 +108,22 @@ const closeModal = () => {
   modal.show = false;
 };
 
+// Lắng nghe phím Enter / Escape để đóng popup thông báo
+const handleKeydown = (e: KeyboardEvent) => {
+  if (modal.show && (e.key === 'Enter' || e.key === 'Escape' || e.key === ' ')) {
+    e.preventDefault();
+    e.stopPropagation();
+    closeModal();
+  }
+};
+
 const handleLogin = async () => {
+  // Nếu modal lỗi/thông báo đang mở, ấn Enter chỉ đóng modal
+  if (modal.show) {
+    closeModal();
+    return;
+  }
+
   if (!username.value || !password.value) {
     showStatus("Thông báo", "Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu.", "error");
     return;
@@ -125,7 +140,14 @@ const handleLogin = async () => {
     if (response.data.success) {
       // ✅ Lưu thông tin user và JWT token
       localStorage.setItem('user', JSON.stringify(response.data.user));
-      localStorage.setItem('token', response.data.token ?? response.data.accessToken ?? '');
+      const token = response.data.token ?? response.data.accessToken ?? response.data.user?.token ?? '';
+      localStorage.setItem('token', token);
+      localStorage.setItem('accessToken', token);
+      const rfToken = response.data.refreshToken ?? response.data.user?.refreshToken ?? '';
+      if (rfToken) {
+        localStorage.setItem('refreshToken', rfToken);
+      }
+      authStore.setSessionExpiredBanner(false);
 
       showStatus("Thành công", "Đăng nhập hệ thống thành công!", "success");
 
@@ -137,8 +159,8 @@ const handleLogin = async () => {
       }
 
       setTimeout(() => {
-        const target = (route.query.redirect as string) || '/';
-        window.location.href = target;
+        const redirectPath = (route.query.redirect as string) || '/';
+        window.location.href = redirectPath;
       }, 1000);
     }
   } catch (err: any) {
@@ -167,12 +189,19 @@ const submitRegistration = async (otpCode: string) => {
 
     if (response.data.success) {
       showOtpModal.value = false;
-      localStorage.setItem('accessToken', response.data.accessToken);
+      const regToken = response.data.accessToken ?? response.data.token ?? response.data.user?.token ?? '';
+      localStorage.setItem('accessToken', regToken);
+      localStorage.setItem('token', regToken);
+      const regRfToken = response.data.refreshToken ?? response.data.user?.refreshToken ?? '';
+      if (regRfToken) {
+        localStorage.setItem('refreshToken', regRfToken);
+      }
       localStorage.setItem('user', JSON.stringify(response.data.user));
+      authStore.setSessionExpiredBanner(false);
       showStatus("Chào mừng gia nhập!", "Bạn đã đăng ký thành công. Hệ thống đang tự động đăng nhập...", "success");
       setTimeout(() => {
-        const target = (route.query.redirect as string) || '/';
-        window.location.href = target;
+        const redirectPath = (route.query.redirect as string) || '/';
+        window.location.href = redirectPath;
       }, 2000);
     }
   } catch (error: any) {
@@ -252,8 +281,20 @@ const handleGoogleLogin = async (response: any) => {
     });
 
     if (res.data.success) {
-      localStorage.setItem('user', JSON.stringify(res.data.user));
-      window.location.href = '/';
+      const user = res.data.user || res.data;
+      const ggToken = res.data.token ?? res.data.accessToken ?? user?.token ?? '';
+      const ggRfToken = res.data.refreshToken ?? user?.refreshToken ?? '';
+      localStorage.setItem('user', JSON.stringify(user));
+      if (ggToken) {
+        localStorage.setItem('token', ggToken);
+        localStorage.setItem('accessToken', ggToken);
+      }
+      if (ggRfToken) {
+        localStorage.setItem('refreshToken', ggRfToken);
+      }
+      authStore.setSessionExpiredBanner(false);
+      const redirectPath = (route.query.redirect as string) || '/';
+      window.location.href = redirectPath;
     }
   } catch (error) {
     console.error("Lỗi Google Login", error);
@@ -263,6 +304,12 @@ const handleGoogleLogin = async (response: any) => {
 onMounted(() => {
   updateGoogleBtnWidth();
   window.addEventListener('resize', updateGoogleBtnWidth);
+  window.addEventListener('keydown', handleKeydown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateGoogleBtnWidth);
+  window.removeEventListener('keydown', handleKeydown);
 });
 
 const handleSendOTP = async () => {
@@ -498,8 +545,9 @@ const handleGoogleVerify = async (response: any) => {
           <div class="flex flex-col space-y-2">
             <div class="flex justify-between items-center">
               <label class="text-[10px] uppercase tracking-widest text-gray-500">Mật Khẩu</label>
+              <!-- tab bỏ qua nút này -->
               <button type="button" @click="isForgotPassword = true"
-                class="text-[10px] text-gray-400 hover:text-black transition-colors">Quên mật khẩu?</button>
+                class="text-[10px] text-gray-400 hover:text-black transition-colors" tabindex="-1">Quên mật khẩu?</button> 
             </div>
             <input type="password" v-model="password"
               class="w-full h-12 px-4 bg-transparent border border-gray-200 rounded-none focus:outline-none focus:border-black transition-colors text-sm font-light"
@@ -518,8 +566,7 @@ const handleGoogleVerify = async (response: any) => {
         <div v-if="isLogin" class="mt-6">
           <div class="relative flex items-center mb-6">
             <div class="flex-grow border-t border-gray-200"></div>
-            <span class="flex-shrink-0 mx-4 text-[10px] text-gray-400 uppercase tracking-widest">Hoặc đăng nhập
-              bằng</span>
+            <span class="flex-shrink-0 mx-4 text-[10px] text-gray-400 uppercase tracking-widest">Hoặc đăng nhập bằng</span>
             <div class="flex-grow border-t border-gray-200"></div>
           </div>
           <div class="flex flex-col space-y-4">
@@ -545,7 +592,7 @@ const handleGoogleVerify = async (response: any) => {
         enter-to-class="opacity-100 scale-100" leave-active-class="transition duration-200 ease-in"
         leave-from-class="opacity-100 scale-100" leave-to-class="opacity-0 scale-95">
         <div v-if="modal.show"
-          class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
           @click.self="closeModal">
           <div class="bg-white w-full max-w-[420px] p-10 border border-gray-200 shadow-2xl relative text-center">
             <button @click="closeModal" class="absolute top-4 right-4 text-gray-400 hover:text-black transition-colors">
@@ -576,7 +623,7 @@ const handleGoogleVerify = async (response: any) => {
         enter-to-class="opacity-100 scale-100" leave-active-class="transition duration-200 ease-in"
         leave-from-class="opacity-100 scale-100" leave-to-class="opacity-0 scale-95">
         <div v-if="showOtpModal"
-          class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
           @click.self="showOtpModal = false">
           <div class="bg-white w-full max-w-[420px] p-10 border border-gray-200 shadow-2xl relative text-center">
             <button @click="showOtpModal = false"

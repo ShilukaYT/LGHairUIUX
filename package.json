@@ -3,7 +3,11 @@
   "private": true,
   "scripts": {
     "dev": "concurrently \"node scripts/dev-proxy.mjs\" \"pnpm --parallel -r run dev\"",
-    "build": "pnpm -r run build"
+    "dev:admin": "pnpm --filter minhtam dev",
+    "dev:customer": "pnpm --filter lghairuiux dev",
+    "build": "pnpm -r run build",
+    "preview:admin": "pnpm --filter minhtam preview",
+    "preview:customer": "pnpm --filter lghairuiux preview"
   },
   "devDependencies": {
     "@types/js-cookie": "^3.0.6",

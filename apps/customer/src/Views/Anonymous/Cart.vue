@@ -14,6 +14,58 @@
         <!-- Cart Items List -->
         <div class="flex-1 flex flex-col bg-white p-6 md:p-10 shadow-sm rounded-xl border border-gray-100">
 
+          <!-- BANNER HẾT HẠN PHIÊN ĐĂNG NHẬP -->
+          <div v-if="isSessionExpired" class="mb-6 p-4 rounded-xl border border-amber-200/90 bg-gradient-to-r from-amber-50/90 via-orange-50/40 to-amber-50/60 shadow-sm transition-all duration-300">
+              <div class="flex items-start justify-between gap-3">
+                  <div class="flex items-start gap-3.5">
+                      <div class="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 text-amber-700 mt-0.5">
+                          <i class="fas fa-exclamation-circle text-base"></i>
+                      </div>
+                      <div>
+                          <div class="text-[11px] uppercase tracking-wider font-bold text-amber-950 flex items-center gap-2">
+                              Phiên đăng nhập đã hết hạn
+                              <span class="px-2 py-0.5 text-[9px] font-semibold bg-amber-200/80 text-amber-900 rounded-full">Cần đăng nhập lại</span>
+                          </div>
+                          <p class="text-xs text-amber-800/90 font-normal mt-1 leading-relaxed">
+                              Đăng nhập lại để tự động đồng bộ giỏ hàng với tài khoản của bạn, giữ nguyên các sản phẩm đã lưu và tích điểm thành viên.
+                          </p>
+                          <div class="mt-3 flex flex-wrap items-center gap-3">
+                              <router-link :to="{ name: 'login', query: { redirect: '/cart' } }" class="inline-flex items-center gap-2 px-4 py-2 bg-black text-white text-[10px] uppercase tracking-[0.15em] font-medium hover:bg-gray-800 transition-all rounded shadow-sm">
+                                  <i class="fas fa-sign-in-alt text-[9px]"></i> Đăng Nhập Lại
+                              </router-link>
+                              <button type="button" @click="isSessionExpired = false" class="text-xs text-amber-900/80 hover:text-black font-medium underline underline-offset-4 transition-colors">
+                                  Tiếp tục với giỏ hàng khách
+                              </button>
+                          </div>
+                      </div>
+                  </div>
+                  <button type="button" @click="isSessionExpired = false" class="text-amber-400 hover:text-amber-800 text-sm p-1 transition-colors" title="Đóng thông báo">
+                      <i class="fas fa-times"></i>
+                  </button>
+              </div>
+          </div>
+
+          <!-- GỢI Ý ĐĂNG NHẬP ĐỒNG BỘ GIỎ HÀNG CHO KHÁCH -->
+          <div v-else-if="!isLoggedIn" class="mb-6 p-4 rounded-xl border border-gray-200/80 bg-gradient-to-r from-zinc-50 via-white to-gray-50/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 transition-all duration-300">
+              <div class="flex items-center gap-3.5">
+                  <div class="w-9 h-9 rounded-full bg-black/5 flex items-center justify-center flex-shrink-0 text-black">
+                      <i class="fas fa-crown text-amber-500 text-sm"></i>
+                  </div>
+                  <div>
+                      <div class="text-[11px] uppercase tracking-wider font-bold text-gray-900 flex items-center gap-2">
+                          Ưu đãi thành viên LGHair
+                          <span class="px-2 py-0.5 text-[9px] font-semibold bg-amber-100 text-amber-800 rounded-full">Tích điểm</span>
+                      </div>
+                      <p class="text-xs text-gray-500 font-light mt-0.5 leading-normal">
+                          Đăng nhập để đồng bộ và lưu trữ giỏ hàng vĩnh viễn trên tài khoản của bạn, tích điểm thưởng khi thanh toán.
+                      </p>
+                  </div>
+              </div>
+              <router-link :to="{ name: 'login', query: { redirect: '/cart' } }" class="self-start sm:self-center flex-shrink-0 px-4 py-2 bg-black text-white text-[10px] uppercase tracking-[0.15em] font-medium hover:bg-gray-800 transition-all rounded shadow-sm">
+                  Đăng Nhập
+              </router-link>
+          </div>
+
           <div v-if="cartItems.length === 0" class="flex flex-col items-center justify-center py-20 text-center">
              <div class="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6">
                 <i class="fas fa-shopping-bag text-4xl text-gray-400"></i>
@@ -171,8 +223,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
-import { X, Minus, Plus, ArrowRight } from 'lucide-vue-next';
+import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
+import { X, Minus, Plus, ArrowRight, Clock } from 'lucide-vue-next';
+import axios from 'axios';
 import {
     getProductCartDB,
     removeFromCartDB,
@@ -182,6 +235,7 @@ import {
 } from "@/Views/Anonymous/CSDL/cartDB";
 import { useRouter } from "vue-router";
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
+import { useAuthStore } from "@/stores/useAuthStore";
 
 const router = useRouter();
 
@@ -199,10 +253,18 @@ interface CartItem {
 }
 
 const cartItems = ref<CartItem[]>([]);
+const isOpen = ref(false);
+const activeTab = ref<"service" | "product">("service");
+const authStore = useAuthStore();
+const isSessionExpired = computed({
+    get: () => authStore.sessionExpiredBanner,
+    set: (val: boolean) => authStore.setSessionExpiredBanner(val)
+});
+const isLoggedIn = ref(false);
 const defaultImage = "/images/no-image.png";
 let stockPollingTimer: any = null;
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:1337';
+const API = import.meta.env.VITE_API_URL || 'https://localhost:7196';
 
 const getImageUrl = (url: string | undefined | null) => {
     if (!url) return defaultImage;
@@ -217,8 +279,58 @@ const loadCart = async () => {
     cartItems.value = await getProductCartDB(maKH);
 };
 
-onMounted(async () => {
+const checkAndSyncCustomerSession = async () => {
+    const token = localStorage.getItem('token') || localStorage.getItem('accessToken');
+    const savedUser = localStorage.getItem('user');
+
+    if (token || savedUser) {
+        try {
+            const res = await axios.get(`${API}/api/account/get-profile`, { withCredentials: true });
+            if (res.data?.success && res.data?.user) {
+                isLoggedIn.value = true;
+                isSessionExpired.value = false;
+            }
+        } catch (err: any) {
+            console.warn('Lỗi xác thực phiên tại giỏ hàng:', err);
+            if (err.response?.status === 401) {
+                localStorage.removeItem('user');
+                localStorage.removeItem('token');
+                localStorage.removeItem('accessToken');
+                localStorage.removeItem('access_token');
+                localStorage.removeItem('refreshToken');
+                localStorage.removeItem('refresh_token');
+                sessionStorage.removeItem('user');
+                sessionStorage.removeItem('token');
+                isLoggedIn.value = false;
+                isSessionExpired.value = true;
+
+                window.dispatchEvent(new Event('user-updated'));
+            }
+        }
+    } else {
+        isLoggedIn.value = false;
+    }
     await loadCart();
+};
+
+const onVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+        checkAndSyncCustomerSession();
+    }
+};
+
+onMounted(async () => {
+    // Tự động mở giỏ hàng khi người dùng truy cập vào trang /cart
+    isOpen.value = true;
+
+    // Kiểm tra trạng thái phiên làm việc và nạp giỏ hàng
+    await checkAndSyncCustomerSession();
+
+    // Đăng ký các sự kiện phản ứng nhanh
+    window.addEventListener('user-updated', checkAndSyncCustomerSession);
+    window.addEventListener('storage', checkAndSyncCustomerSession);
+    window.addEventListener('focus', checkAndSyncCustomerSession);
+    document.addEventListener('visibilitychange', onVisibilityChange);
     
     // Polling 15 giây để tự động cập nhật số lượng tồn kho
     stockPollingTimer = setInterval(async () => {
@@ -244,6 +356,10 @@ onMounted(async () => {
 
 onUnmounted(() => {
     if (stockPollingTimer) clearInterval(stockPollingTimer);
+    window.removeEventListener('user-updated', checkAndSyncCustomerSession);
+    window.removeEventListener('storage', checkAndSyncCustomerSession);
+    window.removeEventListener('focus', checkAndSyncCustomerSession);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
 });
 
 const totalProduct = computed(() => {

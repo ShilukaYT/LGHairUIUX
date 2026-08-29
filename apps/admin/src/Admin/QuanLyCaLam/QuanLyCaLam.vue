@@ -521,70 +521,81 @@ watch(() => route.query.search, (newSearch) => {
     </v-card>
 
     <!-- Modal Sửa Lịch -->
-    <v-dialog v-model="isEditModalOpen" max-width="500">
-      <v-card rounded="xl">
-        <v-card-title class="pa-6 border-b">
-          <div class="text-h6 font-weight-bold">Thiết lập Lịch Làm Việc</div>
-          <div class="text-subtitle-2 text-medium-emphasis mt-1">Thợ: <span class="text-primary font-weight-bold">{{ editState.tenNv }}</span></div>
+    <v-dialog v-model="isEditModalOpen" max-width="540" scrollable>
+      <v-card rounded="xl" class="overflow-hidden">
+        <v-card-title class="pa-3 px-sm-5 border-b d-flex align-center justify-space-between bg-surface">
+          <div>
+            <div class="text-subtitle-1 text-sm-h6 font-weight-bold leading-tight">Thiết lập Lịch Làm Việc</div>
+            <div class="text-caption text-medium-emphasis mt-0.5">
+              Thợ: <span class="text-primary font-weight-bold">{{ editState.tenNv }}</span>
+            </div>
+          </div>
+          <v-btn icon variant="text" size="small" density="comfortable" @click="isEditModalOpen = false" class="text-grey-darken-1">
+            <X class="w-4 h-4" />
+          </v-btn>
         </v-card-title>
         
-        <v-card-text class="pa-6">
+        <v-card-text class="pa-4 px-sm-5 modal-scroll-body" style="max-height: min(65vh, 480px); overflow-y: auto;">
           <v-form @submit.prevent="submitEditSchedule">
-            <v-row>
-              <v-col cols="12" sm="6" class="pb-0">
-                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Ngày bắt đầu sửa</div>
+            <v-row dense>
+              <v-col cols="12" sm="6" class="pb-1">
+                <div class="mb-1 text-caption font-weight-bold text-grey-darken-2">Ngày bắt đầu sửa</div>
                 <v-text-field
                   v-model="editState.ngayBatDauSua"
                   type="date"
                   variant="outlined"
-                  density="comfortable"
+                  density="compact"
                   rounded="lg"
                   :min="todayStr"
+                  hide-details="auto"
                   @keydown.prevent
                 ></v-text-field>
               </v-col>
-              <v-col cols="12" sm="6" class="pb-0">
-                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Khoảng thời gian</div>
+              <v-col cols="12" sm="6" class="pb-1">
+                <div class="mb-1 text-caption font-weight-bold text-grey-darken-2">Khoảng thời gian</div>
                 <v-select
                   v-model="editState.khoangThoiGian"
                   :items="khoangThoiGianOptions"
                   variant="outlined"
-                  density="comfortable"
+                  density="compact"
                   rounded="lg"
+                  hide-details="auto"
                   :readonly="editState.isCreating"
                 ></v-select>
               </v-col>
-              <v-col cols="12" class="pb-0 pt-2">
-                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Ca làm áp dụng chung</div>
+              <v-col cols="12" class="pb-1 pt-1">
+                <div class="mb-1 text-caption font-weight-bold text-grey-darken-2">Ca làm áp dụng chung</div>
                 <v-select
                   v-model="editState.caLamApDung"
                   :items="caLamOptions"
                   variant="outlined"
-                  density="comfortable"
+                  density="compact"
                   rounded="lg"
+                  hide-details="auto"
                 ></v-select>
               </v-col>
-              <v-col cols="12" class="pb-0" v-if="editState.caLamApDung === 'Nghỉ phép'">
-                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Lý do nghỉ phép <span class="text-error">*</span></div>
+              <v-col cols="12" class="pb-1" v-if="editState.caLamApDung === 'Nghỉ phép'">
+                <div class="mb-1 text-caption font-weight-bold text-grey-darken-2">Lý do nghỉ phép <span class="text-error">*</span></div>
                 <v-textarea
                   v-model="editState.lyDo"
                   placeholder="Nhập lý do nghỉ phép cụ thể (ốm đau, việc bận gia đình...)"
                   rows="2"
                   variant="outlined"
-                  density="comfortable"
+                  density="compact"
                   rounded="lg"
                   hide-details="auto"
                 ></v-textarea>
               </v-col>
-              <v-col cols="12" class="pb-0" v-if="editState.khoangThoiGian > 1 && editState.caLamApDung !== 'Nghỉ phép'">
-                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Các ngày áp dụng trong tuần</div>
+              <v-col cols="12" class="pb-1" v-if="editState.khoangThoiGian > 1 && editState.caLamApDung !== 'Nghỉ phép'">
+                <div class="mb-1 text-caption font-weight-bold text-grey-darken-2">Các ngày áp dụng trong tuần</div>
                 <v-chip-group
                   v-model="editState.selectedDaysOfWeek"
                   multiple
                   column
                   selected-class="bg-primary text-white"
+                  class="compact-chip-group"
                 >
-                  <v-chip v-for="day in dayOfWeekOptions" :key="day.value" :value="day.value" filter size="small" class="ma-1">
+                  <v-chip v-for="day in dayOfWeekOptions" :key="day.value" :value="day.value" filter size="x-small" class="ma-0.5 font-weight-medium">
                     {{ day.title }}
                   </v-chip>
                 </v-chip-group>
@@ -595,20 +606,23 @@ watch(() => route.query.search, (newSearch) => {
               v-if="editState.affectedDates.length === 0"
               type="info"
               variant="tonal"
-              class="mt-4"
+              class="mt-3"
               density="compact"
             >
               Không có ngày nào trong phạm vi lịch hiện tại.
             </v-alert>
 
-            <div v-if="editState.affectedDates.length > 0" class="mt-4">
-              <div class="text-subtitle-2 font-weight-bold text-grey-darken-2 mb-2">Các ngày sẽ được cập nhật ({{ editState.affectedDates.length }} ngày)</div>
-              <div class="d-flex flex-wrap gap-2">
+            <div v-if="editState.affectedDates.length > 0" class="mt-3">
+              <div class="text-caption font-weight-bold text-grey-darken-2 mb-1.5 d-flex align-center justify-space-between">
+                <span>Các ngày sẽ được cập nhật:</span>
+                <span class="text-primary font-weight-bold">{{ editState.affectedDates.length }} ngày</span>
+              </div>
+              <div class="affected-chips-scroll d-flex flex-wrap gap-1 pa-2 rounded-lg bg-grey-lighten-4 border">
                 <v-chip
                   v-for="(date, index) in editState.affectedDates"
                   :key="index"
-                  size="small"
-                  variant="outlined"
+                  size="x-small"
+                  variant="flat"
                   color="primary"
                   class="font-weight-bold"
                 >
@@ -619,18 +633,20 @@ watch(() => route.query.search, (newSearch) => {
           </v-form>
         </v-card-text>
 
-        <v-card-actions class="pa-4 px-6 d-flex justify-end border-t">
+        <v-card-actions class="pa-3 px-sm-5 d-flex justify-end border-t bg-surface">
           <v-btn
             variant="outlined"
             rounded="lg"
-            class="text-none font-weight-bold mr-2"
+            size="small"
+            class="text-none font-weight-bold px-4"
             color="grey-darken-2"
             @click="isEditModalOpen = false"
           >Hủy</v-btn>
           <v-btn
             variant="flat"
             rounded="lg"
-            class="text-none font-weight-bold"
+            size="small"
+            class="text-none font-weight-bold px-5"
             color="primary"
             :loading="isSubmitting"
             @click="submitEditSchedule"
@@ -641,67 +657,77 @@ watch(() => route.query.search, (newSearch) => {
     </v-dialog>
 
     <!-- Modal Nghỉ Lễ Chung -->
-    <v-dialog v-model="isHolidayModalOpen" max-width="500">
-      <v-card rounded="xl">
-        <v-card-title class="pa-6 border-b">
-          <div class="text-h6 font-weight-bold text-error">Thiết lập Nghỉ Lễ Chung</div>
-          <div class="text-subtitle-2 text-medium-emphasis mt-1">Cập nhật ca làm của TOÀN BỘ nhân viên thành "Nghỉ lễ"</div>
+    <v-dialog v-model="isHolidayModalOpen" max-width="500" scrollable>
+      <v-card rounded="xl" class="overflow-hidden">
+        <v-card-title class="pa-3 px-sm-5 border-b d-flex align-center justify-space-between bg-surface">
+          <div>
+            <div class="text-subtitle-1 text-sm-h6 font-weight-bold text-error leading-tight">Thiết lập Nghỉ Lễ Chung</div>
+            <div class="text-caption text-medium-emphasis mt-0.5">Cập nhật ca làm của TOÀN BỘ nhân viên thành "Nghỉ lễ"</div>
+          </div>
+          <v-btn icon variant="text" size="small" density="comfortable" @click="isHolidayModalOpen = false" class="text-grey-darken-1">
+            <X class="w-4 h-4" />
+          </v-btn>
         </v-card-title>
         
-        <v-card-text class="pa-6">
+        <v-card-text class="pa-4 px-sm-5 modal-scroll-body" style="max-height: min(65vh, 400px); overflow-y: auto;">
           <v-form @submit.prevent="submitHoliday">
-            <v-row>
-              <v-col cols="12" sm="6" class="pb-0">
-                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Từ ngày</div>
+            <v-row dense>
+              <v-col cols="12" sm="6" class="pb-1">
+                <div class="mb-1 text-caption font-weight-bold text-grey-darken-2">Từ ngày</div>
                 <v-text-field
                   v-model="holidayState.tuNgay"
                   type="date"
                   variant="outlined"
-                  density="comfortable"
+                  density="compact"
                   rounded="lg"
+                  hide-details="auto"
                   :min="todayStr"
                   @keydown.prevent
                 ></v-text-field>
               </v-col>
-              <v-col cols="12" sm="6" class="pb-0">
-                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Đến ngày</div>
+              <v-col cols="12" sm="6" class="pb-1">
+                <div class="mb-1 text-caption font-weight-bold text-grey-darken-2">Đến ngày</div>
                 <v-text-field
                   v-model="holidayState.denNgay"
                   type="date"
                   variant="outlined"
-                  density="comfortable"
+                  density="compact"
                   rounded="lg"
+                  hide-details="auto"
                   :min="holidayState.tuNgay"
                   :max="maxHolidayDate"
                   @keydown.prevent
                 ></v-text-field>
               </v-col>
-              <v-col cols="12" class="pb-0 pt-2">
-                <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Lý do nghỉ (Tên ngày lễ)</div>
+              <v-col cols="12" class="pb-1 pt-1">
+                <div class="mb-1 text-caption font-weight-bold text-grey-darken-2">Lý do nghỉ (Tên ngày lễ)</div>
                 <v-text-field
                   v-model="holidayState.lyDo"
                   placeholder="VD: Nghỉ Tết Nguyên Đán"
                   variant="outlined"
-                  density="comfortable"
+                  density="compact"
                   rounded="lg"
+                  hide-details="auto"
                 ></v-text-field>
               </v-col>
             </v-row>
           </v-form>
         </v-card-text>
 
-        <v-card-actions class="pa-4 px-6 d-flex justify-end border-t">
+        <v-card-actions class="pa-3 px-sm-5 d-flex justify-end border-t bg-surface">
           <v-btn
             variant="outlined"
             rounded="lg"
-            class="text-none font-weight-bold mr-2"
+            size="small"
+            class="text-none font-weight-bold px-4"
             color="grey-darken-2"
             @click="isHolidayModalOpen = false"
           >Hủy</v-btn>
           <v-btn
             variant="flat"
             rounded="lg"
-            class="text-none font-weight-bold"
+            size="small"
+            class="text-none font-weight-bold px-4"
             color="error"
             :loading="isSubmittingHoliday"
             @click="submitHoliday"
@@ -724,4 +750,34 @@ watch(() => route.query.search, (newSearch) => {
 .gap-1 { gap: 4px; }
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
+
+.modal-scroll-body {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+.modal-scroll-body::-webkit-scrollbar {
+  width: 5px;
+}
+.modal-scroll-body::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.affected-chips-scroll {
+  max-height: 90px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+.affected-chips-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.affected-chips-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.compact-chip-group :deep(.v-chip) {
+  margin: 2px !important;
+}
 </style>

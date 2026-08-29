@@ -569,63 +569,72 @@ onUnmounted(() => { if (timer) clearInterval(timer) })
     </v-card>
 
     <!-- Modal Cập nhật Điểm danh -->
-    <v-dialog v-model="isAttendanceModalOpen" max-width="450">
-      <v-card rounded="xl">
-        <v-card-title class="pa-6 border-b" style="white-space: normal;">
-          <div class="text-h6 font-weight-bold">Cập Nhật Trạng Thái</div>
-          <div class="text-subtitle-2 text-medium-emphasis font-weight-medium mt-1">
-            Nhân viên: {{ attendanceForm.hoTenNv }}
+    <v-dialog v-model="isAttendanceModalOpen" max-width="480" scrollable>
+      <v-card rounded="xl" class="overflow-hidden">
+        <v-card-title class="pa-3 px-sm-5 border-b d-flex align-center justify-space-between bg-surface" style="white-space: normal;">
+          <div>
+            <div class="text-subtitle-1 text-sm-h6 font-weight-bold">Cập Nhật Trạng Thái</div>
+            <div class="text-caption text-medium-emphasis font-weight-medium mt-0.5">
+              Nhân viên: <strong>{{ attendanceForm.hoTenNv }}</strong>
+            </div>
+            <div class="text-caption text-warning font-weight-medium mt-0.5 d-flex align-center">
+              <CalendarDays class="w-3.5 h-3.5 mr-1" /> 
+              Ca {{ attendanceForm.caLam }} - {{ formatDate(attendanceForm.ngayLamViec) }}
+            </div>
           </div>
-          <div class="text-subtitle-2 text-warning font-weight-medium mt-1 d-flex align-center">
-            <CalendarDays class="w-4 h-4 mr-1" /> 
-            Ca {{ attendanceForm.caLam }} - {{ formatDate(attendanceForm.ngayLamViec) }}
-          </div>
+          <v-btn icon variant="text" size="small" density="comfortable" @click="isAttendanceModalOpen = false" class="text-grey-darken-1">
+            <X class="w-4 h-4" />
+          </v-btn>
         </v-card-title>
         
-        <v-card-text class="pa-6">
+        <v-card-text class="pa-4 px-sm-5" style="max-height: min(65vh, 420px); overflow-y: auto;">
           <v-form @submit.prevent="submitAttendance">
             <template v-if="attendanceForm.trangThaiGoc !== 2">
-              <div class="mb-2 text-subtitle-2 font-weight-bold text-grey-darken-2">Chọn trạng thái</div>
+              <div class="mb-1 text-caption font-weight-bold text-grey-darken-2">Chọn trạng thái</div>
               <v-select
                 v-model="attendanceForm.trangThai"
                 :items="attendanceStatusOptions"
                 item-title="title"
                 item-value="value"
                 variant="outlined"
-                density="comfortable"
+                density="compact"
                 rounded="lg"
+                hide-details="auto"
               ></v-select>
             </template>
             <template v-else>
-              <div class="mb-2 text-subtitle-2 font-weight-bold text-primary">Xác nhận Rời ca</div>
+              <div class="mb-1 text-subtitle-2 font-weight-bold text-primary">Xác nhận Rời ca</div>
             </template>
 
-            <div v-if="attendanceForm.trangThai !== 2" class="mb-2 mt-4 text-subtitle-2 font-weight-bold text-error">Lý do (Bắt buộc)</div>
-            <div v-else class="mb-2 mt-4 text-subtitle-2 font-weight-bold text-grey-darken-2">Ghi chú (Tùy chọn)</div>
+            <div v-if="attendanceForm.trangThai !== 2" class="mb-1 mt-3 text-caption font-weight-bold text-error">Lý do (Bắt buộc)</div>
+            <div v-else class="mb-1 mt-3 text-caption font-weight-bold text-grey-darken-2">Ghi chú (Tùy chọn)</div>
             <v-textarea
               v-model="attendanceForm.ghiChu"
               placeholder="Nhập ghi chú hoặc lý do..."
               variant="outlined"
-              density="comfortable"
+              density="compact"
               rounded="lg"
               rows="3"
               auto-grow
+              hide-details="auto"
             ></v-textarea>
           </v-form>
         </v-card-text>
 
-        <v-card-actions class="pa-4 px-6 d-flex justify-end border-t">
+        <v-card-actions class="pa-3 px-sm-5 d-flex justify-end border-t bg-surface">
           <v-btn
             variant="outlined"
             rounded="lg"
-            class="text-none font-weight-bold mr-2"
+            size="small"
+            class="text-none font-weight-bold px-4"
             color="grey-darken-2"
             @click="isAttendanceModalOpen = false"
           >Hủy</v-btn>
           <v-btn
             variant="flat"
             rounded="lg"
-            class="text-none font-weight-bold"
+            size="small"
+            class="text-none font-weight-bold px-4"
             color="primary"
             :loading="isSubmittingAttendance"
             @click="submitAttendance"
