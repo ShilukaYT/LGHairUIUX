@@ -324,7 +324,7 @@ const getPriceDisplay = (p: any) => {
 
 // ======================================================
 // FEED "BANNER DANH MỤC + SẢN PHẨM" — khối riêng phía trên khu vực Filter/Grid cũ.
-// Mỗi danh mục: banner (nếu có) -> 2 hàng sản phẩm (pageSize=8) -> nút "Xem thêm".
+// Mỗi danh mục: banner (nếu có) -> 4 hàng sản phẩm (pageSize=16) -> nút "Xem thêm".
 // Sản phẩm của từng danh mục chỉ tải khi khối đó lọt vào viewport (lazy theo danh mục).
 // ======================================================
 interface FeedBanner { maBanner: string; tieuDe?: string; hinhAnh?: string; }
@@ -349,7 +349,7 @@ interface FeedCategoryState {
 const feedCategories = ref<FeedCategoryState[]>([]);
 const feedLoading    = ref(true);
 const feedError      = ref(false);
-const FEED_PAGE_SIZE = 8; // ~2 hàng x 4 cột desktop
+const FEED_PAGE_SIZE = 16; // ~4 hàng x 4 cột desktop
 
 // 🔥 true khi CẢ danh mục lẫn feed đều đang tải lần đầu — dùng để hiện đúng 1 spinner
 // chung, tránh 2 spinner của 2 khối hiện tách rời nhìn giật cục.
