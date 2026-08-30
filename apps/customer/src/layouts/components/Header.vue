@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Search, User, ShoppingBag, Menu, X, Heart, Scissors } from 'lucide-vue-next';
 import axios from 'axios';
-import { getProductCartDB } from '@/Views/Anonymous/CSDL/cartDB';
+import { getCartDB } from '@/Views/Anonymous/CSDL/cartDB';
 import { useWishlistStore } from '@/stores/useWishlistStore';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useBookingBasketStore } from '@/stores/useBookingBasketStore';
@@ -42,9 +42,22 @@ const updateCartCount = async () => {
       maKH = 'GUEST';
     }
   }
-  // Chỉ đếm sản phẩm vật lý (SANPHAM/BIENTHE), không đếm dịch vụ/combo
-  const productItems = await getProductCartDB(maKH);
-  cartCount.value = productItems.length;
+  try {
+    const allDbItems = await getCartDB(maKH);
+    const dbIds = new Set((allDbItems || []).map((item: any) => String(item.id)));
+
+    let extraBasketCount = 0;
+    (bookingBasketStore.items || []).forEach(item => {
+      if (!dbIds.has(String(item.id))) {
+        extraBasketCount++;
+      }
+    });
+
+    let totalCount = (allDbItems || []).length + extraBasketCount;
+    cartCount.value = totalCount;
+  } catch (err) {
+    console.warn('Lỗi đếm số lượng giỏ hàng:', err);
+  }
 };
 
 watch(currentUser, () => {
@@ -173,6 +186,7 @@ onMounted(() => {
   fetchProductCategories();
 
   window.addEventListener('cart-updated', updateCartCount);
+  window.addEventListener('booking-basket-updated', updateCartCount);
   updateCartCount();
 
     // Tự động kiểm tra phiên đăng nhập mỗi 1 phút
@@ -201,6 +215,7 @@ onUnmounted(() => {
   window.removeEventListener('storage', checkUser);
   window.removeEventListener('user-updated', checkUser);
   window.removeEventListener('cart-updated', updateCartCount);
+  window.removeEventListener('booking-basket-updated', updateCartCount);
   document.body.style.overflow = '';
   if (checkSessionInterval) {
     clearInterval(checkSessionInterval);
@@ -530,10 +545,6 @@ const onSearchBlur = () => { setTimeout(() => { showDropdown.value = false; }, 2
             <Heart :size="20" :stroke-width="1.5" />
             <span class="absolute -top-1 -right-1 w-3 h-3 text-white text-[8px] flex items-center justify-center rounded-full" :class="wishlistCount > 0 ? 'bg-red-500' : 'bg-black'">{{ wishlistCount }}</span>
           </router-link>
-          <button @click="bookingBasketStore.openDrawer()" class="text-black hover:text-gray-500 transition-colors relative" aria-label="Khay dịch vụ">
-            <Scissors :size="18" :stroke-width="1.5" />
-            <span v-if="bookingBasketStore.itemCount > 0" class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 text-white text-[8px] flex items-center justify-center rounded-full">{{ bookingBasketStore.itemCount }}</span>
-          </button>
           <router-link :to="{ name: currentUser ? 'profile' : 'login' }" class="text-black hover:text-gray-500 transition-colors flex items-center justify-center" aria-label="Account">
             <template v-if="currentUser">
               <div class="w-5 h-5 rounded-full overflow-hidden border border-gray-200 shrink-0 flex items-center justify-center bg-gray-50">

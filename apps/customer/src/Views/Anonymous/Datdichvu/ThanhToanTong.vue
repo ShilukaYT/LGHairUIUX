@@ -61,7 +61,8 @@ const myVouchers = ref<any[]>([]);
 // Cờ chặn spam click & loading xoay vòng
 const isSubmitting = ref(false);
 
-const tempDate = ref('');
+const todayDefault = new Date().toLocaleDateString('en-CA');
+const tempDate = ref(todayDefault);
 const tempTime = ref('');
 
 const bookingData = ref({
@@ -132,7 +133,7 @@ const showProductDropdown = ref(false);
 let productSearchTimeout: any = null;
 let stockPollingTimer: any = null;
 
-const minDate = new Date().toISOString().split('T')[0];
+const minDate = todayDefault;
 
 const availableHours = computed(() => {
     const hours: string[] = [];
@@ -157,8 +158,12 @@ const expectedEndTime = computed(() => {
 });
 
 const combineDateTime = () => {
-    validateField('bookingDate');
-    validateField('tempTime');
+    if (tempDate.value) {
+        validateField('bookingDate');
+    }
+    if (tempTime.value) {
+        validateField('tempTime');
+    }
     if (tempDate.value && tempTime.value) {
         bookingData.value.bookingDate = `${tempDate.value}T${tempTime.value}`;
     } else {
@@ -379,9 +384,6 @@ const validateAllForm = (): boolean => {
 };
 
 watch(() => bookingData.value.selectedServices.length, () => {
-    validateField('bookingDate');
-    validateField('tempTime');
-    validateField('stylist');
     validateField('cart');
 });
 
@@ -526,27 +528,17 @@ const payNow = computed(() => {
     return servicePayment + productPayment;
 });
 
-const remainAtStore = computed(() => {
-    let total = 0;
-
-    if (bookingData.value.selectedServices.length > 0 && bookingData.value.paymentMode === '10') {
-        const serviceAfterVoucher = Math.max(0, serviceSubTotal.value - discountAmount.value);
-        total += Math.max(0, serviceAfterVoucher - (serviceSubTotal.value * 0.1));
-    }
-
-    if (productItems.value.length > 0 && productData.value.receiveType === 'store') {
-        const remainingDiscount = Math.max(0, discountAmount.value - serviceSubTotal.value);
-        total += Math.max(0, productSubTotal.value - remainingDiscount);
-    }
-
-    return total;
-});
+const totalRemaining = computed(() => Math.max(0, grandTotal.value - payNow.value));
 
 const remainCOD = computed(() => {
     if (productItems.value.length === 0 || productData.value.paymentMethod !== 'cod' || productData.value.receiveType !== 'home') return 0;
     const remainingDiscount = Math.max(0, discountAmount.value - serviceSubTotal.value);
-    const productAfterVoucher = Math.max(0, productSubTotal.value - remainingDiscount);
-    return productAfterVoucher + shippingFee.value;
+    const productAfterVoucher = Math.max(0, productSubTotal.value - remainingDiscount) + shippingFee.value;
+    return Math.min(totalRemaining.value, productAfterVoucher);
+});
+
+const remainAtStore = computed(() => {
+    return Math.max(0, totalRemaining.value - remainCOD.value);
 });
 
 const filteredServices = computed(() => {
@@ -814,28 +806,32 @@ const validateQuantity = (item: ProductItem) => {
 };
 
 // ==========================================
-// TẢI STYLISTS KHẢ DỤNG
+// TẢI STYLISTS KHẢ DỤNG (ĐỒNG BỘ CHUẨN DATDICHVU.VUE)
 // ==========================================
 const loadAvailableStylists = async () => {
     combineDateTime();
 
-    if (!canSearchStylist.value) {
+    if (!tempDate.value || bookingData.value.selectedServices.length === 0) {
         stylists.value = [];
         bookingData.value.stylistId = null;
-        stylistMessage.value = 'Chọn đủ dịch vụ, ngày và giờ để hệ thống hiển thị stylist phù hợp.';
+        stylistMessage.value = 'Chọn đủ dịch vụ và ngày hẹn để hệ thống hiển thị stylist phù hợp.';
         return;
     }
+
+    // Backend yêu cầu GioBatDau hợp lệ dạng TimeOnly (HH:mm). Nếu chưa chọn giờ, dùng '08:00' làm mốc query ca làm trong ngày
+    const checkTime = tempTime.value || '08:00';
+    const checkDuration = Math.max(30, estimatedTotalMinutes.value || 30);
 
     loadingStylists.value = true;
     stylistMessage.value = '';
 
     try {
-        const res = await axios.post(`${API}/api/ThanhToanTong/get-available-stylists`, {
+        const res = await axios.post(`${API}/api/DatDichVu/get-available-stylists`, {
             ngayHen: tempDate.value,
-            gioBatDau: tempTime.value,
-            tongThoiGian: estimatedTotalMinutes.value,
-            maKh: customerId.value,
-            phone: bookingData.value.phone
+            gioBatDau: checkTime,
+            tongThoiGian: checkDuration,
+            maKh: customerId.value || 'GUEST',
+            phone: bookingData.value.phone || ''
         });
 
         const rawList = Array.isArray(res.data)
@@ -848,12 +844,16 @@ const loadAvailableStylists = async () => {
                         ? res.data.nhanViens
                         : [];
 
-        const mapped = rawList.map(normalizeStylist).filter((s: any) => s.id).map((s: any) => ({
-            ...s,
-            isFavorite: s.isFavorite || isStylistFavorite(s.id)
-        }));
+        const mappedStylists = rawList.map(normalizeStylist).filter((s: any) => s.id).map((s: any) => {
+            const isOff = s.lichTrinh && Array.isArray(s.lichTrinh) && s.lichTrinh.some((l: string) => l.includes('Không có ca làm') || l.includes('Nghỉ làm'));
+            return {
+                ...s,
+                isFavorite: s.isFavorite || isStylistFavorite(s.id),
+                isAvailable: isOff ? false : (tempTime.value ? Boolean(s.isAvailable) : true)
+            };
+        });
 
-        mapped.sort((a: any, b: any) => {
+        mappedStylists.sort((a: any, b: any) => {
             if (a.isAvailable !== b.isAvailable) {
                 return a.isAvailable ? -1 : 1;
             }
@@ -862,15 +862,25 @@ const loadAvailableStylists = async () => {
             return favB - favA;
         });
 
-        stylists.value = mapped;
+        stylists.value = mappedStylists;
 
-        if (bookingData.value.stylistId && !stylists.value.some(s => String(s.id) === String(bookingData.value.stylistId) && s.isAvailable)) {
-            bookingData.value.stylistId = null;
-            localStorage.removeItem('temp_stylist_id');
+        // Nếu thợ đã chọn trước đó không còn rảnh trong giờ mới -> reset stylistId và báo cho khách
+        if (tempTime.value && bookingData.value.stylistId) {
+            const currentSelected = stylists.value.find(s => String(s.id) === String(bookingData.value.stylistId));
+            if (currentSelected && !currentSelected.isAvailable) {
+                bookingData.value.stylistId = null;
+                Swal.fire({
+                    title: 'Stylist không khả dụng',
+                    text: `Stylist ${currentSelected.name} không có ca làm việc hoặc đã bận vào khung giờ ${tempTime.value}. Vui lòng chọn Stylist khác hoặc chọn lại giờ hẹn!`,
+                    icon: 'info',
+                    confirmButtonText: 'Đã hiểu',
+                    confirmButtonColor: '#1e293b'
+                });
+            }
         }
 
         if (stylists.value.length === 0) {
-            stylistMessage.value = 'Không tìm thấy stylist trống trong khung giờ này. Hãy đổi ngày hoặc giờ khác.';
+            stylistMessage.value = 'Ngày này tiệm chưa có danh sách Stylist làm việc. Bạn vui lòng chọn ngày khác nhé!';
         }
     } catch (error) {
         console.error('Lỗi tải stylist:', error);
@@ -880,6 +890,108 @@ const loadAvailableStylists = async () => {
     } finally {
         loadingStylists.value = false;
     }
+};
+
+
+// ==========================================
+// STYLIST SCHEDULE HELPERS (CHUẨN HÓA THEO DATDICHVU.VUE)
+// ==========================================
+const getFreeSlots = (stylist: any): string[] => {
+    const lichTrinh = stylist?.lichTrinh;
+    if (!lichTrinh || !Array.isArray(lichTrinh)) {
+        if (stylist?.caLam) return [stylist.caLam];
+        return [];
+    }
+    
+    // Khi CHƯA chọn giờ: hiển thị ca làm việc hoặc lịch trống
+    if (!tempTime.value) {
+        const free = lichTrinh
+            .filter((l: string) => l.includes('Lịch trống:'))
+            .map((l: string) => l.replace('Lịch trống:', '').trim());
+        if (free.length > 0) return free;
+
+        const traica = lichTrinh.find((l: string) => l.includes('Trái ca') || l.includes('Ngoài ca') || l.includes('Làm'));
+        if (traica) {
+            const m = traica.match(/\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}/);
+            if (m) return [`Ca: ${m[0]}`];
+        }
+        return stylist.caLam ? [stylist.caLam] : [];
+    }
+
+    // Khi ĐÃ chọn giờ:
+    const free = lichTrinh
+        .filter((l: string) => l.includes('Lịch trống:'))
+        .map((l: string) => l.replace('Lịch trống:', '').trim());
+    if (free.length > 0) return free;
+
+    if (stylist.isAvailable) {
+        return [`Rảnh lúc ${tempTime.value}`];
+    }
+    return [];
+};
+
+const getBusySlots = (stylist: any): string[] => {
+    const lichTrinh = stylist?.lichTrinh;
+    if (!lichTrinh || !Array.isArray(lichTrinh)) return [];
+    
+    // Khi CHƯA chọn giờ: hiển thị tất cả các ca đã có hẹn
+    if (!tempTime.value) {
+        return lichTrinh
+            .filter((l: string) => l.includes('Có hẹn:'))
+            .map((l: string) => l.replace('Có hẹn:', '').trim());
+    }
+
+    const busyFromSchedule = lichTrinh
+        .filter((l: string) => l.includes('Có hẹn:') || l.includes('Bận:'))
+        .map((l: string) => l.replace(/Có hẹn:|Bận:/g, '').trim());
+    
+    if (busyFromSchedule.length > 0) return busyFromSchedule;
+
+    if (!stylist.isAvailable) {
+        const offReason = lichTrinh.find((l: string) => l.includes('Trái ca') || l.includes('Ngoài ca') || l.includes('Nghỉ') || l.includes('Không có ca'));
+        if (offReason) return [offReason];
+        return [`Bận lúc ${tempTime.value}`];
+    }
+
+    return [];
+};
+
+const selectStylist = (stylist: any) => {
+    if (!tempDate.value) {
+        Swal.fire({
+            title: 'Chọn ngày hẹn',
+            text: 'Vui lòng chọn Ngày hẹn trước khi chọn Stylist!',
+            icon: 'info',
+            confirmButtonText: 'Đã hiểu',
+            confirmButtonColor: '#1e293b'
+        });
+        return;
+    }
+    if (!tempTime.value) {
+        Swal.fire({
+            title: 'Gợi ý chọn giờ hẹn',
+            text: 'Vui lòng chọn Giờ hẹn bên trên để xác nhận Stylist có rảnh trong khung giờ của bạn!',
+            icon: 'info',
+            confirmButtonText: 'Chọn giờ ngay',
+            confirmButtonColor: '#1e293b'
+        });
+        return;
+    }
+    if (!stylist.isAvailable) {
+        const busyText = stylist.lichTrinh && stylist.lichTrinh.length > 0 
+            ? stylist.lichTrinh.join('\n') 
+            : 'Stylist không có ca làm hoặc đã có khách đặt trước vào khung giờ này.';
+        Swal.fire({
+            title: 'Stylist đang bận',
+            text: `Stylist ${stylist.name} không khả dụng vào lúc ${tempTime.value}.\n${busyText}\nVui lòng chọn Stylist khác hoặc đổi giờ hẹn!`,
+            icon: 'warning',
+            confirmButtonText: 'Đã hiểu',
+            confirmButtonColor: '#1e293b'
+        });
+        return;
+    }
+    bookingData.value.stylistId = stylist.id;
+    validateField('stylist');
 };
 
 // ==========================================
@@ -1099,7 +1211,6 @@ const handlePayment = async () => {
                 for (const p of productItems.value) {
                     await removeFromCartDB(p.id, 'SANPHAM');
                 }
-                await clearCartDB(customerId.value || 'GUEST');
             } catch (err) {
                 console.error('Lỗi khi xóa cartDB:', err);
             }
@@ -1543,7 +1654,7 @@ onUnmounted(() => {
     <div class="booking-container">
         <div class="max-w-6xl mx-auto px-4 py-12">
             <div class="text-center mb-12" data-aos="fade-down">
-                <h1 class="font-heading tracking-[0.2em] font-medium text-black text-3xl lg:text-4xl uppercase">THANH TOÁN TỔNG HỢP</h1>
+                <h1 class="font-playfair tracking-[0.1em] font-medium text-black text-3xl lg:text-4xl uppercase">THANH TOÁN TỔNG HỢP</h1>
                 <p class="text-gray-400 mt-2 text-xs uppercase tracking-widest">Đặt lịch hẹn dịch vụ và mua sắm sản phẩm cao cấp cùng lúc</p>
             </div>
 
@@ -1605,7 +1716,7 @@ onUnmounted(() => {
                         
                         <!-- BƯỚC 1: Thông tin khách hàng -->
                         <div class="section-heading-wrapper mt-2">
-                            <h3 class="font-heading section-heading-title font-bold text-black text-sm uppercase tracking-wider">
+                            <h3 class="font-playfair section-heading-title font-bold text-black text-sm uppercase tracking-wider">
                                 <i class="fas fa-user-edit me-2 text-black"></i> THÔNG TIN KHÁCH HÀNG
                             </h3>
                             <div class="heading-line"></div>
@@ -1646,7 +1757,7 @@ onUnmounted(() => {
 
                         <!-- BƯỚC 2: Chọn Ngày, Giờ & Stylist cho Dịch vụ -->
                         <div class="section-heading-wrapper mt-10">
-                            <h3 class="font-heading section-heading-title font-bold text-black text-sm uppercase tracking-wider">
+                            <h3 class="font-playfair section-heading-title font-bold text-black text-sm uppercase tracking-wider">
                                 <i class="fas fa-calendar-check me-2 text-black"></i> ĐẶT LỊCH HẸN DỊCH VỤ
                             </h3>
                             <div class="heading-line"></div>
@@ -1693,39 +1804,78 @@ onUnmounted(() => {
                             </div>
                         </div>
 
-                        <!-- Chọn Stylist -->
+                        <!-- Chọn Stylist (ĐỒNG BỘ CHUẨN ĐẶT DỊCH VỤ) -->
                         <div class="mt-8" v-if="bookingData.selectedServices.length > 0">
                             <div class="section-heading-wrapper mt-4 mb-3">
-                                <h3 class="font-heading section-heading-title font-bold text-black text-sm uppercase tracking-wider">
+                                <h3 class="font-playfair section-heading-title font-bold text-black">
                                     <i class="fas fa-cut me-2 text-black"></i> CHỌN STYLIST
                                 </h3>
                                 <div class="heading-line"></div>
                             </div>
                             <p v-if="errors.stylist" class="error-msg-custom stylist-error-banner mb-3"><i class="fas fa-exclamation-triangle me-1.5"></i>{{ errors.stylist }}</p>
                             
-                            <div v-if="loadingStylists" class="mt-4 p-3 text-center text-gray-500 font-bold bg-gray-50 border border-gray-200">
-                                <i class="fas fa-spinner fa-spin me-2 text-black"></i> Đang tìm stylist phù hợp...
+                            <!-- Gợi ý chọn giờ -->
+                            <div v-if="!tempTime" class="mb-3 p-3 bg-amber-50/80 border border-amber-200/80 rounded-sm text-xs text-amber-900 flex items-center gap-2">
+                                <i class="fas fa-info-circle text-amber-600 text-sm flex-shrink-0"></i>
+                                <span>Vui lòng chọn <strong>Giờ hẹn</strong> bên trên để hệ thống kiểm tra ca làm và độ rảnh của từng Stylist.</span>
+                            </div>
+
+                            <div v-if="loadingStylists" class="mt-4 p-4 text-center text-gray-500 font-bold bg-gray-50 border rounded-sm">
+                                <i class="fas fa-spinner fa-spin me-2 text-black"></i> Đang tải lịch làm việc và kiểm tra ca thợ...
                             </div>
                             
                             <div v-else class="stylist-flex mt-3">
-                                <div v-for="stylist in stylists" :key="stylist.id" class="stylist-card" :class="{
-                                    'active': String(bookingData.stylistId) === String(stylist.id),
-                                    'is-disabled': !stylist.isAvailable
-                                }" @click="stylist.isAvailable ? (bookingData.stylistId = stylist.id, validateField('stylist')) : null"
-                                    :title="!stylist.isAvailable ? stylist.unAvailableReason : ''">
+                                <div v-for="stylist in stylists" :key="stylist.id" 
+                                    class="stylist-card" 
+                                    :class="{
+                                        'active': String(bookingData.stylistId) === String(stylist.id),
+                                        'is-busy': tempTime && !stylist.isAvailable,
+                                        'is-available': tempTime && stylist.isAvailable
+                                    }" 
+                                    @click="selectStylist(stylist)">
                                     
-                                    <div class="stylist-schedule-info" v-if="stylist.lichTrinh && stylist.lichTrinh.length > 0">
-                                        <div class="schedule-header">Ca Làm : {{ stylist.caLam }}</div>
-                                        <div class="schedule-group mt-2">
-                                            <div class="font-bold text-green-600 text-xs mb-1" style="font-size: 11px;"><i class="fas fa-check-circle me-1"></i>Lịch trống:</div>
-                                            <div v-for="(line, index) in stylist.lichTrinh.filter((l: string) => l.includes('Lịch trống'))" :key="'free-'+index" class="schedule-line text-green-700 font-medium">
-                                                {{ line.replace('Lịch trống:', '').trim() }}
-                                            </div>
+                                    <div class="stylist-schedule-info" v-if="stylist.caLam || (stylist.lichTrinh && stylist.lichTrinh.length > 0)">
+                                        <div class="schedule-header flex items-center justify-between gap-1 pb-1 mb-1.5 border-b border-gray-100">
+                                            <span class="truncate font-bold text-[10px] text-gray-800" :title="stylist.caLam">
+                                                <i class="far fa-clock text-[9px] text-gray-400 me-0.5"></i>{{ stylist.caLam || 'Có ca làm' }}
+                                            </span>
+                                            <span :class="(!tempTime || stylist.isAvailable) ? 'text-green-700 bg-green-100 border-green-300' : 'text-red-600 bg-red-100 border-red-300'" 
+                                                class="px-1.5 py-0.5 rounded border text-[8px] font-extrabold uppercase shrink-0">
+                                                {{ tempTime ? (stylist.isAvailable ? 'Rảnh' : 'Bận') : 'Sẵn sàng' }}
+                                            </span>
                                         </div>
-                                        <div class="schedule-group mt-2 pt-2 border-t border-gray-200 border-dashed" v-if="stylist.lichTrinh.some((l: string) => l.includes('Có hẹn'))">
-                                            <div class="font-bold text-red-500 text-xs mb-1" style="font-size: 11px;"><i class="fas fa-calendar-times me-1"></i>Ca bận:</div>
-                                            <div v-for="(line, index) in stylist.lichTrinh.filter((l: string) => l.includes('Có hẹn'))" :key="'busy-'+index" class="schedule-line text-red-500 opacity-80">
-                                                {{ line.replace('Có hẹn:', '').trim() }}
+
+                                        <!-- Phân tách rõ ràng: Khung giờ Rảnh vs Khung giờ Bận -->
+                                        <div class="schedule-sections flex flex-col gap-1 text-left">
+                                            <!-- 1. KHUNG GIỜ RẢNH (XANH LÁ) -->
+                                            <div v-if="getFreeSlots(stylist).length > 0" class="schedule-box free-box">
+                                                <div class="box-title text-green-700 font-bold text-[9px] flex items-center gap-1">
+                                                    <i class="fas fa-check-circle text-[8px] text-green-600"></i>
+                                                    <span>{{ tempTime ? 'Giờ rảnh:' : 'Lịch trống:' }}</span>
+                                                </div>
+                                                <div class="box-content flex flex-col gap-0.5 mt-0.5">
+                                                    <span v-for="(slot, sIdx) in getFreeSlots(stylist)" :key="'free-'+sIdx" class="slot-text text-green-800 text-[9px] font-medium leading-tight truncate" :title="slot">
+                                                        {{ slot }}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <!-- 2. KHUNG GIỜ BẬN / CÓ HẸN (ĐỎ) -->
+                                            <div v-if="getBusySlots(stylist).length > 0" class="schedule-box busy-box">
+                                                <div class="box-title text-red-600 font-bold text-[9px] flex items-center gap-1">
+                                                    <i class="fas fa-calendar-times text-[8px] text-red-500"></i>
+                                                    <span>{{ tempTime ? 'Giờ bận:' : 'Đã có hẹn:' }}</span>
+                                                </div>
+                                                <div class="box-content flex flex-col gap-0.5 mt-0.5">
+                                                    <span v-for="(slot, sIdx) in getBusySlots(stylist)" :key="'busy-'+sIdx" class="slot-text text-red-700 text-[9px] font-medium leading-tight truncate" :title="slot">
+                                                        {{ slot }}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <!-- 3. NGHỈ CA HÔM NAY -->
+                                            <div v-if="stylist.lichTrinh && stylist.lichTrinh.some((l: string) => l.includes('Không có ca làm'))" class="schedule-box off-box">
+                                                <span class="text-gray-500 text-[9px] italic block text-center">Nghỉ ca hôm nay</span>
                                             </div>
                                         </div>
                                     </div>
@@ -1736,29 +1886,24 @@ onUnmounted(() => {
                                         <div v-if="stylist.isFavorite" class="favorite-heart-badge">
                                             <i class="fas fa-heart"></i>
                                         </div>
+                                        <div v-if="tempTime && !stylist.isAvailable" class="busy-badge-corner" title="Đang bận hoặc ngoài ca làm">
+                                            <i class="fas fa-ban"></i>
+                                        </div>
                                     </div>
 
                                     <div class="stylist-meta mt-auto">
                                         <span class="s-name font-bold">{{ stylist.name }}</span>
-
-                                        <template v-if="stylist.isAvailable">
-                                            <span class="s-role text-black">{{ stylist.role }}</span>
-                                            <div class="stylist-rating-badge">
-                                                <span class="rating-val">{{ stylist.rating?.toFixed(1) || '5.0' }}</span>
-                                                <i class="fas fa-star rating-star-icon"></i>
-                                            </div>
-                                        </template>
-
-                                        <template v-else>
-                                            <span class="font-bold mt-1 text-center text-red-500 text-xs">
-                                                {{ stylist.unAvailableReason }}
-                                            </span>
-                                        </template>
+                                        <span class="s-role text-black">{{ stylist.role || 'Stylist' }}</span>
+                                        <div class="stylist-rating-badge" v-if="stylist.rating">
+                                            <span class="rating-val">{{ stylist.rating?.toFixed(1) || '5.0' }}</span>
+                                            <i class="fas fa-star rating-star-icon"></i>
+                                        </div>
                                     </div>
                                 </div>
 
-                                <div v-if="stylists.length === 0" class="w-full p-4 text-center text-red-500 border border-red-200 bg-red-50">
-                                    {{ stylistMessage || 'Không có stylist khả dụng. Vui lòng chọn ngày hoặc giờ khác!' }}
+                                <div v-if="stylists.length === 0" class="w-full p-6 text-center text-gray-500 border border-gray-200 bg-gray-50 rounded-sm">
+                                    <i class="far fa-calendar-times text-2xl text-gray-400 mb-2 block"></i>
+                                    {{ stylistMessage || 'Ngày này tiệm chưa có danh sách Stylist làm việc. Bạn vui lòng chọn ngày khác nhé!' }}
                                 </div>
                             </div>
                         </div>
@@ -1766,7 +1911,7 @@ onUnmounted(() => {
                         <!-- BƯỚC 3: Nhận sản phẩm (Nếu giỏ hàng có sản phẩm) -->
                         <div v-if="productItems.length > 0" class="mt-10">
                             <div class="section-heading-wrapper">
-                                <h3 class="font-heading section-heading-title font-bold text-black text-sm uppercase tracking-wider">
+                                <h3 class="font-playfair section-heading-title font-bold text-black text-sm uppercase tracking-wider">
                                     <i class="fas fa-shipping-fast me-2 text-black"></i> HÌNH THỨC NHẬN SẢN PHẨM
                                 </h3>
                                 <div class="heading-line"></div>
@@ -1890,7 +2035,7 @@ onUnmounted(() => {
                         <!-- KHO VOUCHER -->
                         <div class="mt-8">
                             <div class="section-heading-wrapper">
-                                <h3 class="font-heading section-heading-title font-bold text-black text-sm uppercase tracking-wider">
+                                <h3 class="font-playfair section-heading-title font-bold text-black text-sm uppercase tracking-wider">
                                     <i class="fas fa-ticket-alt me-2 text-black"></i> KHO VOUCHER CỦA BẠN
                                 </h3>
                                 <div class="heading-line"></div>
@@ -1934,7 +2079,7 @@ onUnmounted(() => {
                     <div class="sticky-bill">
                         <div class="glass-card bill-card">
                             <div class="section-heading-wrapper justify-content-center text-center mb-4">
-                                <h3 class="font-heading section-heading-title font-bold text-black text-sm uppercase tracking-wider">
+                                <h3 class="font-playfair section-heading-title font-bold text-black text-sm uppercase tracking-wider">
                                     <i class="fas fa-file-invoice-dollar me-2 text-black"></i> CHI TIẾT ĐƠN HÀNG
                                 </h3>
                                 <div class="heading-line mx-auto" style="width: 80px;"></div>
@@ -2413,33 +2558,109 @@ textarea.booking-input {
     color: var(--text-primary);
 }
 
-/* Stylist Selection */
+/* Stylist Selection (ĐỒNG BỘ CHUẨN DATDICHVU.VUE) */
 .stylist-flex {
     display: flex;
     gap: 16px;
     overflow-x: auto;
     padding: 10px 4px;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
 }
 
 .stylist-flex::-webkit-scrollbar {
-    display: none;
+    height: 6px;
+}
+
+.stylist-flex::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.stylist-flex::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+.stylist-flex::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
 }
 
 .stylist-card {
-    flex: 0 0 120px;
+    flex: 0 0 160px;
     text-align: center;
     cursor: pointer;
     background: #ffffff;
     border: 1px solid var(--border-color);
-    border-radius: 0px;
-    padding: 16px 8px;
+    border-radius: 10px;
+    padding: 12px 8px 14px 8px;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.01);
     display: flex;
     flex-direction: column;
     align-items: center;
+}
+
+.stylist-schedule-info {
+    position: relative; 
+    background-color: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 6px 8px;
+    margin-bottom: 16px; 
+    width: 100%;
+    text-align: left;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.03);
+}
+
+.stylist-schedule-info::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 5px;
+    border-style: solid;
+    border-color: #ffffff transparent transparent transparent;
+    z-index: 2;
+}
+
+.stylist-schedule-info::before {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 6px;
+    border-style: solid;
+    border-color: #e2e8f0 transparent transparent transparent;
+    z-index: 1;
+}
+
+.schedule-header {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.schedule-box {
+    padding: 4px 6px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+}
+
+.schedule-box.free-box {
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+}
+
+.schedule-box.busy-box {
+    background: #fef2f2;
+    border-color: #fecaca;
+}
+
+.schedule-box.off-box {
+    background: #f8fafc;
+    border-color: #e2e8f0;
 }
 
 .stylist-card:hover {
@@ -2452,6 +2673,46 @@ textarea.booking-input {
     border-color: var(--primary-color);
     background: var(--primary-light);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
+}
+
+.stylist-card.is-busy {
+    opacity: 0.55;
+    background: #f8fafc;
+    filter: grayscale(35%);
+    border-color: #e2e8f0;
+    cursor: not-allowed;
+}
+
+.stylist-card.is-busy:hover {
+    transform: none;
+    border-color: #cbd5e1;
+    box-shadow: none;
+}
+
+.stylist-card.is-available {
+    border-color: #bbf7d0;
+}
+
+.stylist-card.is-available:hover {
+    border-color: #22c55e;
+    box-shadow: 0 6px 16px rgba(34, 197, 94, 0.12);
+}
+
+.busy-badge-corner {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    background: #ef4444;
+    color: #ffffff;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    border: 2px solid #ffffff;
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.4);
 }
 
 .avatar-box {
@@ -2570,56 +2831,8 @@ textarea.booking-input {
     z-index: 2;
 }
 
-.stylist-schedule-info {
-    position: relative;
-    background-color: #ffffff;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    padding: 8px;
-    margin-bottom: 20px;
-    width: 100%;
-    text-align: center;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-}
-
-.stylist-schedule-info::after {
-    content: '';
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    border-width: 5px;
-    border-style: solid;
-    border-color: #ffffff transparent transparent transparent;
-    z-index: 2;
-}
-
-.stylist-schedule-info::before {
-    content: '';
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    border-width: 6px;
-    border-style: solid;
-    border-color: var(--border-color) transparent transparent transparent;
-    z-index: 1;
-}
-
-.schedule-header {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--text-primary);
-    margin-bottom: 4px;
-    border-bottom: 1px dashed var(--border-color);
-    padding-bottom: 4px;
-}
-
-.schedule-line {
-    font-size: 10px;
-    color: var(--text-secondary);
-    line-height: 1.4;
-    margin-top: 2px;
+.stylist-card:hover .favorite-heart-badge {
+    transform: scale(1.1);
 }
 
 .stylist-card.is-disabled {

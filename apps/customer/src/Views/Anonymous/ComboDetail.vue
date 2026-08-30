@@ -190,12 +190,11 @@ export default {
         duration: isComboArg ? (targetCombo.thoiGianLam) : totalDuration,
         type: 'COMBO'
       });
-      useBookingBasketStore().openDrawer();
     },
 
     bookNow() {
       this.addToBasket();
-      useBookingBasketStore().openDrawer();
+      this.$router.push('/cart');
     },
   },
 };

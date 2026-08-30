@@ -4,8 +4,6 @@ import Header from './components/Header.vue';
 import Breadcrumb from './components/Breadcrumb.vue';
 import Footer from './components/Footer.vue';
 import ChatbotOverlay from './components/ChatbotOverlay.vue';
-import BookingBasketDrawer from './components/BookingBasketDrawer.vue';
-import BookingBasketBar from './components/BookingBasketBar.vue';
 import CheckoutOptionModal from '@/Views/Anonymous/CheckoutOptionModal.vue';
 import { useBookingBasketStore } from '@/stores/useBookingBasketStore';
 
@@ -32,8 +30,6 @@ const handleCheckoutOption = (payload: { loaiCheckout: string }) => {
     <Footer />
     
     <ChatbotOverlay />
-    <BookingBasketDrawer />
-    <BookingBasketBar />
 
     <CheckoutOptionModal 
       :isOpen="bookingStore.showCheckoutOptionModal"
