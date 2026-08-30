@@ -407,9 +407,9 @@ const addToCart = async (rawItem: any) => {
 // =====================================================================
 // THÊM DỊCH VỤ VÀO KHAY ĐẶT LỊCH (Booking Basket) — KHÔNG qua API Cart
 // =====================================================================
-const addToBasket = (rawItem: any) => {
+const addToBasket = async (rawItem: any) => {
   bookingBasketStore.addItem(rawItem);
-  bookingBasketStore.openDrawer();
+  await addToCart(rawItem);
 };
 // =======================
 // MOUNT

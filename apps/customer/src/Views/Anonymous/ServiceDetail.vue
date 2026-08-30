@@ -189,12 +189,11 @@ export default {
         duration: targetService.thoiGianLam || 30,
       });
       showToast(`Đã thêm "${targetService.tenDv || targetService.tenCombo}" vào giỏ đặt lịch!`, "success");
-      this.bookingBasketStore.openDrawer();
     },
 
     bookNow() {
       this.addToBasket();
-      this.bookingBasketStore.openDrawer();
+      this.$router.push('/cart');
     },
   },
 };

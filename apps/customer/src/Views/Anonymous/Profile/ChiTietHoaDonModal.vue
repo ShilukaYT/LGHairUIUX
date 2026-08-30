@@ -55,27 +55,50 @@ const formatTime = (timeStr) => {
   return timeStr.substring(0, 5);
 };
 
+const normalizeStatus = (status) => {
+  if (status === null || status === undefined) return 'cancelled';
+  const str = String(status).toLowerCase().trim();
+  if (str === '0' || str === '-1' || str === 'cancelled' || str === 'da huy' || str === 'dahuy' || str === 'da_huy') return 'cancelled';
+  if (str === '1' || str === 'pending' || str === 'coc' || str === 'da coc 10%' || str === 'dacoc') return 'pending';
+  if (str === '2' || str === 'paid-full' || str === 'paid' || str === 'da thanh toan' || str === 'dathanhtoan' || str === 'da tra 100%') return 'paid-full';
+  if (str === '3' || str === 'completed' || str === 'hoan thanh' || str === 'hoanthanh') return 'completed';
+  if (str === '4' || str === 'waiting' || str === 'cho hoan tien' || str === 'chohoantien' || str === 'refunding') return 'waiting';
+  if (str === '5' || str === 'refunded' || str === 'da hoan tien' || str === 'dahoantien' || str === '6') return 'refunded';
+  return str;
+};
+
 const getStatusText = (status) => {
-  if (status === 0) return 'Đã hủy';
-  if (status === 1) return 'Đã cọc 10%';
-  if (status === 2) return 'Đã trả 100%';
-  if (status === 3) return 'Hoàn thành';
-  return 'Đang xử lý';
+  const norm = normalizeStatus(status);
+  const map = {
+    cancelled: 'Đã hủy',
+    pending: 'Đã cọc 10%',
+    'paid-full': 'Đã trả 100%',
+    completed: 'Hoàn thành',
+    waiting: 'Chờ hoàn tiền',
+    refunded: 'Đã hoàn tiền'
+  };
+  return map[norm] || 'Đang xử lý';
 };
 
 const getStatusBadgeClass = (status) => {
-  if (status === 0) return 'bg-red-50 text-red-800 border-red-200';
-  if (status === 1) return 'bg-yellow-50 text-yellow-800 border-yellow-200';
-  if (status === 2) return 'bg-blue-50 text-blue-800 border-blue-200';
-  if (status === 3) return 'bg-green-50 text-green-800 border-green-200';
+  const norm = normalizeStatus(status);
+  if (norm === 'pending') return 'bg-yellow-50 text-yellow-800 border-yellow-200';
+  if (norm === 'paid-full') return 'bg-blue-50 text-blue-800 border-blue-200';
+  if (norm === 'completed') return 'bg-green-50 text-green-800 border-green-200';
+  if (norm === 'waiting') return 'bg-orange-50 text-orange-800 border-orange-200';
+  if (norm === 'refunded') return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+  if (norm === 'cancelled') return 'bg-red-50 text-red-800 border-red-200';
   return 'bg-gray-50 text-gray-800 border-gray-200';
 };
 
 const getStatusDotClass = (status) => {
-  if (status === 0) return 'bg-red-500';
-  if (status === 1) return 'bg-yellow-500';
-  if (status === 2) return 'bg-blue-500';
-  if (status === 3) return 'bg-green-500';
+  const norm = normalizeStatus(status);
+  if (norm === 'pending') return 'bg-yellow-500';
+  if (norm === 'paid-full') return 'bg-blue-500';
+  if (norm === 'completed') return 'bg-green-500';
+  if (norm === 'waiting') return 'bg-orange-500';
+  if (norm === 'refunded') return 'bg-emerald-500';
+  if (norm === 'cancelled') return 'bg-red-500';
   return 'bg-gray-500';
 };
 

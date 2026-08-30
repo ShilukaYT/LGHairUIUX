@@ -66,32 +66,61 @@ const formatPrice = (price) => {
   return price != null ? Number(price).toLocaleString('vi-VN') + 'đ' : '0đ';
 };
 
+const normalizeStatus = (status) => {
+  if (status === null || status === undefined) return 'cancelled';
+  const str = String(status).toLowerCase().trim();
+  if (str === '0' || str === '-1' || str === 'cancelled' || str === 'da huy' || str === 'dahuy' || str === 'da_huy') return 'cancelled';
+  if (str === '1' || str === 'pending' || str === 'coc' || str === 'da coc 10%' || str === 'dacoc') return 'pending';
+  if (str === '2' || str === 'paid-full' || str === 'paid' || str === 'da thanh toan' || str === 'dathanhtoan' || str === 'da tra 100%') return 'paid-full';
+  if (str === '3' || str === 'completed' || str === 'hoan thanh' || str === 'hoanthanh') return 'completed';
+  if (str === '4' || str === 'waiting' || str === 'cho hoan tien' || str === 'chohoantien' || str === 'refunding') return 'waiting';
+  if (str === '5' || str === 'refunded' || str === 'da hoan tien' || str === 'dahoantien' || str === '6') return 'refunded';
+  return str;
+};
+
 const statusText = (status) => {
+  const norm = normalizeStatus(status);
   const map = {
+    cancelled: 'Đã hủy',
     pending: 'Đã cọc 10%',
     'paid-full': 'Đã trả 100%',
     completed: 'Hoàn thành',
-    cancelled: 'Đã hủy'
+    waiting: 'Chờ hoàn tiền',
+    refunded: 'Đã hoàn tiền'
   };
-  return map[status] || 'Đang xử lý';
+  return map[norm] || 'Đang xử lý';
 };
 
 const getStatusBadgeClass = (status) => {
-  const s = status?.toLowerCase() || '';
-  if (s === 'pending') return 'bg-yellow-50 text-yellow-800 border-yellow-200';
-  if (s === 'paid-full') return 'bg-blue-50 text-blue-800 border-blue-200';
-  if (s === 'completed') return 'bg-green-50 text-green-800 border-green-200';
-  if (s === 'cancelled') return 'bg-red-50 text-red-800 border-red-200';
+  const norm = normalizeStatus(status);
+  if (norm === 'pending') return 'bg-yellow-50 text-yellow-800 border-yellow-200';
+  if (norm === 'paid-full') return 'bg-blue-50 text-blue-800 border-blue-200';
+  if (norm === 'completed') return 'bg-green-50 text-green-800 border-green-200';
+  if (norm === 'waiting') return 'bg-orange-50 text-orange-800 border-orange-200';
+  if (norm === 'refunded') return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+  if (norm === 'cancelled') return 'bg-red-50 text-red-800 border-red-200';
   return 'bg-gray-50 text-gray-800 border-gray-200';
 };
 
 const getStatusDotClass = (status) => {
-  const s = status?.toLowerCase() || '';
-  if (s === 'pending') return 'bg-yellow-500';
-  if (s === 'paid-full') return 'bg-blue-500';
-  if (s === 'completed') return 'bg-green-500';
-  if (s === 'cancelled') return 'bg-red-500';
+  const norm = normalizeStatus(status);
+  if (norm === 'pending') return 'bg-yellow-500';
+  if (norm === 'paid-full') return 'bg-blue-500';
+  if (norm === 'completed') return 'bg-green-500';
+  if (norm === 'waiting') return 'bg-orange-500';
+  if (norm === 'refunded') return 'bg-emerald-500';
+  if (norm === 'cancelled') return 'bg-red-500';
   return 'bg-gray-500';
+};
+
+const canReschedule = (status) => {
+  const norm = normalizeStatus(status);
+  return norm === 'pending' || norm === 'paid-full';
+};
+
+const canCancel = (status) => {
+  const norm = normalizeStatus(status);
+  return norm === 'pending' || norm === 'paid-full';
 };
 
 // Reset page to 1 on filters change
@@ -105,7 +134,10 @@ const filteredData = computed(() => {
 
   // Status Tab Filter
   if (currentTab.value !== 'all') {
-    data = data.filter(i => i.status === currentTab.value);
+    data = data.filter(i => {
+      const norm = normalizeStatus(i.status ?? i.trangThai);
+      return norm === currentTab.value;
+    });
   }
 
   // Date Filter
@@ -229,8 +261,11 @@ const handleRescheduleSuccess = async () => {
       <button 
         v-for="tab in [
           { key: 'all', label: 'Tất cả' },
-          { key: 'pending', label: 'Chờ xử lý' },
+          { key: 'pending', label: 'Đã cọc 10%' },
+          { key: 'paid-full', label: 'Đã trả 100%' },
           { key: 'completed', label: 'Hoàn thành' },
+          { key: 'waiting', label: 'Chờ hoàn tiền' },
+          { key: 'refunded', label: 'Đã hoàn tiền' },
           { key: 'cancelled', label: 'Đã hủy' }
         ]"
         :key="tab.key"
@@ -277,22 +312,22 @@ const handleRescheduleSuccess = async () => {
               </td>
               <td class="py-4 px-4 text-xs font-bold text-black whitespace-nowrap font-mono">{{ formatPrice(item.amount) }}</td>
               <td class="py-4 px-4 text-xs whitespace-nowrap">
-                <span :class="['inline-flex items-center px-3 py-1 text-[9px] uppercase tracking-widest font-bold rounded-full border', getStatusBadgeClass(item.status)]">
-                  <span class="w-1.5 h-1.5 rounded-full mr-1.5 shrink-0" :class="getStatusDotClass(item.status)"></span>
-                  {{ statusText(item.status) }}
+                <span :class="['inline-flex items-center px-3 py-1 text-[9px] uppercase tracking-widest font-bold rounded-full border', getStatusBadgeClass(item.status ?? item.trangThai)]">
+                  <span class="w-1.5 h-1.5 rounded-full mr-1.5 shrink-0" :class="getStatusDotClass(item.status ?? item.trangThai)"></span>
+                  {{ statusText(item.status ?? item.trangThai) }}
                 </span>
               </td>
               <td class="py-4 px-4 text-xs text-right whitespace-nowrap">
                 <div class="flex items-center justify-end gap-1.5">
                   <button 
-                    v-if="item.status === 'pending' || item.status === 'paid-full'" 
+                    v-if="canReschedule(item.status ?? item.trangThai)" 
                     @click.stop="rescheduleOrder(item.id)"
                     class="inline-flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 px-2.5 py-1.5 text-[9px] uppercase tracking-wider font-bold transition-all duration-200 rounded-sm whitespace-nowrap shrink-0"
                   >
                     <CalendarClock :size="12" /> Dời lịch
                   </button>
                   <button 
-                    v-if="item.status === 'pending'" 
+                    v-if="canCancel(item.status ?? item.trangThai)" 
                     @click.stop="cancelOrder(item.id)"
                     class="inline-flex items-center gap-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-2.5 py-1.5 text-[9px] uppercase tracking-wider font-bold transition-all duration-200 rounded-sm whitespace-nowrap shrink-0"
                   >

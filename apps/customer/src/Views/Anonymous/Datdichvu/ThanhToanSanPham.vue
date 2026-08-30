@@ -664,13 +664,11 @@ const handleCheckout = async () => {
             // Xóa từng món cụ thể vừa đặt để không dính lỗi maKH (GUEST vs User)
             try {
                 for (const item of productItems.value) {
-                    await removeFromCartDB(item.id);
+                    await removeFromCartDB(item.id, 'SANPHAM');
                 }
             } catch(e) {
                 console.error("Lỗi xóa db giỏ hàng", e);
             }
-            
-            await clearCartDB(customer?.maKH || 'GUEST'); // Backup xóa thêm theo luồng cũ
             
             productItems.value = [];                 // Làm rỗng mảng hiển thị hiện tại
 
