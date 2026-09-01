@@ -63,7 +63,7 @@ const formatDate = (dateStr) => {
 };
 
 const formatPrice = (price) => {
-  return price != null ? Number(price).toLocaleString('vi-VN') + 'đ' : '0đ';
+  return price != null ? Number(price).toLocaleString('vi-VN') + ' đ' : '0 đ';
 };
 
 const normalizeStatus = (status) => {
@@ -73,8 +73,10 @@ const normalizeStatus = (status) => {
   if (str === '1' || str === 'pending' || str === 'coc' || str === 'da coc 10%' || str === 'dacoc') return 'pending';
   if (str === '2' || str === 'paid-full' || str === 'paid' || str === 'da thanh toan' || str === 'dathanhtoan' || str === 'da tra 100%') return 'paid-full';
   if (str === '3' || str === 'completed' || str === 'hoan thanh' || str === 'hoanthanh') return 'completed';
-  if (str === '4' || str === 'waiting' || str === 'cho hoan tien' || str === 'chohoantien' || str === 'refunding') return 'waiting';
-  if (str === '5' || str === 'refunded' || str === 'da hoan tien' || str === 'dahoantien' || str === '6') return 'refunded';
+  if (str === '4' || str === 'tam huy' || str === 'tamhuy' || str === 'tam_huy') return 'temp-cancelled';
+  if (str === '5' || str === 'waiting' || str === 'cho hoan tien' || str === 'chohoantien' || str === 'refunding') return 'waiting';
+  if (str === '6' || str === 'refunded' || str === 'da hoan tien' || str === 'dahoantien') return 'refunded';
+  if (str === '9' || str === 'rescheduled' || str === 'doi lich' || str === 'doilich' || str === 'da doi lich') return 'rescheduled';
   return str;
 };
 
@@ -85,42 +87,48 @@ const statusText = (status) => {
     pending: 'Đã cọc 10%',
     'paid-full': 'Đã trả 100%',
     completed: 'Hoàn thành',
+    'temp-cancelled': 'Tạm hủy (Trễ hẹn)',
     waiting: 'Chờ hoàn tiền',
-    refunded: 'Đã hoàn tiền'
+    refunded: 'Đã hoàn tiền',
+    rescheduled: 'Đã dời lịch'
   };
   return map[norm] || 'Đang xử lý';
 };
 
 const getStatusBadgeClass = (status) => {
   const norm = normalizeStatus(status);
-  if (norm === 'pending') return 'bg-yellow-50 text-yellow-800 border-yellow-200';
+  if (norm === 'pending') return 'bg-amber-50 text-amber-800 border-amber-200';
   if (norm === 'paid-full') return 'bg-blue-50 text-blue-800 border-blue-200';
-  if (norm === 'completed') return 'bg-green-50 text-green-800 border-green-200';
-  if (norm === 'waiting') return 'bg-orange-50 text-orange-800 border-orange-200';
-  if (norm === 'refunded') return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+  if (norm === 'completed') return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+  if (norm === 'temp-cancelled') return 'bg-rose-50 text-rose-800 border-rose-200 font-bold';
+  if (norm === 'waiting') return 'bg-orange-50 text-orange-800 border-orange-200 font-semibold';
+  if (norm === 'refunded') return 'bg-teal-50 text-teal-800 border-teal-200 font-semibold';
+  if (norm === 'rescheduled') return 'bg-indigo-50 text-indigo-800 border-indigo-200 font-semibold';
   if (norm === 'cancelled') return 'bg-red-50 text-red-800 border-red-200';
   return 'bg-gray-50 text-gray-800 border-gray-200';
 };
 
 const getStatusDotClass = (status) => {
   const norm = normalizeStatus(status);
-  if (norm === 'pending') return 'bg-yellow-500';
+  if (norm === 'pending') return 'bg-amber-500';
   if (norm === 'paid-full') return 'bg-blue-500';
-  if (norm === 'completed') return 'bg-green-500';
-  if (norm === 'waiting') return 'bg-orange-500';
-  if (norm === 'refunded') return 'bg-emerald-500';
+  if (norm === 'completed') return 'bg-emerald-500';
+  if (norm === 'temp-cancelled') return 'bg-rose-600 animate-pulse';
+  if (norm === 'waiting') return 'bg-orange-500 animate-pulse';
+  if (norm === 'refunded') return 'bg-teal-500';
+  if (norm === 'rescheduled') return 'bg-indigo-500';
   if (norm === 'cancelled') return 'bg-red-500';
-  return 'bg-gray-500';
+  return 'bg-gray-400';
 };
 
 const canReschedule = (status) => {
   const norm = normalizeStatus(status);
-  return norm === 'pending' || norm === 'paid-full';
+  return norm === 'pending' || norm === 'paid-full' || norm === 'temp-cancelled';
 };
 
 const canCancel = (status) => {
   const norm = normalizeStatus(status);
-  return norm === 'pending' || norm === 'paid-full';
+  return norm === 'pending' || norm === 'paid-full' || norm === 'temp-cancelled';
 };
 
 // Reset page to 1 on filters change
@@ -331,7 +339,7 @@ const handleRescheduleSuccess = async () => {
                     @click.stop="cancelOrder(item.id)"
                     class="inline-flex items-center gap-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-2.5 py-1.5 text-[9px] uppercase tracking-wider font-bold transition-all duration-200 rounded-sm whitespace-nowrap shrink-0"
                   >
-                    <XCircle :size="12" /> Hủy đơn
+                    <XCircle :size="12" /> {{ normalizeStatus(item.status ?? item.trangThai) === 'temp-cancelled' ? 'Hoàn tiền' : 'Hủy đơn' }}
                   </button>
                 </div>
               </td>

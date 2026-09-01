@@ -250,24 +250,40 @@ const paginatedData = computed(() => {
   return filteredData.value.slice(start, start + itemsPerPage);
 });
 
-const openDetail = async (id: string) => {
+const openDetail = async (id: string, fallbackItem?: any) => {
   selectedOrderId.value = id;
   isModalOpen.value = true;
   isModalLoading.value = true;
+  
+  if (fallbackItem) {
+    orderDetail.value = { ...fallbackItem };
+  }
+
   try {
     const res = await axios.get(`${API_BASE_URL}/api/DonHangSanPham/chi-tiet/${id}`, {
       headers: getAuthHeaders()
     });
-    orderDetail.value = res.data;
+    
+    let raw = res.data;
+    if (raw && raw.data && !raw.id && !raw.maHd) {
+      raw = raw.data;
+    }
+    
+    orderDetail.value = {
+      ...(fallbackItem || {}),
+      ...(raw || {})
+    };
   } catch (error) {
     console.error("Lỗi khi tải chi tiết sản phẩm:", error);
-    Swal.fire({
-      icon: 'error',
-      title: 'Thất bại',
-      text: 'Không thể tải thông tin chi tiết đơn hàng này.',
-      confirmButtonColor: '#000'
-    });
-    closeModal();
+    if (!fallbackItem) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Thất bại',
+        text: 'Không thể tải thông tin chi tiết đơn hàng này.',
+        confirmButtonColor: '#000'
+      });
+      closeModal();
+    }
   } finally {
     isModalLoading.value = false;
   }
@@ -379,32 +395,45 @@ const getTabClass = (tabKey: string) => {
   return 'border-transparent text-gray-400 hover:text-black hover:border-gray-300';
 };
 
-const getStatusBadgeClass = (status?: string) => {
-  const s = status?.toLowerCase() || '';
+const normalizeProductStatus = (status: any): string => {
+  if (status === null || status === undefined) return 'pending';
+  const str = String(status).trim().toLowerCase();
+  if (str === '0' || str === '-1' || str === 'cancelled' || str === 'da huy' || str === 'dahuy' || str === 'da_huy') return 'cancelled';
+  if (str === '1' || str === 'pending' || str === 'cho xu ly' || str === 'choxuly' || str === 'cho_xu_ly') return 'pending';
+  if (str === '2' || str === 'shipping' || str === 'dang giao' || str === 'danggiao' || str === 'dang_giao' || str === 'dang giao hang') return 'shipping';
+  if (str === '3' || str === 'completed' || str === 'da giao' || str === 'dagiao' || str === 'da_giao' || str === 'da giao hang' || str === 'hoan thanh' || str === 'hoanthanh') return 'completed';
+  if (str === '4' || str === 'returning' || str === 'dang hoan hang' || str === 'danghoanhang' || str === 'yeu cau hoan tien' || str === 'cho hoan tien') return 'returning';
+  if (str === '5' || str === 'returned' || str === 'da nhan hang' || str === 'danhanhang' || str === 'cho salon hoan tien') return 'returned';
+  if (str === '6' || str === 'refunded' || str === 'da hoan tien' || str === 'dahoantien') return 'refunded';
+  return str;
+};
+
+const getStatusBadgeClass = (status?: any) => {
+  const s = normalizeProductStatus(status);
   if (s === 'pending') return 'bg-amber-50 text-amber-900 border-amber-200';
   if (s === 'shipping') return 'bg-blue-50 text-blue-900 border-blue-200';
   if (s === 'completed') return 'bg-emerald-50 text-emerald-900 border-emerald-200';
   if (s === 'returning') return 'bg-orange-50 text-orange-900 border-orange-200';
   if (s === 'returned') return 'bg-purple-50 text-purple-900 border-purple-200';
-  if (s === 'refunded') return 'bg-emerald-50 text-emerald-900 border-emerald-200';
+  if (s === 'refunded') return 'bg-teal-50 text-teal-900 border-teal-200';
   if (s === 'cancelled') return 'bg-rose-50 text-rose-900 border-rose-200';
   return 'bg-gray-50 text-gray-800 border-gray-200';
 };
 
-const getStatusDotClass = (status?: string) => {
-  const s = status?.toLowerCase() || '';
+const getStatusDotClass = (status?: any) => {
+  const s = normalizeProductStatus(status);
   if (s === 'pending') return 'bg-amber-500';
   if (s === 'shipping') return 'bg-blue-500';
   if (s === 'completed') return 'bg-emerald-500';
   if (s === 'returning') return 'bg-orange-500';
   if (s === 'returned') return 'bg-purple-500';
-  if (s === 'refunded') return 'bg-emerald-500';
+  if (s === 'refunded') return 'bg-teal-500';
   if (s === 'cancelled') return 'bg-rose-500';
   return 'bg-gray-400';
 };
 
-const statusText = (status?: string) => {
-  const s = status?.toLowerCase() || '';
+const statusText = (status?: any) => {
+  const s = normalizeProductStatus(status);
   if (s === 'pending') return 'Chờ xử lý';
   if (s === 'shipping') return 'Đang giao hàng';
   if (s === 'completed') return 'Đã giao hàng';
@@ -412,7 +441,7 @@ const statusText = (status?: string) => {
   if (s === 'returned') return 'Đã nhận hàng (Chờ hoàn tiền)';
   if (s === 'refunded') return 'Đã hoàn tiền';
   if (s === 'cancelled') return 'Đã hủy';
-  return status || 'N/A';
+  return String(status || 'Đang xử lý');
 };
 
 onMounted(async () => {
@@ -599,7 +628,7 @@ onMounted(async () => {
 
                   <!-- Nút Chi tiết -->
                   <button 
-                    @click="openDetail(item.id)" 
+                    @click="openDetail(item.id, item)" 
                     class="bg-gray-100 hover:bg-black hover:text-white text-gray-700 px-2.5 py-1.5 text-[9px] uppercase tracking-wider font-semibold rounded-lg transition-all duration-200 border border-gray-200 shrink-0"
                   >
                     Chi tiết
@@ -654,105 +683,117 @@ onMounted(async () => {
 
     <!-- Order Detail Modal -->
     <Teleport to="body">
-      <div v-if="isModalOpen" class="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto" @click.self="closeModal">
-        <div class="relative bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-100 flex flex-col max-h-[88vh] my-auto overflow-hidden text-neutral-900 animate-in fade-in duration-200">
-          <div class="flex justify-between items-center px-6 py-4 border-b border-gray-100 bg-white sticky top-0 z-10 shrink-0">
+      <div v-if="isModalOpen" class="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto font-sans" @click.self="closeModal">
+        <div class="relative bg-white w-full max-w-lg rounded-xl shadow-2xl border border-gray-100 flex flex-col max-h-[85vh] my-auto overflow-hidden text-neutral-900 animate-in fade-in duration-200 font-sans">
+          <!-- Modal Header -->
+          <div class="flex justify-between items-center px-5 py-3.5 border-b border-gray-100 bg-white sticky top-0 z-10 shrink-0">
             <div>
-              <h3 class="text-base font-bold text-gray-900">Chi tiết đơn hàng sản phẩm</h3>
-              <p class="text-xs text-gray-500 mt-0.5">Đơn hàng #{{ selectedOrderId }}</p>
+              <h3 class="text-sm font-black uppercase tracking-wider text-gray-900 font-sans">Chi tiết đơn hàng sản phẩm</h3>
+              <p class="text-[11px] text-gray-400 font-mono font-medium mt-0.5">ĐƠN HÀNG <strong class="text-gray-700 font-bold">#{{ selectedOrderId }}</strong></p>
             </div>
-            <button @click="closeModal" class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
+            <button @click="closeModal" class="w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
               <X class="w-4 h-4" />
             </button>
           </div>
 
-          <div class="p-6 space-y-5 overflow-y-auto flex-1" v-if="orderDetail">
-            <!-- Summary Info -->
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-gray-50/80 rounded-xl border border-gray-100 text-xs">
-              <div>
-                <span class="text-[10px] uppercase tracking-wider text-gray-400 block font-semibold">Ngày đặt</span>
-                <span class="font-semibold text-gray-800">{{ orderDetail.ngayDat || formatDate(orderDetail.ngayTao || orderDetail.date) }}</span>
-              </div>
-              <div>
-                <span class="text-[10px] uppercase tracking-wider text-gray-400 block font-semibold">Trạng thái</span>
-                <span :class="['inline-flex items-center px-2 py-0.5 mt-0.5 text-[9px] uppercase tracking-wider font-bold rounded-full border', getStatusBadgeClass(orderDetail.status || orderDetail.trangThaiText || orderDetail.trangThai)]">
-                  {{ statusText(orderDetail.status || orderDetail.trangThaiText || orderDetail.trangThai) }}
+
+                    <div class="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 font-sans" v-if="orderDetail">
+            <!-- 1. Thông tin tóm tắt đơn hàng -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 bg-gray-50/80 rounded-lg border border-gray-200/80 text-xs">
+              <div class="space-y-0.5">
+                <span class="text-[9.5px] uppercase tracking-wider text-gray-400 block font-bold">Ngày đặt</span>
+                <span class="font-bold text-gray-900">
+                  {{ formatDate(orderDetail.ngayTao || orderDetail.ngayDat || orderDetail.date || orderDetail.createdAt || orderDetail.NgayTao || orderDetail.NgayDat) }}
                 </span>
               </div>
-              <div>
-                <span class="text-[10px] uppercase tracking-wider text-gray-400 block font-semibold">Thanh toán</span>
-                <span class="font-semibold text-gray-800">{{ orderDetail.phuongThucThanhToan || 'Tiền mặt' }}</span>
+              <div class="space-y-0.5">
+                <span class="text-[9.5px] uppercase tracking-wider text-gray-400 block font-bold mb-0.5">Trạng thái</span>
+                <span :class="['inline-flex items-center px-2 py-0.5 text-[8.5px] uppercase tracking-wider font-extrabold rounded border shadow-xs', getStatusBadgeClass(orderDetail.status ?? orderDetail.trangThai ?? orderDetail.TrangThai ?? orderDetail.trangThaiText)]">
+                  <span class="w-1.5 h-1.5 rounded-full mr-1 shrink-0" :class="getStatusDotClass(orderDetail.status ?? orderDetail.trangThai ?? orderDetail.TrangThai ?? orderDetail.trangThaiText)"></span>
+                  {{ statusText(orderDetail.status ?? orderDetail.trangThai ?? orderDetail.TrangThai ?? orderDetail.trangThaiText) }}
+                </span>
               </div>
-              <div>
-                <span class="text-[10px] uppercase tracking-wider text-gray-400 block font-semibold">Tổng thanh toán</span>
-                <span class="font-bold text-red-600 font-mono">{{ formatPrice(orderDetail.thanhTien ?? orderDetail.tongThanhToan ?? orderDetail.tongTien) }}</span>
+              <div class="space-y-0.5">
+                <span class="text-[9.5px] uppercase tracking-wider text-gray-400 block font-bold">Thanh toán</span>
+                <span class="font-bold text-gray-900">{{ orderDetail.phuongThucThanhToan || orderDetail.PhuongThucThanhToan || orderDetail.phuongThuc || orderDetail.paymentMethod || 'Tiền mặt' }}</span>
+              </div>
+              <div class="space-y-0.5">
+                <span class="text-[9.5px] uppercase tracking-wider text-gray-400 block font-bold">Tổng thanh toán</span>
+                <span :class="['font-black text-xs font-mono', (normalizeProductStatus(orderDetail.status ?? orderDetail.trangThai ?? orderDetail.TrangThai) === 'completed' || normalizeProductStatus(orderDetail.status ?? orderDetail.trangThai ?? orderDetail.TrangThai) === 'refunded') ? 'text-emerald-600' : 'text-red-600']">
+                  {{ formatPrice(orderDetail.thanhTien ?? orderDetail.ThanhTien ?? orderDetail.tongTien ?? orderDetail.TongTien ?? orderDetail.amount ?? orderDetail.Amount ?? orderDetail.tongThanhToan) }}
+                </span>
               </div>
             </div>
 
-            <!-- Delivery Info Card -->
-            <div class="p-4 bg-amber-50/60 rounded-xl border border-amber-200/70 text-xs space-y-2">
+            <!-- 2. Thông tin giao hàng & Vận đơn -->
+            <div v-if="orderDetail.tenNguoiNhan || orderDetail.diaChiGiao || orderDetail.diaChi || orderDetail.sdt || orderDetail.donViVanChuyen" class="p-3 bg-amber-50/60 border border-amber-200/70 rounded-lg text-xs space-y-2">
               <div class="flex items-center justify-between">
-                <div class="flex items-center gap-2 text-amber-950 font-bold">
-                  <MapPin :size="15" class="text-amber-700 shrink-0" />
-                  <span class="text-[11px] uppercase tracking-wider">Thông tin giao hàng</span>
+                <div class="flex items-center gap-1.5 text-amber-950 font-bold">
+                  <MapPin :size="14" class="text-amber-700 shrink-0" />
+                  <span class="text-[10px] uppercase tracking-wider">Thông tin giao nhận</span>
                 </div>
-                <span v-if="orderDetail.donViVanChuyen" class="text-[10px] px-2.5 py-0.5 bg-white border border-amber-200 text-amber-900 rounded-full font-semibold shadow-2xs">
-                  {{ orderDetail.donViVanChuyen }} <span v-if="orderDetail.maVanDon">| {{ orderDetail.maVanDon }}</span>
+                <span v-if="orderDetail.donViVanChuyen || orderDetail.DonViVanChuyen" class="text-[9.5px] px-2 py-0.5 bg-white border border-amber-200 text-amber-900 rounded-full font-semibold shadow-2xs">
+                  {{ orderDetail.donViVanChuyen || orderDetail.DonViVanChuyen }} <span v-if="orderDetail.maVanDon || orderDetail.MaVanDon">| {{ orderDetail.maVanDon || orderDetail.MaVanDon }}</span>
                 </span>
               </div>
-              <div class="text-gray-800 text-xs leading-relaxed pl-5 space-y-1">
-                <p class="font-semibold text-gray-900">
-                  Người nhận: {{ orderDetail.tenNguoiNhan || 'Khách hàng' }} 
-                  <span v-if="orderDetail.sdtNhan" class="text-gray-500 font-normal">({{ orderDetail.sdtNhan }})</span>
+              <div class="text-gray-800 text-xs leading-relaxed space-y-0.5">
+                <p class="font-bold text-gray-900" v-if="orderDetail.tenNguoiNhan || orderDetail.hoTen">
+                  Người nhận: <span class="font-semibold text-gray-800">{{ orderDetail.tenNguoiNhan || orderDetail.hoTen }}</span>
+                  <span v-if="orderDetail.sdtNhan || orderDetail.sdt || orderDetail.soDienThoai" class="text-gray-500 font-normal ml-1">({{ orderDetail.sdtNhan || orderDetail.sdt || orderDetail.soDienThoai }})</span>
                 </p>
-                <p class="text-gray-600">
-                  Địa chỉ giao: <span class="font-medium text-gray-800">{{ orderDetail.diaChiGiao || orderDetail.diaChiNhan || orderDetail.diaChi || 'Tại cửa hàng / Chưa cập nhật' }}</span>
+                <p class="text-gray-600 font-medium" v-if="orderDetail.diaChiGiao || orderDetail.diaChiNhan || orderDetail.diaChi">
+                  Địa chỉ: <span class="text-gray-800">{{ orderDetail.diaChiGiao || orderDetail.diaChiNhan || orderDetail.diaChi }}</span>
                 </p>
               </div>
             </div>
 
-            <!-- Items List -->
+            <!-- 3. Danh sách sản phẩm -->
             <div>
-              <h4 class="text-xs font-bold text-gray-700 mb-3">Danh sách sản phẩm trong đơn</h4>
-              <div class="space-y-2.5">
+              <h4 class="text-[11px] font-black uppercase tracking-wider text-gray-600 mb-2 font-sans">Danh sách sản phẩm trong đơn</h4>
+              <div class="border border-gray-200 rounded-lg divide-y divide-gray-100 overflow-hidden bg-white shadow-xs">
                 <div 
-                  v-for="(prod, idx) in (orderDetail.chiTiet || orderDetail.items || [])" 
+                  v-for="(prod, idx) in (orderDetail.chiTiet || orderDetail.ChiTiet || orderDetail.chiTietDonHangs || orderDetail.ChiTietDonHangs || orderDetail.items || orderDetail.Items || [])" 
                   :key="idx"
-                  class="flex items-center justify-between p-3 border border-gray-100 rounded-xl hover:bg-gray-50/40 transition-colors"
+                  class="flex items-center justify-between p-2.5 px-3 hover:bg-gray-50/50 transition-colors"
                 >
-                  <div class="flex items-center gap-3">
-                    <img :src="getImageUrl(prod.hinhAnh || prod.hinhAnhDaiDien)" class="w-12 h-12 rounded-lg object-cover border border-gray-200 shrink-0" />
+                  <div class="flex items-center gap-2.5">
+                    <img 
+                      :src="getImageUrl(prod.hinhAnh || prod.HinhAnh || prod.hinhAnhDaiDien || prod.HinhAnhDaiDien)" 
+                      @error="(e: any) => { e.target.src = DEFAULT_PRODUCT_IMG; }"
+                      class="w-10 h-10 rounded-md object-cover border border-gray-200 shrink-0" 
+                    />
                     <div>
-                      <h5 class="text-xs font-bold text-gray-900">{{ prod.tenSp || prod.tenSP || prod.ten }}</h5>
-                      <span class="text-[11px] text-gray-400">Số lượng: x{{ prod.soLuong || 1 }}</span>
+                      <h5 class="text-xs font-bold text-gray-900 leading-snug">{{ prod.tenSp || prod.TenSp || prod.tenSP || prod.TenSP || prod.ten || prod.Ten || 'Sản phẩm' }}</h5>
+                      <span class="text-[10px] text-gray-400 font-medium">Số lượng: x{{ prod.soLuong || prod.SoLuong || prod.quantity || 1 }}</span>
                     </div>
                   </div>
                   <div class="text-right">
-                    <span class="text-xs font-bold text-gray-900 font-mono">{{ formatPrice(prod.thanhTien || (prod.giaBan * (prod.soLuong || 1))) }}</span>
+                    <span class="text-xs font-black text-gray-900 font-mono">{{ formatPrice(prod.thanhTien || prod.ThanhTien || ((prod.giaBan || prod.GiaBan || prod.gia || 0) * (prod.soLuong || prod.SoLuong || 1))) }}</span>
                   </div>
                 </div>
               </div>
             </div>
 
-            <!-- Price Breakdown -->
+            <!-- 4. Chi tiết tiền / Voucher -->
             <div class="border-t border-gray-100 pt-3 space-y-1.5 text-xs">
               <div class="flex justify-between text-gray-500">
                 <span>Tiền hàng:</span>
-                <span class="font-mono text-gray-800 font-medium">{{ formatPrice(orderDetail.tongTienHang || orderDetail.tongTien) }}</span>
+                <span class="font-mono text-gray-800 font-medium">{{ formatPrice(orderDetail.tongTienHang || orderDetail.tongTien || orderDetail.TongTien) }}</span>
               </div>
-              <div v-if="orderDetail.phiVanChuyen || orderDetail.phiShip" class="flex justify-between text-gray-500">
+              <div v-if="orderDetail.phiVanChuyen || orderDetail.phiShip || orderDetail.PhiVanChuyen" class="flex justify-between text-gray-500">
                 <span>Phí vận chuyển:</span>
-                <span class="font-mono text-gray-800 font-medium">+{{ formatPrice(orderDetail.phiVanChuyen || orderDetail.phiShip) }}</span>
+                <span class="font-mono text-gray-800 font-medium">+{{ formatPrice(orderDetail.phiVanChuyen || orderDetail.phiShip || orderDetail.PhiVanChuyen) }}</span>
               </div>
-              <div v-if="orderDetail.giamGiaVoucher > 0" class="flex justify-between text-emerald-600 font-medium">
+              <div v-if="(orderDetail.giamGiaVoucher || orderDetail.GiamGiaVoucher) > 0" class="flex justify-between text-emerald-600 font-medium">
                 <span>Giảm giá Voucher:</span>
-                <span class="font-mono">-{{ formatPrice(orderDetail.giamGiaVoucher) }}</span>
+                <span class="font-mono">-{{ formatPrice(orderDetail.giamGiaVoucher || orderDetail.GiamGiaVoucher) }}</span>
               </div>
             </div>
           </div>
 
-          <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end shrink-0">
-            <button @click="closeModal" class="bg-gray-900 hover:bg-black text-white px-5 py-2 text-xs font-semibold rounded-xl transition-all shadow-sm">
+
+          <div class="bg-gray-50/80 px-5 py-3 border-t border-gray-100 flex justify-end shrink-0">
+            <button @click="closeModal" class="bg-black hover:bg-neutral-800 text-white px-5 py-1.5 text-xs font-bold uppercase tracking-wider rounded-md transition-all shadow-xs">
               Đóng
             </button>
           </div>

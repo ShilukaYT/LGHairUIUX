@@ -379,6 +379,7 @@ onMounted(async () => {
             tempDate.value = new Date().toLocaleDateString('en-CA');
             combineDateTime();
         }
+        initShiftTab();
         await loadAvailableStylists();
 
         // Khôi phục thợ đã chọn từ query param nếu có
@@ -516,7 +517,12 @@ const removeService = async (id: number | string) => {
     await loadVouchers();
 };
 
-const selectedStylist = computed(() => stylists.value.find(s => s.id === bookingData.value.stylistId));
+const selectedStylist = computed(() => {
+    if (bookingData.value.stylistId === 'AUTO') {
+        return { id: 'AUTO', name: 'Salon tự sắp xếp thợ (Nhanh nhất)' };
+    }
+    return stylists.value.find(s => s.id === bookingData.value.stylistId);
+});
 const subTotal = computed(() => bookingData.value.selectedServices.reduce((sum, s) => sum + s.price, 0));
 
 const totalOriginalPrice = computed(() => {
@@ -646,7 +652,7 @@ const handleBooking = async () => {
 
         const paymentMode = bookingData.value.paymentMode; 
         const paymentMethod = bookingData.value.paymentMethod; 
-        const stylistId = bookingData.value.stylistId || '';
+        const stylistId = (bookingData.value.stylistId === 'AUTO' || !bookingData.value.stylistId) ? '' : bookingData.value.stylistId;
 
         const response = await axios.post(
             `${API}/api/DatDichVu/save-booking-final?paymentMode=${paymentMode}&maStylist=${stylistId}&paymentMethod=${paymentMethod}`,
@@ -683,15 +689,46 @@ const handleBooking = async () => {
 
 const minDate = new Date().toLocaleDateString('en-CA');
 
-const availableHours = computed(() => {
-    const hours = [];
-    for (let i = 8; i <= 20; i++) {
-        const hourLabel = i < 10 ? `0${i}:00` : `${i}:00`;
-        hours.push(hourLabel);
-        hours.push(i < 10 ? `0${i}:30` : `${i}:30`);
-    }
-    return hours;
+const selectedHour = ref('08');
+const selectedMinute = ref('00');
+
+const hoursList = ['08', '09', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20'];
+const morningHours = ['08', '09', '10', '11'];
+const afternoonHours = ['12', '13', '14', '15', '16'];
+const eveningHours = ['17', '18', '19', '20'];
+
+const minutesList = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
+
+const currentShiftTab = ref<'ALL' | 'MORNING' | 'AFTERNOON' | 'EVENING'>('ALL');
+
+const displayedHoursList = computed(() => {
+    if (currentShiftTab.value === 'MORNING') return morningHours;
+    if (currentShiftTab.value === 'AFTERNOON') return afternoonHours;
+    if (currentShiftTab.value === 'EVENING') return eveningHours;
+    return hoursList;
 });
+
+const isHourPast = (hourStr: string) => {
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    if (tempDate.value === todayStr) {
+        const now = new Date();
+        const currentMinutes = now.getHours() * 60 + now.getMinutes();
+        const lastMinuteOfHour = Number(hourStr) * 60 + 55;
+        return lastMinuteOfHour <= currentMinutes + 10;
+    }
+    return false;
+};
+
+const isMinutePast = (minStr: string) => {
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    if (tempDate.value === todayStr) {
+        const now = new Date();
+        const currentMinutes = now.getHours() * 60 + now.getMinutes();
+        const targetMinutes = Number(selectedHour.value) * 60 + Number(minStr);
+        return targetMinutes <= currentMinutes + 10;
+    }
+    return false;
+};
 
 const isTimeSlotPast = (timeStr: string) => {
     if (!timeStr) return false;
@@ -718,6 +755,99 @@ const combineDateTime = () => {
         bookingData.value.bookingDate = '';
     }
 };
+
+const selectHour = (h: string) => {
+    if (isHourPast(h)) return;
+    selectedHour.value = h;
+    if (isMinutePast(selectedMinute.value)) {
+        const validMin = minutesList.find(m => !isMinutePast(m));
+        if (validMin) {
+            selectedMinute.value = validMin;
+        }
+    }
+    tempTime.value = `${selectedHour.value}:${selectedMinute.value}`;
+    combineDateTime();
+};
+
+const selectMinute = (m: string) => {
+    if (isMinutePast(m)) return;
+    selectedMinute.value = m;
+    tempTime.value = `${selectedHour.value}:${selectedMinute.value}`;
+    combineDateTime();
+};
+
+const selectTimeSlot = (timeStr: string) => {
+    if (!timeStr || isTimeSlotPast(timeStr)) return;
+    const parts = timeStr.split(':');
+    if (parts[0]) selectedHour.value = parts[0];
+    if (parts[1]) selectedMinute.value = parts[1];
+    tempTime.value = timeStr;
+    combineDateTime();
+};
+
+const selectAutoStylist = () => {
+    bookingData.value.stylistId = 'AUTO';
+    validateField('stylist');
+};
+
+const initShiftTab = () => {
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    if (tempDate.value === todayStr) {
+        const hour = new Date().getHours();
+        if (hour < 12) {
+            currentShiftTab.value = 'MORNING';
+        } else if (hour < 17) {
+            currentShiftTab.value = 'AFTERNOON';
+        } else if (hour <= 20) {
+            currentShiftTab.value = 'EVENING';
+        } else {
+            currentShiftTab.value = 'ALL';
+        }
+    } else {
+        currentShiftTab.value = 'ALL';
+    }
+};
+
+const initDefaultTime = () => {
+    initShiftTab();
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    if (tempDate.value === todayStr) {
+        let foundHour = '';
+        let foundMin = '00';
+
+        for (const h of hoursList) {
+            if (!isHourPast(h)) {
+                foundHour = h;
+                for (const m of minutesList) {
+                    if (!isMinutePast(m)) {
+                        foundMin = m;
+                        break;
+                    }
+                }
+                break;
+            }
+        }
+
+        if (foundHour) {
+            selectedHour.value = foundHour;
+            selectedMinute.value = foundMin;
+            tempTime.value = `${foundHour}:${foundMin}`;
+        } else {
+            selectedHour.value = '08';
+            selectedMinute.value = '00';
+            tempTime.value = '';
+        }
+    } else {
+        selectedHour.value = '08';
+        selectedMinute.value = '00';
+        tempTime.value = '08:00';
+    }
+    combineDateTime();
+};
+
+watch(() => tempDate.value, () => {
+    initDefaultTime();
+});
 
 watch(
     () => bookingData.value.selectedServices.length,
@@ -776,7 +906,8 @@ const loadAvailableStylists = async () => {
             return {
                 ...s,
                 isFavorite: s.isFavorite || isStylistFavorite(s.id),
-                isAvailable: isOff ? false : (tempTime.value ? Boolean(s.isAvailable) : true)
+                isAvailable: isOff ? false : (tempTime.value ? Boolean(s.isAvailable) : true),
+                nextAvailableTime: s.nextAvailableTime || null
             };
         });
 
@@ -820,33 +951,38 @@ const getFreeSlots = (stylist: any): string[] => {
         return [];
     }
     
-    // Khi CHƯA chọn giờ: hiển thị ca làm việc hoặc lịch trống
-    if (!tempTime.value) {
+    // Khi ĐÃ chọn giờ:
+    if (tempTime.value) {
+        const capacityInfo = lichTrinh.filter((l: string) => l.includes('Đang nhận') || l.includes('Còn'));
+        if (capacityInfo.length > 0) return capacityInfo;
+
         const free = lichTrinh
             .filter((l: string) => l.includes('Lịch trống:'))
             .map((l: string) => l.replace('Lịch trống:', '').trim());
         if (free.length > 0) return free;
-
-        // Nếu backend trả về "Trái ca (Làm 13:00 - 20:00)" vì query giờ khác -> trích xuất giờ ca làm
-        const traica = lichTrinh.find((l: string) => l.includes('Trái ca') || l.includes('Ngoài ca') || l.includes('Làm'));
-        if (traica) {
-            const match = traica.match(/\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}/);
-            if (match) return [match[0]];
-        }
-        
-        // Nếu có caLam -> trích xuất giờ làm việc
-        if (stylist.caLam) {
-            const match = stylist.caLam.match(/\d{1,2}h\s*-\s*\d{1,2}h/);
-            if (match) return [match[0]];
-            return [stylist.caLam];
-        }
-        return [];
+        return ['Sẵn sàng nhận khách'];
     }
 
-    // Khi ĐÃ chọn giờ:
-    return lichTrinh
+    // Khi CHƯA chọn giờ: hiển thị ca làm việc hoặc lịch trống
+    const free = lichTrinh
         .filter((l: string) => l.includes('Lịch trống:'))
         .map((l: string) => l.replace('Lịch trống:', '').trim());
+    if (free.length > 0) return free;
+
+    // Nếu backend trả về "Trái ca (Làm 13:00 - 20:00)" vì query giờ khác -> trích xuất giờ ca làm
+    const traica = lichTrinh.find((l: string) => l.includes('Trái ca') || l.includes('Ngoài ca') || l.includes('Làm'));
+    if (traica) {
+        const match = traica.match(/\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}/);
+        if (match) return [match[0]];
+    }
+    
+    // Nếu có caLam -> trích xuất giờ làm việc
+    if (stylist.caLam) {
+        const match = stylist.caLam.match(/\d{1,2}h\s*-\s*\d{1,2}h/);
+        if (match) return [match[0]];
+        return [stylist.caLam];
+    }
+    return [];
 };
 
 const getBusySlots = (stylist: any): string[] => {
@@ -858,16 +994,80 @@ const getBusySlots = (stylist: any): string[] => {
         .filter((l: string) => l.includes('Có hẹn:'))
         .map((l: string) => l.replace('Có hẹn:', '').trim());
 
-    // 2. Khi ĐÃ chọn giờ hẹn: nếu giờ đó ngoài ca làm ("Trái ca" / "Ngoài ca") -> hiển thị thêm lý do ngoài ca
+    // 2. Khi ĐÃ chọn giờ hẹn: nếu giờ đó ngoài ca làm ("Trái ca" / "Ngoài ca" / "Đã kín chỗ") -> hiển thị thêm lý do
     if (tempTime.value) {
         const outOfShift = lichTrinh
-            .filter((l: string) => l.includes('Trái ca') || l.includes('Ngoài ca'))
+            .filter((l: string) => l.includes('Trái ca') || l.includes('Ngoài ca') || l.includes('Đã kín chỗ'))
             .map((l: string) => l.replace('Trái ca', 'Ngoài ca:').replace('Ngoài ca', 'Ngoài ca:').trim());
         return [...booked, ...outOfShift];
     }
 
     // Khi CHƯA chọn giờ -> hiển thị các ca bận thực tế do khách đã đặt hẹn trước
     return booked;
+};
+
+const getNextAvailableSlot = (stylist: any): string | null => {
+    if (stylist?.nextAvailableTime) {
+        return stylist.nextAvailableTime;
+    }
+
+    const lichTrinh = stylist?.lichTrinh;
+    if (!lichTrinh || !Array.isArray(lichTrinh)) return null;
+
+    // Tìm xem trong lichTrinh có chuỗi "(Nhận từ HH:mm)" hay "Nhận từ HH:mm"
+    for (const l of lichTrinh) {
+        const match = l.match(/Nhận từ\s+(\d{1,2}:\d{2})/i);
+        if (match && match[1]) {
+            return match[1];
+        }
+    }
+
+    // Nếu không có, tìm trong lịch trống đầu tiên sau giờ hiện tại
+    if (tempTime.value) {
+        const free = lichTrinh.filter((l: string) => l.includes('Lịch trống:'));
+        for (const f of free) {
+            const timeMatch = f.match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/);
+            if (timeMatch && timeMatch[1]) {
+                if (timeMatch[1] > tempTime.value) {
+                    return timeMatch[1];
+                }
+            }
+        }
+    }
+    return null;
+};
+
+const pickSuggestedSlotAndStylist = async (timeStr: string, stylist: any) => {
+    if (!timeStr || !stylist) return;
+    
+    // 1. Cập nhật giờ và phút
+    const parts = timeStr.split(':');
+    if (parts[0]) selectedHour.value = parts[0];
+    if (parts[1]) selectedMinute.value = parts[1];
+    tempTime.value = timeStr;
+    combineDateTime();
+    
+    // 2. Chọn stylist này
+    bookingData.value.stylistId = stylist.id;
+    validateField('stylist');
+
+    // 3. Tải lại danh sách thợ theo giờ mới
+    await loadAvailableStylists();
+
+    // 4. Giữ chắc chắn stylistId
+    bookingData.value.stylistId = stylist.id;
+    validateField('stylist');
+
+    // 5. Toast thông báo nhẹ
+    Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'success',
+        title: `Đã chọn giờ ${timeStr} & Stylist ${stylist.name}!`,
+        showConfirmButton: false,
+        timer: 2000,
+        timerProgressBar: true
+    });
 };
 
 const selectStylist = (stylist: any) => {
@@ -1053,37 +1253,122 @@ onUnmounted(() => {
                                 <p v-if="errors.bookingDate" class="error-msg-custom"><i class="fas fa-exclamation-circle me-1"></i>{{ errors.bookingDate }}</p>
                             </div>
 
-                            <div>
-                                <label class="custom-label font-bold">Giờ hẹn *</label>
-                                <select id="booking-time-select" v-model="tempTime" 
-                                    @change="combineDateTime"
-                                    :class="{ 'input-error': errors.tempTime }"
-                                    class="booking-input">
-                                    <option value="" disabled>Chọn giờ</option>
-                                    <option v-for="h in availableHours" :key="h" :value="h" :disabled="isTimeSlotPast(h)" :class="{ 'text-gray-400 bg-gray-50': isTimeSlotPast(h) }">
-                                        {{ h }}{{ isTimeSlotPast(h) ? ' (Đã qua)' : '' }}
-                                    </option>
-                                </select>
-                                <p v-if="errors.tempTime" class="error-msg-custom"><i class="fas fa-exclamation-circle me-1"></i>{{ errors.tempTime }}</p>
-                                <div class="summary-line" v-if="tempTime">
-                                    <span class="font-bold">Giờ bắt đầu làm:</span>
-                                    <span class="font-bold">{{ tempTime }}</span>
-                                </div>
-                                <div class="summary-line" v-if="expectedEndTime">
-                                    <span class="font-bold">Dự kiến xong lúc:</span>
-                                    <span class="text-black font-bold" style="font-size: 1.1rem;">{{
-                                        expectedEndTime }}</span>
-                                </div>
-                                <div class="summary-line text-black" v-if="estimatedTotalMinutes > 0">
-                                    <span class="font-bold">Tổng thời gian:</span>
-                                    <span>{{ estimatedTotalMinutes }} phút</span>
-                                </div>
-                            </div>
-
                             <div class="md:col-span-2">
-                                <label class="custom-label font-bold">Ghi chú</label>
-                                <input v-model="bookingData.note" type="text" class="booking-input w-full"
-                                    placeholder="Ghi chú yêu cầu...">
+                                <label class="custom-label font-bold mb-2 flex items-center justify-between">
+                                    <span><i class="far fa-clock me-1 text-black"></i> Giờ hẹn phục vụ *</span>
+                                    <span v-if="tempTime" class="text-xs text-green-700 font-bold bg-green-50 px-2 py-0.5 rounded border border-green-200">
+                                        Đã chọn: {{ tempTime }}
+                                    </span>
+                                </label>
+                                
+                                <!-- Khung lưới chọn giờ & phút 2 hàng nút Pill chuyên biệt -->
+                                <div class="time-slot-grid-container" :class="{ 'border-rose-400 bg-rose-50/20': errors.tempTime }">
+                                    <!-- Phần 1: Chọn Giờ hẹn -->
+                                    <div class="mb-4">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <span class="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                                <i class="far fa-clock me-1 text-black"></i> 1. Chọn Giờ hẹn:
+                                            </span>
+                                            <span class="text-xs font-extrabold text-black bg-gray-100 px-2.5 py-0.5 rounded-full border border-gray-200">
+                                                {{ selectedHour }} giờ
+                                            </span>
+                                        </div>
+
+                                        <!-- Các Tab Ca làm việc -->
+                                        <div class="time-shifts-tabs flex flex-wrap gap-2 mb-2.5">
+                                            <button type="button" 
+                                                class="shift-tab-btn" 
+                                                :class="{ active: currentShiftTab === 'ALL' }"
+                                                @click="currentShiftTab = 'ALL'">
+                                                Tất cả (08:00 - 20:00)
+                                            </button>
+                                            <button type="button" 
+                                                class="shift-tab-btn" 
+                                                :class="{ active: currentShiftTab === 'MORNING' }"
+                                                @click="currentShiftTab = 'MORNING'">
+                                                Sáng (08:00 - 11:00)
+                                            </button>
+                                            <button type="button" 
+                                                class="shift-tab-btn" 
+                                                :class="{ active: currentShiftTab === 'AFTERNOON' }"
+                                                @click="currentShiftTab = 'AFTERNOON'">
+                                                Chiều (12:00 - 16:00)
+                                            </button>
+                                            <button type="button" 
+                                                class="shift-tab-btn" 
+                                                :class="{ active: currentShiftTab === 'EVENING' }"
+                                                @click="currentShiftTab = 'EVENING'">
+                                                Tối (17:00 - 20:00)
+                                            </button>
+                                        </div>
+
+                                        <!-- Lưới nút Giờ dạng Pill Button -->
+                                        <div class="time-pills-wrapper grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7 gap-2">
+                                            <button type="button"
+                                                v-for="h in displayedHoursList" 
+                                                :key="h"
+                                                :disabled="isHourPast(h)"
+                                                @click="selectHour(h)"
+                                                class="time-pill-btn"
+                                                :class="{
+                                                    'active': selectedHour === h && !isHourPast(h),
+                                                    'disabled': isHourPast(h)
+                                                }"
+                                                :title="isHourPast(h) ? 'Giờ này đã qua' : `Chọn ${h} giờ`">
+                                                <span class="time-text font-bold">{{ h }}:00</span>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Phân cách tinh tế -->
+                                    <div class="border-t border-gray-200/80 my-3.5"></div>
+
+                                    <!-- Phần 2: Chọn Phút hẹn -->
+                                    <div>
+                                        <div class="flex items-center justify-between mb-2">
+                                            <span class="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                                <i class="fas fa-hourglass-start me-1 text-black"></i> 2. Chọn Phút hẹn (Cách nhau 5 phút):
+                                            </span>
+                                            <span class="text-xs font-extrabold text-black bg-gray-100 px-2.5 py-0.5 rounded-full border border-gray-200">
+                                                :{{ selectedMinute }} phút
+                                            </span>
+                                        </div>
+
+                                        <!-- Lưới nút Phút dạng Pill Button -->
+                                        <div class="time-pills-wrapper grid grid-cols-4 sm:grid-cols-6 md:grid-cols-12 gap-1.5">
+                                            <button type="button"
+                                                v-for="m in minutesList" 
+                                                :key="m"
+                                                :disabled="isMinutePast(m)"
+                                                @click="selectMinute(m)"
+                                                class="time-pill-btn py-2 text-xs"
+                                                :class="{
+                                                    'active': selectedMinute === m && !isMinutePast(m),
+                                                    'disabled': isMinutePast(m)
+                                                }"
+                                                :title="isMinutePast(m) ? 'Khung phút này đã qua' : `Chọn phút :${m}`">
+                                                <span class="time-text font-bold">:{{ m }}</span>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Tóm tắt dòng thời gian -->
+                                    <div v-if="tempTime" class="time-summary-banner mt-3.5 pt-3 border-t border-gray-200/70 flex flex-wrap items-center justify-between gap-2 text-xs">
+                                        <div class="flex items-center gap-1.5 text-gray-800">
+                                            <i class="far fa-play-circle text-green-600"></i>
+                                            <span>Giờ hẹn: <strong class="text-sm font-black text-black">{{ tempTime }}</strong></span>
+                                        </div>
+                                        <div class="flex items-center gap-1.5 text-gray-800" v-if="estimatedTotalMinutes > 0">
+                                            <i class="far fa-hourglass text-amber-600"></i>
+                                            <span>Thời gian làm: <strong>{{ estimatedTotalMinutes }} phút</strong></span>
+                                        </div>
+                                        <div class="flex items-center gap-1.5 text-gray-800" v-if="expectedEndTime">
+                                            <i class="far fa-check-circle text-blue-600"></i>
+                                            <span>Dự kiến xong lúc: <strong class="text-sm font-black text-black">{{ expectedEndTime }}</strong></span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <p v-if="errors.tempTime" class="error-msg-custom mt-2"><i class="fas fa-exclamation-circle me-1"></i>{{ errors.tempTime }}</p>
                             </div>
                         </div>
 
@@ -1112,21 +1397,21 @@ onUnmounted(() => {
 
                         <div class="section-heading-wrapper mt-10">
                             <h3 class="font-playfair section-heading-title font-bold text-black">
-                                <i class="fas fa-cut me-2"></i> CHỌN STYLIST
+                                <i class="fas fa-cut me-2"></i> CHỌN STYLIST PHỤC VỤ
                             </h3>
                             <div class="heading-line"></div>
                         </div>
                         <p v-if="errors.stylist" class="error-msg-custom stylist-error-banner mb-3"><i class="fas fa-exclamation-triangle me-1.5"></i>{{ errors.stylist }}</p>
 
-                        <!-- Gợi ý chọn giờ -->
+                        <!-- Gợi ý chọn giờ nếu chưa chọn -->
                         <div v-if="!tempTime" class="mb-3 p-3 bg-amber-50/80 border border-amber-200/80 rounded-sm text-xs text-amber-900 flex items-center gap-2">
                             <i class="fas fa-info-circle text-amber-600 text-sm flex-shrink-0"></i>
-                            <span>Vui lòng chọn <strong>Giờ hẹn</strong> bên trên để hệ thống kiểm tra ca làm và độ rảnh của từng Stylist.</span>
+                            <span>Bạn có thể chọn 1 Stylist yêu thích bên dưới hoặc chọn giờ hẹn để Salon sắp xếp.</span>
                         </div>
 
                         <div v-if="isSearchingStylist"
                             class="mt-4 p-4 text-center text-gray-500 font-bold bg-gray-50 border rounded-sm">
-                            <i class="fas fa-spinner fa-spin me-2 text-black"></i> Đang tải lịch làm việc và kiểm tra ca thợ...
+                            <i class="fas fa-spinner fa-spin me-2 text-black"></i> Đang kiểm tra lịch trống của từng Stylist...
                         </div>
 
                         <div v-else class="stylist-flex mt-3">
@@ -1140,47 +1425,47 @@ onUnmounted(() => {
                                 @click="selectStylist(stylist)">
                                 
                                 <div class="stylist-schedule-info" v-if="stylist.caLam || (stylist.lichTrinh && stylist.lichTrinh.length > 0)">
-                                    <div class="schedule-header flex items-center justify-between gap-1 pb-1 mb-1.5 border-b border-gray-100">
+                                    <div class="schedule-header flex items-center justify-between gap-1 pb-1 mb-1 border-b border-gray-100">
                                         <span class="truncate font-bold text-[10px] text-gray-800" :title="stylist.caLam">
                                             <i class="far fa-clock text-[9px] text-gray-400 me-0.5"></i>{{ stylist.caLam || 'Có ca làm' }}
                                         </span>
-                                        <span :class="(!tempTime || stylist.isAvailable) ? 'text-green-700 bg-green-100 border-green-300' : 'text-red-600 bg-red-100 border-red-300'" 
+                                        <span :class="(!tempTime || stylist.isAvailable) ? ((stylist.lichTrinh && stylist.lichTrinh.some((l: string) => l.includes('Đang nhận'))) ? 'text-amber-700 bg-amber-100 border-amber-300' : 'text-green-700 bg-green-100 border-green-300') : 'text-red-600 bg-red-100 border-red-300'" 
                                             class="px-1.5 py-0.5 rounded border text-[8px] font-extrabold uppercase shrink-0">
-                                            {{ tempTime ? (stylist.isAvailable ? 'Rảnh' : 'Bận') : 'Sẵn sàng' }}
+                                            {{ tempTime ? (stylist.isAvailable ? ((stylist.lichTrinh && stylist.lichTrinh.some((l: string) => l.includes('Đang nhận'))) ? 'Còn 1 chỗ' : 'Sẵn sàng') : 'Kín lịch') : 'Sẵn sàng' }}
                                         </span>
                                     </div>
 
-                                    <!-- Phân tách rõ ràng: Khung giờ Rảnh vs Khung giờ Bận -->
-                                    <div class="schedule-sections flex flex-col gap-1 text-left">
-                                        <!-- 1. KHUNG GIỜ RẢNH (XANH LÁ) -->
+                                    <!-- Khung giờ Rảnh / Bận gọn gàng -->
+                                    <div class="schedule-sections flex flex-col gap-0.5 text-left">
                                         <div v-if="getFreeSlots(stylist).length > 0" class="schedule-box free-box">
-                                            <div class="box-title text-green-700 font-bold text-[9px] flex items-center gap-1">
-                                                <i class="fas fa-check-circle text-[8px] text-green-600"></i>
-                                                <span>{{ tempTime ? 'Giờ rảnh:' : 'Lịch trống:' }}</span>
+                                            <div class="box-content flex flex-col gap-0.5">
+                                                <span v-for="(slot, sIdx) in getFreeSlots(stylist).slice(0, 2)" :key="'free-'+sIdx" class="slot-text text-green-800 text-[9px] font-medium leading-tight" :title="slot">
+                                                    <template v-if="slot.includes('Đang nhận')">
+                                                        <span class="font-bold block">Đang nhận:</span>
+                                                        <span class="block text-[8px] text-green-900 font-semibold mt-0.5">{{ slot.replace('Đang nhận', '').trim() }}</span>
+                                                    </template>
+                                                    <template v-else>
+                                                        {{ slot }}
+                                                    </template>
+                                                </span>
                                             </div>
-                                            <div class="box-content flex flex-col gap-0.5 mt-0.5">
-                                                <span v-for="(slot, sIdx) in getFreeSlots(stylist)" :key="'free-'+sIdx" class="slot-text text-green-800 text-[9px] font-medium leading-tight truncate" :title="slot">
+                                        </div>
+
+                                        <div v-if="getBusySlots(stylist).length > 0 && !stylist.isAvailable" class="schedule-box busy-box">
+                                            <div class="box-content flex flex-col gap-0.5">
+                                                <span v-for="(slot, sIdx) in getBusySlots(stylist).slice(0, 1)" :key="'busy-'+sIdx" class="slot-text text-red-700 text-[9px] font-medium leading-tight truncate" :title="slot">
                                                     {{ slot }}
                                                 </span>
                                             </div>
                                         </div>
 
-                                        <!-- 2. KHUNG GIỜ BẬN / CÓ HẸN (ĐỎ) -->
-                                        <div v-if="getBusySlots(stylist).length > 0" class="schedule-box busy-box">
-                                            <div class="box-title text-red-600 font-bold text-[9px] flex items-center gap-1">
-                                                <i class="fas fa-calendar-times text-[8px] text-red-500"></i>
-                                                <span>{{ tempTime ? 'Giờ bận:' : 'Đã có hẹn:' }}</span>
-                                            </div>
-                                            <div class="box-content flex flex-col gap-0.5 mt-0.5">
-                                                <span v-for="(slot, sIdx) in getBusySlots(stylist)" :key="'busy-'+sIdx" class="slot-text text-red-700 text-[9px] font-medium leading-tight truncate" :title="slot">
-                                                    {{ slot }}
-                                                </span>
-                                            </div>
-                                        </div>
-
-                                        <!-- 3. NGHỈ CA HÔM NAY -->
-                                        <div v-if="stylist.lichTrinh && stylist.lichTrinh.some((l: string) => l.includes('Không có ca làm'))" class="schedule-box off-box">
-                                            <span class="text-gray-500 text-[9px] italic block text-center">Nghỉ ca hôm nay</span>
+                                        <!-- Gợi ý giờ nhận tiếp theo thông minh -->
+                                        <div v-if="tempTime && !stylist.isAvailable && getNextAvailableSlot(stylist)" 
+                                             class="mt-1 p-1 px-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded text-[9px] font-bold cursor-pointer transition-all flex items-center justify-between shadow-sm"
+                                             title="Bấm để tự động đổi sang khung giờ này và chọn luôn Stylist"
+                                             @click.stop="pickSuggestedSlotAndStylist(getNextAvailableSlot(stylist)!, stylist)">
+                                            <span>⚡ Nhận từ: <strong>{{ getNextAvailableSlot(stylist) }}</strong></span>
+                                            <span class="underline text-[8.5px] text-amber-950 font-black">Chọn</span>
                                         </div>
                                     </div>
                                 </div>
@@ -1199,7 +1484,6 @@ onUnmounted(() => {
     
                                 <div class="stylist-meta mt-auto">
                                     <span class="s-name font-bold">{{ stylist.name }}</span>
-    
                                     <span class="s-role text-black">{{ stylist.role || 'Stylist' }}</span>
                                     <div class="stylist-rating-badge" v-if="stylist.rating">
                                         <span class="rating-val">{{ stylist.rating?.toFixed(1) || '5.0' }}</span>
@@ -1379,6 +1663,14 @@ onUnmounted(() => {
                                         <span class="dot"></span> <b>Thanh toán 100%</b>
                                     </div>
                                 </div>
+                            </div>
+
+                            <!-- Ghi chú đơn hàng / Yêu cầu thêm -->
+                            <div class="payment-block mb-3 mt-3">
+                                <label class="custom-label font-bold mb-1.5 flex items-center justify-between">
+                                    <span><i class="far fa-comment-dots text-black me-1"></i> Ghi chú yêu cầu (tùy chọn)</span>
+                                </label>
+                                <textarea v-model="bookingData.note" class="booking-input w-full pt-2 text-xs" style="height: 65px; border-radius: 4px;" placeholder="Ghi chú thêm cho Stylist (tùy chọn)..."></textarea>
                             </div>
 
                             <div class="bill-summary">
@@ -1669,6 +1961,151 @@ h1 {
     to { opacity: 1; transform: translateY(0); }
 }
 
+/* Time Slot Grid & Pills */
+.time-slot-grid-container {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    padding: 16px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+    transition: all 0.25s ease;
+}
+
+.shift-tab-btn {
+    padding: 6px 14px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    color: #4b5563;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.shift-tab-btn:hover {
+    background: #f9fafb;
+    color: #111827;
+    border-color: #d1d5db;
+}
+
+.shift-tab-btn.active {
+    background: #000000;
+    color: #ffffff;
+    border-color: #000000;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.time-pill-btn {
+    padding: 9px 4px;
+    background: #ffffff;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 6px;
+    color: #111827;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.time-pill-btn:hover:not(.disabled) {
+    border-color: #000000;
+    background: #f9fafb;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.07);
+}
+
+.time-pill-btn.active {
+    background: #000000 !important;
+    color: #ffffff !important;
+    border-color: #000000 !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.time-pill-btn.active .time-text {
+    color: #ffffff !important;
+    font-weight: 700;
+}
+
+.time-pill-btn.disabled {
+    background: #f9fafb !important;
+    color: #cbd5e1 !important;
+    border-color: #f1f5f9 !important;
+    cursor: not-allowed !important;
+    opacity: 0.45 !important;
+    text-decoration: none !important;
+    box-shadow: none !important;
+}
+
+.time-pill-btn.disabled .time-text {
+    color: #cbd5e1 !important;
+    text-decoration: none !important;
+}
+
+/* Auto Stylist Card */
+.auto-stylist-card {
+    background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+    border: 1.5px solid #fde68a;
+    padding: 14px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.auto-stylist-card:hover {
+    border-color: #f59e0b;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(245, 158, 11, 0.15);
+}
+
+.auto-stylist-card.active {
+    border-color: #000000;
+    background: #ffffff;
+    box-shadow: 0 0 0 2px #000000, 0 8px 20px rgba(0, 0, 0, 0.06);
+}
+
+.auto-icon-box {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(245, 158, 11, 0.2);
+}
+
+.check-circle {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1.5px solid #d1d5db;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: transparent;
+    transition: all 0.2s ease;
+}
+
+.auto-stylist-card.active .check-circle {
+    background: #000000;
+    border-color: #000000;
+    color: #ffffff;
+}
+
+.time-summary-banner {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-left: 3px solid #000000;
+    padding: 10px 14px;
+    border-radius: 6px;
+}
+
 select.booking-input {
     appearance: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23111827' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
@@ -1813,17 +2250,69 @@ select.booking-input {
 }
 
 .stylist-card.is-busy {
-    opacity: 0.55;
-    background: #f8fafc;
-    filter: grayscale(35%);
+    background: #fbfbfb;
     border-color: #e2e8f0;
-    cursor: not-allowed;
+}
+
+.stylist-card.is-busy .avatar-box,
+.stylist-card.is-busy .stylist-meta {
+    opacity: 0.55;
+    filter: grayscale(35%);
+}
+
+.stylist-card.is-busy .stylist-schedule-info {
+    opacity: 1 !important;
+    filter: none !important;
 }
 
 .stylist-card.is-busy:hover {
-    transform: none;
+    transform: translateY(-2px);
     border-color: #cbd5e1;
-    box-shadow: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+
+.suggestion-slot-box {
+    margin-top: 6px;
+    padding: 5px 8px;
+    background: #fffbeb !important;
+    border: 1.5px solid #f59e0b !important;
+    border-radius: 6px;
+    color: #92400e;
+    font-size: 9.5px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);
+    transition: all 0.2s ease;
+    opacity: 1 !important;
+    filter: none !important;
+}
+
+.suggestion-slot-box:hover {
+    background: #fef08a !important;
+    border-color: #d97706 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);
+}
+
+.suggestion-slot-btn {
+    background: #000000;
+    color: #ffffff;
+    font-size: 8.5px;
+    font-weight: 800;
+    padding: 2.5px 7px;
+    border-radius: 4px;
+    letter-spacing: 0.3px;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.suggestion-slot-box:hover .suggestion-slot-btn {
+    background: #1f2937;
+    transform: scale(1.05);
 }
 
 .stylist-card.is-available {

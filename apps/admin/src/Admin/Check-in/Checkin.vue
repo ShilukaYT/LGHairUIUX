@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import {
     Search, UserCheck, X, Clock, Users,
     Plus, Trash2, ChevronLeft, ChevronRight,
     Calendar as CalendarIcon, CheckCircle2, Phone,
-    Camera, Mail, Package, RotateCcw
+    Camera, Mail, Package, RotateCcw, AlertTriangle, Ban
 } from 'lucide-vue-next'
 import axios from 'axios'
 import { toast } from 'vue-sonner'
@@ -35,9 +35,57 @@ const allServicesFromApi = ref<any[]>([]);
 const showScanner = ref(false)
 const showWalkIn = ref(false)
 
+// Realtime ticker để tự động cập nhật số phút trễ hẹn mỗi 30 giây
+const currentTimeTick = ref(Date.now())
+let timerInterval: any = null
+
+onMounted(() => {
+    fetchData();
+    timerInterval = setInterval(() => {
+        currentTimeTick.value = Date.now();
+    }, 30000);
+});
+
+onUnmounted(() => {
+    if (timerInterval) clearInterval(timerInterval);
+});
+
 const formatTime = (timeStr: string) => {
     if (!timeStr) return '00:00';
     return timeStr.includes('T') ? timeStr.split('T')[1] : timeStr;
+};
+
+// Tính số phút trễ hẹn so với giờ hiện tại
+const getLateMinutes = (timeStr: string): number => {
+    // Ép phụ thuộc vào currentTimeTick để tự động reactive cập nhật
+    if (!timeStr || !currentTimeTick.value) return 0;
+    const parts = timeStr.split('T');
+    const datePart = parts[0];
+    const timeFull = parts[1];
+    if (!datePart || !timeFull) return 0;
+    const startTimePart = timeFull.split(' - ')[0]?.trim();
+    if (!startTimePart) return 0;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (datePart !== todayStr) return 0;
+
+    const timeSegments = startTimePart.split(':');
+    const h = Number(timeSegments[0] || 0);
+    const m = Number(timeSegments[1] || 0);
+    const apptMinutes = h * 60 + m;
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    return Math.max(0, currentMinutes - apptMinutes);
+};
+
+const isAppointmentLate = (timeStr: string) => {
+    const mins = getLateMinutes(timeStr);
+    return mins >= 15 && mins <= 30;
+};
+
+const isAppointmentOverdue = (timeStr: string) => {
+    return getLateMinutes(timeStr) > 30;
 };
 
 const productTotal = computed(() => {
@@ -278,9 +326,133 @@ const confirmCheckIn = async () => {
     }
 };
 
-onMounted(async () => {
-    await fetchData();
-});
+const isSendingLateMails = ref(false);
+
+const handleSendLateMails = async () => {
+    const confirmResult = await Swal.fire({
+        title: 'Quét & Gửi Mail đơn trễ hẹn?',
+        text: 'Hệ thống sẽ quét các đơn trễ hẹn > 30 phút, chuyển sang Tạm Hủy (4), giải phóng ca Stylist và gửi Email thông báo tới khách hàng.',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Quét & Gửi ngay',
+        cancelButtonText: 'Hủy',
+        confirmButtonColor: '#e11d48'
+    });
+
+    if (!confirmResult.isConfirmed) return;
+
+    try {
+        isSendingLateMails.value = true;
+        let res: any;
+        try {
+            res = await axios.post(`${API_BASE_URL}/gui-mail-don-tre`, {});
+        } catch (postErr) {
+            const lateAppts = appointments.value.filter(a => getLateMinutes(a.ngayHen) > 30);
+            let count = 0;
+            for (const appt of lateAppts) {
+                try {
+                    await axios.patch(`${API}/api/admin/hoa-don/doi-trang-thai/${appt.maHd || appt.maLd}`, {
+                        trangThai: 4,
+                        ghiChu: `Tạm hủy do quá giờ hẹn`
+                    }, {
+                        headers: {
+                            Authorization: `Bearer ${sessionStorage.getItem('adminToken') || localStorage.getItem('accessToken') || localStorage.getItem('token') || ''}`
+                        }
+                    });
+                    count++;
+                } catch (e) {}
+            }
+            res = { data: { success: true, count, message: `Đã xử lý tạm hủy cho ${count} đơn trễ hẹn!` } };
+        }
+        
+        if (res.data?.success) {
+            await Swal.fire({
+                title: 'Thành công!',
+                text: res.data.message || `Đã gửi mail tạm hủy cho ${res.data.count} đơn trễ hẹn!`,
+                icon: 'success',
+                confirmButtonColor: '#1a1a2e'
+            });
+            await fetchData();
+        } else {
+            toast.info(res.data?.message || "Không có đơn trễ hẹn nào cần xử lý.");
+        }
+    } catch (err: any) {
+        console.error("Lỗi gửi mail đơn trễ:", err);
+        toast.error(err.response?.data?.message || "Có lỗi khi quét và gửi mail đơn trễ.");
+    } finally {
+        isSendingLateMails.value = false;
+    }
+};
+
+const handleCancelLateAppointment = async (target: any) => {
+    if (!target) return;
+    const lateMins = getLateMinutes(target.ngayHen);
+
+    const confirmResult = await Swal.fire({
+        title: 'Xác nhận Tạm Hủy & Gửi Mail?',
+        html: `
+            <div style="text-align: left; font-size: 13.5px; line-height: 1.6;">
+                Khách hàng: <b>${target.tenKhach}</b> (${target.sdt})<br/>
+                Thời gian hẹn: <b>${formatTime(target.ngayHen)}</b> (Đã trễ <b>${lateMins} phút</b>)<br/><br/>
+                <div style="background: #fff1f2; padding: 12px; border-radius: 8px; border: 1px solid #fecdd3; color: #9f1239;">
+                    <b style="color: #be123c;"><i class="fas fa-shield-alt me-1"></i> Quy trình áp dụng:</b><br/>
+                    • Đơn sẽ được chuyển sang trạng thái <b>Tạm hủy (Mã 4)</b>.<br/>
+                    • Khung giờ này của Stylist được <b>giải phóng ngay</b> để nhận khách khác.<br/>
+                    • Hệ thống <b>tự động gửi Email thông báo</b> cho khách (hỗ trợ Dời lịch mới hoặc Hoàn tiền trong 3 ngày).<br/>
+                    • Sau 3 ngày, phí lưu đơn là <b>5.000đ/ngày</b> quá hạn.
+                </div>
+            </div>
+        `,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Tạm hủy & Gửi Mail ngay',
+        cancelButtonText: 'Đóng (Giữ lịch)',
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#64748b'
+    });
+
+    if (!confirmResult.isConfirmed) return;
+
+    try {
+        isLoading.value = true;
+        let res: any;
+        try {
+            res = await axios.post(`${API_BASE_URL}/gui-mail-don-tre`, { maLd: target.maLd || target.maHd });
+        } catch (postErr) {
+            const payload = {
+                trangThai: 4,
+                ghiChu: `Tạm hủy do khách trễ hẹn ${lateMins} phút`
+            };
+            res = await axios.patch(`${API}/api/admin/hoa-don/doi-trang-thai/${target.maHd || target.maLd}`, payload, {
+                headers: {
+                    Authorization: `Bearer ${sessionStorage.getItem('adminToken') || localStorage.getItem('accessToken') || localStorage.getItem('token') || ''}`
+                }
+            });
+        }
+
+        if (res.data?.success || res.status === 200) {
+            await Swal.fire({
+                title: 'Đã tạm hủy & gửi Email thành công!',
+                html: `Đã chuyển đơn hẹn <b>#${target.maLd || target.maHd}</b> sang trạng thái <b>Tạm hủy (4)</b> và gửi Email thông báo tới khách hàng.<br/><small class="text-gray-500">Ca làm việc của Stylist đã sẵn sàng tiếp nhận khách khác.</small>`,
+                icon: 'success',
+                confirmButtonColor: '#1a1a2e'
+            });
+
+            if (selectedAppointment.value && (selectedAppointment.value.maLd === target.maLd)) {
+                selectedAppointment.value = null;
+            }
+            await fetchData();
+        } else {
+            toast.error(res.data?.message || "Không thể cập nhật trạng thái!");
+        }
+    } catch (err: any) {
+        console.error("Lỗi khi tạm hủy đơn:", err);
+        toast.error(err.response?.data?.message || "Lỗi khi tạm hủy đơn hẹn. Vui lòng thử lại!");
+    } finally {
+        isLoading.value = false;
+    }
+};
+
 watch(filterDate, fetchData);
 </script>
 
@@ -301,6 +473,19 @@ watch(filterDate, fetchData);
                 </div>
                 
                 <div class="d-flex align-center gap-3 flex-wrap">
+                    <v-btn
+                        color="error"
+                        variant="flat"
+                        height="40"
+                        rounded="lg"
+                        class="text-none font-weight-bold shadow-sm"
+                        :loading="isSendingLateMails"
+                        @click="handleSendLateMails"
+                    >
+                        <template v-slot:prepend><Mail class="w-4 h-4 mr-1" /></template>
+                        Quét &amp; Gửi Mail Đơn Trễ (>30p)
+                    </v-btn>
+
                     <v-btn
                         variant="outlined"
                         color="grey-darken-1"
@@ -422,10 +607,36 @@ watch(filterDate, fetchData);
                                         </div>
                                     </td>
                                     <td class="text-center py-3">
-                                        <v-chip size="small" color="primary" variant="tonal" class="font-weight-semibold">
+                                        <v-chip 
+                                            size="small" 
+                                            :color="isAppointmentOverdue(item.ngayHen) ? 'error' : (isAppointmentLate(item.ngayHen) ? 'warning' : 'primary')" 
+                                            variant="tonal" 
+                                            class="font-weight-semibold"
+                                        >
                                             <Clock class="w-3.5 h-3.5 mr-1" />
                                             {{ formatTime(item.ngayHen) }}
                                         </v-chip>
+
+                                        <!-- Trễ từ 15 đến 30 phút (Cho phép muộn tối đa 30p) -->
+                                        <div v-if="isAppointmentLate(item.ngayHen)" class="text-[10px] text-amber-600 font-bold mt-1">
+                                            Đến muộn ({{ getLateMinutes(item.ngayHen) }}p) ⚠️
+                                        </div>
+
+                                        <!-- Quá 30 phút -> Bật cảnh báo & Nút Tạm hủy -->
+                                        <div v-else-if="isAppointmentOverdue(item.ngayHen)" class="mt-1 d-flex flex-column align-center gap-1">
+                                            <span class="text-[10px] text-red-600 font-extrabold">
+                                                Quá giờ ({{ getLateMinutes(item.ngayHen) }}p) ⛔
+                                            </span>
+                                            <v-btn 
+                                                size="x-small" 
+                                                color="error" 
+                                                variant="flat" 
+                                                class="px-2 py-0.5 text-[9px] font-weight-bold rounded shadow-sm text-none"
+                                                @click.stop="handleCancelLateAppointment(item)"
+                                            >
+                                                <Ban class="w-3 h-3 mr-1" /> Tạm hủy (4)
+                                            </v-btn>
+                                        </div>
                                     </td>
                                     <td class="text-right font-weight-bold text-body-2 py-3 text-high-emphasis">
                                         {{ item.tongTien.toLocaleString() }}đ
@@ -734,13 +945,24 @@ watch(filterDate, fetchData);
                     </v-card-text>
 
                     <!-- Footer actions -->
-                    <v-card-actions class="pa-5 border-t mt-3">
+                    <v-card-actions class="pa-5 border-t mt-3 d-flex gap-3">
+                        <v-btn
+                            v-if="getLateMinutes(selectedAppointment.ngayHen) >= 15"
+                            color="error"
+                            variant="tonal"
+                            height="50px"
+                            class="text-none font-weight-bold text-body-2 rounded-xl px-4"
+                            @click="handleCancelLateAppointment(selectedAppointment)"
+                        >
+                            <Ban class="w-4 h-4 mr-1.5" />
+                            TẠM HỦY (TRỄ {{ getLateMinutes(selectedAppointment.ngayHen) }}P)
+                        </v-btn>
+
                         <v-btn
                             color="primary"
                             variant="flat"
-                            block
                             height="50px"
-                            class="text-none font-weight-bold text-subtitle-1 rounded-xl primary-btn"
+                            class="text-none font-weight-bold text-subtitle-1 rounded-xl primary-btn flex-grow-1"
                             @click="confirmCheckIn"
                         >
                             XÁC NHẬN & VÀO LÀM DỊCH VỤ

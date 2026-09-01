@@ -66,9 +66,11 @@ const errorMessage = ref('')
 
 const getFirstDayOfMonthString = () => {
   const d = new Date()
+  d.setDate(d.getDate() - 60) // Lấy mặc định 60 ngày gần nhất để không bị ẩn hóa đơn khi sang tháng mới
   const year = d.getFullYear()
   const month = String(d.getMonth() + 1).padStart(2, '0')
-  return `${year}-${month}-01`
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 const getLocalDateString = () => {
@@ -84,17 +86,33 @@ const filter = ref({
   denNgay: getLocalDateString()
 })
 
-const statusFilterOptions = [
-  { title: 'Tất cả trạng thái', value: '' },
-  { title: 'Chờ xử lý / Đã cọc 10%', value: '1' },
-  { title: 'Đang giao / Đã thanh toán', value: '2' },
-  { title: 'Đã giao hàng / Hoàn thành', value: '3' },
-  { title: 'Đang hoàn hàng (Chờ về kho)', value: '4' },
-  { title: 'Đã nhận hàng (Đã nhập kho - Chờ hoàn tiền)', value: '5' },
-  { title: 'Đã hoàn tiền (Hoàn tất 100%)', value: '6' },
-  { title: 'Đã Hủy (Hủy trước khi gửi)', value: '0' },
-  { title: 'Tất cả đơn Hủy & Hoàn hàng (0, 4, 5, 6)', value: 'CANCEL_GROUP' }
-]
+const statusFilterOptions = computed(() => {
+  if (activeTab.value === 'dichVu') {
+    return [
+      { title: 'Tất cả trạng thái', value: '' },
+      { title: 'Đã cọc 10%', value: '1' },
+      { title: 'Đã thanh toán', value: '2' },
+      { title: 'Hoàn thành', value: '3' },
+      { title: 'Tạm hủy (Trễ hẹn)', value: '4' },
+      { title: 'Chờ hoàn tiền', value: '5' },
+      { title: 'Đã hoàn tiền', value: '6' },
+      { title: 'Đã dời lịch', value: '9' },
+      { title: 'Đã Hủy', value: '0' },
+      { title: 'Đơn Hủy & Hoàn tiền (0, 4, 5, 6)', value: 'CANCEL_GROUP' }
+    ]
+  }
+  return [
+    { title: 'Tất cả trạng thái', value: '' },
+    { title: 'Chờ xử lý', value: '1' },
+    { title: 'Đang giao hàng', value: '2' },
+    { title: 'Đã giao hàng (Hoàn thành)', value: '3' },
+    { title: 'Đang hoàn hàng (Chờ về kho)', value: '4' },
+    { title: 'Đã nhận hàng (Chờ hoàn tiền)', value: '5' },
+    { title: 'Đã hoàn tiền (Hoàn tất 100%)', value: '6' },
+    { title: 'Đã Hủy', value: '0' },
+    { title: 'Tất cả đơn Hủy & Hoàn hàng (0, 4, 5, 6)', value: 'CANCEL_GROUP' }
+  ]
+})
 
 const getAuthHeaders = () => {
   const token =
@@ -188,16 +206,29 @@ const handleRefresh = async () => {
 // ── STATUS DISPLAY & CHIP COLORS ──
 const getStatusText = (status: number, maHd: string = '') => {
   const laDonSp = maHd.startsWith('SP') || maHd.startsWith('HDSP')
-  const map: Record<number, string> = {
-    0: 'Đã Hủy',
-    1: laDonSp ? 'Chờ xử lý' : 'Đã cọc 10%',
-    2: laDonSp ? 'Đang giao hàng' : 'Đã thanh toán',
-    3: laDonSp ? 'Đã giao hàng' : 'Hoàn thành',
-    4: 'Đang hoàn hàng',
-    5: 'Đã nhận hàng (Chờ hoàn tiền)',
-    6: 'Đã hoàn tiền'
+  if (laDonSp) {
+    const mapSp: Record<number, string> = {
+      0: 'Đã Hủy',
+      1: 'Chờ xử lý',
+      2: 'Đang giao hàng',
+      3: 'Đã giao hàng',
+      4: 'Đang hoàn hàng',
+      5: 'Đã nhận hàng (Chờ hoàn tiền)',
+      6: 'Đã hoàn tiền'
+    }
+    return mapSp[status] || 'N/A'
   }
-  return map[status] || 'N/A'
+  const mapDv: Record<number, string> = {
+    0: 'Đã Hủy',
+    1: 'Đã cọc 10%',
+    2: 'Đã thanh toán',
+    3: 'Hoàn thành',
+    4: 'Tạm hủy (Trễ hẹn)',
+    5: 'Chờ hoàn tiền',
+    6: 'Đã hoàn tiền',
+    9: 'Đã dời lịch'
+  }
+  return mapDv[status] || 'N/A'
 }
 
 const getStatusBadgeConfig = (status: number, maHd: string = '') => {
@@ -241,23 +272,23 @@ const getStatusBadgeConfig = (status: number, maHd: string = '') => {
         borderColor: isDark ? 'rgba(34, 197, 94, 0.35)' : '#bbf7d0',
         dotColor: '#22c55e'
       }
-    case 4: // Đang hoàn hàng (Cam đậm)
+    case 4: // Đang hoàn hàng (SP) / Tạm hủy (DV)
       return {
-        label: 'Đang hoàn hàng',
+        label: laDonSp ? 'Đang hoàn hàng' : 'Tạm hủy (Trễ hẹn)',
+        color: 'error',
+        bgColor: isDark ? 'rgba(244, 63, 94, 0.18)' : '#ffe4e6',
+        textColor: isDark ? '#fda4af' : '#be123c',
+        borderColor: isDark ? 'rgba(244, 63, 94, 0.35)' : '#fecdd3',
+        dotColor: '#e11d48'
+      }
+    case 5: // Chờ hoàn tiền (Cam)
+      return {
+        label: laDonSp ? 'Đã nhận hàng (Chờ hoàn tiền)' : 'Chờ hoàn tiền',
         color: 'orange',
         bgColor: isDark ? 'rgba(249, 115, 22, 0.18)' : '#ffedd5',
         textColor: isDark ? '#fed7aa' : '#c2410c',
         borderColor: isDark ? 'rgba(249, 115, 22, 0.35)' : '#fed7aa',
         dotColor: '#f97316'
-      }
-    case 5: // Đã nhận hàng nhập kho - Chờ hoàn tiền (Tím)
-      return {
-        label: 'Đã nhận hàng',
-        color: 'purple',
-        bgColor: isDark ? 'rgba(168, 85, 247, 0.18)' : '#f3e8ff',
-        textColor: isDark ? '#d8b4fe' : '#7e22ce',
-        borderColor: isDark ? 'rgba(168, 85, 247, 0.35)' : '#e9d5ff',
-        dotColor: '#a855f7'
       }
     case 6: // Đã hoàn tiền (Xanh ngọc Emerald)
       return {
@@ -267,6 +298,15 @@ const getStatusBadgeConfig = (status: number, maHd: string = '') => {
         textColor: isDark ? '#6ee7b7' : '#047857',
         borderColor: isDark ? 'rgba(16, 185, 129, 0.35)' : '#a7f3d0',
         dotColor: '#10b981'
+      }
+    case 9: // Đã dời lịch (Tím Indigo)
+      return {
+        label: 'Đã dời lịch',
+        color: 'indigo',
+        bgColor: isDark ? 'rgba(99, 102, 241, 0.18)' : '#e0e7ff',
+        textColor: isDark ? '#a5b4fc' : '#4338ca',
+        borderColor: isDark ? 'rgba(99, 102, 241, 0.35)' : '#c7d2fe',
+        dotColor: '#6366f1'
       }
     default:
       return {
@@ -312,6 +352,10 @@ const getStatusSelectOptions = (maHd: string = '') => {
     { title: 'Đã cọc 10%', value: 1 },
     { title: 'Đã thanh toán', value: 2 },
     { title: 'Hoàn thành', value: 3 },
+    { title: 'Tạm hủy (Trễ hẹn)', value: 4 },
+    { title: 'Chờ hoàn tiền', value: 5 },
+    { title: 'Đã hoàn tiền', value: 6 },
+    { title: 'Đã dời lịch', value: 9 },
     { title: 'Đã Hủy', value: 0 }
   ]
 }
@@ -465,8 +509,28 @@ const openVietQRRefundModal = (maHd: string, amount: number = 0) => {
   isVietQRModalOpen.value = true
 }
 
-const handleVietQRUpdated = () => {
-  fetchHoaDons()
+const handleVietQRUpdated = (updatedMaHd?: string) => {
+  if (updatedMaHd) {
+    const all = [...hoaDonDichVu.value, ...hoaDonSanPham.value]
+    const target = all.find((h) => h.maHd === updatedMaHd)
+    if (target) {
+      target.trangThai = 6
+    }
+  }
+  // Tải ngầm danh sách mới nhất ở nền sau, không kích hoạt spinner loading làm giật trang
+  axios.get(`${API_BASE_URL}/danh-sach`, {
+    params: {
+      tuNgay: filter.value.tuNgay,
+      denNgay: filter.value.denNgay,
+      search: searchQuery.value
+    },
+    headers: getAuthHeaders()
+  }).then((res) => {
+    if (res.data.success) {
+      hoaDonSanPham.value = res.data.hoaDonSanPham || []
+      hoaDonDichVu.value = res.data.hoaDonDichVu || []
+    }
+  }).catch(() => {})
 }
 
 const viewDetail = (maHd: string) => {
@@ -484,8 +548,8 @@ watch([() => filter.value.tuNgay, () => filter.value.denNgay], fetchHoaDons)
 
 // ── FILTERED INVOICES & PAGINATION ──
 const filteredInvoices = computed(() => {
-  const list = activeTab.value === 'dichVu' ? hoaDonDichVu.value : hoaDonSanPham.value
-  return list.filter((h) => {
+  const list = activeTab.value === 'dichVu' ? [...hoaDonDichVu.value] : [...hoaDonSanPham.value]
+  const filtered = list.filter((h) => {
     if (selectedStatusFilter.value !== '') {
       if (selectedStatusFilter.value === 'CANCEL_GROUP') {
         if (![0, 4, 5, 6].includes(Number(h.trangThai))) return false
@@ -494,6 +558,13 @@ const filteredInvoices = computed(() => {
       }
     }
     return true
+  })
+
+  // SẮP XẾP THEO THỜI GIAN TẠO: MỚI NHẤT ĐƯỢC ƯU TIÊN LÊN ĐẦU
+  return filtered.sort((a, b) => {
+    const timeA = a.ngayTao ? new Date(a.ngayTao).getTime() : 0
+    const timeB = b.ngayTao ? new Date(b.ngayTao).getTime() : 0
+    return timeB - timeA
   })
 })
 
@@ -794,7 +865,7 @@ const totalPages = computed(() => {
                     color="amber-darken-3"
                     size="small"
                     title="Quét VietQR chuyển tiền hoàn"
-                    @click="openVietQRRefundModal(hd.maHd, hd.thanhTien)"
+                    @click="openVietQRRefundModal(hd.maHd, hd.soTienHoan || hd.tienDaTra || hd.thanhTien)"
                   >
                     <QrCode class="w-4 h-4" />
                   </v-btn>
