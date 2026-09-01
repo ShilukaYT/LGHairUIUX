@@ -75,7 +75,28 @@ const manualForm = ref({
   amount: props.tongTien || 0
 });
 
-const activeBankCode = computed(() => returnData.value?.maNganHang || (isManualMode.value ? manualForm.value.bankCode : ''));
+const parseCleanBankCode = (bankStr?: string) => {
+  if (!bankStr) return 'MB';
+  const b = bankStr.toUpperCase();
+  if (b.includes('MBBANK') || b.includes('MB')) return 'MB';
+  if (b.includes('VIETCOMBANK') || b.includes('VCB')) return 'VCB';
+  if (b.includes('TECHCOMBANK') || b.includes('TCB')) return 'TCB';
+  if (b.includes('VIETINBANK') || b.includes('ICB') || b.includes('CTG')) return 'ICB';
+  if (b.includes('BIDV')) return 'BIDV';
+  if (b.includes('ACB')) return 'ACB';
+  if (b.includes('VPBANK') || b.includes('VPB')) return 'VPB';
+  if (b.includes('TPBANK') || b.includes('TPB')) return 'TPB';
+  if (b.includes('SACOMBANK') || b.includes('STB')) return 'STB';
+  if (b.includes('HDBANK') || b.includes('HDB')) return 'HDB';
+  if (b.includes('VIB')) return 'VIB';
+  if (b.includes('MSB')) return 'MSB';
+  return bankStr.split(' ')[0]?.replace(/[^a-zA-Z0-9]/g, '') || 'MB';
+};
+
+const activeBankCode = computed(() => {
+  const raw = returnData.value?.maNganHang || (isManualMode.value ? manualForm.value.bankCode : '');
+  return parseCleanBankCode(raw);
+});
 const activeStk = computed(() => returnData.value?.soTaiKhoan || (isManualMode.value ? manualForm.value.bankAccountNumber : ''));
 const activeHolder = computed(() => returnData.value?.tenChuTaiKhoan || (isManualMode.value ? manualForm.value.bankAccountHolder : ''));
 const activeAmount = computed(() => Math.round(returnData.value?.soTienHoan || manualForm.value.amount || props.tongTien || 0));
@@ -588,14 +609,14 @@ const handleCompleteRefund = async () => {
         </div>
       </v-card-text>
 
-      <!-- Footer Action Buttons (TUÂN THỦ TUYỆT ĐỐI THEO TRÌNH TỰ BẢO VỆ CHỐNG KHAI KHỐNG) -->
+      <!-- Footer Action Buttons -->
       <v-card-actions class="pa-4 bg-surface border-t d-flex justify-space-between flex-wrap gap-2">
         <v-btn 
           variant="outlined" 
           color="grey-darken-1" 
           rounded="lg"
           class="text-none font-weight-bold px-5" 
-          @click="emit('close'); emit('updated');"
+          @click="emit('close')"
         >
           Đóng cửa sổ
         </v-btn>
