@@ -16,7 +16,13 @@ import {
   CheckCircle2,
   Crown,
   Gem,
-  Shield
+  Shield,
+  X,
+  KeyRound,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  Check
 } from 'lucide-vue-next';
 import axios from 'axios';
 import { useRouter, useRoute } from 'vue-router';
@@ -85,6 +91,8 @@ interface ProfileData {
   diemTichLuy: number;
   tongTienDaChi: number;
   tenRank: string;
+  isGoogleAccount?: boolean;
+  hasPassword?: boolean;
 }
 
 const profileData = ref<ProfileData | null>(null);
@@ -99,6 +107,15 @@ const profileForm = ref({
   sdt: '',
   gioiTinh: 'Nam'
 });
+
+// Password verification modal state
+const showPasswordVerifyModal = ref(false);
+const verifyMethod = ref<'google' | 'password'>('google');
+const oldPasswordInput = ref('');
+const showOldPassword = ref(false);
+const showNewPassword = ref(false);
+const isVerifyingPassword = ref(false);
+const newPasswordPending = ref('');
 
 // Ranks List
 interface RankItem {
@@ -407,9 +424,11 @@ const handleSaveAllChanges = async () => {
     Swal.fire({ icon: 'warning', title: 'Thiếu thông tin', text: 'Vui lòng nhập số điện thoại.', confirmButtonColor: '#000' });
     return;
   }
-  if (!profileForm.value.email.trim()) {
-    Swal.fire({ icon: 'warning', title: 'Thiếu thông tin', text: 'Vui lòng nhập Email.', confirmButtonColor: '#000' });
-    return;
+  // Nếu người dùng xóa trống Email nhưng trong hệ thống đã có Email -> Tự động giữ nguyên Email cũ
+  let submitEmail = profileForm.value.email?.trim() || '';
+  if (!submitEmail && profileData.value?.email) {
+    submitEmail = profileData.value.email.trim();
+    profileForm.value.email = submitEmail;
   }
 
   // Regex validation
@@ -419,7 +438,7 @@ const handleSaveAllChanges = async () => {
     Swal.fire({ icon: 'error', title: 'Lỗi định dạng', text: 'Số điện thoại không hợp lệ (phải từ 10-11 chữ số).', confirmButtonColor: '#000' });
     return;
   }
-  if (!emailRegex.test(profileForm.value.email)) {
+  if (submitEmail && !emailRegex.test(submitEmail)) {
     Swal.fire({ icon: 'error', title: 'Lỗi định dạng', text: 'Địa chỉ Email không đúng định dạng.', confirmButtonColor: '#000' });
     return;
   }
@@ -432,7 +451,7 @@ const handleSaveAllChanges = async () => {
     const updateRes = await axios.put(`${API_BASE_URL}/api/Profile/update`, {
       hoTen: mergedHoTen,
       sdt: profileForm.value.sdt,
-      email: profileForm.value.email,
+      email: submitEmail,
       gioiTinh: profileForm.value.gioiTinh
     }, {
       headers: getAuthHeaders()
@@ -449,51 +468,15 @@ const handleSaveAllChanges = async () => {
         throw new Error('Mật khẩu mới phải có ít nhất 6 ký tự, bao gồm cả chữ cái và số.');
       }
 
-      isSavingProfile.value = false; // pause indicator to wait for prompt
-      const { value: oldPassword } = await Swal.fire({
-        title: 'Xác thực mật khẩu cũ',
-        text: 'Vui lòng nhập mật khẩu hiện tại để xác nhận thay đổi mật khẩu:',
-        input: 'password',
-        inputPlaceholder: 'Nhập mật khẩu hiện tại...',
-        showCancelButton: true,
-        confirmButtonColor: '#000',
-        cancelButtonColor: '#d33',
-        confirmButtonText: 'Xác nhận',
-        cancelButtonText: 'Hủy'
-      });
-
-      if (!oldPassword) {
-        // User cancelled password prompt, keep profile changes but abort password
-        Swal.fire({
-          icon: 'info',
-          title: 'Cập nhật một phần',
-          text: 'Đã cập nhật thông tin cá nhân. Thay đổi mật khẩu đã bị hủy.',
-          confirmButtonColor: '#000'
-        });
-        newPasswordInput.value = '';
-        await fetchProfileData();
-        return;
-      }
-
-      isSavingProfile.value = true; // resume indicator
-      const passwordRes = await axios.put(`${API_BASE_URL}/api/Profile/change-password`, {
-        oldPassword: oldPassword,
-        newPassword: newPasswordInput.value.trim()
-      }, {
-        headers: getAuthHeaders()
-      });
-
-      if (!passwordRes.data || !passwordRes.data.success) {
-        throw new Error(passwordRes.data?.message || 'Mật khẩu cũ không chính xác. Không thể đổi mật khẩu mới.');
-      }
-      
-      newPasswordInput.value = '';
+      isSavingProfile.value = false;
+      openPasswordVerifyModal();
+      return;
     }
 
     Swal.fire({
       icon: 'success',
       title: 'Thành công!',
-      text: 'Đã lưu mọi thay đổi thành công.',
+      text: 'Đã lưu thông tin cá nhân thành công.',
       timer: 1500,
       showConfirmButton: false
     });
@@ -510,6 +493,145 @@ const handleSaveAllChanges = async () => {
     });
   } finally {
     isSavingProfile.value = false;
+  }
+};
+
+const openPasswordVerifyModal = () => {
+  if (!newPasswordInput.value.trim()) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Chưa nhập mật khẩu mới',
+      text: 'Vui lòng nhập mật khẩu mới cần đổi trước khi xác minh.',
+      confirmButtonColor: '#000'
+    });
+    return;
+  }
+
+  const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d).{6,}$/;
+  if (!passwordRegex.test(newPasswordInput.value.trim())) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Mật khẩu không hợp lệ',
+      text: 'Mật khẩu mới phải có ít nhất 6 ký tự, bao gồm cả chữ cái và số.',
+      confirmButtonColor: '#000'
+    });
+    return;
+  }
+
+  newPasswordPending.value = newPasswordInput.value.trim();
+  oldPasswordInput.value = '';
+  // Nếu tài khoản tạo qua Google -> mặc định mở tab Google
+  if (profileData.value?.isGoogleAccount) {
+    verifyMethod.value = 'google';
+  } else {
+    verifyMethod.value = 'password';
+  }
+
+  showPasswordVerifyModal.value = true;
+};
+
+const closePasswordVerifyModal = () => {
+  showPasswordVerifyModal.value = false;
+  oldPasswordInput.value = '';
+};
+
+// Xác minh danh tính bằng Google OAuth để đổi mật khẩu
+const handleGoogleVerifyForPassword = async (response: any) => {
+  if (!response?.credential) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Lỗi xác thực',
+      text: 'Không nhận được thông tin xác thực từ Google.',
+      confirmButtonColor: '#000'
+    });
+    return;
+  }
+
+  isVerifyingPassword.value = true;
+  try {
+    const res = await axios.put(`${API_BASE_URL}/api/Profile/change-password`, {
+      googleCredential: response.credential,
+      newPassword: newPasswordPending.value
+    }, {
+      headers: getAuthHeaders()
+    });
+
+    if (res.data && res.data.success) {
+      showPasswordVerifyModal.value = false;
+      newPasswordInput.value = '';
+      newPasswordPending.value = '';
+      oldPasswordInput.value = '';
+      Swal.fire({
+        icon: 'success',
+        title: 'Thành công!',
+        text: res.data.message || 'Xác minh Google thành công! Đã đổi mật khẩu mới.',
+        confirmButtonColor: '#000'
+      });
+      await fetchProfileData();
+    } else {
+      throw new Error(res.data?.message || 'Không thể đổi mật khẩu qua Google.');
+    }
+  } catch (err: any) {
+    console.error(err);
+    const serverMessage = err.response?.data?.message || err.message || 'Xác minh Google thất bại.';
+    Swal.fire({
+      icon: 'error',
+      title: 'Xác thực thất bại',
+      text: serverMessage,
+      confirmButtonColor: '#000'
+    });
+  } finally {
+    isVerifyingPassword.value = false;
+  }
+};
+
+// Xác minh bằng mật khẩu cũ thông thường
+const handleOldPasswordVerifySubmit = async () => {
+  if (!oldPasswordInput.value.trim()) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Thiếu thông tin',
+      text: 'Vui lòng nhập mật khẩu hiện tại.',
+      confirmButtonColor: '#000'
+    });
+    return;
+  }
+
+  isVerifyingPassword.value = true;
+  try {
+    const res = await axios.put(`${API_BASE_URL}/api/Profile/change-password`, {
+      oldPassword: oldPasswordInput.value.trim(),
+      newPassword: newPasswordPending.value
+    }, {
+      headers: getAuthHeaders()
+    });
+
+    if (res.data && res.data.success) {
+      showPasswordVerifyModal.value = false;
+      newPasswordInput.value = '';
+      newPasswordPending.value = '';
+      oldPasswordInput.value = '';
+      Swal.fire({
+        icon: 'success',
+        title: 'Thành công!',
+        text: res.data.message || 'Đổi mật khẩu thành công!',
+        confirmButtonColor: '#000'
+      });
+      await fetchProfileData();
+    } else {
+      throw new Error(res.data?.message || 'Mật khẩu cũ không chính xác.');
+    }
+  } catch (err: any) {
+    console.error(err);
+    const serverMessage = err.response?.data?.message || err.message || 'Đổi mật khẩu thất bại.';
+    Swal.fire({
+      icon: 'error',
+      title: 'Đổi mật khẩu thất bại',
+      text: serverMessage,
+      confirmButtonColor: '#000'
+    });
+  } finally {
+    isVerifyingPassword.value = false;
   }
 };
 
@@ -681,12 +803,7 @@ const handleLogoutAll = () => {
   <div class="w-full bg-[#fcfcfc] min-h-screen py-8 lg:py-12 animate-in fade-in duration-500">
     <div class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
       
-      <!-- Breadcrumbs -->
-      <div class="text-[10px] uppercase tracking-widest text-gray-400 mb-6 font-semibold">
-        <router-link to="/" class="hover:text-black transition-colors">Trang chủ</router-link>
-        <span class="mx-2">/</span>
-        <span class="text-black">Hồ sơ cá nhân</span>
-      </div>
+
       <!-- Guest / Not logged in State -->
       <div v-if="!customerInfo || customerInfo.maKH === 'GUEST'" class="bg-white p-12 border border-gray-200 shadow-sm text-center py-20 rounded-sm">
         <ShieldAlert class="w-14 h-14 mx-auto text-gray-300 mb-6" :stroke-width="1.2" />
@@ -888,7 +1005,7 @@ const handleLogoutAll = () => {
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label class="block text-[9px] uppercase tracking-widest text-gray-500 font-bold mb-2">Email</label>
-                      <input v-model="profileForm.email" type="email" placeholder="email@example.com" required
+                      <input v-model="profileForm.email" type="email" placeholder="email@example.com (không bắt buộc)"
                         class="w-full bg-white border border-gray-200 focus:border-black outline-none px-4 py-3 text-xs transition-all rounded-sm text-black shadow-sm" />
                     </div>
                     <div>
@@ -912,7 +1029,20 @@ const handleLogoutAll = () => {
 
                   <!-- Security Section -->
                   <div class="pt-8 border-t border-gray-150">
-                    <h3 class="font-heading text-xs uppercase tracking-widest text-black font-bold mb-6">Tài khoản & bảo mật</h3>
+                    <div class="flex items-center justify-between mb-4">
+                      <h3 class="font-heading text-xs uppercase tracking-widest text-black font-bold">Tài khoản & bảo mật</h3>
+                      
+                      <!-- Google account indicator -->
+                      <div v-if="profileData?.isGoogleAccount" class="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50/90 border border-amber-200/80 text-amber-900 text-[10.5px] font-medium rounded-full shadow-2xs">
+                        <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">
+                          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                        </svg>
+                        <span>Đã liên kết với tài khoản Google</span>
+                      </div>
+                    </div>
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
@@ -922,9 +1052,29 @@ const handleLogoutAll = () => {
                         <span class="text-[8px] uppercase tracking-wider text-gray-400 block mt-1 font-semibold">Mặc định dùng Email hoặc SĐT đăng nhập</span>
                       </div>
                       <div>
-                        <label class="block text-[9px] uppercase tracking-widest text-gray-500 font-bold mb-2">Mật khẩu mới</label>
-                        <input v-model="newPasswordInput" type="password" placeholder="Bỏ trống nếu không đổi..."
-                          class="w-full bg-white border border-gray-200 focus:border-black outline-none px-4 py-3 text-xs transition-all rounded-sm text-black shadow-sm" />
+                        <div class="flex items-center justify-between mb-2">
+                          <label class="block text-[9px] uppercase tracking-widest text-gray-500 font-bold">Mật khẩu mới</label>
+                          <button 
+                            v-if="profileData?.isGoogleAccount && newPasswordInput.trim()"
+                            type="button"
+                            @click="openPasswordVerifyModal"
+                            class="text-[9px] uppercase tracking-widest text-amber-700 hover:text-black font-bold flex items-center gap-1 transition-colors"
+                          >
+                            <Sparkles :size="12" />
+                            <span>Xác minh Google ngay</span>
+                          </button>
+                        </div>
+                        <div class="relative">
+                          <input :type="showNewPassword ? 'text' : 'password'" v-model="newPasswordInput" placeholder="Bỏ trống nếu không đổi..."
+                            class="w-full bg-white border border-gray-200 focus:border-black outline-none px-4 py-3 pr-10 text-xs transition-all rounded-sm text-black shadow-sm" />
+                          <button type="button" @click="showNewPassword = !showNewPassword" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black">
+                            <Eye v-if="!showNewPassword" :size="14" />
+                            <EyeOff v-else :size="14" />
+                          </button>
+                        </div>
+                        <p v-if="profileData?.isGoogleAccount" class="text-[8px] text-gray-400 mt-1 font-medium">
+                          Tài khoản đã liên kết Google: Bạn có thể đổi hoặc đặt mật khẩu mới dễ dàng bằng cách bấm nút <strong>Xác minh Google</strong>.
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -1156,6 +1306,156 @@ const handleLogoutAll = () => {
       </div>
 
     </div>
+
+    <!-- MODAL XÁC THỰC DANH TÍNH ĐỔI MẬT KHẨU (HỖ TRỢ GOOGLE VÀ MẬT KHẨU CŨ) -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition duration-300 ease-out"
+        enter-from-class="opacity-0 scale-95"
+        enter-to-class="opacity-100 scale-100"
+        leave-active-class="transition duration-200 ease-in"
+        leave-from-class="opacity-100 scale-100"
+        leave-to-class="opacity-0 scale-95"
+      >
+        <div
+          v-if="showPasswordVerifyModal"
+          class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
+          @click.self="closePasswordVerifyModal"
+        >
+          <div class="bg-white w-full max-w-[480px] border border-gray-200 shadow-2xl relative overflow-hidden rounded-sm animate-in fade-in zoom-in-95 duration-200">
+            <!-- Header -->
+            <div class="bg-black px-6 py-5 text-white flex items-center justify-between relative">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center border border-white/20">
+                  <KeyRound :size="18" class="text-amber-400" />
+                </div>
+                <div>
+                  <h3 class="text-sm font-heading uppercase tracking-[0.15em] font-bold text-white">Xác thực đổi mật khẩu</h3>
+                  <p class="text-white/60 text-[10px] tracking-wide mt-0.5">Bảo vệ an toàn tài khoản của bạn</p>
+                </div>
+              </div>
+              <button
+                @click="closePasswordVerifyModal"
+                class="text-white/70 hover:text-white transition-colors p-1"
+              >
+                <X :size="18" />
+              </button>
+            </div>
+
+            <!-- Body -->
+            <div class="p-6">
+              <div class="mb-5">
+                <p class="text-xs text-gray-600 leading-relaxed font-light">
+                  Bạn đang yêu cầu đặt mật khẩu mới cho tài khoản: <strong class="text-black font-semibold">{{ profileData?.email || profileData?.sdt }}</strong>
+                </p>
+              </div>
+
+              <!-- Verification Method Selector -->
+              <div class="flex border border-gray-200 p-1 bg-gray-50 rounded-sm mb-6">
+                <!-- Tab 1: Google Verify (Khuyên dùng) -->
+                <button
+                  type="button"
+                  @click="verifyMethod = 'google'"
+                  :class="[
+                    'flex-1 flex items-center justify-center gap-2 py-2.5 px-3 text-[10px] uppercase tracking-wider font-bold transition-all rounded-xs',
+                    verifyMethod === 'google' ? 'bg-white text-black shadow-xs border border-gray-200' : 'text-gray-500 hover:text-black'
+                  ]"
+                >
+                  <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                  </svg>
+                  <span>Xác minh Google</span>
+                </button>
+
+                <!-- Tab 2: Mật khẩu cũ -->
+                <button
+                  type="button"
+                  @click="verifyMethod = 'password'"
+                  :class="[
+                    'flex-1 flex items-center justify-center gap-2 py-2.5 px-3 text-[10px] uppercase tracking-wider font-bold transition-all rounded-xs',
+                    verifyMethod === 'password' ? 'bg-white text-black shadow-xs border border-gray-200' : 'text-gray-500 hover:text-black'
+                  ]"
+                >
+                  <Lock :size="13" />
+                  <span>Mật khẩu cũ</span>
+                </button>
+              </div>
+
+              <!-- VIEW 1: XÁC MINH QUA GOOGLE (Cực kỳ tiện cho tài khoản Google) -->
+              <div v-if="verifyMethod === 'google'" class="space-y-4 text-center py-2">
+                <div class="bg-amber-50/60 border border-amber-200/80 p-4 rounded-sm text-left">
+                  <div class="flex items-start gap-2.5">
+                    <Sparkles :size="16" class="text-amber-700 shrink-0 mt-0.5" />
+                    <div>
+                      <p class="text-[11px] text-amber-900 font-medium">Xác thực 1 chạm với Google</p>
+                      <p class="text-[10px] text-amber-700 font-light mt-0.5 leading-relaxed">
+                        Bạn chỉ cần bấm nút bên dưới và chọn đúng tài khoản Google <strong class="font-semibold">{{ profileData?.email }}</strong> để hệ thống xác nhận và đặt mật khẩu mới ngay.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex justify-center pt-2 pb-1 min-h-[44px]">
+                  <GoogleLogin :callback="handleGoogleVerifyForPassword" :button-config="{ width: 300, shape: 'rectangular', text: 'continue_with' }" />
+                </div>
+
+                <div v-if="isVerifyingPassword" class="flex items-center justify-center gap-2 text-xs text-gray-500 pt-2">
+                  <Loader2 class="w-4 h-4 animate-spin text-black" />
+                  <span>Đang kiểm tra xác thực Google...</span>
+                </div>
+              </div>
+
+              <!-- VIEW 2: XÁC MINH BẰNG MẬT KHẨU HIỆN TẠI -->
+              <div v-else class="space-y-4">
+                <div>
+                  <label class="block text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-2">Nhập mật khẩu hiện tại</label>
+                  <div class="relative">
+                    <input
+                      :type="showOldPassword ? 'text' : 'password'"
+                      v-model="oldPasswordInput"
+                      @keyup.enter="handleOldPasswordVerifySubmit"
+                      placeholder="Mật khẩu đang sử dụng..."
+                      class="w-full bg-white border border-gray-200 focus:border-black outline-none px-4 py-3 pr-10 text-xs transition-all rounded-sm text-black shadow-sm"
+                    />
+                    <button
+                      type="button"
+                      @click="showOldPassword = !showOldPassword"
+                      class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black"
+                    >
+                      <Eye v-if="!showOldPassword" :size="14" />
+                      <EyeOff v-else :size="14" />
+                    </button>
+                  </div>
+                </div>
+
+                <div class="pt-2">
+                  <button
+                    type="button"
+                    :disabled="isVerifyingPassword || !oldPasswordInput.trim()"
+                    @click="handleOldPasswordVerifySubmit"
+                    class="w-full bg-black text-white py-3.5 text-[10px] uppercase tracking-[0.2em] font-semibold transition-all hover:bg-gray-900 active:scale-[0.98] disabled:opacity-40 rounded-sm flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    <Loader2 v-if="isVerifyingPassword" class="w-3.5 h-3.5 animate-spin" />
+                    <span>Xác nhận & Cập nhật mật khẩu</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Footer note -->
+              <div class="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between text-[10px] text-gray-400">
+                <span>LG Hair Security System</span>
+                <button type="button" @click="closePasswordVerifyModal" class="hover:text-black underline uppercase tracking-wider">
+                  Hủy thao tác
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 

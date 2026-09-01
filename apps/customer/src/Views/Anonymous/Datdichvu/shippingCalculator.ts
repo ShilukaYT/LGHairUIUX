@@ -1,6 +1,6 @@
 
 // Địa chỉ kho mặc định
-export const KHO_ORIGIN = "C01- 03 đường 10 tháng 3, Phường Thành Nhất, TP Buôn Ma Thuột, Tỉnh Đăk Lăk";
+export const KHO_ORIGIN = "123 Nguyễn Tất Thành, Phường Buôn Ma Thuột, Tỉnh Đăk Lăk";
 
 /**
  * Tính phí giao hàng dựa trên khoảng cách và địa chỉ

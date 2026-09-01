@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, reactive, shallowRef } from 'vue';
 import axios from 'axios';
-import Swal from 'sweetalert2';
 import { 
   QrCode, 
   Copy, 
@@ -18,7 +17,11 @@ import {
   UserCheck,
   X,
   PlusCircle,
-  RefreshCw
+  RefreshCw,
+  Eye,
+  Image as ImageIcon,
+  HelpCircle,
+  AlertTriangle
 } from 'lucide-vue-next';
 
 const props = defineProps<{
@@ -39,6 +42,39 @@ const getAuthHeaders = () => {
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 
+// ── NOTIFICATION SNACKBAR ──
+const snackbar = reactive({
+  show: false,
+  text: '',
+  color: 'success'
+});
+
+const showSnackbar = (text: string, color: 'success' | 'error' | 'warning' | 'info' = 'success') => {
+  snackbar.text = text;
+  snackbar.color = color;
+  snackbar.show = true;
+};
+
+// ── VUETIFY 3 CONFIRMATION DIALOG ──
+const confirmDialog = reactive({
+  show: false,
+  title: '',
+  subtitle: '',
+  description: '',
+  icon: shallowRef<any>(HelpCircle),
+  iconColor: 'primary',
+  confirmText: 'Xác nhận',
+  cancelText: 'Hủy bỏ',
+  confirmColor: 'primary',
+  requireInput: false,
+  inputLabel: '',
+  inputPlaceholder: '',
+  inputValue: '',
+  inputError: '',
+  loading: false,
+  onConfirm: null as null | (() => Promise<void> | void)
+});
+
 const popularBanks = [
   { code: 'MB', name: 'MBBank (Ngân Hàng Quân Đội)' },
   { code: 'VCB', name: 'Vietcombank' },
@@ -50,12 +86,18 @@ const popularBanks = [
   { code: 'TPB', name: 'TPBank' },
   { code: 'STB', name: 'Sacombank' },
   { code: 'HDB', name: 'HDBank' },
+  { code: 'SHB', name: 'SHB' },
   { code: 'VIB', name: 'VIB' },
-  { code: 'MSB', name: 'MSB' }
+  { code: 'MSB', name: 'MSB' },
+  { code: 'LPB', name: 'LPBank' },
+  { code: 'OCB', name: 'OCB' },
+  { code: 'CAKE', name: 'CAKE by VPBank' },
+  { code: 'TIMO', name: 'Timo Digital Bank' },
+  { code: 'VIETCAPITALBANK', name: 'BVBank (Bản Việt)' }
 ];
 
 const formatPrice = (p?: number) => {
-  return p != null ? p.toLocaleString('vi-VN') + '₫' : '0₫';
+  return (p || 0).toLocaleString('vi-VN') + '₫';
 };
 
 const formatDate = (dateStr?: string) => {
@@ -84,7 +126,7 @@ const vietQrUrl = computed(() => {
   if (!activeBankCode.value || !activeStk.value) return '';
   const memo = encodeURIComponent(`HOAN TIEN DON ${props.maHd}`);
   const name = encodeURIComponent(activeHolder.value || '');
-  return `https://img.vietqr.io/image/${activeBankCode.value}-${activeStk.value}-compact2.png?amount=${activeAmount.value}&addInfo=${memo}&accountName=${name}`;
+  return `https://img.vietqr.io/image/${activeBankCode.value}-${activeStk.value}-compact1.png?amount=${activeAmount.value}&addInfo=${memo}&accountName=${name}`;
 });
 
 const getTrackingLink = (courier?: string, code?: string) => {
@@ -114,6 +156,15 @@ const copyToClipboard = (text: string) => {
   }, 2000);
 };
 
+const isImagePreviewOpen = ref(false);
+const previewImageUrl = ref('');
+
+const openImagePreview = (url: string) => {
+  if (!url) return;
+  previewImageUrl.value = url;
+  isImagePreviewOpen.value = true;
+};
+
 const fetchReturnDetails = async () => {
   if (!props.maHd) return;
   isLoading.value = true;
@@ -127,7 +178,6 @@ const fetchReturnDetails = async () => {
     if (res.data && res.data.hasData) {
       returnData.value = res.data.data;
 
-      // Đồng bộ fallback từ localStorage nếu vừa cập nhật bưu kiện
       if (!returnData.value.maVanDon) {
         const localVandon = localStorage.getItem(`hoan_hang_vandon_${props.maHd}`);
         if (localVandon) {
@@ -170,148 +220,143 @@ watch(() => props.isOpen, (val) => {
 });
 
 // THAO TÁC ADMIN 1: DUYỆT YÊU CẦU HOÀN
-const handleApprove = async () => {
-  const result = await Swal.fire({
-    title: 'Duyệt yêu cầu hoàn hàng?',
-    text: `Xác nhận duyệt yêu cầu hoàn đơn #${props.maHd} để khách gửi hàng về Salon.`,
-    icon: 'question',
-    showCancelButton: true,
-    confirmButtonText: 'Duyệt yêu cầu',
-    cancelButtonText: 'Hủy',
-    confirmButtonColor: '#334155'
-  });
-  if (!result.isConfirmed) return;
+const handleApprove = () => {
+  confirmDialog.title = 'Duyệt yêu cầu hoàn hàng?';
+  confirmDialog.subtitle = `Đơn hàng #${props.maHd}`;
+  confirmDialog.description = 'Xác nhận duyệt yêu cầu hoàn đơn để khách hàng tiến hành gửi bưu phẩm về Salon.';
+  confirmDialog.icon = shallowRef(CheckCircle2);
+  confirmDialog.iconColor = 'success';
+  confirmDialog.confirmText = 'Duyệt yêu cầu';
+  confirmDialog.cancelText = 'Hủy';
+  confirmDialog.confirmColor = 'success';
+  confirmDialog.requireInput = false;
+  confirmDialog.onConfirm = async () => {
+    try {
+      confirmDialog.loading = true;
+      const res = await axios.patch(`${API_BASE_URL}/api/hoan-hang/admin/duyet-yeu-cau/${props.maHd}`, {
+        dongY: true
+      }, { headers: getAuthHeaders() });
 
-  try {
-    const res = await axios.patch(`${API_BASE_URL}/api/hoan-hang/admin/duyet-yeu-cau/${props.maHd}`, {
-      dongY: true
-    }, { headers: getAuthHeaders() });
-
-    Swal.fire({
-      icon: 'success',
-      title: 'Đã duyệt yêu cầu!',
-      text: res.data?.message || 'Đã chấp thuận yêu cầu đổi trả của khách hàng.',
-      confirmButtonColor: '#334155'
-    });
-    fetchReturnDetails();
-    emit('updated');
-  } catch (err: any) {
-    Swal.fire({ icon: 'error', title: 'Lỗi', text: err.response?.data?.message || 'Lỗi khi duyệt yêu cầu hoàn.', confirmButtonColor: '#334155' });
-  }
+      confirmDialog.show = false;
+      showSnackbar(res.data?.message || 'Đã chấp thuận yêu cầu đổi trả của khách hàng.', 'success');
+      fetchReturnDetails();
+      emit('updated');
+    } catch (err: any) {
+      showSnackbar(err.response?.data?.message || 'Lỗi khi duyệt yêu cầu hoàn.', 'error');
+    } finally {
+      confirmDialog.loading = false;
+    }
+  };
+  confirmDialog.show = true;
 };
 
 // THAO TÁC ADMIN 2: TỪ CHỐI YÊU CẦU HOÀN
-const handleReject = async () => {
-  const { value: reason } = await Swal.fire({
-    title: 'Từ chối yêu cầu hoàn hàng',
-    input: 'textarea',
-    inputLabel: 'Lý do từ chối (bắt buộc):',
-    inputPlaceholder: 'Nhập lý do chi tiết từ chối...',
-    showCancelButton: true,
-    confirmButtonText: 'Xác nhận Từ Chối',
-    cancelButtonText: 'Hủy bỏ',
-    confirmButtonColor: '#dc2626',
-    inputValidator: (value) => {
-      if (!value || !value.trim()) {
-        return 'Vui lòng nhập lý do từ chối!';
-      }
+const handleReject = () => {
+  confirmDialog.title = 'Từ chối yêu cầu hoàn hàng';
+  confirmDialog.subtitle = `Đơn hàng #${props.maHd}`;
+  confirmDialog.description = 'Vui lòng nhập lý do từ chối chi tiết gửi tới khách hàng:';
+  confirmDialog.icon = shallowRef(Ban);
+  confirmDialog.iconColor = 'error';
+  confirmDialog.confirmText = 'Xác nhận Từ Chối';
+  confirmDialog.cancelText = 'Hủy bỏ';
+  confirmDialog.confirmColor = 'error';
+  confirmDialog.requireInput = true;
+  confirmDialog.inputLabel = 'Lý do từ chối (bắt buộc)';
+  confirmDialog.inputPlaceholder = 'Nhập lý do chi tiết từ chối...';
+  confirmDialog.inputValue = '';
+  confirmDialog.inputError = '';
+  confirmDialog.onConfirm = async () => {
+    if (!confirmDialog.inputValue.trim()) {
+      confirmDialog.inputError = 'Vui lòng nhập lý do từ chối!';
+      return;
     }
-  });
+    try {
+      confirmDialog.loading = true;
+      const res = await axios.patch(`${API_BASE_URL}/api/hoan-hang/admin/duyet-yeu-cau/${props.maHd}`, {
+        dongY: false,
+        lyDoTuChoi: confirmDialog.inputValue.trim()
+      }, { headers: getAuthHeaders() });
 
-  if (!reason) return;
-
-  try {
-    const res = await axios.patch(`${API_BASE_URL}/api/hoan-hang/admin/duyet-yeu-cau/${props.maHd}`, {
-      dongY: false,
-      lyDoTuChoi: reason
-    }, { headers: getAuthHeaders() });
-
-    Swal.fire({
-      icon: 'info',
-      title: 'Đã từ chối hoàn hàng',
-      text: res.data?.message || 'Đã từ chối yêu cầu đổi trả.',
-      confirmButtonColor: '#334155'
-    });
-    fetchReturnDetails();
-    emit('updated');
-  } catch (err: any) {
-    Swal.fire({ icon: 'error', title: 'Lỗi', text: err.response?.data?.message || 'Lỗi khi từ chối yêu cầu.', confirmButtonColor: '#334155' });
-  }
+      confirmDialog.show = false;
+      showSnackbar(res.data?.message || 'Đã từ chối yêu cầu đổi trả.', 'info');
+      fetchReturnDetails();
+      emit('updated');
+    } catch (err: any) {
+      showSnackbar(err.response?.data?.message || 'Lỗi khi từ chối yêu cầu.', 'error');
+    } finally {
+      confirmDialog.loading = false;
+    }
+  };
+  confirmDialog.show = true;
 };
 
 // THAO TÁC ADMIN 3: XÁC NHẬN ĐÃ NHẬN ĐƯỢC HÀNG & NHẬP KHO (TỰ ĐỘNG CỘNG TỒN KHO)
-const handleRestock = async () => {
+const handleRestock = () => {
   if (!returnData.value?.maVanDon) {
-    Swal.fire({
-      icon: 'warning',
-      title: 'Chưa có mã vận đơn!',
-      text: 'Khách hàng chưa cập nhật mã vận đơn bưu phẩm và ảnh biên lai gửi hàng. Không thể nhận hàng để tránh trường hợp khai khống!',
-      confirmButtonColor: '#334155'
-    });
+    showSnackbar('Khách hàng chưa cập nhật mã vận đơn bưu phẩm và ảnh biên lai gửi hàng.', 'warning');
     return;
   }
 
-  const result = await Swal.fire({
-    title: 'Xác nhận đã nhận hàng bưu phẩm?',
-    html: `Bạn đã nhận được kiện hàng <b>#${props.maHd}</b> (Vận đơn: <b>${returnData.value.donViVanChuyen || ''} - ${returnData.value.maVanDon}</b>) và kiểm tra nguyên vẹn?<br/><br/><small class="text-gray-500">Hệ thống sẽ tự động nhập lại số lượng sản phẩm vào kho tồn và cho phép hoàn tiền.</small>`,
-    icon: 'question',
-    showCancelButton: true,
-    confirmButtonText: 'Đã nhận & Nhập kho',
-    cancelButtonText: 'Chưa nhận',
-    confirmButtonColor: '#334155'
-  });
-  if (!result.isConfirmed) return;
+  confirmDialog.title = 'Xác nhận đã nhận hàng bưu phẩm?';
+  confirmDialog.subtitle = `Đơn #${props.maHd} • Vận đơn: ${returnData.value.donViVanChuyen || ''} - ${returnData.value.maVanDon}`;
+  confirmDialog.description = 'Bạn xác nhận Salon đã nhận được kiện hàng và kiểm tra nguyên vẹn? Hệ thống sẽ tự động nhập lại số lượng sản phẩm vào kho tồn và cho phép hoàn tiền.';
+  confirmDialog.icon = shallowRef(PackageCheck);
+  confirmDialog.iconColor = 'purple-darken-1';
+  confirmDialog.confirmText = 'Đã nhận & Nhập kho';
+  confirmDialog.cancelText = 'Chưa nhận';
+  confirmDialog.confirmColor = 'primary';
+  confirmDialog.requireInput = false;
+  confirmDialog.onConfirm = async () => {
+    try {
+      confirmDialog.loading = true;
+      const res = await axios.patch(`${API_BASE_URL}/api/hoan-hang/admin/nhan-hang-nhap-kho/${props.maHd}`, {}, {
+        headers: getAuthHeaders()
+      });
 
-  try {
-    const res = await axios.patch(`${API_BASE_URL}/api/hoan-hang/admin/nhan-hang-nhap-kho/${props.maHd}`, {}, {
-      headers: getAuthHeaders()
-    });
-
-    Swal.fire({
-      icon: 'success',
-      title: 'Đã nhập kho thành công!',
-      text: res.data?.message || 'Đã nhận hàng hoàn và hoàn trả số lượng vào kho. Bây giờ bạn có thể quét VietQR và hoàn tiền.',
-      confirmButtonColor: '#334155'
-    });
-    localStorage.setItem(`hoan_hang_status_${props.maHd}`, '5');
-    fetchReturnDetails();
-    emit('updated');
-  } catch (err: any) {
-    Swal.fire({ icon: 'error', title: 'Lỗi', text: err.response?.data?.message || 'Lỗi khi nhập kho hàng hoàn.', confirmButtonColor: '#334155' });
-  }
+      localStorage.setItem(`hoan_hang_status_${props.maHd}`, '5');
+      fetchReturnDetails();
+      emit('updated');
+      confirmDialog.show = false;
+      showSnackbar(res.data?.message || 'Đã nhận hàng hoàn và nhập kho thành công! Bây giờ bạn có thể quét VietQR và hoàn tiền.', 'success');
+    } catch (err: any) {
+      showSnackbar(err.response?.data?.message || 'Lỗi khi nhập kho hàng hoàn.', 'error');
+    } finally {
+      confirmDialog.loading = false;
+    }
+  };
+  confirmDialog.show = true;
 };
 
 // THAO TÁC ADMIN 4: XÁC NHẬN ĐÃ CHUYỂN TIỀN HOÀN QUA VIETQR (CHỈ KHI ĐÃ NHẬP KHO XONG - TRẠNG THÁI 5)
-const handleCompleteRefund = async () => {
-  const result = await Swal.fire({
-    title: 'Xác nhận đã chuyển tiền hoàn?',
-    html: `Bạn đã quét mã VietQR và <b>chuyển tiền hoàn ${formatPrice(activeAmount.value)}</b> cho khách thành công?`,
-    icon: 'success',
-    showCancelButton: true,
-    confirmButtonText: 'Xác nhận Đã hoàn tiền',
-    cancelButtonText: 'Chưa chuyển',
-    confirmButtonColor: '#059669'
-  });
-  if (!result.isConfirmed) return;
+const handleCompleteRefund = () => {
+  confirmDialog.title = 'Xác nhận đã chuyển tiền hoàn?';
+  confirmDialog.subtitle = `Số tiền: ${formatPrice(activeAmount.value)} • Đơn #${props.maHd}`;
+  confirmDialog.description = 'Bạn đã quét mã VietQR và chuyển tiền hoàn trả cho khách thành công?';
+  confirmDialog.icon = shallowRef(QrCode);
+  confirmDialog.iconColor = 'emerald-darken-1';
+  confirmDialog.confirmText = 'Xác nhận Đã hoàn tiền';
+  confirmDialog.cancelText = 'Chưa chuyển';
+  confirmDialog.confirmColor = 'success';
+  confirmDialog.requireInput = false;
+  confirmDialog.onConfirm = async () => {
+    try {
+      confirmDialog.loading = true;
+      const res = await axios.patch(`${API_BASE_URL}/api/hoan-hang/admin/xac-nhan-hoan-tien-xong/${props.maHd}`, {}, {
+        headers: getAuthHeaders()
+      });
 
-  try {
-    const res = await axios.patch(`${API_BASE_URL}/api/hoan-hang/admin/xac-nhan-hoan-tien-xong/${props.maHd}`, {}, {
-      headers: getAuthHeaders()
-    });
-
-    localStorage.setItem(`hoan_hang_status_${props.maHd}`, '6');
-    emit('close');
-    emit('updated');
-
-    Swal.fire({
-      icon: 'success',
-      title: 'Hoàn tất hoàn tiền 100%!',
-      text: res.data?.message || 'Đơn hàng đã được chuyển sang trạng thái Đã hoàn tiền (Trạng thái 6)!',
-      confirmButtonColor: '#0f172a'
-    });
-  } catch (err: any) {
-    Swal.fire({ icon: 'error', title: 'Lỗi', text: err.response?.data?.message || 'Lỗi khi xác nhận hoàn tiền.' });
-  }
+      localStorage.setItem(`hoan_hang_status_${props.maHd}`, '6');
+      confirmDialog.show = false;
+      emit('close');
+      emit('updated');
+      showSnackbar(res.data?.message || 'Đơn hàng đã được chuyển sang trạng thái Đã hoàn tiền (Trạng thái 6)!', 'success');
+    } catch (err: any) {
+      showSnackbar(err.response?.data?.message || 'Lỗi khi xác nhận hoàn tiền.', 'error');
+    } finally {
+      confirmDialog.loading = false;
+    }
+  };
+  confirmDialog.show = true;
 };
 </script>
 
@@ -514,20 +559,29 @@ const handleCompleteRefund = async () => {
 
                 <!-- Ảnh biên lai gửi hàng nếu có -->
                 <div v-if="returnData.hinhAnhBienLai" class="border-t pt-2">
-                  <div class="font-weight-bold text-medium-emphasis mb-1.5 flex items-center gap-1">
+                  <div class="font-weight-bold text-medium-emphasis mb-1.5 flex items-center justify-between">
                     <span>📸 Ảnh biên lai / Bill gửi:</span>
+                    <span 
+                      class="text-[11px] text-primary cursor-pointer hover:underline font-bold flex items-center gap-0.5"
+                      @click="openImagePreview(returnData.hinhAnhBienLai.startsWith('http') || returnData.hinhAnhBienLai.startsWith('data:') ? returnData.hinhAnhBienLai : `${API_BASE_URL}${returnData.hinhAnhBienLai}`)"
+                    >
+                      <Eye class="w-3 h-3" /> Xem lớn
+                    </span>
                   </div>
-                  <div class="relative group w-32 h-24 rounded-lg overflow-hidden border bg-surface shadow-sm">
-                    <a :href="returnData.hinhAnhBienLai.startsWith('http') || returnData.hinhAnhBienLai.startsWith('data:') ? returnData.hinhAnhBienLai : `${API_BASE_URL}${returnData.hinhAnhBienLai}`" target="_blank">
-                      <img 
-                        :src="returnData.hinhAnhBienLai.startsWith('http') || returnData.hinhAnhBienLai.startsWith('data:') ? returnData.hinhAnhBienLai : `${API_BASE_URL}${returnData.hinhAnhBienLai}`" 
-                        alt="Biên lai gửi hàng" 
-                        class="w-full h-full object-cover group-hover:scale-105 transition-transform" 
-                      />
-                      <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-weight-bold text-uppercase">
-                        Xem ảnh lớn
-                      </div>
-                    </a>
+                  <div 
+                    class="relative group w-36 h-24 rounded-lg overflow-hidden border bg-surface shadow-sm cursor-pointer hover:ring-2 hover:ring-primary transition-all"
+                    @click="openImagePreview(returnData.hinhAnhBienLai.startsWith('http') || returnData.hinhAnhBienLai.startsWith('data:') ? returnData.hinhAnhBienLai : `${API_BASE_URL}${returnData.hinhAnhBienLai}`)"
+                    title="Bấm để xem ảnh biên lai phóng to"
+                  >
+                    <img 
+                      :src="returnData.hinhAnhBienLai.startsWith('http') || returnData.hinhAnhBienLai.startsWith('data:') ? returnData.hinhAnhBienLai : `${API_BASE_URL}${returnData.hinhAnhBienLai}`" 
+                      alt="Biên lai gửi hàng" 
+                      class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" 
+                    />
+                    <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[11px] font-weight-bold gap-1">
+                      <Eye class="w-4 h-4 text-white" />
+                      <span>Xem ảnh lớn</span>
+                    </div>
                   </div>
                 </div>
               </v-card>
@@ -685,6 +739,147 @@ const handleCompleteRefund = async () => {
 
     </v-card>
   </v-dialog>
+
+  <!-- ═══════ LIGHTBOX XEM ẢNH BIÊN LAI LỚN ═══════ -->
+  <v-dialog v-model="isImagePreviewOpen" max-width="850px" style="z-index: 10000002;">
+    <v-card rounded="xl" class="overflow-hidden bg-slate-900 text-white shadow-2xl">
+      <div class="pa-4 px-5 d-flex align-center justify-space-between border-b border-slate-800 bg-slate-950/90">
+        <div class="d-flex align-center gap-2.5">
+          <ImageIcon class="w-5 h-5 text-primary" />
+          <div>
+            <h4 class="font-weight-bold text-subtitle-1 text-white mb-0">ẢNH BIÊN LAI / BILL GỬI HÀNG</h4>
+            <p class="text-caption text-slate-400 mb-0 font-mono">Đơn hàng #{{ props.maHd }}</p>
+          </div>
+        </div>
+        <v-btn icon variant="text" size="small" color="white" @click="isImagePreviewOpen = false">
+          <X class="w-5 h-5" />
+        </v-btn>
+      </div>
+
+      <div class="pa-4 d-flex align-center justify-center bg-black/80 min-h-[350px] max-h-[75vh] overflow-auto select-none">
+        <img
+          :src="previewImageUrl"
+          alt="Ảnh biên lai phóng to"
+          class="max-w-full max-h-[70vh] rounded-lg object-contain shadow-2xl transition-transform"
+        />
+      </div>
+
+      <div class="pa-3 px-5 border-t border-slate-800 bg-slate-950/90 d-flex justify-space-between align-center">
+        <span class="text-caption text-slate-400">Kiểm tra thông tin bill bưu phẩm trước khi nhận hàng &amp; hoàn tiền</span>
+        <div class="d-flex align-center gap-2">
+          <v-btn
+            v-if="previewImageUrl.startsWith('http')"
+            variant="outlined"
+            color="grey-lighten-2"
+            size="small"
+            rounded="lg"
+            class="text-none font-weight-bold"
+            :href="previewImageUrl"
+            target="_blank"
+          >
+            Mở tab mới
+          </v-btn>
+          <v-btn
+            variant="flat"
+            color="primary"
+            size="small"
+            rounded="lg"
+            class="text-none font-weight-bold px-5"
+            @click="isImagePreviewOpen = false"
+          >
+            Đóng
+          </v-btn>
+        </div>
+      </div>
+    </v-card>
+  </v-dialog>
+
+  <!-- ═══════ HỘP THOẠI XÁC NHẬN VUETIFY 3 CHUẨN ĐẸP ═══════ -->
+  <v-dialog v-model="confirmDialog.show" max-width="480px" style="z-index: 10000005;">
+    <v-card rounded="2xl" class="pa-6 text-center elevation-12 bg-surface">
+      <div class="d-flex justify-center mb-4">
+        <v-avatar size="64" :color="confirmDialog.iconColor" variant="tonal" class="rounded-circle">
+          <component :is="confirmDialog.icon" class="w-8 h-8" />
+        </v-avatar>
+      </div>
+
+      <h3 class="text-h6 font-weight-black mb-2 text-slate-800 dark:text-white">
+        {{ confirmDialog.title }}
+      </h3>
+
+      <div v-if="confirmDialog.subtitle" class="mb-3">
+        <span class="text-caption font-weight-bold text-primary font-mono bg-primary/10 py-1 px-3 rounded-lg d-inline-block">
+          {{ confirmDialog.subtitle }}
+        </span>
+      </div>
+
+      <p class="text-body-2 text-medium-emphasis mb-4 px-2 leading-relaxed">
+        {{ confirmDialog.description }}
+      </p>
+
+      <!-- Input lý do nếu cần -->
+      <div v-if="confirmDialog.requireInput" class="mb-4 text-left">
+        <v-textarea
+          v-model="confirmDialog.inputValue"
+          :label="confirmDialog.inputLabel"
+          :placeholder="confirmDialog.inputPlaceholder"
+          variant="outlined"
+          density="comfortable"
+          rounded="lg"
+          rows="3"
+          :error-messages="confirmDialog.inputError"
+          @update:model-value="confirmDialog.inputError = ''"
+          hide-details="auto"
+          auto-grow
+        ></v-textarea>
+      </div>
+
+      <div class="d-flex gap-3 justify-center pt-2">
+        <v-btn
+          variant="outlined"
+          color="grey-darken-1"
+          rounded="xl"
+          height="42"
+          class="text-none font-weight-bold px-6 flex-1"
+          :disabled="confirmDialog.loading"
+          @click="confirmDialog.show = false"
+        >
+          {{ confirmDialog.cancelText }}
+        </v-btn>
+
+        <v-btn
+          :color="confirmDialog.confirmColor"
+          variant="flat"
+          rounded="xl"
+          height="42"
+          class="text-none font-weight-bold px-6 flex-1 text-white"
+          :loading="confirmDialog.loading"
+          @click="confirmDialog.onConfirm && confirmDialog.onConfirm()"
+        >
+          {{ confirmDialog.confirmText }}
+        </v-btn>
+      </div>
+    </v-card>
+  </v-dialog>
+
+  <!-- ═══════ SNACKBAR THÔNG BÁO VUETIFY 3 ═══════ -->
+  <v-snackbar
+    v-model="snackbar.show"
+    :color="snackbar.color"
+    location="top right"
+    :timeout="3000"
+    elevation="6"
+    style="z-index: 10000010;"
+  >
+    <div class="d-flex align-center font-weight-bold text-caption">
+      <span>{{ snackbar.text }}</span>
+    </div>
+    <template v-slot:actions>
+      <v-btn variant="text" icon density="comfortable" @click="snackbar.show = false">
+        <X class="w-4 h-4" />
+      </v-btn>
+    </template>
+  </v-snackbar>
 </template>
 
 <style>

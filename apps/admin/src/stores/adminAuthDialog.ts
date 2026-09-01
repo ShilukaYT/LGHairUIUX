@@ -52,6 +52,33 @@ export const useAdminAuthDialogStore = defineStore('adminAuthDialog', () => {
     onLogoutConfirmedCallback = null;
   }
 
+  // 3. Locked Account Dialog (Tài khoản bị khóa)
+  const showLockedAccountDialog = ref(false);
+  const lockedAccountMessage = ref('Tài khoản của bạn đã bị khóa bởi quản trị viên. Vui lòng liên hệ quản trị viên để được hỗ trợ.');
+
+  function triggerLockedAccount(msg?: string) {
+    if (msg) {
+      lockedAccountMessage.value = msg;
+    }
+    showLockedAccountDialog.value = true;
+    sessionStorage.removeItem('adminUser');
+    sessionStorage.removeItem('adminToken');
+    sessionStorage.removeItem('adminRefreshToken');
+    sessionStorage.removeItem('staffUser');
+    sessionStorage.removeItem('staffToken');
+    sessionStorage.removeItem('staffRefreshToken');
+    sessionStorage.removeItem('nhanVienUser');
+    localStorage.removeItem('staffToken');
+    localStorage.removeItem('staffRefreshToken');
+    localStorage.removeItem('staffUser');
+    localStorage.removeItem('nhanVienUser');
+  }
+
+  function closeLockedAccount() {
+    showLockedAccountDialog.value = false;
+    router.push('/admin/login');
+  }
+
   return {
     showSessionExpiredDialog,
     sessionExpiredMessage,
@@ -60,6 +87,10 @@ export const useAdminAuthDialogStore = defineStore('adminAuthDialog', () => {
     showLogoutConfirmDialog,
     triggerLogoutConfirm,
     confirmLogout,
-    closeLogoutConfirm
+    closeLogoutConfirm,
+    showLockedAccountDialog,
+    lockedAccountMessage,
+    triggerLockedAccount,
+    closeLockedAccount
   };
 });

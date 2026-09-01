@@ -3,7 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import axios from 'axios';
 import { 
   Search, Package, RotateCcw, Truck, Eye, X, AlertCircle, 
-  CheckCircle, Clock, XCircle, ArrowRight, ShieldCheck, ChevronLeft, ChevronRight 
+  CheckCircle, Clock, XCircle, ArrowRight, ShieldCheck, ChevronLeft, ChevronRight, MapPin 
 } from 'lucide-vue-next';
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 import Swal from 'sweetalert2';
@@ -71,12 +71,16 @@ const formatPrice = (price?: number | null) => {
 };
 
 const formatDate = (dateStr?: string) => {
-  if (!dateStr) return '';
+  if (!dateStr) return '--/--/----';
+  if (dateStr.includes('/') && !dateStr.includes('T')) return dateStr;
   const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return String(dateStr);
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
-  return `${day}/${month}/${year}`;
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${day}/${month}/${year} ${hours}:${minutes}`;
 };
 
 const DEFAULT_PRODUCT_IMG = 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?q=80&w=120';
@@ -662,17 +666,17 @@ onMounted(async () => {
             </button>
           </div>
 
-          <div class="p-6 space-y-6 overflow-y-auto flex-1" v-if="orderDetail">
+          <div class="p-6 space-y-5 overflow-y-auto flex-1" v-if="orderDetail">
             <!-- Summary Info -->
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-gray-50/70 rounded-xl border border-gray-100 text-xs">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 p-4 bg-gray-50/80 rounded-xl border border-gray-100 text-xs">
               <div>
                 <span class="text-[10px] uppercase tracking-wider text-gray-400 block font-semibold">Ngày đặt</span>
-                <span class="font-semibold text-gray-800">{{ formatDate(orderDetail.ngayTao || orderDetail.date) }}</span>
+                <span class="font-semibold text-gray-800">{{ orderDetail.ngayDat || formatDate(orderDetail.ngayTao || orderDetail.date) }}</span>
               </div>
               <div>
                 <span class="text-[10px] uppercase tracking-wider text-gray-400 block font-semibold">Trạng thái</span>
-                <span :class="['inline-flex items-center px-2 py-0.5 mt-0.5 text-[9px] uppercase tracking-wider font-bold rounded-full border', getStatusBadgeClass(orderDetail.status || orderDetail.trangThaiText)]">
-                  {{ statusText(orderDetail.status || orderDetail.trangThaiText) }}
+                <span :class="['inline-flex items-center px-2 py-0.5 mt-0.5 text-[9px] uppercase tracking-wider font-bold rounded-full border', getStatusBadgeClass(orderDetail.status || orderDetail.trangThaiText || orderDetail.trangThai)]">
+                  {{ statusText(orderDetail.status || orderDetail.trangThaiText || orderDetail.trangThai) }}
                 </span>
               </div>
               <div>
@@ -681,7 +685,29 @@ onMounted(async () => {
               </div>
               <div>
                 <span class="text-[10px] uppercase tracking-wider text-gray-400 block font-semibold">Tổng thanh toán</span>
-                <span class="font-bold text-red-600 font-mono">{{ formatPrice(orderDetail.thanhTien || orderDetail.tongTien) }}</span>
+                <span class="font-bold text-red-600 font-mono">{{ formatPrice(orderDetail.thanhTien ?? orderDetail.tongThanhToan ?? orderDetail.tongTien) }}</span>
+              </div>
+            </div>
+
+            <!-- Delivery Info Card -->
+            <div class="p-4 bg-amber-50/60 rounded-xl border border-amber-200/70 text-xs space-y-2">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2 text-amber-950 font-bold">
+                  <MapPin :size="15" class="text-amber-700 shrink-0" />
+                  <span class="text-[11px] uppercase tracking-wider">Thông tin giao hàng</span>
+                </div>
+                <span v-if="orderDetail.donViVanChuyen" class="text-[10px] px-2.5 py-0.5 bg-white border border-amber-200 text-amber-900 rounded-full font-semibold shadow-2xs">
+                  {{ orderDetail.donViVanChuyen }} <span v-if="orderDetail.maVanDon">| {{ orderDetail.maVanDon }}</span>
+                </span>
+              </div>
+              <div class="text-gray-800 text-xs leading-relaxed pl-5 space-y-1">
+                <p class="font-semibold text-gray-900">
+                  Người nhận: {{ orderDetail.tenNguoiNhan || 'Khách hàng' }} 
+                  <span v-if="orderDetail.sdtNhan" class="text-gray-500 font-normal">({{ orderDetail.sdtNhan }})</span>
+                </p>
+                <p class="text-gray-600">
+                  Địa chỉ giao: <span class="font-medium text-gray-800">{{ orderDetail.diaChiGiao || orderDetail.diaChiNhan || orderDetail.diaChi || 'Tại cửa hàng / Chưa cập nhật' }}</span>
+                </p>
               </div>
             </div>
 
@@ -702,9 +728,25 @@ onMounted(async () => {
                     </div>
                   </div>
                   <div class="text-right">
-                    <span class="text-xs font-bold text-gray-900 font-mono">{{ formatPrice(prod.thanhTien || prod.giaBan * (prod.soLuong || 1)) }}</span>
+                    <span class="text-xs font-bold text-gray-900 font-mono">{{ formatPrice(prod.thanhTien || (prod.giaBan * (prod.soLuong || 1))) }}</span>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <!-- Price Breakdown -->
+            <div class="border-t border-gray-100 pt-3 space-y-1.5 text-xs">
+              <div class="flex justify-between text-gray-500">
+                <span>Tiền hàng:</span>
+                <span class="font-mono text-gray-800 font-medium">{{ formatPrice(orderDetail.tongTienHang || orderDetail.tongTien) }}</span>
+              </div>
+              <div v-if="orderDetail.phiVanChuyen || orderDetail.phiShip" class="flex justify-between text-gray-500">
+                <span>Phí vận chuyển:</span>
+                <span class="font-mono text-gray-800 font-medium">+{{ formatPrice(orderDetail.phiVanChuyen || orderDetail.phiShip) }}</span>
+              </div>
+              <div v-if="orderDetail.giamGiaVoucher > 0" class="flex justify-between text-emerald-600 font-medium">
+                <span>Giảm giá Voucher:</span>
+                <span class="font-mono">-{{ formatPrice(orderDetail.giamGiaVoucher) }}</span>
               </div>
             </div>
           </div>

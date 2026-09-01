@@ -286,7 +286,7 @@ watch(
           <div class="w-full lg:w-1/2 flex flex-col pt-8 lg:pt-2 lg:py-10">
 
             <!-- Mã SP -->
-            <p class="text-[11px] text-neutral-400 tracking-[0.05em] mb-2">{{ product.maSp }}</p>
+            <!-- <p class="text-[11px] text-neutral-400 tracking-[0.05em] mb-2">{{ product.maSp }}</p> -->
 
             <!-- Thương hiệu / Danh mục -->
             <p class="text-[11px] text-neutral-500 uppercase tracking-[0.1em] mb-3" v-if="product.thuongHieu || product.danhMuc">
