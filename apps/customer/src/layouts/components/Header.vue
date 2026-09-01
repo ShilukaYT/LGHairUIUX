@@ -137,7 +137,7 @@ const productCategoryColumns = computed(() => {
 
 // Điều hướng sang trang Product kèm filter danh mục
 const goToProductCategory = (maDM: string) => {
-  router.push({ name: 'Product', query: { danhMuc: maDM } });
+  router.push({ name: 'shop', query: { danhMuc: maDM } });
   mobileMenuOpen.value = false;
 };
 

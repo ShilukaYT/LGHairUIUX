@@ -22,9 +22,12 @@ const breadcrumbs = computed(() => {
       crumbs.push({ label: 'Dịch vụ', to: { name: 'services' } });
       break;
     case 'service_detail':
+    case 'serviceDetail':
+    case 'SERVICEDETAIL':
       crumbs.push({ label: 'Dịch vụ', to: { name: 'services' } });
       crumbs.push({ label: 'Chi tiết dịch vụ', to: { name: route.name, params: route.params } });
       break;
+    
     case 'booking':
       crumbs.push({ label: 'Đặt lịch', to: { name: 'booking' } });
       break;

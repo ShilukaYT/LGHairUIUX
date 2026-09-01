@@ -82,6 +82,21 @@ axios.interceptors.response.use(
   },
   async (error) => {
     const originalRequest = error.config;
+    const isLocked = error.response?.data?.isLocked === true;
+    const serverMessage = error.response?.data?.message || '';
+    const hasLockKeyword = typeof serverMessage === 'string' && (serverMessage.toLowerCase().includes('khóa') || serverMessage.toLowerCase().includes('bị khoá'));
+
+    if (isLocked || hasLockKeyword) {
+      try {
+        const { useAdminAuthDialogStore } = await import('@/stores/adminAuthDialog');
+        const authDialogStore = useAdminAuthDialogStore();
+        authDialogStore.triggerLockedAccount(serverMessage || 'Tài khoản của bạn đã bị khóa bởi quản trị viên. Vui lòng liên hệ quản trị viên để được hỗ trợ.');
+      } catch {
+        router.push('/admin/login');
+      }
+      return Promise.reject(error);
+    }
+
     if (!originalRequest) {
       return Promise.reject(error);
     }
@@ -189,6 +204,19 @@ axios.interceptors.response.use(
             localStorage.removeItem('staffRefreshToken');
             localStorage.removeItem('staffUser');
             localStorage.removeItem('nhanVienUser');
+
+            const isRefreshLocked = refreshError.response?.data?.isLocked === true;
+            const refreshMsg = refreshError.response?.data?.message || '';
+            if (isRefreshLocked || (typeof refreshMsg === 'string' && (refreshMsg.toLowerCase().includes('khóa') || refreshMsg.toLowerCase().includes('bị khoá')))) {
+              try {
+                const { useAdminAuthDialogStore } = await import('@/stores/adminAuthDialog');
+                const authDialogStore = useAdminAuthDialogStore();
+                authDialogStore.triggerLockedAccount(refreshMsg || 'Tài khoản của bạn đã bị khóa bởi quản trị viên.');
+              } catch {
+                router.push('/admin/login');
+              }
+              return reject(refreshError);
+            }
 
             try {
               const { useAdminAuthDialogStore } = await import('@/stores/adminAuthDialog');

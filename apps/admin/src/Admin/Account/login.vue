@@ -128,15 +128,21 @@ const handleLogin = async () => {
     }
   } catch (error: any) {
     // Xử lý lỗi từ Backend trả về (Sai pass, tài khoản bị khóa...)
-    let errorMsg = 'Không thể kết nối đến máy chủ. Vui lòng thử lại.'
-    if (error.response && error.response.data) {
-      errorMsg = error.response.data.message || 'Tài khoản hoặc mật khẩu không chính xác!'
+    const serverMsg = error.response?.data?.message;
+    const isLocked = error.response?.data?.isLocked === true || 
+      (typeof serverMsg === 'string' && (serverMsg.toLowerCase().includes('khóa') || serverMsg.toLowerCase().includes('bị khoá')));
+
+    if (isLocked) {
+      showAlert('Tài khoản bị khóa', serverMsg || 'Tài khoản của bạn đã bị khóa bởi quản trị viên. Vui lòng liên hệ quản trị viên để được hỗ trợ.', 'error');
     } else {
-      errorMsg = 'Tài khoản hoặc mật khẩu không chính xác!'
+      let errorMsg = 'Không thể kết nối đến máy chủ. Vui lòng thử lại.';
+      if (error.response && error.response.data) {
+        errorMsg = error.response.data.message || 'Tài khoản hoặc mật khẩu không chính xác!';
+      } else {
+        errorMsg = 'Tài khoản hoặc mật khẩu không chính xác!';
+      }
+      showAlert('Đăng nhập thất bại', errorMsg, 'error');
     }
-    
-    // Hiển thị thông báo đăng nhập sai bằng Vuetify 3 Dialog
-    showAlert('Đăng nhập thất bại', errorMsg, 'error')
   } finally {
     isLoading.value = false
   }

@@ -181,6 +181,34 @@ const openDeleteConfirm = (item: ChucVuItem) => {
   showDeleteModal.value = true
 }
 
+const handleLuongInput = (val: any) => {
+  if (val === null || val === undefined || val === '') {
+    form.luong = 0
+    return
+  }
+  let num = typeof val === 'string' ? parseInt(val.replace(/\D/g, ''), 10) : Number(val)
+  if (isNaN(num) || num < 0) num = 0
+  if (num > 100000000) num = 100000000
+  form.luong = Math.floor(num)
+}
+
+const handleLuongPaste = (e: ClipboardEvent) => {
+  e.preventDefault()
+  const text = e.clipboardData?.getData('text') || ''
+  const digits = text.replace(/\D/g, '')
+  if (digits) {
+    let num = parseInt(digits, 10)
+    if (num > 100000000) num = 100000000
+    form.luong = num
+  }
+}
+
+const handleLuongKeydown = (e: KeyboardEvent) => {
+  if (['e', 'E', '+', '-', '.', ','].includes(e.key)) {
+    e.preventDefault()
+  }
+}
+
 const validateForm = () => {
   let valid = true
   errors.tenLoai = ''
@@ -192,6 +220,9 @@ const validateForm = () => {
   }
   if (form.luong === null || form.luong === undefined || form.luong < 0) {
     errors.luong = 'Lương cơ bản không hợp lệ (phải >= 0)'
+    valid = false
+  } else if (form.luong > 100000000) {
+    errors.luong = 'Lương cơ bản tối đa là 100.000.000 VNĐ'
     valid = false
   }
   return valid
@@ -606,25 +637,6 @@ const confirmDelete = async () => {
         <!-- Dialog Body -->
         <v-card-text class="pa-6">
           <v-form @submit.prevent="saveForm">
-            <!-- Mã chức vụ -->
-            <div class="mb-4">
-              <label class="text-caption font-weight-bold text-medium-emphasis mb-1 d-block">
-                Mã Chức Vụ <span class="font-weight-normal text-medium-emphasis">(Tùy chọn)</span>:
-              </label>
-              <v-text-field
-                v-model="form.maLoaiNv"
-                :disabled="dialogMode === 'edit'"
-                placeholder="VD: LNV01 (Để trống nếu muốn tự động sinh mã)"
-                variant="outlined"
-                density="comfortable"
-                rounded="lg"
-                hide-details
-              ></v-text-field>
-              <p v-if="dialogMode === 'create'" class="text-caption text-medium-emphasis mt-1">
-                💡 Để trống nếu muốn hệ thống tự động sinh mã
-              </p>
-            </div>
-
             <!-- Tên chức vụ -->
             <div class="mb-4">
               <label class="text-caption font-weight-bold text-medium-emphasis mb-1 d-block">
@@ -644,20 +656,29 @@ const confirmDelete = async () => {
 
             <!-- Lương cơ bản -->
             <div class="mb-4">
-              <label class="text-caption font-weight-bold text-medium-emphasis mb-1 d-block">
-                Lương Cơ Bản (VNĐ) <span class="text-error">*</span>:
-              </label>
+              <div class="d-flex justify-space-between align-center mb-1">
+                <label class="text-caption font-weight-bold text-medium-emphasis">
+                  Lương Cơ Bản (VNĐ) <span class="text-error">*</span>:
+                </label>
+                <span class="text-caption text-medium-emphasis">Tối đa: 100.000.000 ₫</span>
+              </div>
               <v-text-field
-                v-model.number="form.luong"
+                :model-value="form.luong"
                 type="number"
                 min="0"
+                max="100000000"
                 step="500000"
-                placeholder="Nhập định mức lương cơ bản..."
+                placeholder="Nhập định mức lương cơ bản (tối đa 100tr)..."
                 variant="outlined"
                 density="comfortable"
                 rounded="lg"
                 hide-details
                 :error-messages="errors.luong"
+                class="no-spin-arrows"
+                @wheel.prevent="$event.target.blur()"
+                @paste="handleLuongPaste"
+                @keydown="handleLuongKeydown"
+                @update:model-value="handleLuongInput"
               ></v-text-field>
               <p v-if="errors.luong" class="text-caption text-error font-weight-bold mt-1">{{ errors.luong }}</p>
               <div class="text-caption text-success font-weight-bold mt-1 d-flex align-center gap-1">
@@ -804,5 +825,15 @@ const confirmDelete = async () => {
 
 :deep(.v-switch .v-selection-control--dirty .v-switch__thumb) {
   background-color: #ffffff !important;
+}
+
+/* Ẩn mũi tên cuộn tăng giảm trên ô input số */
+:deep(input[type='number']::-webkit-inner-spin-button),
+:deep(input[type='number']::-webkit-outer-spin-button) {
+  -webkit-appearance: none !important;
+  margin: 0 !important;
+}
+:deep(input[type='number']) {
+  -moz-appearance: textfield !important;
 }
 </style>

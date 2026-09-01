@@ -198,7 +198,7 @@ const submitRegistration = async (otpCode: string) => {
       }
       localStorage.setItem('user', JSON.stringify(response.data.user));
       authStore.setSessionExpiredBanner(false);
-      showStatus("Chào mừng gia nhập!", "Bạn đã đăng ký thành công. Hệ thống đang tự động đăng nhập...", "success");
+      showStatus("ĐĂNG KÝ THÀNH CÔNG!", "Chào mừng bạn đã đến với LGHair. Hệ thống sẽ đăng nhập cho bạn ngay...", "success");
       setTimeout(() => {
         const redirectPath = (route.query.redirect as string) || '/';
         window.location.href = redirectPath;

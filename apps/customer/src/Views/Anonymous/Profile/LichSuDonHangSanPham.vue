@@ -3,7 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 import axios from 'axios';
 import { 
   Search, Package, RotateCcw, Truck, Eye, X, AlertCircle, 
-  CheckCircle, Clock, XCircle, ArrowRight, ShieldCheck, ChevronLeft, ChevronRight 
+  CheckCircle, Clock, XCircle, ArrowRight, ShieldCheck, ChevronLeft, ChevronRight, MapPin 
 } from 'lucide-vue-next';
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 import Swal from 'sweetalert2';
@@ -71,12 +71,16 @@ const formatPrice = (price?: number | null) => {
 };
 
 const formatDate = (dateStr?: string) => {
-  if (!dateStr) return '';
+  if (!dateStr) return '--/--/----';
+  if (dateStr.includes('/') && !dateStr.includes('T')) return dateStr;
   const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return String(dateStr);
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
-  return `${day}/${month}/${year}`;
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${day}/${month}/${year} ${hours}:${minutes}`;
 };
 
 const DEFAULT_PRODUCT_IMG = 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?q=80&w=120';
@@ -692,8 +696,9 @@ onMounted(async () => {
             </button>
           </div>
 
-          <div class="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 font-sans" v-if="orderDetail">
-            <!-- Summary Info -->
+
+                    <div class="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 font-sans" v-if="orderDetail">
+            <!-- 1. Thông tin tóm tắt đơn hàng -->
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 bg-gray-50/80 rounded-lg border border-gray-200/80 text-xs">
               <div class="space-y-0.5">
                 <span class="text-[9.5px] uppercase tracking-wider text-gray-400 block font-bold">Ngày đặt</span>
@@ -720,19 +725,29 @@ onMounted(async () => {
               </div>
             </div>
 
-            <!-- Delivery Info if available -->
-            <div v-if="orderDetail.tenNguoiNhan || orderDetail.diaChiGiao || orderDetail.diaChi || orderDetail.sdt" class="p-3 bg-gray-50/80 border border-gray-200/80 rounded-lg text-xs space-y-1">
-              <span class="text-[9.5px] uppercase tracking-wider text-gray-400 font-bold block">Thông tin giao nhận</span>
-              <p class="font-bold text-gray-900" v-if="orderDetail.tenNguoiNhan || orderDetail.hoTen">
-                Người nhận: <span class="font-semibold text-gray-800">{{ orderDetail.tenNguoiNhan || orderDetail.hoTen }}</span>
-                <span v-if="orderDetail.sdt || orderDetail.soDienThoai" class="text-gray-500 font-normal ml-2">({{ orderDetail.sdt || orderDetail.soDienThoai }})</span>
-              </p>
-              <p class="text-gray-600 font-medium" v-if="orderDetail.diaChiGiao || orderDetail.diaChi">
-                Địa chỉ: {{ orderDetail.diaChiGiao || orderDetail.diaChi }}
-              </p>
+            <!-- 2. Thông tin giao hàng & Vận đơn -->
+            <div v-if="orderDetail.tenNguoiNhan || orderDetail.diaChiGiao || orderDetail.diaChi || orderDetail.sdt || orderDetail.donViVanChuyen" class="p-3 bg-amber-50/60 border border-amber-200/70 rounded-lg text-xs space-y-2">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1.5 text-amber-950 font-bold">
+                  <MapPin :size="14" class="text-amber-700 shrink-0" />
+                  <span class="text-[10px] uppercase tracking-wider">Thông tin giao nhận</span>
+                </div>
+                <span v-if="orderDetail.donViVanChuyen || orderDetail.DonViVanChuyen" class="text-[9.5px] px-2 py-0.5 bg-white border border-amber-200 text-amber-900 rounded-full font-semibold shadow-2xs">
+                  {{ orderDetail.donViVanChuyen || orderDetail.DonViVanChuyen }} <span v-if="orderDetail.maVanDon || orderDetail.MaVanDon">| {{ orderDetail.maVanDon || orderDetail.MaVanDon }}</span>
+                </span>
+              </div>
+              <div class="text-gray-800 text-xs leading-relaxed space-y-0.5">
+                <p class="font-bold text-gray-900" v-if="orderDetail.tenNguoiNhan || orderDetail.hoTen">
+                  Người nhận: <span class="font-semibold text-gray-800">{{ orderDetail.tenNguoiNhan || orderDetail.hoTen }}</span>
+                  <span v-if="orderDetail.sdtNhan || orderDetail.sdt || orderDetail.soDienThoai" class="text-gray-500 font-normal ml-1">({{ orderDetail.sdtNhan || orderDetail.sdt || orderDetail.soDienThoai }})</span>
+                </p>
+                <p class="text-gray-600 font-medium" v-if="orderDetail.diaChiGiao || orderDetail.diaChiNhan || orderDetail.diaChi">
+                  Địa chỉ: <span class="text-gray-800">{{ orderDetail.diaChiGiao || orderDetail.diaChiNhan || orderDetail.diaChi }}</span>
+                </p>
+              </div>
             </div>
 
-            <!-- Items List -->
+            <!-- 3. Danh sách sản phẩm -->
             <div>
               <h4 class="text-[11px] font-black uppercase tracking-wider text-gray-600 mb-2 font-sans">Danh sách sản phẩm trong đơn</h4>
               <div class="border border-gray-200 rounded-lg divide-y divide-gray-100 overflow-hidden bg-white shadow-xs">
@@ -753,12 +768,29 @@ onMounted(async () => {
                     </div>
                   </div>
                   <div class="text-right">
-                    <span class="text-xs font-black text-gray-900 font-mono">{{ formatPrice(prod.thanhTien || prod.ThanhTien || (prod.giaBan || prod.GiaBan || prod.gia || 0) * (prod.soLuong || prod.SoLuong || 1)) }}</span>
+                    <span class="text-xs font-black text-gray-900 font-mono">{{ formatPrice(prod.thanhTien || prod.ThanhTien || ((prod.giaBan || prod.GiaBan || prod.gia || 0) * (prod.soLuong || prod.SoLuong || 1))) }}</span>
                   </div>
                 </div>
               </div>
             </div>
+
+            <!-- 4. Chi tiết tiền / Voucher -->
+            <div class="border-t border-gray-100 pt-3 space-y-1.5 text-xs">
+              <div class="flex justify-between text-gray-500">
+                <span>Tiền hàng:</span>
+                <span class="font-mono text-gray-800 font-medium">{{ formatPrice(orderDetail.tongTienHang || orderDetail.tongTien || orderDetail.TongTien) }}</span>
+              </div>
+              <div v-if="orderDetail.phiVanChuyen || orderDetail.phiShip || orderDetail.PhiVanChuyen" class="flex justify-between text-gray-500">
+                <span>Phí vận chuyển:</span>
+                <span class="font-mono text-gray-800 font-medium">+{{ formatPrice(orderDetail.phiVanChuyen || orderDetail.phiShip || orderDetail.PhiVanChuyen) }}</span>
+              </div>
+              <div v-if="(orderDetail.giamGiaVoucher || orderDetail.GiamGiaVoucher) > 0" class="flex justify-between text-emerald-600 font-medium">
+                <span>Giảm giá Voucher:</span>
+                <span class="font-mono">-{{ formatPrice(orderDetail.giamGiaVoucher || orderDetail.GiamGiaVoucher) }}</span>
+              </div>
+            </div>
           </div>
+
 
           <div class="bg-gray-50/80 px-5 py-3 border-t border-gray-100 flex justify-end shrink-0">
             <button @click="closeModal" class="bg-black hover:bg-neutral-800 text-white px-5 py-1.5 text-xs font-bold uppercase tracking-wider rounded-md transition-all shadow-xs">

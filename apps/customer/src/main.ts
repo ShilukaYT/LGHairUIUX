@@ -89,10 +89,32 @@ axios.interceptors.response.use(
     const originalRequest = error.config;
 
     // Kiểm tra thông báo tài khoản bị khóa toàn cục
+    const isLocked = error.response?.data?.isLocked === true;
     const serverMessage = error.response?.data?.message || '';
-    if (typeof serverMessage === 'string' && (serverMessage.toLowerCase().includes('khóa') || serverMessage.toLowerCase().includes('bị khoá'))) {
-      const authStore = useAuthStore();
-      authStore.triggerLockedAccount();
+    const hasLockKeyword = typeof serverMessage === 'string' && (serverMessage.toLowerCase().includes('khóa') || serverMessage.toLowerCase().includes('bị khoá'));
+
+    if (isLocked || hasLockKeyword) {
+      // Xóa sạch phiên đăng nhập khi tài khoản bị khóa
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('refresh_token');
+      sessionStorage.removeItem('user');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('accessToken');
+      sessionStorage.removeItem('refreshToken');
+      localStorage.setItem('account_locked', 'true');
+      window.dispatchEvent(new Event('user-updated'));
+
+      try {
+        const authStore = useAuthStore();
+        authStore.triggerLockedAccount();
+      } catch (storeErr) {
+        console.warn('Lỗi mở modal khóa tài khoản:', storeErr);
+      }
+      return Promise.reject(error);
     }
 
     if (!originalRequest) {
@@ -185,6 +207,18 @@ axios.interceptors.response.use(
             sessionStorage.removeItem('token');
 
             window.dispatchEvent(new Event('user-updated'));
+
+            const isRefreshLocked = refreshErr.response?.data?.isLocked === true;
+            const refreshMsg = refreshErr.response?.data?.message || '';
+            if (isRefreshLocked || (typeof refreshMsg === 'string' && (refreshMsg.toLowerCase().includes('khóa') || refreshMsg.toLowerCase().includes('bị khoá')))) {
+              try {
+                const authStore = useAuthStore();
+                authStore.triggerLockedAccount();
+              } catch (storeErr) {
+                console.warn('Lỗi mở modal khóa tài khoản:', storeErr);
+              }
+              return reject(refreshErr);
+            }
             
             try {
               // Chỉ hiển thị Modal popup nếu đang ở các trang bắt buộc đăng nhập (Profile, Đơn hàng)

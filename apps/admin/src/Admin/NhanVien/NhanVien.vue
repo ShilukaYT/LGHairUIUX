@@ -53,6 +53,28 @@ const errors = ref({})
 const searchQuery = ref('')
 const filterTrangThai = ref('') 
 const filterGioiTinh = ref('')  
+const filterRole = ref('')
+const filterLoaiNv = ref('')
+
+const getRoleName = (nv) => {
+  if (!nv) return '--'
+  if (nv.tenChucVu) return nv.tenChucVu
+  if (nv.TenChucVu) return nv.TenChucVu
+  const targetRoleCode = nv.maRole || nv.MaRole
+  const r = (roles.value || []).find(x => (x.maRole || x.MaRole) === targetRoleCode)
+  return r ? (r.tenChucVu || r.TenChucVu || r.tenRole || targetRoleCode) : (targetRoleCode || 'Chưa phân chức vụ')
+}
+
+const getLoaiNvName = (nv) => {
+  if (!nv) return '--'
+  if (nv.tenLoai) return nv.tenLoai
+  if (nv.TenLoai) return nv.TenLoai
+  if (nv.tenLoaiNv) return nv.tenLoaiNv
+  if (nv.TenLoaiNv) return nv.TenLoaiNv
+  const targetLoaiCode = nv.maLoaiNv || nv.MaLoaiNv || nv.maLoaiNV
+  const l = (loaiNvs.value || []).find(x => (x.maLoaiNv || x.MaLoaiNv || x.maLoaiNV) === targetLoaiCode)
+  return l ? (l.tenLoai || l.TenLoai || l.tenLoaiNv || targetLoaiCode) : (targetLoaiCode || 'Chưa phân loại')
+}
 
 const showReviewModal = ref(false)
 const reviewsList = ref([])
@@ -121,8 +143,10 @@ const filteredNhanViens = computed(() => {
 
     const matchStatus = filterTrangThai.value === '' || String(nv.trangThai) === String(filterTrangThai.value)
     const matchGender = !filterGioiTinh.value || nv.gioiTinh === filterGioiTinh.value
+    const matchRole = !filterRole.value || String(nv.maRole || nv.MaRole) === String(filterRole.value)
+    const matchLoaiNv = !filterLoaiNv.value || String(nv.maLoaiNv || nv.MaLoaiNv || nv.maLoaiNV) === String(filterLoaiNv.value)
 
-    return matchSearch && matchStatus && matchGender
+    return matchSearch && matchStatus && matchGender && matchRole && matchLoaiNv
   })
 })
 
@@ -135,19 +159,53 @@ const pagedNhanViens = computed(() => {
   return filteredNhanViens.value.slice(start, start + perPage.value)
 })
 
-watch([searchQuery, filterTrangThai, filterGioiTinh], () => {
+watch([searchQuery, filterTrangThai, filterGioiTinh, filterRole, filterLoaiNv], () => {
   currentPage.value = 1
 })
 
 // --- API Calls ---
 const fetchOptions = async () => {
   try {
-    const [resRoles, resLoai] = await Promise.all([
-      fetch(`${API}/api/NhanVien/roles`, { headers: getAuthHeaders() }),
-      fetch(`${API}/api/NhanVien/loainvs`, { headers: getAuthHeaders() })
+    const headers = getAuthHeaders()
+    const [resRoles, resLoai, resLoaiDirect] = await Promise.allSettled([
+      fetch(`${API}/api/NhanVien/roles`, { headers }),
+      fetch(`${API}/api/NhanVien/loainvs`, { headers }),
+      fetch(`${API}/api/LoaiNhanVien`, { headers })
     ])
-    if (resRoles.ok) roles.value = await resRoles.json()
-    if (resLoai.ok) loaiNvs.value = await resLoai.json()
+
+    if (resRoles.status === 'fulfilled' && resRoles.value.ok) {
+      const data = await resRoles.value.json()
+      roles.value = Array.isArray(data) ? data : (data?.data || [])
+    }
+
+    if (resLoai.status === 'fulfilled' && resLoai.value.ok) {
+      const data = await resLoai.value.json()
+      const list = Array.isArray(data) ? data : (data?.data || [])
+      if (list.length > 0) loaiNvs.value = list
+    }
+
+    if ((!loaiNvs.value || loaiNvs.value.length === 0) && resLoaiDirect.status === 'fulfilled' && resLoaiDirect.value.ok) {
+      const data = await resLoaiDirect.value.json()
+      const list = Array.isArray(data) ? data : (data?.data || [])
+      if (list.length > 0) loaiNvs.value = list
+    }
+
+    // Fallbacks if endpoints return empty or failed
+    if (!roles.value || roles.value.length === 0) {
+      roles.value = [
+        { maRole: 'R01', tenChucVu: 'Quản trị viên' },
+        { maRole: 'R02', tenChucVu: 'Lễ tân' },
+        { maRole: 'R03', tenChucVu: 'Nhân viên kỹ thuật' }
+      ]
+    }
+
+    if (!loaiNvs.value || loaiNvs.value.length === 0) {
+      loaiNvs.value = [
+        { maLoaiNv: 'LNV01', tenLoai: 'Stylist chính Bậc 1', luong: 15000000 },
+        { maLoaiNv: 'LNV02', tenLoai: 'Thợ phụ', luong: 7000000 },
+        { maLoaiNv: 'CV111', tenLoai: 'Phụ Hồ', luong: 17500000 }
+      ]
+    }
   } catch (err) {
     console.error('Lỗi khi tải danh mục roles/loainvs:', err)
   }
@@ -199,11 +257,14 @@ const openAddForm = () => {
   selectedImageFile.value = null
   imagePreviewUrl.value = null
   errors.value = {}
+  const defaultRole = roles.value[0]?.maRole || roles.value[0]?.MaRole || 'R01'
+  const defaultLoaiNv = loaiNvs.value[0]?.maLoaiNv || loaiNvs.value[0]?.MaLoaiNv || loaiNvs.value[0]?.maLoaiNV || 'LNV01'
+
   formData.value = {
     maNv: generateUniqueStaffCode(), 
     hoTenNv: '', 
-    maRole: roles.value[0]?.maRole || roles.value[0]?.MaRole || '', 
-    maLoaiNv: loaiNvs.value[0]?.maLoaiNv || loaiNvs.value[0]?.MaLoaiNv || '', 
+    maRole: defaultRole, 
+    maLoaiNv: defaultLoaiNv, 
     gioiTinh: 'Nam', cccd: '', namSinh: '', sdt: '', 
     email: '', diaChi: '', ngayVaoLam: new Date().toISOString().split('T')[0], 
     trangThai: 1, tenDangNhap: '', matKhau: '', matKhauCu: ''
@@ -220,8 +281,8 @@ const openEditForm = (nv) => {
   formData.value = {
     maNv: nv.maNv,
     hoTenNv: nv.hoTenNv,
-    maRole: nv.maRole,
-    maLoaiNv: nv.maLoaiNv,
+    maRole: nv.maRole || nv.MaRole || '',
+    maLoaiNv: nv.maLoaiNv || nv.MaLoaiNv || nv.maLoaiNV || '',
     gioiTinh: nv.gioiTinh || 'Nam',
     cccd: nv.cccd || '',
     namSinh: nv.namSinh || '',
@@ -532,11 +593,12 @@ const formatVND = (value) => {
 
 const currentLoaiLuong = computed(() => {
   if (!formData.value.maLoaiNv) return 0
-  const loai = loaiNvs.value.find(l => (l.maLoaiNv || l.MaLoaiNv) === formData.value.maLoaiNv)
+  const loai = loaiNvs.value.find(l => (l.maLoaiNv || l.MaLoaiNv || l.maLoaiNV) === formData.value.maLoaiNv)
   if (loai && (loai.luong !== undefined || loai.Luong !== undefined)) {
     return loai.luong || loai.Luong || 0
   }
   const fallbackSalaries = {
+    'CV111': 17500000,
     'LNV01': 15000000,
     'LNV02': 7000000,
     'LNV03': 12000000
@@ -660,7 +722,33 @@ onMounted(() => {
               variant="outlined"
               hide-details
               rounded="lg"
-              style="width: 150px;"
+              style="width: 140px;"
+            ></v-select>
+
+            <v-select
+              v-model="filterRole"
+              :items="[{ title: 'Tất cả chức vụ', value: '' }, ...roles.map(r => ({ title: r.tenChucVu || r.TenChucVu, value: r.maRole || r.MaRole }))]"
+              item-title="title"
+              item-value="value"
+              label="Chức vụ (Role)"
+              density="compact"
+              variant="outlined"
+              hide-details
+              rounded="lg"
+              style="width: 170px;"
+            ></v-select>
+
+            <v-select
+              v-model="filterLoaiNv"
+              :items="[{ title: 'Tất cả phân loại', value: '' }, ...loaiNvs.map(l => ({ title: l.tenLoai || l.TenLoai, value: l.maLoaiNv || l.MaLoaiNv || l.maLoaiNV }))]"
+              item-title="title"
+              item-value="value"
+              label="Phân loại NV"
+              density="compact"
+              variant="outlined"
+              hide-details
+              rounded="lg"
+              style="width: 190px;"
             ></v-select>
           </div>
 
@@ -670,7 +758,7 @@ onMounted(() => {
             rounded="lg"
             class="text-none font-weight-bold"
             height="40"
-            @click="() => { searchQuery = ''; filterTrangThai = ''; filterGioiTinh = ''; fetchNhanViens(); }"
+            @click="() => { searchQuery = ''; filterTrangThai = ''; filterGioiTinh = ''; filterRole = ''; filterLoaiNv = ''; fetchNhanViens(); }"
           >
             Đặt lại lọc
           </v-btn>
@@ -705,12 +793,18 @@ onMounted(() => {
                       <v-img v-if="nv.hinhAnh" :src="toAbsUrl(nv.hinhAnh)" cover></v-img>
                       <span v-else class="font-weight-bold text-caption">{{ nv.hoTenNv?.charAt(0).toUpperCase() || '?' }}</span>
                     </v-avatar>
-                    <div class="d-flex flex-column">
+                    <div class="d-flex flex-column gap-1">
                       <span class="font-weight-bold text-body-2">{{ nv.hoTenNv }}</span>
                       <span class="text-caption font-mono text-medium-emphasis">Mã: {{ nv.maNv }}</span>
-                      <v-chip size="x-small" color="info" variant="tonal" class="mt-1 font-weight-bold" style="width: fit-content;">
-                        {{ nv.tenChucVu }}
-                      </v-chip>
+                      
+                      <div class="d-flex align-center gap-1 flex-wrap mt-0.5">
+                        <v-chip size="x-small" color="primary" variant="flat" class="font-weight-bold" title="Chức vụ (Quyền hệ thống)">
+                          {{ getRoleName(nv) }}
+                        </v-chip>
+                        <v-chip size="x-small" color="purple" variant="tonal" class="font-weight-bold" title="Phân loại vị trí công việc">
+                          {{ getLoaiNvName(nv) }}
+                        </v-chip>
+                      </div>
                     </div>
                   </div>
                 </td>
@@ -1009,10 +1103,28 @@ onMounted(() => {
                     </v-text-field>
                   </v-col>
                   <v-col cols="12" sm="6">
-                    <v-select v-model="formData.maRole" :items="roles" :item-title="item => item.tenChucVu || item.TenChucVu" :item-value="item => item.maRole || item.MaRole" label="Chức vụ" variant="outlined" density="compact" rounded="lg"></v-select>
+                    <v-select 
+                      v-model="formData.maRole" 
+                      :items="roles" 
+                      :item-title="item => item.tenChucVu || item.TenChucVu || item.tenRole" 
+                      :item-value="item => item.maRole || item.MaRole" 
+                      label="Chức vụ (Quyền hệ thống) *" 
+                      variant="outlined" 
+                      density="compact" 
+                      rounded="lg"
+                    ></v-select>
                   </v-col>
                   <v-col cols="12" sm="6">
-                    <v-select v-model="formData.maLoaiNv" :items="loaiNvs" :item-title="item => item.tenLoai || item.TenLoai" :item-value="item => item.maLoaiNv || item.MaLoaiNv" label="Phân loại NV" variant="outlined" density="compact" rounded="lg"></v-select>
+                    <v-select 
+                      v-model="formData.maLoaiNv" 
+                      :items="loaiNvs" 
+                      :item-title="item => item.tenLoai || item.TenLoai || item.tenLoaiNv" 
+                      :item-value="item => item.maLoaiNv || item.MaLoaiNv || item.maLoaiNV" 
+                      label="Phân loại NV (Vị trí công việc) *" 
+                      variant="outlined" 
+                      density="compact" 
+                      rounded="lg"
+                    ></v-select>
                   </v-col>
                   <v-col cols="12" sm="6">
                     <v-text-field :model-value="formatVND(currentLoaiLuong)" label="Lương cơ bản" readonly disabled variant="outlined" density="compact" rounded="lg"></v-text-field>

@@ -4,7 +4,7 @@ import axios from 'axios'
 import {
   Search, FileDown, Eye, X, Printer, ShoppingBag, Scissors,
   FileText, RotateCcw, Filter, CheckCircle, AlertCircle, Clock, XCircle,
-  PackageCheck, PackageX, AlertTriangle, ChevronDown, QrCode
+  PackageCheck, PackageX, AlertTriangle, ChevronDown, QrCode, MapPin, User, Truck
 } from 'lucide-vue-next'
 import Swal from 'sweetalert2'
 import { logActivity } from '@/utils/activityLogger'
@@ -13,6 +13,7 @@ import { saveAs } from 'file-saver'
 import { useTheme } from 'vuetify'
 import { useCustomizerStore } from '@/stores/customizer'
 import ModalVietQRHoanTien from './ModalVietQRHoanTien.vue'
+import ModalChiTietHoaDon from './ModalChiTietHoaDon.vue'
 
 const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
 const API_BASE_URL = `${API}/api/admin/hoa-don`
@@ -319,6 +320,21 @@ const getStatusBadgeConfig = (status: number, maHd: string = '') => {
   }
 }
 
+const canEditStatus = (hd: any) => {
+  if (!hd) return false
+  const ma = String(hd.maHd || '').toUpperCase()
+  const laDonSp = ma.startsWith('SP') || ma.startsWith('HDSP')
+
+  if (!laDonSp) {
+    // Hóa đơn dịch vụ: không được chỉnh trạng thái
+    return false
+  }
+
+  // Hóa đơn sản phẩm: chỉ cho phép chỉnh trạng thái khi đơn ở "Chờ xử lý" (1) hoặc "Đang giao hàng" (2)
+  // Các trạng thái: Đã nhận hàng (3), Đang/Đã hoàn hàng (4, 5), Đã hoàn tiền (6), Đã hủy (0) KHÔNG ĐƯỢC CHỈNH TRẠNG THÁI
+  return hd.trangThai === 1 || hd.trangThai === 2
+}
+
 const getStatusSelectOptions = (maHd: string = '') => {
   const laDonSp = maHd.startsWith('SP') || maHd.startsWith('HDSP')
   if (laDonSp) {
@@ -350,10 +366,20 @@ const changeInvoiceStatus = async (maHd: string, newStatus: number) => {
     allData.find((h) => h.maHd === maHd) ||
     (selectedHd.value && selectedHd.value.maHd === maHd ? selectedHd.value : null)
 
-  if (currentHd && (currentHd.trangThai === 3 || currentHd.trangThai === 0 || currentHd.trangThai === 6)) {
-    if (newStatus !== currentHd.trangThai) {
-      showNotification('Đơn hàng đã hoàn tất / đã hủy / đã hoàn tiền. Không thể thay đổi.', 'warning')
+  if (currentHd) {
+    const ma = String(currentHd.maHd || maHd).toUpperCase()
+    const laDonSp = ma.startsWith('SP') || ma.startsWith('HDSP')
+
+    if (!laDonSp) {
+      showNotification('Hóa đơn dịch vụ không được phép thay đổi trạng thái.', 'warning')
       return
+    }
+
+    if (laDonSp && currentHd.trangThai !== 1 && currentHd.trangThai !== 2) {
+      if (newStatus !== currentHd.trangThai) {
+        showNotification('Trạng thái đã nhận hàng, đã hoàn hàng và đã hoàn tiền không được phép chỉnh sửa.', 'warning')
+        return
+      }
     }
   }
 
@@ -469,6 +495,7 @@ const exportExcel = async () => {
 }
 
 const isModalOpen = ref(false)
+const selectedMaHd = ref('')
 const selectedHd = ref<any>(null)
 
 // ── STATE MODAL VIETQR HOÀN TIỀN RIÊNG BIỆT ──
@@ -506,248 +533,14 @@ const handleVietQRUpdated = (updatedMaHd?: string) => {
   }).catch(() => {})
 }
 
-const viewDetail = async (maHd: string) => {
-  try {
-    const res = await axios.get(`${API_BASE_URL}/chi-tiet/${maHd}`, {
-      headers: getAuthHeaders()
-    })
-    if (res.data.success) {
-      const detail = res.data.data
-      const match = [...hoaDonSanPham.value, ...hoaDonDichVu.value].find(
-        (h) => String(h.maHd || '').toUpperCase() === String(maHd).toUpperCase()
-      )
-      if (match && match.chiTiet) {
-        detail.chiTiet = match.chiTiet
-      }
-      selectedHd.value = detail
-      isModalOpen.value = true
-    }
-  } catch (e) {
-    showNotification('Không thể tải chi tiết hóa đơn', 'error')
-  }
-}
-
-const printInvoice = () => {
-  if (!selectedHd.value) return
-
-  const hd = selectedHd.value
-  logActivity(
-    'In hóa đơn',
-    `Đã in chi tiết hóa đơn ${hd.maHd} cho khách hàng ${hd.tenKh || ''}`,
-    'Hóa đơn'
+const viewDetail = (maHd: string) => {
+  if (!maHd) return
+  selectedMaHd.value = maHd
+  const match = [...hoaDonSanPham.value, ...hoaDonDichVu.value].find(
+    (h) => String(h.maHd || '').toUpperCase() === String(maHd).toUpperCase()
   )
-
-  const isSp = String(hd.maHd || '').toUpperCase().startsWith('SP') || String(hd.maHd || '').toUpperCase().startsWith('HDSP')
-  const items = isSp ? (hd.chiTiet || hd.chiTietDichVu || []) : (hd.chiTietDichVu || [])
-
-  const itemsHtml = items.length > 0 ? items.map((item: any) => {
-    const ten = item.ten || item.Ten || item.tenHangMuc || item.tenSP || item.tenSp || 'Dịch vụ Salon'
-    const sl = item.soLuong || item.SoLuong || item.soluong || 1
-    const gia = item.thanhTien || item.ThanhTien || ((item.gia || item.Gia || item.giaBan || 0) * sl)
-    const ghiChu = isSp ? 'Sản phẩm' : (item.thoThucHien || 'Hệ thống')
-    return `
-      <tr>
-        <td style="padding: 6px 4px; text-align: left; word-break: break-word;">${ten}</td>
-        <td style="padding: 6px 4px; text-align: center;">${sl}</td>
-        <td style="padding: 6px 4px; text-align: center;">${ghiChu}</td>
-        <td style="padding: 6px 4px; text-align: right; font-weight: bold;">${Number(gia).toLocaleString()}₫</td>
-      </tr>
-    `
-  }).join('') : `<tr><td colspan="4" style="text-align: center; padding: 10px;">Không có mục chi tiết</td></tr>`
-
-  const printWindow = window.open('', '_blank', 'width=750,height=750,top=100,left=200')
-  if (!printWindow) {
-    showNotification('Trình duyệt đang chặn Cửa sổ Popup. Vui lòng cho phép Popup để in hóa đơn.', 'warning')
-    return
-  }
-
-  const htmlContent = `
-    <!DOCTYPE html>
-    <html lang="vi">
-    <head>
-      <meta charset="utf-8">
-      <title>In Hóa Đơn #${hd.maHd}</title>
-      <style>
-        * { box-sizing: border-box; }
-        html, body {
-          width: 100%;
-          min-height: 100vh;
-          margin: 0;
-          padding: 0;
-          background-color: #f1f5f9;
-          color: #0f172a;
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        }
-        body {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          padding: 20px;
-        }
-        .receipt-card {
-          width: 100%;
-          max-width: 500px;
-          margin: 0 auto;
-          padding: 24px;
-          background: #ffffff;
-          border-radius: 12px;
-          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
-          border: 1px solid #cbd5e1;
-          font-size: 12px;
-          line-height: 1.5;
-        }
-        .header {
-          text-align: center;
-          border-bottom: 2px dashed #cbd5e1;
-          padding-bottom: 10px;
-          margin-bottom: 10px;
-        }
-        .salon-name {
-          font-size: 17px;
-          font-weight: 800;
-          text-transform: uppercase;
-          color: #0284c7;
-          margin-bottom: 4px;
-        }
-        .salon-info {
-          font-size: 11px;
-          color: #475569;
-        }
-        .doc-title {
-          font-size: 13px;
-          font-weight: 800;
-          text-transform: uppercase;
-          margin-top: 8px;
-          color: #0f172a;
-        }
-        .info-row {
-          display: flex;
-          justify-content: space-between;
-          font-size: 12px;
-          margin-bottom: 4px;
-        }
-        table {
-          width: 100%;
-          border-collapse: collapse;
-          margin: 10px 0;
-          font-size: 11px;
-        }
-        th {
-          border-top: 2px dashed #cbd5e1;
-          border-bottom: 2px dashed #cbd5e1;
-          padding: 6px 4px;
-          text-transform: uppercase;
-          font-weight: bold;
-          color: #334155;
-        }
-        td {
-          border-bottom: 1px dotted #e2e8f0;
-          padding: 6px 4px;
-        }
-        .totals {
-          border-top: 2px dashed #cbd5e1;
-          padding-top: 8px;
-          margin-top: 8px;
-        }
-        .total-main {
-          font-size: 15px;
-          font-weight: 800;
-          color: #0284c7;
-        }
-        .footer {
-          text-align: center;
-          border-top: 2px dashed #cbd5e1;
-          margin-top: 12px;
-          padding-top: 8px;
-          font-size: 11px;
-          color: #64748b;
-        }
-
-        @media print {
-          @page {
-            margin: 4mm;
-          }
-          html, body {
-            width: 100% !important;
-            height: auto !important;
-            min-height: 0 !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            background: #ffffff !important;
-            display: block !important;
-          }
-          .receipt-card {
-            width: 100% !important;
-            max-width: 100% !important;
-            margin: 0 auto !important;
-            padding: 4mm 6mm !important;
-            box-shadow: none !important;
-            border-radius: 0 !important;
-            border: none !important;
-            font-size: 12px !important;
-          }
-          .salon-name, .total-main {
-            color: #000000 !important;
-          }
-        }
-      </style>
-    </head>
-    <body>
-      <div class="receipt-card">
-        <div class="header">
-          <div class="salon-name">LGHAIR SALON</div>
-          <div class="salon-info">Địa chỉ: 123 Đường ABC, Phường Buôn Ma Thuột, tỉnh Đắk Lắk</div>
-          <div class="salon-info">Hotline: 0123.456.789</div>
-          <div class="doc-title">PHIẾU THANH TOÁN HÓA ĐƠN</div>
-        </div>
-
-        <div class="info-row"><span>Mã hóa đơn:</span> <strong>#${hd.maHd}</strong></div>
-        <div class="info-row"><span>Ngày tạo:</span> <span>${new Date(hd.ngayTao).toLocaleString('vi-VN')}</span></div>
-        <div class="info-row"><span>Khách hàng:</span> <strong>${hd.tenKh || 'Khách vãng lai'}</strong></div>
-        <div class="info-row"><span>Thu ngân:</span> <span>${hd.tenThuNgan || 'Hệ thống'}</span></div>
-
-        <table>
-          <thead>
-            <tr>
-              <th style="text-align: left;">Sản phẩm / Dịch vụ</th>
-              <th style="text-align: center; width: 28px;">SL</th>
-              <th style="text-align: center; width: 60px;">Thợ làm việc</th>
-              <th style="text-align: right; width: 70px;">Thành tiền</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsHtml}
-          </tbody>
-        </table>
-
-        <div class="totals">
-          <div class="info-row"><span>Tạm tính gốc:</span> <span>${Number(hd.tongTien || 0).toLocaleString()}₫</span></div>
-          ${hd.giamGiaVip ? `<div class="info-row"><span>Giảm giá VIP:</span> <span>-${hd.giamGiaVip}%</span></div>` : ''}
-          <div class="info-row total-main" style="margin-top: 4px;"><span>TỔNG THANH TOÁN:</span> <span>${Number(hd.thanhTien || 0).toLocaleString()}₫</span></div>
-        </div>
-
-        <div class="footer">
-          <p style="margin: 0; font-weight: bold;">Cảm ơn Quý khách & Hẹn gặp lại!</p>
-          <p style="margin: 2px 0 0 0;">Hotline CSKH: 0123.456.789 - Website: lghair.netlify.app</p>
-        </div>
-      </div>
-
-      <script>
-        window.onload = function() {
-          window.focus();
-          setTimeout(function() {
-            window.print();
-            window.close();
-          }, 250);
-        };
-      <\/script>
-    </body>
-    </html>
-  `
-
-  printWindow.document.open()
-  printWindow.document.write(htmlContent)
-  printWindow.document.close()
+  selectedHd.value = match || null
+  isModalOpen.value = true
 }
 
 onMounted(fetchHoaDons)
@@ -996,9 +789,9 @@ const totalPages = computed(() => {
 
               <td class="py-3 text-center">
                 <div class="d-flex justify-center align-center">
-                  <!-- TH 1: Đơn đã chốt (3: Đã giao, 0: Đã hủy, 5: Đã nhập kho) => Chip tĩnh màu sắc rõ nét, không bao giờ bị cắt chữ -->
+                  <!-- TH 1: Đơn không được phép đổi trạng thái => Chip tĩnh màu sắc rõ nét -->
                   <div
-                    v-if="hd.trangThai === 3 || hd.trangThai === 0 || hd.trangThai === 5"
+                    v-if="!canEditStatus(hd)"
                     class="status-chip d-inline-flex align-center px-3 py-1.5 rounded-pill font-weight-bold text-caption text-no-wrap"
                     :style="{
                       backgroundColor: getStatusBadgeConfig(hd.trangThai, hd.maHd).bgColor,
@@ -1006,11 +799,10 @@ const totalPages = computed(() => {
                       border: '1px solid ' + getStatusBadgeConfig(hd.trangThai, hd.maHd).borderColor
                     }"
                   >
-                    <span class="status-dot mr-1.5" :style="{ backgroundColor: getStatusBadgeConfig(hd.trangThai, hd.maHd).dotColor }"></span>
                     {{ getStatusText(hd.trangThai, hd.maHd) }}
                   </div>
 
-                  <!-- TH 2: Đơn có thể đổi trạng thái (1: Chờ xử lý, 2: Đang giao, 4: Đang hoàn hàng) => Nút menu chuyển trạng thái màu sắc nổi bật -->
+                  <!-- TH 2: Đơn được phép đổi trạng thái (Dịch vụ: Đã cọc 10%; Sản phẩm: Chờ xử lý/Đang giao) => Nút menu chuyển trạng thái -->
                   <v-menu v-else location="bottom center" transition="scale-transition">
                     <template v-slot:activator="{ props }">
                       <button
@@ -1023,7 +815,6 @@ const totalPages = computed(() => {
                           border: '1px solid ' + getStatusBadgeConfig(hd.trangThai, hd.maHd).borderColor
                         }"
                       >
-                        <span class="status-dot mr-1.5" :style="{ backgroundColor: getStatusBadgeConfig(hd.trangThai, hd.maHd).dotColor }"></span>
                         <span>{{ getStatusText(hd.trangThai, hd.maHd) }}</span>
                         <ChevronDown class="w-3.5 h-3.5 ml-1 opacity-80" />
                       </button>
@@ -1043,8 +834,7 @@ const totalPages = computed(() => {
                         class="mx-1 my-0.5"
                       >
                         <template v-slot:prepend>
-                          <span class="status-dot mr-2" :style="{ backgroundColor: getStatusBadgeConfig(opt.value, hd.maHd).dotColor }"></span>
-                        </template>
+                          </template>
                         <v-list-item-title class="text-caption font-weight-bold">
                           {{ opt.title }}
                         </v-list-item-title>
@@ -1115,312 +905,13 @@ const totalPages = computed(() => {
       </div>
     </v-card>
 
-    <!-- ═══════ MODAL: CHI TIẾT HÓA ĐƠN & IN PHIẾU POS ═══════ -->
-    <v-dialog v-model="isModalOpen" max-width="850px" persistent scrollable>
-      <v-card v-if="selectedHd" rounded="xl">
-        <!-- Dialog Header -->
-        <v-card-title class="pa-6 pb-4 d-flex align-center justify-space-between bg-primary text-white border-b">
-          <div class="d-flex align-center gap-3">
-            <v-avatar color="white" size="42" rounded="lg" elevation="2">
-              <FileText class="w-5 h-5 text-primary" />
-            </v-avatar>
-            <div>
-              <h3 class="text-h6 font-weight-bold mb-0 text-white">
-                HÓA ĐƠN CHI TIẾT
-              </h3>
-              <p class="text-caption text-white opacity-80 mb-0 font-mono">
-                Mã hóa đơn: #{{ selectedHd.maHd }}
-              </p>
-            </div>
-          </div>
-
-          <div class="d-flex align-center gap-2">
-            <v-btn
-              color="white"
-              variant="outlined"
-              size="small"
-              rounded="lg"
-              class="text-none font-weight-bold"
-              @click="printInvoice"
-            >
-              <template v-slot:prepend>
-                <Printer class="w-4 h-4 mr-1" />
-              </template>
-              In Hóa Đơn (Máy in POS)
-            </v-btn>
-
-            <v-btn icon variant="text" density="comfortable" color="white" @click="isModalOpen = false">
-              <X class="w-5 h-5" />
-            </v-btn>
-          </div>
-        </v-card-title>
-
-        <!-- Dialog Body -->
-        <v-card-text class="pa-6">
-          <div id="invoice-print" class="w-100 max-w-3xl mx-auto px-2 py-2 d-flex flex-column gap-4">
-            <!-- Header Tiêu Đề Salon -->
-            <div class="text-center border-b pb-4 print:border-b print:border-black print:pb-1">
-              <h1 class="text-h5 font-weight-black uppercase text-primary print:text-black mb-1">
-                LGHAIR SALON
-              </h1>
-              <p class="text-caption text-medium-emphasis mb-0 print:text-black">
-                Địa chỉ: 123 Đường ABC, Phường Buôn Ma Thuột, Tỉnh Đắk Lắk
-              </p>
-              <p class="text-caption font-weight-bold text-primary print:text-black mb-0">
-                Hotline: 0123.456.789
-              </p>
-            </div>
-
-            <!-- Header Máy in POS khi In thực tế -->
-            <div class="hidden print:block text-center font-weight-bold text-caption text-uppercase border-b border-dashed border-black pb-2">
-              PHIẾU THANH TOÁN HÓA ĐƠN
-            </div>
-
-            <!-- Cảnh báo trạng thái Hoàn hàng / Đã Hủy -->
-            <v-alert
-              v-if="selectedHd.trangThai === 4"
-              type="warning"
-              variant="tonal"
-              rounded="xl"
-              class="print:hidden my-2"
-            >
-              <div class="d-flex flex-column flex-sm-row align-start align-sm-center justify-space-between gap-3">
-                <div>
-                  <div class="font-weight-black text-subtitle-2 text-amber-900">📦 ĐƠN HÀNG ĐANG HOÀN VỀ (ĐANG QUAY ĐẦU)</div>
-                  <div class="text-caption text-amber-800">
-                    Kiện hàng đang được Shipper vận chuyển quay về Salon. Sau khi đã nhận và kiểm tra hàng, hãy bấm xác nhận để tự động nhập kho lại.
-                  </div>
-                </div>
-                <div class="d-flex align-center gap-2 flex-wrap flex-shrink-0">
-                  <v-btn
-                    color="amber-darken-3"
-                    variant="flat"
-                    rounded="lg"
-                    class="text-none font-weight-bold"
-                    @click="openVietQRRefundModal(selectedHd.maHd, selectedHd.thanhTien)"
-                  >
-                    <QrCode class="w-4 h-4 mr-1.5" />
-                    Quét VietQR Hoàn Tiền
-                  </v-btn>
-                  <v-btn
-                    color="purple"
-                    variant="flat"
-                    rounded="lg"
-                    class="text-none font-weight-bold"
-                    @click="changeInvoiceStatus(selectedHd.maHd, 5)"
-                  >
-                    <PackageCheck class="w-4 h-4 mr-1.5" />
-                    Đã nhận hàng & Nhập kho
-                  </v-btn>
-                </div>
-              </div>
-            </v-alert>
-
-            <v-alert
-              v-else-if="selectedHd.trangThai === 5"
-              color="purple"
-              variant="tonal"
-              rounded="xl"
-              class="print:hidden my-2"
-            >
-              <div class="d-flex align-center justify-space-between flex-wrap gap-2">
-                <div class="d-flex align-center gap-2">
-                  <PackageCheck class="w-5 h-5 text-purple" />
-                  <div>
-                    <div class="font-weight-black text-subtitle-2 text-purple-900">🟣 ĐÃ NHẬN HÀNG HOÀN & NHẬP KHO</div>
-                    <div class="text-caption text-purple-800">Kiện hàng đã được kiểm tra và cộng trả lại số lượng vào kho thành công.</div>
-                  </div>
-                </div>
-                <v-btn
-                  color="purple-darken-1"
-                  variant="outlined"
-                  rounded="lg"
-                  class="text-none font-weight-bold"
-                  @click="openVietQRRefundModal(selectedHd.maHd, selectedHd.thanhTien)"
-                >
-                  <QrCode class="w-4 h-4 mr-1.5" />
-                  Xem VietQR Hoàn Tiền
-                </v-btn>
-              </div>
-            </v-alert>
-
-            <v-alert
-              v-else-if="selectedHd.trangThai === 0"
-              type="error"
-              variant="tonal"
-              rounded="xl"
-              class="print:hidden my-2"
-            >
-              <div class="font-weight-black text-subtitle-2">🔴 ĐƠN HÀNG ĐÃ HỦY</div>
-            </v-alert>
-
-            <!-- Info Cards Grid (Desktop View) -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-xl border print:hidden" style="background-color: rgba(var(--v-theme-on-surface), 0.03);">
-              <div class="d-flex flex-column gap-1">
-                <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">MÃ HÓA ĐƠN</span>
-                <span class="text-body-2 font-weight-black font-mono text-primary">#{{ selectedHd.maHd }}</span>
-              </div>
-
-              <div class="d-flex flex-column gap-1">
-                <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">NGÀY TẠO</span>
-                <span class="text-body-2 font-weight-bold font-mono">{{ new Date(selectedHd.ngayTao).toLocaleString('vi-VN') }}</span>
-              </div>
-
-              <div class="d-flex flex-column gap-1">
-                <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">KHÁCH HÀNG</span>
-                <span class="text-body-2 font-weight-bold text-truncate">{{ selectedHd.tenKh || 'Khách vãng lai' }}</span>
-              </div>
-
-              <div class="d-flex flex-column gap-1">
-                <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">THU NGÂN</span>
-                <span class="text-body-2 font-weight-bold text-truncate">{{ selectedHd.tenThuNgan || 'Hệ thống' }}</span>
-              </div>
-            </div>
-
-            <!-- POS Print Header Info -->
-            <div class="hidden print:flex flex-column gap-1 text-caption border-b border-dashed border-black pb-2 font-mono">
-              <div class="d-flex justify-space-between"><span>Mã hóa đơn:</span> <strong>#{{ selectedHd.maHd }}</strong></div>
-              <div class="d-flex justify-space-between"><span>Ngày tạo:</span> <span>{{ new Date(selectedHd.ngayTao).toLocaleString('vi-VN') }}</span></div>
-              <div class="d-flex justify-space-between"><span>Khách hàng:</span> <strong>{{ selectedHd.tenKh || 'Khách vãng lai' }}</strong></div>
-              <div class="d-flex justify-space-between"><span>Thu ngân:</span> <span>{{ selectedHd.tenThuNgan || 'Hệ thống' }}</span></div>
-            </div>
-
-            <!-- Invoice Items Table -->
-            <v-table density="compact" class="border rounded-xl print:border-none" hover>
-              <thead>
-                <tr class="border-b print:bg-transparent print:border-t print:border-b print:border-dashed print:border-black" style="background-color: rgba(var(--v-theme-on-surface), 0.04);">
-                  <th class="font-weight-bold text-caption uppercase text-left py-2.5">Tên Sản phẩm / Dịch vụ</th>
-                  <th class="font-weight-bold text-caption uppercase text-center py-2.5" style="width: 70px;">SL</th>
-                  <th class="font-weight-bold text-caption uppercase text-left py-2.5 print:hidden" style="width: 140px;">Thợ làm việc</th>
-                  <th class="font-weight-bold text-caption uppercase text-right py-2.5" style="width: 140px;">Thành tiền</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="(item, index) in (selectedHd.maHd?.toUpperCase().startsWith('SP') || selectedHd.maHd?.toUpperCase().startsWith('HDSP') ? (selectedHd.chiTiet || selectedHd.chiTietDichVu || []) : (selectedHd.chiTietDichVu || []))"
-                  :key="index"
-                >
-                  <td class="py-2 font-weight-bold">
-                    {{ item.ten || item.Ten || item.tenHangMuc || item.tenSP || item.tenSp || 'Dịch vụ Salon' }}
-                  </td>
-                  <td class="py-2 text-center font-mono font-weight-bold">
-                    {{ item.soLuong || item.SoLuong || item.soluong || 1 }}
-                  </td>
-                  <td class="py-2 print:hidden">
-                    <v-chip size="x-small" variant="tonal" color="grey-darken-1" class="font-weight-bold">
-                      {{ selectedHd.maHd?.toUpperCase().startsWith('SP') || selectedHd.maHd?.toUpperCase().startsWith('HDSP') ? 'Sản phẩm' : (item.thoThucHien || 'Hệ thống') }}
-                    </v-chip>
-                  </td>
-                  <td class="py-2 text-right font-mono font-weight-black text-body-2">
-                    {{ (item.thanhTien || item.ThanhTien || (item.gia || item.Gia || item.giaBan || 0) * (item.soLuong || item.SoLuong || 1)).toLocaleString() }}₫
-                  </td>
-                </tr>
-              </tbody>
-            </v-table>
-
-            <!-- Quick Status Update Row in Modal -->
-            <div class="print:hidden border-t border-dashed pt-4 d-flex flex-column flex-sm-row align-center justify-space-between gap-3">
-              <span class="text-caption font-weight-bold uppercase text-medium-emphasis">TRẠNG THÁI HIỆN TẠI:</span>
-              
-              <div class="d-flex align-center gap-2">
-                <!-- Đơn đã chốt (3, 0, 5) -->
-                <div
-                  v-if="selectedHd.trangThai === 3 || selectedHd.trangThai === 0 || selectedHd.trangThai === 5"
-                  class="status-chip d-inline-flex align-center px-4 py-2 rounded-pill font-weight-bold text-body-2"
-                  :style="{
-                    backgroundColor: getStatusBadgeConfig(selectedHd.trangThai, selectedHd.maHd).bgColor,
-                    color: getStatusBadgeConfig(selectedHd.trangThai, selectedHd.maHd).textColor,
-                    border: '1px solid ' + getStatusBadgeConfig(selectedHd.trangThai, selectedHd.maHd).borderColor
-                  }"
-                >
-                  <span class="status-dot mr-2" :style="{ backgroundColor: getStatusBadgeConfig(selectedHd.trangThai, selectedHd.maHd).dotColor }"></span>
-                  {{ getStatusText(selectedHd.trangThai, selectedHd.maHd) }}
-                </div>
-
-                <!-- Đơn có thể đổi (1, 2, 4) -->
-                <v-menu v-else location="bottom end" transition="scale-transition">
-                  <template v-slot:activator="{ props }">
-                    <button
-                      v-bind="props"
-                      type="button"
-                      class="status-btn d-inline-flex align-center px-4 py-2 rounded-pill font-weight-bold text-body-2 cursor-pointer"
-                      :style="{
-                        backgroundColor: getStatusBadgeConfig(selectedHd.trangThai, selectedHd.maHd).bgColor,
-                        color: getStatusBadgeConfig(selectedHd.trangThai, selectedHd.maHd).textColor,
-                        border: '1px solid ' + getStatusBadgeConfig(selectedHd.trangThai, selectedHd.maHd).borderColor
-                      }"
-                    >
-                      <span class="status-dot mr-2" :style="{ backgroundColor: getStatusBadgeConfig(selectedHd.trangThai, selectedHd.maHd).dotColor }"></span>
-                      <span>{{ getStatusText(selectedHd.trangThai, selectedHd.maHd) }}</span>
-                      <ChevronDown class="w-4 h-4 ml-1.5 opacity-80" />
-                    </button>
-                  </template>
-
-                  <v-list density="compact" rounded="xl" class="py-1.5 border elevation-4" min-width="220">
-                    <div class="px-3 py-1 text-caption text-medium-emphasis font-weight-bold border-b mb-1">
-                      CHỌN TRẠNG THÁI MỚI
-                    </div>
-                    <v-list-item
-                      v-for="opt in getStatusSelectOptions(selectedHd.maHd)"
-                      :key="opt.value"
-                      :value="opt.value"
-                      :active="opt.value === selectedHd.trangThai"
-                      @click="changeInvoiceStatus(selectedHd.maHd, Number(opt.value))"
-                      rounded="lg"
-                      class="mx-1 my-0.5"
-                    >
-                      <template v-slot:prepend>
-                        <span class="status-dot mr-2" :style="{ backgroundColor: getStatusBadgeConfig(opt.value, selectedHd.maHd).dotColor }"></span>
-                      </template>
-                      <v-list-item-title class="text-caption font-weight-bold">
-                        {{ opt.title }}
-                      </v-list-item-title>
-                    </v-list-item>
-                  </v-list>
-                </v-menu>
-              </div>
-            </div>
-
-            <!-- Revenue Totals -->
-            <div class="d-flex flex-column align-end gap-2 pt-4 border-t print:border-dashed print:border-black">
-              <div class="d-flex align-center justify-space-between w-100 text-caption text-medium-emphasis">
-                <span>Tạm tính gốc:</span>
-                <strong class="font-mono text-body-2 text-high-emphasis">{{ selectedHd.tongTien?.toLocaleString() }}₫</strong>
-              </div>
-              <div v-if="selectedHd.giamGiaVip" class="d-flex align-center justify-space-between w-100 text-caption font-weight-bold text-error">
-                <span>Giảm giá VIP:</span>
-                <span>-{{ selectedHd.giamGiaVip }}%</span>
-              </div>
-              <div class="d-flex align-center justify-space-between w-100 text-h6 font-weight-bold pt-2 border-t">
-                <span class="font-weight-black">TỔNG THANH TOÁN:</span>
-                <span class="font-weight-black text-primary font-mono text-h5">{{ selectedHd.thanhTien?.toLocaleString() }}₫</span>
-              </div>
-            </div>
-
-            <!-- POS Receipt Thank you Message -->
-            <div class="hidden print:flex flex-column align-center justify-center text-center mt-3 pt-3 border-t border-dashed border-black gap-1">
-              <p class="text-caption font-weight-bold mb-0">Cảm ơn Quý khách & Hẹn gặp lại!</p>
-              <p class="text-caption mb-0">Hotline CSKH: 0123.456.789 - Website: lghair.vn</p>
-            </div>
-          </div>
-        </v-card-text>
-
-        <!-- Dialog Footer -->
-        <v-card-actions class="pa-6 pt-4 border-t print:hidden d-flex justify-center">
-          <v-btn
-            color="primary"
-            height="44"
-            variant="flat"
-            rounded="xl"
-            elevation="4"
-            class="text-none font-weight-black px-10"
-            @click="isModalOpen = false"
-          >
-            Đóng cửa sổ
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <!-- ═══════ MODAL: CHI TIẾT HÓA ĐƠN DÙNG CHUNG ═══════ -->
+    <ModalChiTietHoaDon
+      v-model="isModalOpen"
+      :ma-hd="selectedMaHd"
+      :initial-data="selectedHd"
+      @status-updated="fetchHoaDons"
+    />
 
     <!-- ═══════ MODAL VIETQR HOÀN TIỀN RIÊNG BIỆT ═══════ -->
     <ModalVietQRHoanTien

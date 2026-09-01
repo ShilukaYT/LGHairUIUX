@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '@/stores/useAuthStore'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -40,25 +41,51 @@ const router = createRouter({
         { path: 'chuyen-vien-yeu-thich', name: 'favorite_employees', component: () => import('@/Views/Anonymous/FavoriteEmployees.vue') },
       ]
     },
-    // Future admin layout setup
-    // {
-    //   path: '/admin',
-    //   component: () => import('@/Views/Admin/Index.vue'),
-    //   children: [ ... ]
-    // }
-    // }
   ],
 })
 
 router.beforeEach((to, from, next) => {
+  // 1. Kiểm tra cờ tài khoản bị khóa
+  if (localStorage.getItem('account_locked') === 'true') {
+    localStorage.removeItem('account_locked');
+    try {
+      const authStore = useAuthStore();
+      authStore.triggerLockedAccount();
+    } catch {}
+    if (to.meta.requiresAuth) {
+      next({ name: 'home' });
+      return;
+    }
+  }
+
   const localUserStr = localStorage.getItem('user') || sessionStorage.getItem('user');
   let isGuest = false;
+  let isUserLocked = false;
   if (localUserStr) {
     try {
       const parsed = JSON.parse(localUserStr);
       if (parsed.maKH === 'GUEST') isGuest = true;
+      if (parsed.trangThai === 0 || parsed.TrangThai === 0) isUserLocked = true;
     } catch {
       // ignore
+    }
+  }
+
+  if (isUserLocked) {
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refreshToken');
+    sessionStorage.removeItem('user');
+    sessionStorage.removeItem('token');
+    try {
+      const authStore = useAuthStore();
+      authStore.triggerLockedAccount();
+    } catch {}
+    if (to.meta.requiresAuth) {
+      next({ name: 'home' });
+      return;
     }
   }
 

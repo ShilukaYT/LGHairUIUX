@@ -283,13 +283,16 @@ const canSubmit = computed(
     !sending.value,
 )
 
-async function loadKhachHang() {
+async function loadKhachHang(showToast = false) {
   loadingList.value = true
   try {
     const res = await axios.get<KhachHangOption[]>(`${API}/api/ThongBao/khach-hang`, {
       withCredentials: true,
     })
     khachHangList.value = Array.isArray(res.data) ? res.data : []
+    if (showToast) {
+      showNotification(`Đã làm mới danh sách: ${khachHangList.value.length} khách hàng`, 'success')
+    }
   } catch {
     showNotification('Không tải được danh sách khách hàng.', 'error')
     khachHangList.value = []
@@ -1095,7 +1098,23 @@ onUnmounted(() => {
           <div v-else class="mb-6 flex-grow-1 d-flex flex-column">
             <!-- Search Input Wrapper -->
             <div class="mb-4">
-              <label class="text-caption font-weight-bold text-medium-emphasis mb-1.5 d-block">Tìm Kiếm Khách Hàng:</label>
+              <div class="d-flex align-center justify-space-between mb-1.5">
+                <label class="text-caption font-weight-bold text-medium-emphasis mb-0">Tìm Kiếm Khách Hàng:</label>
+                <!-- <v-btn
+                  size="x-small"
+                  variant="text"
+                  color="primary"
+                  rounded="md"
+                  class="text-none font-weight-bold px-2"
+                  :loading="loadingList"
+                  @click="loadKhachHang(true)"
+                >
+                  <template v-slot:prepend>
+                    <RefreshCw class="w-3.5 h-3.5 mr-1" />
+                  </template>
+                  Làm Mới Danh Sách
+                </v-btn> -->
+              </div>
               <v-text-field
                 v-model="bulkSearchQuery"
                 placeholder="Tìm theo tên, SĐT, email..."
@@ -1106,6 +1125,20 @@ onUnmounted(() => {
               >
                 <template v-slot:prepend-inner>
                   <Search class="w-4 h-4 text-medium-emphasis me-2" />
+                </template>
+                <template v-slot:append-inner>
+                  <v-btn
+                    icon
+                    variant="text"
+                    size="small"
+                    density="comfortable"
+                    color="primary"
+                    :loading="loadingList"
+                    @click="loadKhachHang(true)"
+                    title="Làm mới danh sách khách hàng"
+                  >
+                    <RefreshCw class="w-4 h-4" />
+                  </v-btn>
                 </template>
               </v-text-field>
             </div>
@@ -1177,6 +1210,13 @@ onUnmounted(() => {
                   <span class="text-caption text-medium-emphasis opacity-60">|</span>
                   <v-btn size="small" variant="text" color="grey-darken-1" rounded="md" class="text-none font-weight-bold px-2.5" @click="deselectAllBulk">
                     Bỏ chọn
+                  </v-btn>
+                  <span class="text-caption text-medium-emphasis opacity-60">|</span>
+                  <v-btn size="small" variant="text" color="primary" rounded="md" class="text-none font-weight-bold px-2.5" :loading="loadingList" @click="loadKhachHang(true)">
+                    <template v-slot:prepend>
+                      <RefreshCw class="w-3.5 h-3.5 mr-1" />
+                    </template>
+                    Làm mới
                   </v-btn>
                 </div>
                 <v-chip color="primary" size="small" variant="flat" class="font-weight-black px-3">

@@ -410,28 +410,66 @@ const refreshStackPreview = async () => {
 };
 
 const isVoucherDisabled = (v: any) => {
+    if (!v) return true;
     if (v.isAvailable === false) return true;
+    if (v.giaTriToiThieu != null && Number(v.giaTriToiThieu) > 0 && subTotal.value < Number(v.giaTriToiThieu)) {
+        return true;
+    }
+    if (v.minSpend != null && Number(v.minSpend) > 0 && subTotal.value < Number(v.minSpend)) {
+        return true;
+    }
     if (v.desc && v.desc.includes('Đơn tối thiểu')) {
-        const match = v.desc.match(/Đơn tối thiểu ([\d,]+)đ/);
+        const match = v.desc.match(/Đơn tối thiểu ([\d,.]+)/i);
         if (match) {
-            const minVal = parseInt(match[1].replace(/,/g, ''));
-            if (subTotal.value < minVal) return true;
+            const minVal = parseInt(match[1].replace(/[,.]/g, ''));
+            if (!isNaN(minVal) && subTotal.value < minVal) return true;
         }
     }
     return false;
 };
 
+const getDisabledReason = (v: any) => {
+    if (!v) return 'Chưa đủ điều kiện';
+    if (v.errorMessage) return v.errorMessage;
+    if (v.giaTriToiThieu != null && Number(v.giaTriToiThieu) > 0) {
+        return `Yêu cầu đơn tối thiểu ${Number(v.giaTriToiThieu).toLocaleString()}đ (hiện có: ${subTotal.value.toLocaleString()}đ)`;
+    }
+    if (v.minSpend != null && Number(v.minSpend) > 0) {
+        return `Yêu cầu đơn tối thiểu ${Number(v.minSpend).toLocaleString()}đ (hiện có: ${subTotal.value.toLocaleString()}đ)`;
+    }
+    if (v.desc && v.desc.includes('Đơn tối thiểu')) {
+        const match = v.desc.match(/Đơn tối thiểu ([\d,.]+)/i);
+        if (match) {
+            return `Yêu cầu đơn tối thiểu ${match[1]}đ (hiện có: ${subTotal.value.toLocaleString()}đ)`;
+        }
+    }
+    return 'Chưa đạt giá trị đơn hàng tối thiểu';
+};
+
 watch([() => orderData.value.voucherIds.slice(), subTotal, shippingFee, () => productItems.value.length], () => {
+    if (orderData.value.voucherIds.length > 0 && myVouchers.value.length > 0) {
+        orderData.value.voucherIds = orderData.value.voucherIds.filter((id) => {
+            const v = myVouchers.value.find((x: any) => x.id === id);
+            return v && !isVoucherDisabled(v);
+        });
+    }
     refreshStackPreview();
 }, { deep: true, immediate: true });
 
 function toggleVoucher(id: string) {
-    const ids = orderData.value.voucherIds;
     const v = myVouchers.value.find(x => x.id === id);
     if (v && isVoucherDisabled(v)) {
-        Swal.fire({ title: 'Không hợp lệ', text: 'Không thể áp dụng voucher: ' + (v.errorMessage || 'Chưa đủ điều kiện.'), icon: 'warning', confirmButtonText: 'Đã hiểu', confirmButtonColor: '#d4af37' });
+        const reason = getDisabledReason(v);
+        Swal.fire({ 
+            title: 'Chưa đủ điều kiện áp dụng', 
+            text: reason, 
+            icon: 'warning', 
+            confirmButtonText: 'Đã hiểu', 
+            confirmButtonColor: '#1e293b' 
+        });
         return;
     }
+    const ids = orderData.value.voucherIds;
     const i = ids.indexOf(id);
     if (i >= 0) { ids.splice(i, 1); return; }
     if (ids.length >= 2) {
@@ -961,11 +999,20 @@ const formatMoney = (money: number) => new Intl.NumberFormat("vi-VN", { style: "
                                     <div class="v-divider"></div>
                                     <div class="ticket-right">
                                         <div class="d-flex justify-content-between align-items-start mb-2">
-                                            <span class="v-code-badge">{{ v.code }}</span>
+                                            <div class="flex items-center gap-2 flex-wrap">
+                                                <span class="v-code-badge">{{ v.code }}</span>
+                                                <span v-if="isVoucherDisabled(v)" class="px-2 py-0.5 text-[10px] font-bold bg-red-50 text-red-600 border border-red-200 rounded">
+                                                    Chưa đủ điều kiện
+                                                </span>
+                                            </div>
                                             <span class="v-expiry-tag"><i class="far fa-calendar-alt me-1.5"></i>HSD: {{ v.expiry }}</span>
                                         </div>
                                         <div class="v-price-gold font-bold">Giảm: {{ v.discount.toLocaleString() }}đ</div>
-                                        <div class="v-desc text-black mt-1">{{ v.desc }}</div>
+                                        <div class="v-desc text-black mt-1" v-if="v.desc">{{ v.desc }}</div>
+                                        <div v-if="isVoucherDisabled(v)" class="text-xs text-red-600 font-semibold mt-2 flex items-center gap-1.5 bg-red-50 px-2.5 py-1.5 rounded border border-red-200">
+                                            <i class="fas fa-exclamation-circle text-[12px] text-red-500 shrink-0"></i>
+                                            <span>{{ getDisabledReason(v) }}</span>
+                                        </div>
                                     </div>
                                     <div class="v-check-icon" v-if="orderData.voucherIds.includes(v.id)">
                                         <i class="fas fa-check-circle"></i>
@@ -1564,6 +1611,28 @@ textarea.booking-input {
     border: 2px solid #000000;
     background: #fafafa;
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+}
+
+.voucher-ticket-item.disabled {
+    filter: grayscale(100%);
+    opacity: 0.5;
+    cursor: not-allowed !important;
+    background: #f8f9fa;
+    border: 1px dashed #d1d5db;
+}
+.voucher-ticket-item.disabled:hover {
+    transform: none;
+    border-color: #d1d5db;
+    box-shadow: none;
+}
+.voucher-ticket-item.disabled .v-price-gold {
+    color: #4b5563 !important;
+}
+.voucher-ticket-item.disabled .ticket-left {
+    background: #6b7280 !important;
+}
+.voucher-ticket-item.disabled .ticket-brand-text {
+    color: #e5e7eb !important;
 }
 
 .ticket-left {

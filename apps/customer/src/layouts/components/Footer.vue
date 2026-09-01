@@ -18,7 +18,7 @@ const currentYear = new Date().getFullYear();
 
       <div class="flex flex-col space-y-4">
         <h4 class="text-[10px] uppercase tracking-[0.2em] font-medium text-white mb-2">Khám Phá</h4>
-        <router-link :to="{ name: 'services' }" class="text-sm text-gray-400 font-light hover:text-white transition-colors text-left w-fit">Dịch Vụ</router-link>
+        <router-link :to="{ name: 'dmdv' }" class="text-sm text-gray-400 font-light hover:text-white transition-colors text-left w-fit">Dịch Vụ</router-link>
         <router-link :to="{ name: 'shop' }" class="text-sm text-gray-400 font-light hover:text-white transition-colors text-left w-fit">Sản Phẩm</router-link>
         <router-link :to="{ name: 'employees' }" class="text-sm text-gray-400 font-light hover:text-white transition-colors text-left w-fit">Chuyên Viên</router-link>
         <router-link :to="{ name: 'datdichvu' }" class="text-sm text-gray-400 font-light hover:text-white transition-colors text-left w-fit">Đặt Lịch Hẹn</router-link>
@@ -28,20 +28,19 @@ const currentYear = new Date().getFullYear();
       <div class="flex flex-col space-y-4">
         <h4 class="text-[10px] uppercase tracking-[0.2em] font-medium text-white mb-2">Ghé Thăm</h4>
         <p class="text-sm text-gray-400 font-light leading-relaxed">
-          123 Đại lộ Thời trang<br />
-          Quận 1, TP. Hồ Chí Minh
+          123 Nguyễn Tất Thành<br />
+          Phường Buôn Ma Thuột, tỉnh Đắk Lắk
         </p>
         <div class="pt-2 text-sm text-gray-400 font-light">
-          <span class="block mb-1">T2-T6: 9:00 - 20:00</span>
-          <span class="block mb-1">T7: 10:00 - 18:00</span>
+          <span class="block mb-1">T2-T7: 7:00 - 20:00</span>
           <span class="block">CN: Nghỉ</span>
         </div>
       </div>
 
       <div class="flex flex-col space-y-4">
         <h4 class="text-[10px] uppercase tracking-[0.2em] font-medium text-white mb-2">Liên Hệ</h4>
-        <a href="#" class="text-sm text-gray-400 font-light hover:text-white transition-colors">+84 (555) 123-4567</a>
-        <a href="#" class="text-sm text-gray-400 font-light hover:text-white transition-colors">hello@beforhair.com</a>
+        <a href="#" class="text-sm text-gray-400 font-light hover:text-white transition-colors">0123456789</a>
+        <a href="#" class="text-sm text-gray-400 font-light hover:text-white transition-colors">contact@lghair.com</a>
         <div class="pt-4 flex gap-4">
           <a href="#" class="text-sm text-gray-400 font-light hover:text-white transition-colors">Instagram</a>
           <a href="#" class="text-sm text-gray-400 font-light hover:text-white transition-colors">TikTok</a>
