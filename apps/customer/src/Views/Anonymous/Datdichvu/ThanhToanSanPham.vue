@@ -377,11 +377,14 @@ const loadVouchers = async () => {
     }
 };
 
+let isRefreshingStack = false;
 const refreshStackPreview = async () => {
-    if (!customer.maKH || customer.maKH === 'GUEST') {
+    if (isRefreshingStack) return;
+    if (!customer.maKH || customer.maKH === 'GUEST' || orderData.value.voucherIds.length === 0 || subTotal.value <= 0 || productItems.value.length === 0) {
         stackPreview.value = { totalDiscount: 0, finalAmount: subTotal.value + shippingFee.value, memberDiscount: 0, voucherAmount: 0, memberRankPercent: 0 };
         return;
     }
+    isRefreshingStack = true;
     try {
         const codes = orderData.value.voucherIds.join(',');
         const res = await axios.get(`${API}/api/ThanhToanSanPham/preview-voucher-stack`, {
@@ -402,10 +405,12 @@ const refreshStackPreview = async () => {
     } catch (e: any) {
         stackPreview.value = { totalDiscount: 0, finalAmount: subTotal.value + shippingFee.value, memberDiscount: 0, voucherAmount: 0, memberRankPercent: 0 };
         const msg = e.response?.data?.message || 'Voucher không đủ điều kiện áp dụng!';
-        Swal.fire({ title: 'Opps!', text: msg, icon: 'warning', confirmButtonText: 'Đã hiểu', confirmButtonColor: '#d4af37' });
-        if (orderData.value.voucherIds.length > 0) {
-            orderData.value.voucherIds.pop();
+        if (subTotal.value > 0 && productItems.value.length > 0) {
+            Swal.fire({ title: 'Opps!', text: msg, icon: 'warning', confirmButtonText: 'Đã hiểu', confirmButtonColor: '#d4af37' });
         }
+        orderData.value.voucherIds = [];
+    } finally {
+        isRefreshingStack = false;
     }
 };
 
@@ -446,15 +451,22 @@ const getDisabledReason = (v: any) => {
     return 'Chưa đạt giá trị đơn hàng tối thiểu';
 };
 
-watch([() => orderData.value.voucherIds.slice(), subTotal, shippingFee, () => productItems.value.length], () => {
+let isFilteringVouchers = false;
+watch([() => orderData.value.voucherIds.join(','), subTotal, shippingFee, () => productItems.value.length], () => {
+    if (isFilteringVouchers) return;
     if (orderData.value.voucherIds.length > 0 && myVouchers.value.length > 0) {
-        orderData.value.voucherIds = orderData.value.voucherIds.filter((id) => {
+        const validIds = orderData.value.voucherIds.filter((id) => {
             const v = myVouchers.value.find((x: any) => x.id === id);
             return v && !isVoucherDisabled(v);
         });
+        if (validIds.length !== orderData.value.voucherIds.length) {
+            isFilteringVouchers = true;
+            orderData.value.voucherIds = validIds;
+            setTimeout(() => { isFilteringVouchers = false; }, 0);
+        }
     }
     refreshStackPreview();
-}, { deep: true, immediate: true });
+}, { immediate: true });
 
 function toggleVoucher(id: string) {
     const v = myVouchers.value.find(x => x.id === id);

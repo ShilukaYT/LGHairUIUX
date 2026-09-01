@@ -72,13 +72,13 @@ const formatMoney = (val: number) => {
 const confirmBooking = () => {
     // Xóa các dữ liệu tạm sau khi khách đã xem xong hóa đơn
     const itemsToRemove = [
-        'temp_services', 
+        'temp_services',
         'temp_products',
-        'temp_date', 
-        'temp_stylist_name', 
-        'last_booking_ref', 
-        'current_pay_mode', 
-        'total_bill_original', 
+        'temp_date',
+        'temp_stylist_name',
+        'last_booking_ref',
+        'current_pay_mode',
+        'total_bill_original',
         'temp_stylist_img',
         'temp_receive_type',
         'temp_shipping_fee',
@@ -88,7 +88,7 @@ const confirmBooking = () => {
     ];
     itemsToRemove.forEach(item => localStorage.removeItem(item));
 
-    alert("Xác nhận thành công! Hẹn gặp lại bạn tại LG Hair.");
+    alert("Xác nhận thành công! Hẹn gặp lại bạn tại LGHair.");
     router.push('/');
 };
 </script>
@@ -119,7 +119,7 @@ const confirmBooking = () => {
                             <h3 class="card-header-title text-gray-900 mb-3">
                                 <i class="fas fa-cut me-2 text-[var(--gold-solid)]"></i>Dịch vụ đã đặt
                             </h3>
-                            
+
                             <div class="service-confirm-list mt-2">
                                 <div v-for="s in selectedServices" :key="s.id" class="confirm-item-row">
                                     <div class="item-icon-circle">
@@ -132,7 +132,8 @@ const confirmBooking = () => {
                                                 class="text-muted text-xs me-2 line-through">
                                                 {{ formatMoney(s.originalPrice) }}
                                             </span>
-                                            <span class="gold-solid-text font-bold text-sm">{{ formatMoney(s.price) }}</span>
+                                            <span class="gold-solid-text font-bold text-sm">{{ formatMoney(s.price)
+                                                }}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -140,11 +141,12 @@ const confirmBooking = () => {
                         </div>
 
                         <!-- Danh sách Sản phẩm -->
-                        <div v-if="selectedProducts.length > 0" :class="{ 'mt-4 pt-4 border-t border-[#f3f4f6]': selectedServices.length > 0 }">
+                        <div v-if="selectedProducts.length > 0"
+                            :class="{ 'mt-4 pt-4 border-t border-[#f3f4f6]': selectedServices.length > 0 }">
                             <h3 class="card-header-title text-gray-900 mb-3">
                                 <i class="fas fa-box-open me-2 text-[var(--gold-solid)]"></i>Sản phẩm đã mua
                             </h3>
-                            
+
                             <div class="product-confirm-list mt-2">
                                 <div v-for="p in selectedProducts" :key="p.id" class="confirm-item-row">
                                     <div class="item-icon-circle">
@@ -153,8 +155,10 @@ const confirmBooking = () => {
                                     <div class="item-info">
                                         <span class="service-name text-gray-900">{{ p.tenItem || p.name }}</span>
                                         <div class="d-flex align-items-center justify-content-between mt-1">
-                                            <span class="text-xs text-gray-500">Số lượng: {{ p.soLuong || p.quantity || 1 }}</span>
-                                            <span class="gold-solid-text font-bold text-sm">{{ formatMoney((p.gia || p.price || 0) * (p.soLuong || p.quantity || 1)) }}</span>
+                                            <span class="text-xs text-gray-500">Số lượng: {{ p.soLuong || p.quantity ||
+                                                1 }}</span>
+                                            <span class="gold-solid-text font-bold text-sm">{{ formatMoney((p.gia ||
+                                                p.price || 0) * (p.soLuong || p.quantity || 1)) }}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -162,19 +166,22 @@ const confirmBooking = () => {
                         </div>
 
                         <!-- Thông tin nhận sản phẩm -->
-                        <div v-if="selectedProducts.length > 0" class="mt-3 p-3 bg-[#fbfbfd] rounded-xl border border-dashed border-[#e5e7eb]">
+                        <div v-if="selectedProducts.length > 0"
+                            class="mt-3 p-3 bg-[#fbfbfd] rounded-xl border border-dashed border-[#e5e7eb]">
                             <div v-if="receiveType === 'home' && deliveryInfo" class="delivery-summary">
                                 <h5 class="text-xs font-bold text-gray-800 uppercase mb-2">
                                     <i class="fas fa-truck me-1 text-[var(--gold-solid)]"></i> Giao hàng tận nhà
                                 </h5>
-                                <p class="mb-1 text-xs text-gray-700"><b>Người nhận:</b> {{ deliveryInfo.hoTen }} ({{ deliveryInfo.soDienThoai }})</p>
+                                <p class="mb-1 text-xs text-gray-700"><b>Người nhận:</b> {{ deliveryInfo.hoTen }} ({{
+                                    deliveryInfo.soDienThoai }})</p>
                                 <p class="mb-0 text-xs text-gray-500"><b>Địa chỉ:</b> {{ deliveryInfo.diaChi }}</p>
                             </div>
                             <div v-else class="delivery-summary">
                                 <h5 class="text-xs font-bold text-gray-800 uppercase mb-2">
                                     <i class="fas fa-store me-1 text-[var(--gold-solid)]"></i> Nhận tại cửa hàng
                                 </h5>
-                                <p class="mb-0 text-xs text-gray-500">Sản phẩm sẽ được chuẩn bị sẵn tại tiệm khi bạn đến thực hiện dịch vụ.</p>
+                                <p class="mb-0 text-xs text-gray-500">Sản phẩm sẽ được chuẩn bị sẵn tại tiệm khi bạn đến
+                                    thực hiện dịch vụ.</p>
                             </div>
                         </div>
                     </div>
@@ -202,7 +209,8 @@ const confirmBooking = () => {
                         <!-- Thẻ Stylist (Chỉ hiển thị nếu có đặt dịch vụ) -->
                         <div v-if="selectedServices.length > 0" class="stylist-horizontal-card mb-4">
                             <div v-if="stylistImg" class="avatar-wrapper">
-                                <img :src="stylistImg" onerror="this.onerror=null; this.src='/images/no-image.png'" alt="Stylist">
+                                <img :src="stylistImg" onerror="this.onerror=null; this.src='/images/no-image.png'"
+                                    alt="Stylist">
                                 <div class="verify-badge">
                                     <i class="fas fa-check"></i>
                                 </div>
@@ -210,7 +218,7 @@ const confirmBooking = () => {
                             <div v-else class="avatar-placeholder-circle">
                                 {{ stylistName.charAt(0).toUpperCase() }}
                             </div>
-                            
+
                             <div class="stylist-details">
                                 <span class="role-badge">Stylist Đã Chọn</span>
                                 <h4 class="stylist-name text-gray-900">{{ stylistName }}</h4>
@@ -291,7 +299,11 @@ const confirmBooking = () => {
 }
 
 /* Typography & Titles */
-h1, h2, h3, h4, .card-header-title {
+h1,
+h2,
+h3,
+h4,
+.card-header-title {
     font-family: 'Montserrat', sans-serif !important;
 }
 

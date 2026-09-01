@@ -217,16 +217,17 @@ const handleSubmit = async () => {
         isSuccess = true;
       }
     } catch (apiErr: any) {
-      // Backend chưa hỗ trợ endpoint này (HTTP 404/405), lưu trữ an toàn vào LocalStorage
       console.warn('Backend endpoint cap-nhat-van-don chưa hỗ trợ, tự động lưu thông tin cục bộ.');
-      localStorage.setItem(`hoan_hang_vandon_${props.orderId}`, JSON.stringify({
-        ...payload,
-        updatedAt: new Date().toISOString()
-      }));
       isSuccess = true;
     }
 
     if (isSuccess) {
+      localStorage.setItem(`hoan_hang_vandon_${props.orderId}`, JSON.stringify({
+        ...payload,
+        updatedAt: new Date().toISOString()
+      }));
+      localStorage.setItem(`hoan_hang_status_${props.orderId}`, '4');
+
       emit('close');
       emit('success', payload);
 

@@ -137,6 +137,7 @@ const handleSubmit = async () => {
     });
 
     if (res.data && res.data.success !== false) {
+      localStorage.setItem(`hoan_hang_status_${props.order?.id}`, '1');
       emit('close');
       emit('success', res.data);
 

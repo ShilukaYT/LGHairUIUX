@@ -215,7 +215,8 @@ const handleRescheduleSuccess = async () => {
     <!-- Header Title -->
     <div class="mb-8 border-b border-gray-100 pb-4">
       <h2 class="font-heading text-xl uppercase tracking-widest text-black mb-1">Lịch Sử Hóa Đơn</h2>
-      <p class="text-xs text-gray-500">Quản lý và theo dõi các lịch hẹn dịch vụ của bạn tại <span class="text-black font-semibold">LG Hair</span></p>
+      <p class="text-xs text-gray-500">Quản lý và theo dõi các lịch hẹn dịch vụ của bạn tại <span
+          class="text-black font-semibold">LGHair</span></p>
     </div>
 
     <!-- Toolbar / Filters -->
@@ -225,38 +226,30 @@ const handleRescheduleSuccess = async () => {
         <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
           <Search :size="14" class="text-gray-400" />
         </span>
-        <input type="text" 
-          placeholder="Tìm theo mã đơn hoặc dịch vụ..." 
-          v-model="searchQuery" 
-          class="w-full bg-[#fcfcfc] border border-gray-200 focus:border-black focus:bg-white outline-none pl-9 pr-4 py-2.5 text-xs transition-all duration-200 rounded-sm text-black shadow-sm"
-        />
+        <input type="text" placeholder="Tìm theo mã đơn hoặc dịch vụ..." v-model="searchQuery"
+          class="w-full bg-[#fcfcfc] border border-gray-200 focus:border-black focus:bg-white outline-none pl-9 pr-4 py-2.5 text-xs transition-all duration-200 rounded-sm text-black shadow-sm" />
       </div>
 
       <!-- Date picker and Sort -->
       <div class="flex items-center gap-3">
         <div class="relative flex items-center">
-          <input type="date" 
-            v-model="filterDate" 
-            class="bg-[#fcfcfc] border border-gray-200 focus:border-black focus:bg-white outline-none px-3 pr-8 py-2.5 text-xs transition-all duration-200 rounded-sm text-black shadow-sm"
-          />
-          <button 
-            v-if="filterDate"
-            @click="filterDate = ''"
+          <input type="date" v-model="filterDate"
+            class="bg-[#fcfcfc] border border-gray-200 focus:border-black focus:bg-white outline-none px-3 pr-8 py-2.5 text-xs transition-all duration-200 rounded-sm text-black shadow-sm" />
+          <button v-if="filterDate" @click="filterDate = ''"
             class="absolute right-2.5 text-gray-400 hover:text-red-500 transition-colors text-[10px] font-bold px-1 py-0.5 rounded-full hover:bg-gray-100"
-            title="Xóa bộ lọc ngày"
-          >
+            title="Xóa bộ lọc ngày">
             ✕
           </button>
         </div>
         <div class="relative">
-          <select v-model="sortBy" 
-            class="bg-[#fcfcfc] border border-gray-200 focus:border-black focus:bg-white outline-none pl-3 pr-8 py-2.5 text-xs transition-all duration-200 rounded-sm text-black appearance-none shadow-sm cursor-pointer"
-          >
+          <select v-model="sortBy"
+            class="bg-[#fcfcfc] border border-gray-200 focus:border-black focus:bg-white outline-none pl-3 pr-8 py-2.5 text-xs transition-all duration-200 rounded-sm text-black appearance-none shadow-sm cursor-pointer">
             <option value="newest">Mới nhất</option>
             <option value="oldest">Cũ nhất</option>
           </select>
           <span class="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none">
-            <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" stroke-width="1.5"
+              viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"></path>
             </svg>
           </span>
@@ -266,20 +259,16 @@ const handleRescheduleSuccess = async () => {
 
     <!-- Status Tabs -->
     <div class="flex flex-wrap gap-8 mb-8 border-b border-gray-100 pb-px">
-      <button 
-        v-for="tab in [
-          { key: 'all', label: 'Tất cả' },
-          { key: 'pending', label: 'Đã cọc 10%' },
-          { key: 'paid-full', label: 'Đã trả 100%' },
-          { key: 'completed', label: 'Hoàn thành' },
-          { key: 'waiting', label: 'Chờ hoàn tiền' },
-          { key: 'refunded', label: 'Đã hoàn tiền' },
-          { key: 'cancelled', label: 'Đã hủy' }
-        ]"
-        :key="tab.key"
-        @click="currentTab = tab.key"
-        :class="['pb-3.5 text-[11px] uppercase tracking-widest font-semibold transition-all relative border-b-2 -mb-px', currentTab === tab.key ? 'border-black text-black font-extrabold' : 'border-transparent text-gray-400 hover:text-black']"
-      >
+      <button v-for="tab in [
+        { key: 'all', label: 'Tất cả' },
+        { key: 'pending', label: 'Đã cọc 10%' },
+        { key: 'paid-full', label: 'Đã trả 100%' },
+        { key: 'completed', label: 'Hoàn thành' },
+        { key: 'waiting', label: 'Chờ hoàn tiền' },
+        { key: 'refunded', label: 'Đã hoàn tiền' },
+        { key: 'cancelled', label: 'Đã hủy' }
+      ]" :key="tab.key" @click="currentTab = tab.key"
+        :class="['pb-3.5 text-[11px] uppercase tracking-widest font-semibold transition-all relative border-b-2 -mb-px', currentTab === tab.key ? 'border-black text-black font-extrabold' : 'border-transparent text-gray-400 hover:text-black']">
         {{ tab.label }}
       </button>
     </div>
@@ -295,7 +284,8 @@ const handleRescheduleSuccess = async () => {
       <div class="overflow-x-auto w-full">
         <table class="w-full text-left border-collapse">
           <thead>
-            <tr class="border-b border-gray-200 bg-gray-50/40 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+            <tr
+              class="border-b border-gray-200 bg-gray-50/40 text-[10px] font-bold uppercase tracking-widest text-gray-500">
               <th class="py-3.5 px-4 whitespace-nowrap">Mã đơn hàng</th>
               <th class="py-3.5 px-4 whitespace-nowrap">Ngày đặt</th>
               <th class="py-3.5 px-4 min-w-[200px]">Dịch vụ</th>
@@ -311,35 +301,34 @@ const handleRescheduleSuccess = async () => {
                 <p class="text-xs tracking-widest text-gray-400">Không tìm thấy lịch sử hóa đơn nào.</p>
               </td>
             </tr>
-            
-            <tr v-for="item in paginatedData" :key="item.id" class="hover:bg-gray-50/50 transition-colors cursor-pointer" @click="viewDetail(item)">
+
+            <tr v-for="item in paginatedData" :key="item.id"
+              class="hover:bg-gray-50/50 transition-colors cursor-pointer" @click="viewDetail(item)">
               <td class="py-4 px-4 text-xs font-bold text-black whitespace-nowrap tracking-wider">#{{ item.id }}</td>
               <td class="py-4 px-4 text-xs text-gray-500 whitespace-nowrap">{{ formatDate(item.date) }}</td>
               <td class="py-4 px-4 text-xs text-gray-900 max-w-[300px] truncate font-medium" :title="item.service">
                 {{ item.service }}
               </td>
-              <td class="py-4 px-4 text-xs font-bold text-black whitespace-nowrap font-mono">{{ formatPrice(item.amount) }}</td>
+              <td class="py-4 px-4 text-xs font-bold text-black whitespace-nowrap font-mono">{{ formatPrice(item.amount)
+                }}</td>
               <td class="py-4 px-4 text-xs whitespace-nowrap">
-                <span :class="['inline-flex items-center px-3 py-1 text-[9px] uppercase tracking-widest font-bold rounded-full border', getStatusBadgeClass(item.status ?? item.trangThai)]">
-                  <span class="w-1.5 h-1.5 rounded-full mr-1.5 shrink-0" :class="getStatusDotClass(item.status ?? item.trangThai)"></span>
+                <span
+                  :class="['inline-flex items-center px-3 py-1 text-[9px] uppercase tracking-widest font-bold rounded-full border', getStatusBadgeClass(item.status ?? item.trangThai)]">
+                  <span class="w-1.5 h-1.5 rounded-full mr-1.5 shrink-0"
+                    :class="getStatusDotClass(item.status ?? item.trangThai)"></span>
                   {{ statusText(item.status ?? item.trangThai) }}
                 </span>
               </td>
               <td class="py-4 px-4 text-xs text-right whitespace-nowrap">
                 <div class="flex items-center justify-end gap-1.5">
-                  <button 
-                    v-if="canReschedule(item.status ?? item.trangThai)" 
-                    @click.stop="rescheduleOrder(item.id)"
-                    class="inline-flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 px-2.5 py-1.5 text-[9px] uppercase tracking-wider font-bold transition-all duration-200 rounded-sm whitespace-nowrap shrink-0"
-                  >
+                  <button v-if="canReschedule(item.status ?? item.trangThai)" @click.stop="rescheduleOrder(item.id)"
+                    class="inline-flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 px-2.5 py-1.5 text-[9px] uppercase tracking-wider font-bold transition-all duration-200 rounded-sm whitespace-nowrap shrink-0">
                     <CalendarClock :size="12" /> Dời lịch
                   </button>
-                  <button 
-                    v-if="canCancel(item.status ?? item.trangThai)" 
-                    @click.stop="cancelOrder(item.id)"
-                    class="inline-flex items-center gap-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-2.5 py-1.5 text-[9px] uppercase tracking-wider font-bold transition-all duration-200 rounded-sm whitespace-nowrap shrink-0"
-                  >
-                    <XCircle :size="12" /> {{ normalizeStatus(item.status ?? item.trangThai) === 'temp-cancelled' ? 'Hoàn tiền' : 'Hủy đơn' }}
+                  <button v-if="canCancel(item.status ?? item.trangThai)" @click.stop="cancelOrder(item.id)"
+                    class="inline-flex items-center gap-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-2.5 py-1.5 text-[9px] uppercase tracking-wider font-bold transition-all duration-200 rounded-sm whitespace-nowrap shrink-0">
+                    <XCircle :size="12" /> {{ normalizeStatus(item.status ?? item.trangThai) === 'temp-cancelled' ?
+                    'Hoàn tiền' : 'Hủy đơn' }}
                   </button>
                 </div>
               </td>
@@ -350,41 +339,23 @@ const handleRescheduleSuccess = async () => {
 
       <!-- Pagination -->
       <div v-if="totalPages > 1" class="flex justify-between items-center mt-6 pt-4 border-t border-gray-100">
-        <button 
-          :disabled="currentPage === 1" 
-          @click="currentPage--"
-          class="border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:hover:bg-white text-black px-4 py-2 text-[10px] uppercase tracking-widest transition-colors rounded-sm"
-        >
+        <button :disabled="currentPage === 1" @click="currentPage--"
+          class="border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:hover:bg-white text-black px-4 py-2 text-[10px] uppercase tracking-widest transition-colors rounded-sm">
           Trước
         </button>
         <span class="text-xs text-gray-500 tracking-widest">Trang {{ currentPage }} / {{ totalPages }}</span>
-        <button 
-          :disabled="currentPage === totalPages" 
-          @click="currentPage++"
-          class="border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:hover:bg-white text-black px-4 py-2 text-[10px] uppercase tracking-widest transition-colors rounded-sm"
-        >
+        <button :disabled="currentPage === totalPages" @click="currentPage++"
+          class="border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:hover:bg-white text-black px-4 py-2 text-[10px] uppercase tracking-widest transition-colors rounded-sm">
           Sau
         </button>
       </div>
     </div>
 
     <!-- Modal components -->
-    <ChiTietHoaDonModal 
-      :isOpen="isModalOpen" 
-      :bookingId="selectedBookingId" 
-      @close="isModalOpen = false" 
-    />
-    <HuyDonModal
-      :isOpen="isCancelModalOpen"
-      :bookingId="selectedCancelId"
-      @close="isCancelModalOpen = false"
-      @success="handleCancelSuccess"
-    />
-    <DoiLichModal
-      :isOpen="isRescheduleModalOpen"
-      :bookingId="selectedRescheduleId"
-      @close="isRescheduleModalOpen = false"
-      @success="handleRescheduleSuccess"
-    />
+    <ChiTietHoaDonModal :isOpen="isModalOpen" :bookingId="selectedBookingId" @close="() => { isModalOpen = false; fetchHistory(); }" @updated="fetchHistory" />
+    <HuyDonModal :isOpen="isCancelModalOpen" :bookingId="selectedCancelId" @close="() => { isCancelModalOpen = false; fetchHistory(); }"
+      @success="handleCancelSuccess" />
+    <DoiLichModal :isOpen="isRescheduleModalOpen" :bookingId="selectedRescheduleId"
+      @close="() => { isRescheduleModalOpen = false; fetchHistory(); }" @success="handleRescheduleSuccess" />
   </div>
 </template>

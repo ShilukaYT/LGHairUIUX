@@ -2,7 +2,8 @@
 import { ref, watch, computed, reactive, shallowRef } from 'vue'
 import axios from 'axios'
 import {
-  FileText, X, Printer, PackageCheck, QrCode, ChevronDown, CheckCircle2, Ban, HelpCircle, AlertCircle
+  FileText, X, Printer, PackageCheck, QrCode, ChevronDown, CheckCircle2, Ban, HelpCircle, AlertCircle,
+  Scissors, ShoppingBag, Sparkles, User, Box
 } from 'lucide-vue-next'
 import { logActivity } from '@/utils/activityLogger'
 import { useTheme } from 'vuetify'
@@ -17,6 +18,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
   (e: 'status-updated', payload: { maHd: string; newStatus: number }): void
+  (e: 'closed'): void
+  (e: 'refresh'): void
 }>()
 
 const API = import.meta.env.VITE_API_URL || 'https://localhost:7196'
@@ -83,12 +86,25 @@ const openVietQRRefundModal = (maHd: string, amount: number = 0) => {
   isVietQRModalOpen.value = true
 }
 
-const handleVietQRUpdated = () => {
-  if (selectedHd.value) {
-    selectedHd.value.trangThai = 6
+const handleVietQRClose = async () => {
+  isVietQRModalOpen.value = false
+  const targetId = props.maHd || vietQRSelectedMaHd.value
+  if (targetId) {
+    await fetchDetail(targetId)
+    const currentStatus = selectedHd.value?.trangThai ?? 6
+    emit('status-updated', { maHd: targetId, newStatus: currentStatus })
+    emit('refresh')
   }
-  if (props.maHd) {
-    emit('status-updated', { maHd: props.maHd, newStatus: 6 })
+}
+
+const handleVietQRUpdated = async () => {
+  isVietQRModalOpen.value = false
+  const targetId = props.maHd || vietQRSelectedMaHd.value
+  if (targetId) {
+    await fetchDetail(targetId)
+    const currentStatus = selectedHd.value?.trangThai ?? 6
+    emit('status-updated', { maHd: targetId, newStatus: currentStatus })
+    emit('refresh')
   }
 }
 
@@ -108,17 +124,21 @@ const fetchDetail = async (maHd: string) => {
   if (!maHd) return
   isLoading.value = true
 
-  // Gán tạm dữ liệu initial có sẵn nếu có để giao diện xuất hiện tức thì
-  if (props.initialData && (props.initialData.maHd === maHd || props.initialData.MaHd === maHd)) {
-    selectedHd.value = { ...props.initialData }
-  }
-
   try {
     const res = await axios.get(`${API_BASE_URL}/chi-tiet/${maHd}`, {
       headers: getAuthHeaders()
     })
     if (res.data && res.data.success && res.data.data) {
       const detail = res.data.data
+
+      // Nếu có cập nhật trạng thái trong localStorage thì đồng bộ ngay
+      const localSt = localStorage.getItem(`hoan_hang_status_${maHd}`)
+      if (localSt != null && localSt !== '') {
+        const numSt = Number(localSt)
+        if (!isNaN(numSt) && numSt > (detail.trangThai ?? 0)) {
+          detail.trangThai = numSt
+        }
+      }
 
       // Nếu initialData có mảng chi tiết phong phú hơn, bổ sung thêm
       if (props.initialData) {
@@ -144,9 +164,14 @@ const fetchDetail = async (maHd: string) => {
 
 watch(
   [() => props.modelValue, () => props.maHd],
-  ([newOpen, newMaHd]) => {
+  ([newOpen, newMaHd], [oldOpen]) => {
     if (newOpen && newMaHd) {
       fetchDetail(newMaHd)
+    } else if (oldOpen && !newOpen) {
+      // Khi đóng modal chi tiết hóa đơn: phát emit closed và refresh để bảng danh sách bên ngoài reload lại
+      selectedHd.value = null
+      emit('closed')
+      emit('refresh')
     } else if (!newOpen) {
       selectedHd.value = null
     }
@@ -284,6 +309,73 @@ const getInvoiceItems = (hd: any) => {
   return hd.chiTietDichVu || hd.ChiTietDichVu || hd.chiTiet || hd.ChiTiet || []
 }
 
+// ── PHÂN LOẠI HẠNG MỤC DỊCH VỤ & SẢN PHẨM ──
+const isProductItem = (item: any, maHd: string = '') => {
+  const isSpOnly = String(maHd || '').toUpperCase().startsWith('SP') || String(maHd || '').toUpperCase().startsWith('HDSP')
+  if (isSpOnly) return true
+  const tho = String(item.thoThucHien || item.ThoThucHien || '').toLowerCase().trim()
+  const loai = String(item.loai || item.Loai || '').toLowerCase().trim()
+  if (loai === 'sanpham') return true
+  if (loai === 'dichvu') return false
+  if (item.maSp || item.maBienThe || item.isSanPham) return true
+  return tho === 'sản phẩm' || tho === 'san pham' || tho === 'sp'
+}
+
+const serviceItems = computed(() => {
+  if (!selectedHd.value) return []
+  const items = getInvoiceItems(selectedHd.value)
+  const isSpOnly = String(selectedHd.value?.maHd || '').toUpperCase().startsWith('SP') || String(selectedHd.value?.maHd || '').toUpperCase().startsWith('HDSP')
+  if (isSpOnly) return []
+  return items.filter((item: any) => !isProductItem(item, selectedHd.value?.maHd))
+})
+
+const productItems = computed(() => {
+  if (!selectedHd.value) return []
+  const items = getInvoiceItems(selectedHd.value)
+  const isSpOnly = String(selectedHd.value?.maHd || '').toUpperCase().startsWith('SP') || String(selectedHd.value?.maHd || '').toUpperCase().startsWith('HDSP')
+  if (isSpOnly) return items
+  return items.filter((item: any) => isProductItem(item, selectedHd.value?.maHd))
+})
+
+const getItemName = (item: any) => {
+  if (!item) return 'Hạng mục Salon'
+  const raw = item.ten || item.Ten || item.tenHangMuc || item.tenSP || item.tenSp || 'Hạng mục Salon'
+  // Xóa các đuôi định dạng (x1), (x2), (x3)... nếu đã bị nối trước đó
+  return String(raw).replace(/\s*\([xX]\d+\)\s*$/, '').trim()
+}
+
+const getItemQty = (item: any) => {
+  if (!item) return 1
+  if (item.soLuong != null && item.soLuong !== '') return Number(item.soLuong)
+  if (item.SoLuong != null && item.SoLuong !== '') return Number(item.SoLuong)
+  if (item.soluong != null && item.soluong !== '') return Number(item.soluong)
+  // Nếu có đuôi (x2) trong tên thì parse ra số lượng
+  const raw = item.ten || item.Ten || item.tenHangMuc || item.tenSP || item.tenSp || ''
+  const match = String(raw).match(/\([xX](\d+)\)\s*$/)
+  if (match && match[1]) {
+    return parseInt(match[1], 10)
+  }
+  return 1
+}
+
+const totalServicePrice = computed(() => {
+  return serviceItems.value.reduce((sum: number, item: any) => {
+    const sl = getItemQty(item)
+    const gia = item.thanhTien ?? item.ThanhTien ?? ((item.gia || item.Gia || item.giaBan || 0) * sl)
+    return sum + Number(gia)
+  }, 0)
+})
+
+const totalProductPrice = computed(() => {
+  return productItems.value.reduce((sum: number, item: any) => {
+    const sl = getItemQty(item)
+    const gia = item.thanhTien ?? item.ThanhTien ?? ((item.gia || item.Gia || item.giaBan || 0) * sl)
+    return sum + Number(gia)
+  }, 0)
+})
+
+const isMixedOrder = computed(() => serviceItems.value.length > 0 && productItems.value.length > 0)
+
 // ── ĐỔI TRẠNG THÁI HÓA ĐƠN TRONG MODAL ──
 const executeStatusChange = async (maHd: string, newStatus: number, ghiChuLyDo: string = '') => {
   try {
@@ -406,25 +498,86 @@ const printInvoice = () => {
     'Hóa đơn'
   )
 
-  const isSp = String(hd.maHd || '').toUpperCase().startsWith('SP') || String(hd.maHd || '').toUpperCase().startsWith('HDSP')
-  const items = getInvoiceItems(hd)
+  const hasService = serviceItems.value.length > 0
+  const hasProduct = productItems.value.length > 0
+  const isMixed = isMixedOrder.value
 
-  const itemsHtml = items.length > 0 ? items.map((item: any) => {
-    const ten = item.ten || item.Ten || item.tenHangMuc || item.tenSP || item.tenSp || 'Dịch vụ Salon'
-    const sl = item.soLuong || item.SoLuong || item.soluong || 1
-    const gia = item.thanhTien || item.ThanhTien || ((item.gia || item.Gia || item.giaBan || 0) * sl)
-    const ghiChu = isSp ? 'Sản phẩm' : (item.thoThucHien || 'Hệ thống')
-    return `
-      <tr>
-        <td style="padding: 6px 4px; text-align: left; word-break: break-word;">${ten}</td>
-        <td style="padding: 6px 4px; text-align: center;">${sl}</td>
-        <td style="padding: 6px 4px; text-align: center;">${ghiChu}</td>
-        <td style="padding: 6px 4px; text-align: right; font-weight: bold;">${Number(gia).toLocaleString()}₫</td>
-      </tr>
+  let tablesHtml = ''
+
+  if (hasService) {
+    const sRows = serviceItems.value.map((item: any) => {
+      const ten = getItemName(item)
+      const sl = getItemQty(item)
+      const gia = item.thanhTien || item.ThanhTien || ((item.gia || item.Gia || item.giaBan || 0) * sl)
+      const tho = item.thoThucHien || item.ThoThucHien || 'Chuyên viên'
+      return `
+        <tr>
+          <td style="padding: 3px 2px; text-align: left; word-break: break-word;">${ten}</td>
+          <td style="padding: 3px 2px; text-align: center;">${sl}</td>
+          <td style="padding: 3px 2px; text-align: center;">${tho}</td>
+          <td style="padding: 3px 2px; text-align: right; font-weight: bold;">${Number(gia).toLocaleString()}₫</td>
+        </tr>
+      `
+    }).join('')
+
+    tablesHtml += `
+      ${isMixed ? '<div class="group-header">1. DỊCH VỤ SALON</div>' : ''}
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th style="text-align: left;">Dịch vụ</th>
+            <th style="text-align: center; width: 30px;">SL</th>
+            <th style="text-align: center; width: 85px;">Thợ làm</th>
+            <th style="text-align: right; width: 75px;">T.Tiền</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${sRows}
+        </tbody>
+      </table>
+      ${isMixed ? `<div class="subtotal-line">Tạm tính Dịch vụ: <strong>${totalServicePrice.value.toLocaleString()}₫</strong></div>` : ''}
     `
-  }).join('') : `<tr><td colspan="4" style="text-align: center; padding: 10px;">Không có mục chi tiết</td></tr>`
+  }
 
-  const printWindow = window.open('', '_blank', 'width=750,height=750,top=100,left=200')
+  if (hasProduct) {
+    const pRows = productItems.value.map((item: any) => {
+      const ten = getItemName(item)
+      const sl = getItemQty(item)
+      const gia = item.thanhTien || item.ThanhTien || ((item.gia || item.Gia || item.giaBan || 0) * sl)
+      return `
+        <tr>
+          <td style="padding: 3px 2px; text-align: left; word-break: break-word;">${ten}</td>
+          <td style="padding: 3px 2px; text-align: center;">${sl}</td>
+          <td style="padding: 3px 2px; text-align: center;">Tại quầy</td>
+          <td style="padding: 3px 2px; text-align: right; font-weight: bold;">${Number(gia).toLocaleString()}₫</td>
+        </tr>
+      `
+    }).join('')
+
+    tablesHtml += `
+      ${isMixed ? '<div class="group-header" style="margin-top: 6px;">2. SẢN PHẨM MUA KÈM (MANG VỀ)</div>' : ''}
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th style="text-align: left;">Sản phẩm</th>
+            <th style="text-align: center; width: 30px;">SL</th>
+            <th style="text-align: center; width: 85px;">Hình thức</th>
+            <th style="text-align: right; width: 75px;">T.Tiền</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${pRows}
+        </tbody>
+      </table>
+      ${isMixed ? `<div class="subtotal-line">Tạm tính Sản phẩm: <strong>${totalProductPrice.value.toLocaleString()}₫</strong></div>` : ''}
+    `
+  }
+
+  if (!hasService && !hasProduct) {
+    tablesHtml = `<tr><td colspan="4" style="text-align: center; padding: 8px;">Không có mục chi tiết</td></tr>`
+  }
+
+  const printWindow = window.open('', '_blank', 'width=700,height=700,top=100,left=200')
   if (!printWindow) {
     showSnackbar('Trình duyệt đang chặn cửa sổ Popup. Vui lòng cho phép Popup để in hóa đơn.', 'warning')
     return
@@ -437,106 +590,158 @@ const printInvoice = () => {
       <meta charset="utf-8">
       <title>In Hóa Đơn #${hd.maHd}</title>
       <style>
-        * { box-sizing: border-box; }
+        @page {
+          size: auto;
+          margin: 2mm 3mm;
+        }
+        * {
+          box-sizing: border-box;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
         html, body {
           width: 100%;
-          min-height: 100vh;
           margin: 0;
           padding: 0;
-          background-color: #f1f5f9;
-          color: #0f172a;
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+          background-color: #ffffff;
+          color: #000000;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+          font-size: 11px;
+          line-height: 1.3;
         }
         body {
           display: flex;
           justify-content: center;
-          align-items: center;
-          padding: 20px;
+          align-items: flex-start;
+          padding: 10px 0;
         }
         .pos-card {
-          width: 380px;
+          width: 340px;
+          max-width: 100%;
           background: #ffffff;
-          padding: 24px;
-          border-radius: 12px;
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+          padding: 12px;
+          color: #000000;
         }
         .text-center { text-align: center; }
         .salon-title {
-          font-size: 20px;
+          font-size: 18px;
           font-weight: 900;
           text-transform: uppercase;
-          margin: 0 0 4px 0;
-          color: #0f172a;
+          margin: 0 0 2px 0;
+          letter-spacing: 0.5px;
+          color: #000000;
         }
         .salon-sub {
-          font-size: 11px;
-          color: #475569;
-          margin: 0 auto 2px auto;
-          line-height: 1.35;
+          font-size: 10.5px;
+          color: #000000;
+          margin: 0 auto 1px auto;
+          line-height: 1.3;
           text-wrap: balance;
-          max-width: 320px;
         }
         .divider-dashed {
-          border-bottom: 1px dashed #94a3b8;
-          margin: 12px 0;
+          border-bottom: 1px dashed #000000;
+          margin: 8px 0;
         }
         .pos-title {
-          font-size: 13px;
-          font-weight: 800;
+          font-size: 12px;
+          font-weight: 900;
           text-transform: uppercase;
           letter-spacing: 0.5px;
-          margin-bottom: 8px;
+          margin: 4px 0;
+          color: #000000;
+        }
+        .order-badge-bw {
+          display: inline-block;
+          font-size: 10px;
+          font-weight: bold;
+          text-transform: uppercase;
+          padding: 1px 6px;
+          border: 1px solid #000000;
+          margin: 2px 0 6px 0;
+          color: #000000;
         }
         .info-row {
           display: flex;
           justify-content: space-between;
           font-size: 11px;
           font-family: monospace;
+          margin-bottom: 2px;
+          color: #000000;
+        }
+        .group-header {
+          font-size: 10.5px;
+          font-weight: 900;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          border-top: 1px dashed #000000;
+          border-bottom: 1px solid #000000;
+          padding: 3px 2px;
+          margin-top: 6px;
+          margin-bottom: 2px;
+          color: #000000;
+        }
+        .subtotal-line {
+          text-align: right;
+          font-size: 10.5px;
+          font-family: monospace;
+          color: #000000;
+          margin-top: 2px;
           margin-bottom: 4px;
+          padding: 1px 0;
+          border-bottom: 1px dotted #000000;
         }
         .items-table {
           width: 100%;
           border-collapse: collapse;
-          font-size: 11px;
-          margin: 10px 0;
+          font-size: 10.5px;
+          margin: 2px 0;
+          color: #000000;
         }
         .items-table th {
-          border-top: 1px dashed #000;
-          border-bottom: 1px dashed #000;
-          padding: 6px 2px;
+          border-top: 1px dashed #000000;
+          border-bottom: 1px dashed #000000;
+          padding: 4px 2px;
           text-transform: uppercase;
+          font-size: 10px;
+          font-weight: 800;
+          color: #000000;
         }
         .total-section {
           display: flex;
           flex-direction: column;
-          gap: 4px;
-          margin-top: 8px;
-          padding-top: 8px;
-          border-top: 1px dashed #94a3b8;
+          gap: 2px;
+          margin-top: 6px;
+          padding-top: 6px;
+          border-top: 1px dashed #000000;
+          color: #000000;
         }
         .total-row {
           display: flex;
           justify-content: space-between;
-          font-size: 12px;
+          font-size: 11px;
+          color: #000000;
         }
         .total-main {
-          font-size: 15px;
+          font-size: 14px;
           font-weight: 900;
-          margin-top: 4px;
-          padding-top: 6px;
-          border-top: 1px solid #000;
+          margin-top: 3px;
+          padding-top: 4px;
+          padding-bottom: 4px;
+          border-top: 1px solid #000000;
+          border-bottom: 1px solid #000000;
+          color: #000000;
         }
         .footer-thank {
-          font-size: 11px;
+          font-size: 10px;
           text-align: center;
-          margin-top: 16px;
-          padding-top: 10px;
-          border-top: 1px dashed #94a3b8;
-          color: #475569;
+          margin-top: 10px;
+          padding-top: 6px;
+          border-top: 1px dashed #000000;
+          color: #000000;
         }
         @media print {
           body {
-            background: transparent;
+            background: #ffffff;
             padding: 0;
             display: block;
           }
@@ -544,7 +749,6 @@ const printInvoice = () => {
             width: 100%;
             max-width: 80mm;
             padding: 0;
-            border-radius: 0;
             box-shadow: none;
             margin: 0 auto;
           }
@@ -555,41 +759,34 @@ const printInvoice = () => {
       <div class="pos-card">
         <div class="text-center">
           <div class="salon-title">LGHAIR SALON</div>
-          <div class="salon-sub">Địa chỉ: 123 Nguyễn Tất Thành, Phường Buôn Ma Thuột, Đắk Lắk</div>
-          <div class="salon-sub" style="font-weight: bold; color: #0f172a; margin-top: 2px;">Hotline: 0123.456.789</div>
+          <div class="salon-sub">Địa chỉ: 123 Nguyễn Tất Thành, TP. Buôn Ma Thuột, Đắk Lắk</div>
+          <div class="salon-sub" style="font-weight: bold; margin-top: 1px;">Hotline: 0123.456.789</div>
         </div>
 
         <div class="divider-dashed"></div>
         <div class="text-center pos-title">PHIẾU THANH TOÁN HÓA ĐƠN</div>
+        ${isMixed ? '<div class="text-center"><span class="order-badge-bw">[ ĐƠN KẾT HỢP: DỊCH VỤ + SẢN PHẨM ]</span></div>' : ''}
 
         <div class="info-row"><span>Mã hóa đơn:</span> <strong>#${hd.maHd}</strong></div>
         <div class="info-row"><span>Ngày tạo:</span> <span>${new Date(hd.ngayTao || new Date()).toLocaleString('vi-VN')}</span></div>
         <div class="info-row"><span>Khách hàng:</span> <strong>${hd.tenKh || hd.khachHang || 'Khách vãng lai'}</strong></div>
         <div class="info-row"><span>Người thực hiện:</span> <span>${hd.tenThuNgan || 'Hệ thống'}</span></div>
 
-        <table class="items-table">
-          <thead>
-            <tr>
-              <th style="text-align: left;">Mục</th>
-              <th style="text-align: center; width: 35px;">SL</th>
-              <th style="text-align: center; width: 65px;">Thực hiện</th>
-              <th style="text-align: right; width: 75px;">T.Tiền</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsHtml}
-          </tbody>
-        </table>
+        ${tablesHtml}
 
         <div class="total-section">
-          <div class="total-row"><span>Tạm tính:</span> <strong>${Number(hd.tongTien || 0).toLocaleString()}₫</strong></div>
-          ${hd.giamGiaVip ? `<div class="total-row" style="color: #dc2626;"><span>Giảm giá VIP:</span> <span>-${hd.giamGiaVip}%</span></div>` : ''}
+          ${isMixed ? `
+            <div class="total-row"><span>Tiền Dịch vụ:</span> <span>${totalServicePrice.value.toLocaleString()}₫</span></div>
+            <div class="total-row"><span>Tiền Sản phẩm:</span> <span>${totalProductPrice.value.toLocaleString()}₫</span></div>
+          ` : ''}
+          <div class="total-row"><span>Tạm tính tổng:</span> <strong>${Number(hd.tongTien || 0).toLocaleString()}₫</strong></div>
+          ${hd.giamGiaVip ? `<div class="total-row"><span>Giảm giá VIP:</span> <span>-${hd.giamGiaVip}%</span></div>` : ''}
           <div class="total-row total-main"><span>TỔNG CỘNG:</span> <span>${Number(hd.thanhTien || hd.tongTien || 0).toLocaleString()}₫</span></div>
         </div>
 
         <div class="footer-thank">
-          <div style="font-weight: bold;">Cảm ơn Quý khách & Hẹn gặp lại!</div>
-          <div style="font-size: 10px; margin-top: 2px;">Hotline CSKH: 0123.456.789 - Website: lghair.vn</div>
+          <div style="font-weight: bold;">Cảm ơn Quý khách &amp; Hẹn gặp lại!</div>
+          <div style="font-size: 9.5px; margin-top: 1px;">Hotline CSKH: 0123.456.789 - Website: lghair.vn</div>
         </div>
       </div>
       <script>
@@ -691,8 +888,8 @@ const printInvoice = () => {
           >
             <div class="d-flex flex-column flex-sm-row align-start align-sm-center justify-space-between gap-3">
               <div>
-                <div class="font-weight-black text-subtitle-2 text-amber-900">📦 ĐƠN HÀNG ĐANG HOÀN VỀ (ĐANG QUAY ĐẦU)</div>
-                <div class="text-caption text-amber-800">
+                <div class="font-weight-black text-subtitle-2 text-amber-900 dark:text-amber-300">📦 ĐƠN HÀNG ĐANG HOÀN VỀ</div>
+                <div class="text-caption text-amber-800 dark:text-amber-200 mt-1" style="line-height: 1.4;">
                   Kiện hàng đang được Shipper vận chuyển quay về Salon. Sau khi đã nhận và kiểm tra hàng, hãy bấm xác nhận để tự động nhập kho lại.
                 </div>
               </div>
@@ -701,17 +898,17 @@ const printInvoice = () => {
                   color="amber-darken-3"
                   variant="flat"
                   rounded="lg"
-                  class="text-none font-weight-bold"
+                  class="text-none font-weight-bold text-white shadow-sm"
                   @click="openVietQRRefundModal(selectedHd.maHd, selectedHd.thanhTien)"
                 >
                   <QrCode class="w-4 h-4 mr-1.5" />
                   Quét VietQR Hoàn Tiền
                 </v-btn>
                 <v-btn
-                  color="purple"
+                  color="purple-darken-1"
                   variant="flat"
                   rounded="lg"
-                  class="text-none font-weight-bold"
+                  class="text-none font-weight-bold text-white shadow-sm"
                   @click="changeInvoiceStatus(selectedHd.maHd, 5)"
                 >
                   <PackageCheck class="w-4 h-4 mr-1.5" />
@@ -730,17 +927,17 @@ const printInvoice = () => {
           >
             <div class="d-flex align-center justify-space-between flex-wrap gap-2">
               <div class="d-flex align-center gap-2">
-                <PackageCheck class="w-5 h-5 text-purple" />
+                <PackageCheck class="w-5 h-5 text-purple-600 dark:text-purple-300" />
                 <div>
-                  <div class="font-weight-black text-subtitle-2 text-purple-900">🟣 ĐÃ NHẬN HÀNG HOÀN &amp; NHẬP KHO</div>
-                  <div class="text-caption text-purple-800">Kiện hàng đã được kiểm tra và cộng trả lại số lượng vào kho thành công.</div>
+                  <div class="font-weight-black text-subtitle-2 text-purple-900 dark:text-purple-300">🟣 ĐÃ NHẬN HÀNG HOÀN &amp; NHẬP KHO</div>
+                  <div class="text-caption text-purple-800 dark:text-purple-200 mt-0.5">Kiện hàng đã được kiểm tra và cộng trả lại số lượng vào kho thành công.</div>
                 </div>
               </div>
               <v-btn
                 color="purple-darken-1"
-                variant="outlined"
+                variant="flat"
                 rounded="lg"
-                class="text-none font-weight-bold"
+                class="text-none font-weight-bold text-white shadow-sm"
                 @click="openVietQRRefundModal(selectedHd.maHd, selectedHd.thanhTien)"
               >
                 <QrCode class="w-4 h-4 mr-1.5" />
@@ -756,14 +953,46 @@ const printInvoice = () => {
             rounded="xl"
             class="print:hidden my-2"
           >
-            <div class="font-weight-black text-subtitle-2">🔴 ĐƠN HÀNG ĐÃ HỦY</div>
+            <div class="font-weight-black text-subtitle-2 text-red-900 dark:text-red-300">🔴 ĐƠN HÀNG ĐÃ HỦY</div>
           </v-alert>
 
           <!-- Info Cards Grid (Desktop View) -->
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-xl border print:hidden" style="background-color: rgba(var(--v-theme-on-surface), 0.03);">
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-xl border print:hidden pa-4" style="background-color: rgba(var(--v-theme-on-surface), 0.03);">
             <div class="d-flex flex-column gap-1">
               <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">MÃ HÓA ĐƠN</span>
-              <span class="text-body-2 font-weight-black font-mono text-primary">#{{ selectedHd.maHd }}</span>
+              <div class="d-flex align-center gap-1.5 flex-wrap">
+                <span class="text-body-2 font-weight-black font-mono text-primary">#{{ selectedHd.maHd }}</span>
+                <v-chip
+                  v-if="isMixedOrder"
+                  size="x-small"
+                  color="purple"
+                  variant="flat"
+                  class="font-weight-bold"
+                >
+                  <Sparkles class="w-3 h-3 mr-1" />
+                  Đơn Kết Hợp
+                </v-chip>
+                <v-chip
+                  v-else-if="serviceItems.length > 0"
+                  size="x-small"
+                  color="success"
+                  variant="flat"
+                  class="font-weight-bold"
+                >
+                  <Scissors class="w-3 h-3 mr-1" />
+                  Dịch Vụ
+                </v-chip>
+                <v-chip
+                  v-else
+                  size="x-small"
+                  color="primary"
+                  variant="flat"
+                  class="font-weight-bold"
+                >
+                  <ShoppingBag class="w-3 h-3 mr-1" />
+                  Sản Phẩm
+                </v-chip>
+              </div>
             </div>
 
             <div class="d-flex flex-column gap-1">
@@ -790,45 +1019,120 @@ const printInvoice = () => {
             <div class="d-flex justify-space-between"><span>Người thực hiện:</span> <span>{{ selectedHd.tenThuNgan || selectedHd.thuNgan || 'Hệ thống' }}</span></div>
           </div>
 
-          <!-- Invoice Items Table -->
-          <v-table density="compact" class="border rounded-xl print:border-none" hover>
-            <thead>
-              <tr class="border-b print:bg-transparent print:border-t print:border-b print:border-dashed print:border-black" style="background-color: rgba(var(--v-theme-on-surface), 0.04);">
-                <th class="font-weight-bold text-caption uppercase text-left py-2.5">Tên Sản phẩm / Dịch vụ</th>
-                <th class="font-weight-bold text-caption uppercase text-center py-2.5" style="width: 70px;">SL</th>
-                <th class="font-weight-bold text-caption uppercase text-left py-2.5 print:hidden" style="width: 140px;">
-                  {{ selectedHd.maHd?.toUpperCase().startsWith('SP') || selectedHd.maHd?.toUpperCase().startsWith('HDSP') ? 'Loại' : 'Người thực hiện' }}
-                </th>
-                <th class="font-weight-bold text-caption uppercase text-right py-2.5" style="width: 140px;">Thành tiền</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="(item, index) in getInvoiceItems(selectedHd)"
-                :key="index"
-              >
-                <td class="py-2 font-weight-bold">
-                  {{ item.ten || item.Ten || item.tenHangMuc || item.tenSP || item.tenSp || 'Dịch vụ Salon' }}
-                </td>
-                <td class="py-2 text-center font-mono font-weight-bold">
-                  {{ item.soLuong || item.SoLuong || item.soluong || 1 }}
-                </td>
-                <td class="py-2 print:hidden">
-                  <v-chip size="x-small" variant="tonal" color="grey-darken-1" class="font-weight-bold">
-                    {{ selectedHd.maHd?.toUpperCase().startsWith('SP') || selectedHd.maHd?.toUpperCase().startsWith('HDSP') ? 'Sản phẩm' : (item.thoThucHien || 'Hệ thống') }}
+          <!-- ═══════ PHÂN NHÓM 1: DỊCH VỤ SALON ═══════ -->
+          <div v-if="serviceItems.length > 0" class="d-flex flex-column gap-2 mt-1">
+            <div class="d-flex align-center justify-space-between px-1">
+              <div class="d-flex align-center gap-2">
+                <v-avatar color="success" variant="tonal" size="28" rounded="lg">
+                  <Scissors class="w-4 h-4 text-success" />
+                </v-avatar>
+                <div>
+                  <span class="text-caption font-weight-black text-uppercase text-success tracking-wide">
+                    {{ isMixedOrder ? '1. DỊCH VỤ THỰC HIỆN TẠI SALON' : 'DANH SÁCH DỊCH VỤ SALON' }}
+                  </span>
+                  <v-chip size="x-small" color="success" variant="tonal" class="ml-2 font-weight-bold">
+                    {{ serviceItems.length }} dịch vụ
                   </v-chip>
-                </td>
-                <td class="py-2 text-right font-mono font-weight-black text-body-2 text-primary">
-                  {{ (item.thanhTien || item.ThanhTien || ((item.gia || item.Gia || item.giaBan || 0) * (item.soLuong || item.SoLuong || 1))).toLocaleString() }}₫
-                </td>
-              </tr>
-              <tr v-if="getInvoiceItems(selectedHd).length === 0">
-                <td colspan="4" class="text-center py-6 text-medium-emphasis">
-                  Không có mục chi tiết nào
-                </td>
-              </tr>
-            </tbody>
-          </v-table>
+                </div>
+              </div>
+              <span v-if="isMixedOrder" class="text-caption font-weight-bold text-medium-emphasis">
+                Tạm tính DV: <strong class="text-success font-mono">{{ totalServicePrice.toLocaleString() }}₫</strong>
+              </span>
+            </div>
+
+            <v-table density="compact" class="border rounded-xl print:border-none" hover>
+              <thead>
+                <tr class="border-b print:bg-transparent" style="background-color: rgba(var(--v-theme-on-surface), 0.04);">
+                  <th class="font-weight-bold text-caption uppercase text-left py-2.5">Tên Dịch vụ</th>
+                  <th class="font-weight-bold text-caption uppercase text-center py-2.5" style="width: 70px;">SL</th>
+                  <th class="font-weight-bold text-caption uppercase text-left py-2.5 print:hidden" style="width: 180px;">Chuyên viên thực hiện</th>
+                  <th class="font-weight-bold text-caption uppercase text-right py-2.5" style="width: 140px;">Thành tiền</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="(item, index) in serviceItems"
+                  :key="'srv-' + index"
+                >
+                  <td class="py-2.5 font-weight-bold">
+                    {{ getItemName(item) }}
+                  </td>
+                  <td class="py-2.5 text-center font-mono font-weight-bold">
+                    {{ getItemQty(item) }}
+                  </td>
+                  <td class="py-2.5 print:hidden">
+                    <v-chip size="x-small" variant="tonal" color="success" class="font-weight-bold">
+                      <User class="w-3 h-3 mr-1" />
+                      {{ item.thoThucHien || item.ThoThucHien || 'Chuyên viên Salon' }}
+                    </v-chip>
+                  </td>
+                  <td class="py-2.5 text-right font-mono font-weight-black text-body-2 text-success">
+                    {{ (item.thanhTien || item.ThanhTien || ((item.gia || item.Gia || item.giaBan || 0) * getItemQty(item))).toLocaleString() }}₫
+                  </td>
+                </tr>
+              </tbody>
+            </v-table>
+          </div>
+
+          <!-- ═══════ PHÂN NHÓM 2: SẢN PHẨM MUA KÈM / BÁN LẺ ═══════ -->
+          <div v-if="productItems.length > 0" class="d-flex flex-column gap-2 mt-2">
+            <div class="d-flex align-center justify-space-between px-1">
+              <div class="d-flex align-center gap-2">
+                <v-avatar color="primary" variant="tonal" size="28" rounded="lg">
+                  <ShoppingBag class="w-4 h-4 text-primary" />
+                </v-avatar>
+                <div>
+                  <span class="text-caption font-weight-black text-uppercase text-primary tracking-wide">
+                    {{ isMixedOrder ? '2. SẢN PHẨM MUA KÈM (MANG VỀ)' : 'DANH SÁCH SẢN PHẨM' }}
+                  </span>
+                  <v-chip size="x-small" color="primary" variant="tonal" class="ml-2 font-weight-bold">
+                    {{ productItems.length }} sản phẩm
+                  </v-chip>
+                </div>
+              </div>
+              <span v-if="isMixedOrder" class="text-caption font-weight-bold text-medium-emphasis">
+                Tạm tính SP: <strong class="text-primary font-mono">{{ totalProductPrice.toLocaleString() }}₫</strong>
+              </span>
+            </div>
+
+            <v-table density="compact" class="border rounded-xl print:border-none" hover>
+              <thead>
+                <tr class="border-b print:bg-transparent" style="background-color: rgba(var(--v-theme-on-surface), 0.04);">
+                  <th class="font-weight-bold text-caption uppercase text-left py-2.5">Tên Sản phẩm &amp; Quy cách</th>
+                  <th class="font-weight-bold text-caption uppercase text-center py-2.5" style="width: 70px;">SL</th>
+                  <th class="font-weight-bold text-caption uppercase text-left py-2.5 print:hidden" style="width: 180px;">Hình thức nhận</th>
+                  <th class="font-weight-bold text-caption uppercase text-right py-2.5" style="width: 140px;">Thành tiền</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="(item, index) in productItems"
+                  :key="'prod-' + index"
+                >
+                  <td class="py-2.5 font-weight-bold">
+                    {{ getItemName(item) }}
+                  </td>
+                  <td class="py-2.5 text-center font-mono font-weight-bold">
+                    {{ getItemQty(item) }}
+                  </td>
+                  <td class="py-2.5 print:hidden">
+                    <v-chip size="x-small" variant="tonal" color="primary" class="font-weight-bold">
+                      <Box class="w-3 h-3 mr-1" />
+                      {{ isMixedOrder ? 'Mua tại quầy' : (selectedHd.diaChiGiaoHang ? 'Giao hàng tận nơi' : 'Tại quầy') }}
+                    </v-chip>
+                  </td>
+                  <td class="py-2.5 text-right font-mono font-weight-black text-body-2 text-primary">
+                    {{ (item.thanhTien || item.ThanhTien || ((item.gia || item.Gia || item.giaBan || 0) * getItemQty(item))).toLocaleString() }}₫
+                  </td>
+                </tr>
+              </tbody>
+            </v-table>
+          </div>
+
+          <!-- Empty Items State -->
+          <div v-if="serviceItems.length === 0 && productItems.length === 0" class="border rounded-xl pa-8 text-center text-medium-emphasis">
+            Không có mục chi tiết nào trong hóa đơn này
+          </div>
 
           <!-- Quick Status Update Row in Modal -->
           <div class="print:hidden border-t border-dashed pt-4 d-flex flex-column flex-sm-row align-center justify-space-between gap-3">
@@ -895,8 +1199,16 @@ const printInvoice = () => {
 
           <!-- Revenue Totals -->
           <div class="d-flex flex-column align-end gap-2 pt-4 border-t print:border-dashed print:border-black">
+            <div v-if="isMixedOrder" class="d-flex align-center justify-space-between w-100 text-caption text-medium-emphasis">
+              <span class="text-success font-weight-bold">Tạm tính Dịch vụ:</span>
+              <strong class="font-mono text-body-2 text-success">{{ totalServicePrice.toLocaleString() }}₫</strong>
+            </div>
+            <div v-if="isMixedOrder" class="d-flex align-center justify-space-between w-100 text-caption text-medium-emphasis">
+              <span class="text-primary font-weight-bold">Tạm tính Sản phẩm:</span>
+              <strong class="font-mono text-body-2 text-primary">{{ totalProductPrice.toLocaleString() }}₫</strong>
+            </div>
             <div class="d-flex align-center justify-space-between w-100 text-caption text-medium-emphasis">
-              <span>Tạm tính gốc:</span>
+              <span>{{ isMixedOrder ? 'Tạm tính gốc tổng:' : 'Tạm tính gốc:' }}</span>
               <strong class="font-mono text-body-2 text-high-emphasis">{{ Number(selectedHd.tongTien || 0).toLocaleString() }}₫</strong>
             </div>
             <div v-if="selectedHd.giamGiaVip" class="d-flex align-center justify-space-between w-100 text-caption font-weight-bold text-error">
@@ -939,7 +1251,7 @@ const printInvoice = () => {
     :is-open="isVietQRModalOpen"
     :ma-hd="vietQRSelectedMaHd"
     :tong-tien="vietQRSelectedAmount"
-    @close="isVietQRModalOpen = false"
+    @close="handleVietQRClose"
     @updated="handleVietQRUpdated"
   />
 

@@ -286,7 +286,7 @@ function getAvatarColor(name?: string): string {
 
 // ── QUICK REPLY SUGGESTIONS ──
 const defaultSuggestions = [
-  { text: 'Dạ LG Hair xin chào anh/chị, em có thể giúp gì cho mình ạ?', type: 'greet' },
+  { text: 'Dạ LGHair xin chào anh/chị, em có thể giúp gì cho mình ạ?', type: 'greet' },
   { text: 'Dạ bên em mở cửa từ 8:00 đến 21:00 hàng ngày ạ.', type: 'hours' },
   { text: 'Dạ anh/chị muốn đặt lịch cắt tóc hay làm dịch vụ gì ạ?', type: 'book' }
 ]
@@ -305,7 +305,7 @@ const currentSuggestions = computed(() => {
 
   if (content.includes('chào') || content.includes('hello') || content.includes('hi')) {
     return [
-      { text: 'Dạ LG Hair xin chào anh/chị, em có thể giúp gì cho mình ạ?', type: 'greet' },
+      { text: 'Dạ LGHair xin chào anh/chị, em có thể giúp gì cho mình ạ?', type: 'greet' },
       { text: 'Dạ em chào anh/chị! Không biết mình đang cần tư vấn dịch vụ gì ạ?', type: 'greet' },
       { text: 'Dạ chào anh/chị, chúc anh/chị một ngày tốt lành ạ!', type: 'greet' }
     ]
@@ -376,14 +376,8 @@ onUnmounted(() => {
 <template>
   <v-container fluid class="pa-4 pa-md-6">
     <!-- HIGH PRIORITY SNACKBAR -->
-    <v-snackbar
-      v-model="snackbar.show"
-      :color="snackbar.color"
-      location="top right"
-      :timeout="3500"
-      elevation="6"
-      style="z-index: 99999;"
-    >
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" location="top right" :timeout="3500" elevation="6"
+      style="z-index: 99999;">
       <div class="d-flex align-center font-weight-bold">
         <span>{{ snackbar.text }}</span>
       </div>
@@ -412,10 +406,12 @@ onUnmounted(() => {
         </p>
 
         <div class="d-flex justify-end gap-2">
-          <v-btn variant="outlined" rounded="lg" class="text-none font-weight-bold" @click="isDeleteConfirmOpen = false">
+          <v-btn variant="outlined" rounded="lg" class="text-none font-weight-bold"
+            @click="isDeleteConfirmOpen = false">
             Hủy bỏ
           </v-btn>
-          <v-btn color="error" variant="flat" rounded="lg" class="text-none font-weight-bold" @click="executeDeleteSelectedRooms">
+          <v-btn color="error" variant="flat" rounded="lg" class="text-none font-weight-bold"
+            @click="executeDeleteSelectedRooms">
             Xóa Ngay
           </v-btn>
         </div>
@@ -423,19 +419,15 @@ onUnmounted(() => {
     </v-dialog>
 
     <!-- ═══════ 100% VUETIFY 3 MAIN CHAT CARD ═══════ -->
-    <v-card
-      elevation="3"
-      rounded="2xl"
-      class="border overflow-hidden"
-      style="height: calc(100vh - 150px); min-height: 560px;"
-    >
+    <v-card elevation="3" rounded="2xl" class="border overflow-hidden"
+      style="height: calc(100vh - 150px); min-height: 560px;">
       <v-row no-gutters class="fill-height">
 
         <!-- ══════════════════════════════════════════
              CỘT TRÁI: DANH SÁCH PHÒNG CHAT (VUETIFY)
         ══════════════════════════════════════════ -->
         <v-col cols="12" md="4" lg="3" class="border-r fill-height d-flex flex-column bg-surface">
-          
+
           <!-- Header Cột Trái -->
           <div class="pa-4 border-b shrink-0">
             <div class="d-flex align-center justify-space-between mb-4">
@@ -445,33 +437,21 @@ onUnmounted(() => {
                 </v-avatar>
                 <div>
                   <h2 class="text-subtitle-1 font-weight-bold mb-1" style="line-height: 1.3;">Hỗ Trợ Khách Hàng</h2>
-                  <div class="text-caption text-primary font-weight-bold uppercase tracking-wider" style="font-size: 11px; line-height: 1.2;">Live Chat 1:1</div>
+                  <div class="text-caption text-primary font-weight-bold uppercase tracking-wider"
+                    style="font-size: 11px; line-height: 1.2;">Live Chat 1:1</div>
                 </div>
               </div>
 
-              <v-btn
-                size="small"
-                :color="isManageMode ? 'grey' : 'error'"
-                variant="tonal"
-                rounded="lg"
-                class="text-none font-weight-bold"
-                @click="toggleManageMode"
-              >
+              <v-btn size="small" :color="isManageMode ? 'grey' : 'error'" variant="tonal" rounded="lg"
+                class="text-none font-weight-bold" @click="toggleManageMode">
                 {{ isManageMode ? 'Hủy' : 'Quản lý' }}
               </v-btn>
             </div>
 
             <!-- Tìm kiếm khách hàng -->
             <div class="mb-3">
-              <v-text-field
-                v-model="searchQuery"
-                placeholder="Tìm kiếm khách hàng..."
-                variant="outlined"
-                density="compact"
-                hide-details
-                rounded="xl"
-                clearable
-              >
+              <v-text-field v-model="searchQuery" placeholder="Tìm kiếm khách hàng..." variant="outlined"
+                density="compact" hide-details rounded="xl" clearable>
                 <template v-slot:prepend-inner>
                   <Search class="w-4 h-4 text-medium-emphasis" />
                 </template>
@@ -479,7 +459,8 @@ onUnmounted(() => {
             </div>
 
             <!-- Count Badge -->
-            <v-sheet rounded="lg" border class="d-flex align-center justify-space-between px-3 py-2 text-caption font-weight-bold text-medium-emphasis mt-3">
+            <v-sheet rounded="lg" border
+              class="d-flex align-center justify-space-between px-3 py-2 text-caption font-weight-bold text-medium-emphasis mt-3">
               <span>Khách hàng đang đợi:</span>
               <v-chip color="primary" size="x-small" variant="flat" class="font-weight-black">
                 {{ activeRooms.length }}
@@ -490,26 +471,13 @@ onUnmounted(() => {
           <!-- Room List -->
           <div class="flex-grow-1 overflow-y-auto pa-2 space-y-1">
             <!-- Manage Mode Toolbar -->
-            <v-sheet v-if="isManageMode" rounded="lg" border class="d-flex align-center justify-space-between pa-2 mb-2">
-              <v-checkbox
-                :model-value="isAllSelected"
-                label="Chọn tất cả"
-                density="compact"
-                hide-details
-                color="primary"
-                class="font-weight-bold"
-                @update:model-value="toggleSelectAll"
-              ></v-checkbox>
+            <v-sheet v-if="isManageMode" rounded="lg" border
+              class="d-flex align-center justify-space-between pa-2 mb-2">
+              <v-checkbox :model-value="isAllSelected" label="Chọn tất cả" density="compact" hide-details
+                color="primary" class="font-weight-bold" @update:model-value="toggleSelectAll"></v-checkbox>
 
-              <v-btn
-                color="error"
-                size="small"
-                variant="flat"
-                rounded="lg"
-                class="text-none font-weight-bold"
-                :disabled="selectedRoomIds.length === 0"
-                @click="confirmDeleteSelectedRooms"
-              >
+              <v-btn color="error" size="small" variant="flat" rounded="lg" class="text-none font-weight-bold"
+                :disabled="selectedRoomIds.length === 0" @click="confirmDeleteSelectedRooms">
                 <template v-slot:prepend>
                   <Trash2 class="w-3.5 h-3.5 mr-1" />
                 </template>
@@ -532,37 +500,22 @@ onUnmounted(() => {
 
             <!-- Room Cards -->
             <template v-else>
-              <v-card
-                v-for="room in filteredRooms"
-                :key="room.id"
-                variant="flat"
-                rounded="xl"
-                class="pa-3 cursor-pointer transition-all mb-2 relative room-card"
-                :class="[
+              <v-card v-for="room in filteredRooms" :key="room.id" variant="flat" rounded="xl"
+                class="pa-3 cursor-pointer transition-all mb-2 relative room-card" :class="[
                   isDark ? 'room-card-dark' : 'room-card-light',
                   selectedRoom?.id === room.id ? (isDark ? 'room-card-active-dark' : 'room-card-active-light') : ''
-                ]"
-                @click="isManageMode ? handleRoomCheckboxToggle(room.id) : selectRoom(room)"
-              >
+                ]" @click="isManageMode ? handleRoomCheckboxToggle(room.id) : selectRoom(room)">
                 <div class="d-flex align-center gap-3">
-                  <v-checkbox
-                    v-if="isManageMode"
-                    :value="room.id"
-                    v-model="selectedRoomIds"
-                    density="compact"
-                    hide-details
-                    color="primary"
-                    @click.stop
-                  ></v-checkbox>
+                  <v-checkbox v-if="isManageMode" :value="room.id" v-model="selectedRoomIds" density="compact"
+                    hide-details color="primary" @click.stop></v-checkbox>
 
                   <div class="position-relative shrink-0">
-                    <v-avatar :color="getAvatarColor(room.customerName)" size="42" rounded="lg" class="font-weight-bold text-white shadow-xs">
+                    <v-avatar :color="getAvatarColor(room.customerName)" size="42" rounded="lg"
+                      class="font-weight-bold text-white shadow-xs">
                       {{ room.customerName?.charAt(0)?.toUpperCase() || '?' }}
                     </v-avatar>
-                    <span
-                      v-if="room.status === 'Active'"
-                      class="position-absolute bottom-0 right-0 w-3 h-3 rounded-circle bg-success border-2 border-white"
-                    ></span>
+                    <span v-if="room.status === 'Active'"
+                      class="position-absolute bottom-0 right-0 w-3 h-3 rounded-circle bg-success border-2 border-white"></span>
                   </div>
 
                   <div class="flex-grow-1 min-w-0">
@@ -571,21 +524,17 @@ onUnmounted(() => {
                         {{ room.customerName }}
                       </span>
                       <div class="d-flex align-center gap-1">
-                        <v-chip
-                          v-if="selectedRoom?.id === room.id"
-                          color="warning"
-                          size="x-small"
-                          variant="flat"
-                          class="font-weight-black px-1.5"
-                          style="height: 16px; font-size: 9px;"
-                        >
+                        <v-chip v-if="selectedRoom?.id === room.id" color="warning" size="x-small" variant="flat"
+                          class="font-weight-black px-1.5" style="height: 16px; font-size: 9px;">
                           Đang chọn
                         </v-chip>
-                        <span class="text-caption font-mono ml-1 room-card-sub" style="font-size: 10px;">{{ formatTime(room.updatedAt) }}</span>
+                        <span class="text-caption font-mono ml-1 room-card-sub" style="font-size: 10px;">{{
+                          formatTime(room.updatedAt) }}</span>
                       </div>
                     </div>
 
-                    <p v-if="room.isCustomerTyping" class="text-caption text-success font-weight-bold mb-0 text-truncate animate-pulse">
+                    <p v-if="room.isCustomerTyping"
+                      class="text-caption text-success font-weight-bold mb-0 text-truncate animate-pulse">
                       Đang nhập...
                     </p>
                     <p v-else class="text-caption mb-0 text-truncate room-card-sub">
@@ -602,7 +551,7 @@ onUnmounted(() => {
              CỘT PHẢI: KHUNG CHAT CHI TIẾT (VUETIFY)
         ══════════════════════════════════════════ -->
         <v-col cols="12" md="8" lg="9" class="fill-height d-flex flex-column bg-grey-lighten-5 dark:bg-grey-darken-4">
-          
+
           <!-- Empty State -->
           <div v-if="!selectedRoom" class="flex-grow-1 d-flex flex-column align-center justify-center pa-8 text-center">
             <v-avatar color="primary-lighten-5" size="72" class="mb-4">
@@ -619,19 +568,23 @@ onUnmounted(() => {
             <!-- Chat Header Toolbar -->
             <v-toolbar color="surface" border="bottom" class="px-4">
               <div class="d-flex align-center gap-3">
-                <v-avatar :color="getAvatarColor(selectedRoom.customerName)" size="42" rounded="lg" class="font-weight-bold text-white shadow-xs">
+                <v-avatar :color="getAvatarColor(selectedRoom.customerName)" size="42" rounded="lg"
+                  class="font-weight-bold text-white shadow-xs">
                   {{ selectedRoom.customerName?.charAt(0)?.toUpperCase() }}
                 </v-avatar>
                 <div>
                   <div class="text-subtitle-1 font-weight-bold d-flex align-center gap-2">
                     <span>{{ selectedRoom.customerName }}</span>
-                    <v-chip v-if="selectedRoom.isCustomerTyping" color="success" size="x-small" variant="flat" class="font-weight-bold">
+                    <v-chip v-if="selectedRoom.isCustomerTyping" color="success" size="x-small" variant="flat"
+                      class="font-weight-bold">
                       đang soạn tin...
                     </v-chip>
                   </div>
                   <div class="d-flex align-center gap-1">
-                    <span :class="['w-2 h-2 rounded-circle me-1', selectedRoom.status === 'Active' ? 'bg-success' : 'bg-grey']"></span>
-                    <span class="text-caption font-weight-bold" :class="selectedRoom.status === 'Active' ? 'text-success' : 'text-medium-emphasis'">
+                    <span
+                      :class="['w-2 h-2 rounded-circle me-1', selectedRoom.status === 'Active' ? 'bg-success' : 'bg-grey']"></span>
+                    <span class="text-caption font-weight-bold"
+                      :class="selectedRoom.status === 'Active' ? 'text-success' : 'text-medium-emphasis'">
                       {{ selectedRoom.status === 'Active' ? 'Đang hoạt động' : 'Đã đóng' }}
                     </span>
                   </div>
@@ -640,15 +593,8 @@ onUnmounted(() => {
 
               <v-spacer></v-spacer>
 
-              <v-btn
-                :color="selectedRoom.status === 'Active' ? 'error' : 'success'"
-                variant="tonal"
-                size="small"
-                rounded="lg"
-                class="text-none font-weight-bold"
-                :loading="togglingStatus"
-                @click="handleToggleStatus"
-              >
+              <v-btn :color="selectedRoom.status === 'Active' ? 'error' : 'success'" variant="tonal" size="small"
+                rounded="lg" class="text-none font-weight-bold" :loading="togglingStatus" @click="handleToggleStatus">
                 <template v-slot:prepend>
                   <Power class="w-4 h-4 mr-1" />
                 </template>
@@ -666,37 +612,27 @@ onUnmounted(() => {
                 <v-avatar color="grey-lighten-4" size="48" class="mb-2">
                   <MessageSquare class="w-6 h-6 text-medium-emphasis" />
                 </v-avatar>
-                <div class="text-caption text-medium-emphasis font-weight-bold">Chưa có tin nhắn nào trong cuộc hội thoại này</div>
+                <div class="text-caption text-medium-emphasis font-weight-bold">Chưa có tin nhắn nào trong cuộc hội
+                  thoại này
+                </div>
               </div>
 
               <!-- Chat Bubbles -->
               <template v-else>
-                <div
-                  v-for="msg in messages"
-                  :key="msg.id"
-                  class="d-flex align-start gap-3 mb-4"
-                  :class="msg.senderRole === 'Staff' ? 'justify-end' : 'justify-start'"
-                >
+                <div v-for="msg in messages" :key="msg.id" class="d-flex align-start gap-3 mb-4"
+                  :class="msg.senderRole === 'Staff' ? 'justify-end' : 'justify-start'">
                   <!-- Customer Avatar (Left) -->
-                  <v-avatar
-                    v-if="msg.senderRole === 'Customer'"
-                    :color="getAvatarColor(selectedRoom.customerName)"
-                    size="36"
-                    rounded="lg"
-                    class="font-weight-bold text-white me-2 mt-1 shadow-xs"
-                  >
+                  <v-avatar v-if="msg.senderRole === 'Customer'" :color="getAvatarColor(selectedRoom.customerName)"
+                    size="36" rounded="lg" class="font-weight-bold text-white me-2 mt-1 shadow-xs">
                     {{ selectedRoom.customerName?.charAt(0)?.toUpperCase() }}
                   </v-avatar>
 
                   <!-- Message Bubble -->
-                  <div class="d-flex flex-column" :class="msg.senderRole === 'Staff' ? 'align-end' : 'align-start'" style="max-width: 72%;">
-                    <v-sheet
-                      elevation="1"
-                      rounded="xl"
-                      class="pa-3 text-body-2 font-weight-medium border"
+                  <div class="d-flex flex-column" :class="msg.senderRole === 'Staff' ? 'align-end' : 'align-start'"
+                    style="max-width: 72%;">
+                    <v-sheet elevation="1" rounded="xl" class="pa-3 text-body-2 font-weight-medium border"
                       :color="msg.senderRole === 'Staff' ? 'primary' : 'surface'"
-                      :class="msg.senderRole === 'Staff' ? 'text-white' : 'text-high-emphasis'"
-                    >
+                      :class="msg.senderRole === 'Staff' ? 'text-white' : 'text-high-emphasis'">
                       {{ msg.content }}
                     </v-sheet>
                     <span class="text-caption text-medium-emphasis font-mono mt-1 px-1" style="font-size: 11px;">
@@ -705,13 +641,8 @@ onUnmounted(() => {
                   </div>
 
                   <!-- Staff Avatar (Right) -->
-                  <v-avatar
-                    v-if="msg.senderRole === 'Staff'"
-                    color="primary-darken-1"
-                    size="36"
-                    rounded="lg"
-                    class="font-weight-bold text-white ms-2 mt-1 shadow-xs"
-                  >
+                  <v-avatar v-if="msg.senderRole === 'Staff'" color="primary-darken-1" size="36" rounded="lg"
+                    class="font-weight-bold text-white ms-2 mt-1 shadow-xs">
                     NV
                   </v-avatar>
                 </div>
@@ -729,16 +660,11 @@ onUnmounted(() => {
               <div v-else class="space-y-3">
                 <!-- Quick Response Chips Group -->
                 <div class="d-flex align-center gap-2 overflow-x-auto pb-2">
-                  <span class="text-caption font-weight-bold text-medium-emphasis uppercase me-1 shrink-0">Gợi ý trả lời:</span>
-                  <v-chip
-                    v-for="(suggestion, idx) in currentSuggestions"
-                    :key="idx"
-                    color="primary"
-                    variant="tonal"
-                    size="small"
-                    class="font-weight-bold cursor-pointer me-1 shrink-0"
-                    @click="applySuggestion(suggestion.text)"
-                  >
+                  <span class="text-caption font-weight-bold text-medium-emphasis uppercase me-1 shrink-0">Gợi ý trả
+                    lời:</span>
+                  <v-chip v-for="(suggestion, idx) in currentSuggestions" :key="idx" color="primary" variant="tonal"
+                    size="small" class="font-weight-bold cursor-pointer me-1 shrink-0"
+                    @click="applySuggestion(suggestion.text)">
                     <template v-slot:prepend>
                       <Smile v-if="suggestion.type === 'greet'" class="w-3.5 h-3.5 mr-1" />
                       <DollarSign v-else-if="suggestion.type === 'price'" class="w-3.5 h-3.5 mr-1" />
@@ -753,25 +679,11 @@ onUnmounted(() => {
 
                 <!-- Input Text Field & Send Button -->
                 <div class="d-flex align-center gap-3">
-                  <v-text-field
-                    v-model="newMessage"
-                    placeholder="Nhập tin nhắn..."
-                    variant="outlined"
-                    density="compact"
-                    hide-details
-                    rounded="xl"
-                    @keydown.enter="handleSend"
-                  ></v-text-field>
+                  <v-text-field v-model="newMessage" placeholder="Nhập tin nhắn..." variant="outlined" density="compact"
+                    hide-details rounded="xl" @keydown.enter="handleSend"></v-text-field>
 
-                  <v-btn
-                    color="primary"
-                    icon
-                    elevation="3"
-                    size="large"
-                    :disabled="!newMessage.trim() || sending"
-                    :loading="sending"
-                    @click="handleSend"
-                  >
+                  <v-btn color="primary" icon elevation="3" size="large" :disabled="!newMessage.trim() || sending"
+                    :loading="sending" @click="handleSend">
                     <Send class="w-5 h-5" />
                   </v-btn>
                 </div>
@@ -786,7 +698,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-:global(body.v-theme--dark), 
+:global(body.v-theme--dark),
 :global(.v-theme--dark .v-main),
 :global(.v-theme--dark .v-application) {
   background-color: #141416 !important;
@@ -802,9 +714,11 @@ onUnmounted(() => {
   background-color: #ffffff !important;
   border: 1px solid #e2e8f0 !important;
 }
+
 .room-card-light .room-card-title {
   color: #0f172a !important;
 }
+
 .room-card-light .room-card-sub {
   color: #64748b !important;
 }
@@ -815,9 +729,11 @@ onUnmounted(() => {
   border-left: 6px solid #d97706 !important;
   box-shadow: 0 4px 14px rgba(217, 119, 6, 0.18) !important;
 }
+
 .room-card-active-light .room-card-title {
   color: #b45309 !important;
 }
+
 .room-card-active-light .room-card-sub {
   color: #475569 !important;
 }
@@ -827,9 +743,11 @@ onUnmounted(() => {
   background-color: #1e1e24 !important;
   border: 1px solid #334155 !important;
 }
+
 .room-card-dark .room-card-title {
   color: #f8fafc !important;
 }
+
 .room-card-dark .room-card-sub {
   color: #94a3b8 !important;
 }
@@ -840,9 +758,11 @@ onUnmounted(() => {
   border-left: 6px solid #f59e0b !important;
   box-shadow: 0 4px 16px rgba(245, 158, 11, 0.25) !important;
 }
+
 .room-card-active-dark .room-card-title {
   color: #fbbf24 !important;
 }
+
 .room-card-active-dark .room-card-sub {
   color: #e2e8f0 !important;
 }

@@ -44,7 +44,12 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, from) => {
+  // 0. Update title tag
+  if (to.meta.title) {
+    document.title = `${to.meta.title} - LG Hair Salon`;
+  }
+
   // 1. Kiểm tra cờ tài khoản bị khóa
   if (localStorage.getItem('account_locked') === 'true') {
     localStorage.removeItem('account_locked');
@@ -53,8 +58,7 @@ router.beforeEach((to, from, next) => {
       authStore.triggerLockedAccount();
     } catch {}
     if (to.meta.requiresAuth) {
-      next({ name: 'home' });
-      return;
+      return { name: 'home' };
     }
   }
 
@@ -84,8 +88,7 @@ router.beforeEach((to, from, next) => {
       authStore.triggerLockedAccount();
     } catch {}
     if (to.meta.requiresAuth) {
-      next({ name: 'home' });
-      return;
+      return { name: 'home' };
     }
   }
 
@@ -100,13 +103,13 @@ router.beforeEach((to, from, next) => {
 
   if (to.meta.requiresAuth && !isAuthenticated) {
     // Nếu route yêu cầu đăng nhập nhưng chưa có user -> đẩy về trang login
-    next({ name: 'login', query: { redirect: to.fullPath } });
+    return { name: 'login', query: { redirect: to.fullPath } };
   } else if (to.name === 'login' && isAuthenticated) {
     // Nếu đã đăng nhập mà cố tình vào trang login -> đẩy về trang chủ
-    next({ name: 'home' });
-  } else {
-    next();
+    return { name: 'home' };
   }
+
+  return true;
 });
 
 export default router

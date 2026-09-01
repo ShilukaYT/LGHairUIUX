@@ -153,8 +153,8 @@ function selectDatLichKhach(item: KhachHangDatLich) {
   maKh.value = item.maKh
   const ngayStr = item.ngayHen ? formatNgayVN(item.ngayHen) : ''
   const gioStr = item.gioBatDau ? ` lúc ${item.gioBatDau}` : ''
-  tieuDe.value = `Nhắc lịch hẹn tại LG Hair Salon`
-  noiDung.value = `Kính chào ${item.hoTen || 'Quý khách'},\n\nChúng tôi xin nhắc lịch hẹn của bạn tại LG Hair Salon:\n📅 Ngày: ${ngayStr}${gioStr}\n\nVui lòng có mặt đúng giờ. Nếu cần thay đổi hoặc hủy lịch, xin liên hệ hotline chúng tôi sớm.\n\nTrân trọng,\nLG Hair Salon 💇`
+  tieuDe.value = `Nhắc lịch hẹn tại LGHair Salon`
+  noiDung.value = `Kính chào ${item.hoTen || 'Quý khách'},\n\nChúng tôi xin nhắc lịch hẹn của bạn tại LGHair Salon:\n📅 Ngày: ${ngayStr}${gioStr}\n\nVui lòng có mặt đúng giờ. Nếu cần thay đổi hoặc hủy lịch, xin liên hệ hotline chúng tôi sớm.\n\nTrân trọng,\nLG Hair Salon 💇`
   showNotification(`Đã chọn ${item.hoTen || item.maKh} — kiểm tra nội dung rồi gửi!`, 'success')
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
@@ -785,7 +785,7 @@ function resendMessage(item: SentNotificationItem) {
   noiDung.value = item.noiDung
   sendViaGmail.value = item.kenhGui.includes('Gmail')
   sendViaZalo.value = item.kenhGui.includes('Zalo')
-  
+
   if (item.mode === 'single' && item.maKh) {
     sendMode.value = 'single'
     maKh.value = item.maKh
@@ -796,7 +796,7 @@ function resendMessage(item: SentNotificationItem) {
       maKh.value = found.maKh
     }
   }
-  
+
   showNotification('Đã sao chép nội dung tin nhắn vào biểu mẫu!', 'success')
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
@@ -841,13 +841,13 @@ function formatTime(isoStr: string) {
 // ── QUICK TEMPLATES ──
 const fillTemplate = (type: 'nhac_lich' | 'chuc_mung' | 'khuyen_mai') => {
   if (type === 'nhac_lich') {
-    tieuDe.value = 'Nhắc lịch hẹn dịch vụ tóc tại LG Hair Salon'
+    tieuDe.value = 'Nhắc lịch hẹn dịch vụ tóc tại LGHair Salon'
     noiDung.value = `Kính chào Quý khách,\n\nLG Hair Salon xin nhắc lịch hẹn làm đẹp của bạn hôm nay. Vui lòng ghé salon đúng giờ để được phục vụ chu đáo nhất.\n\nHotline hỗ trợ: 0900.123.456\nTrân trọng!`
   } else if (type === 'chuc_mung') {
-    tieuDe.value = '🎉 Chúc mừng sinh nhật Quý khách từ LG Hair Salon'
+    tieuDe.value = '🎉 Chúc mừng sinh nhật Quý khách từ LGHair Salon'
     noiDung.value = `Thân gửi Quý khách,\n\nLG Hair Salon xin gửi lời chúc mừng sinh nhật tốt đẹp nhất đến bạn! Tặng bạn Voucher giảm 30% cho tất cả dịch vụ uốn/nhuộm trong tháng này.\n\nChúc bạn luôn rạng rỡ và tự tin!`
   } else if (type === 'khuyen_mai') {
-    tieuDe.value = '🔥 Siêu Ưu Đãi Combo Uốn/Nhuộm Cao Cấp tại LG Hair'
+    tieuDe.value = '🔥 Siêu Ưu Đãi Combo Uốn/Nhuộm Cao Cấp tại LGHair'
     noiDung.value = `Kính chào Quý khách,\n\nLG Hair Salon đang áp dụng chương trình ưu đãi đặc biệt: Combo Cắt + Uốn + Nhuộm cao cấp giảm giá chỉ từ 499k. Đặt lịch ngay hôm nay để nhận quà tặng hấp dẫn!`
   }
 }
@@ -867,14 +867,8 @@ onUnmounted(() => {
 <template>
   <v-container fluid class="pa-4 pa-md-6">
     <!-- HIGH PRIORITY SNACKBAR -->
-    <v-snackbar
-      v-model="snackbar.show"
-      :color="snackbar.color"
-      location="top right"
-      :timeout="3500"
-      elevation="6"
-      style="z-index: 99999;"
-    >
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" location="top right" :timeout="3500" elevation="6"
+      style="z-index: 99999;">
       <div class="d-flex align-center font-weight-bold">
         <span>{{ snackbar.text }}</span>
       </div>
@@ -894,35 +888,25 @@ onUnmounted(() => {
           </v-avatar>
           <div>
             <h1 class="text-h5 font-weight-bold mb-1">Gửi Thông Báo Khách Hàng</h1>
-            <p class="text-subtitle-2 text-medium-emphasis mb-0">Gửi tin nhắn chăm sóc khách hàng tự động qua Email &amp; Zalo Chat</p>
+            <p class="text-subtitle-2 text-medium-emphasis mb-0">Gửi tin nhắn chăm sóc khách hàng tự động qua Email
+              &amp;
+              Zalo Chat</p>
           </div>
         </div>
 
         <div class="d-flex gap-2">
-          <v-btn
-            color="success"
-            variant="flat"
-            size="large"
-            rounded="xl"
-            class="text-none font-weight-bold shadow-xs px-6"
-            @click="openQrLoginModal"
-            v-if="!zaloTrangThai?.personalLoggedIn"
-          >
+          <v-btn color="success" variant="flat" size="large" rounded="xl"
+            class="text-none font-weight-bold shadow-xs px-6" @click="openQrLoginModal"
+            v-if="!zaloTrangThai?.personalLoggedIn">
             <template v-slot:prepend>
               <QrCode class="w-5 h-5 mr-2" />
             </template>
             Đăng Nhập Zalo (QR)
           </v-btn>
 
-          <v-btn
-            color="error"
-            variant="flat"
-            size="large"
-            rounded="xl"
-            class="text-none font-weight-bold shadow-xs px-6"
-            @click="logoutZalo"
-            v-if="zaloTrangThai?.personalLoggedIn"
-          >
+          <v-btn color="error" variant="flat" size="large" rounded="xl"
+            class="text-none font-weight-bold shadow-xs px-6" @click="logoutZalo"
+            v-if="zaloTrangThai?.personalLoggedIn">
             <template v-slot:prepend>
               <XCircle class="w-5 h-5 mr-2" />
             </template>
@@ -936,22 +920,14 @@ onUnmounted(() => {
     <v-card v-if="zaloTrangThai" border rounded="2xl" class="pa-5 mb-6">
       <div class="d-flex flex-column flex-md-row align-start align-md-center justify-space-between gap-4">
         <div class="d-flex align-center gap-4">
-          <v-avatar
-            :color="zaloTrangThai.personalLoggedIn ? 'success' : 'warning'"
-            size="44"
-            rounded="xl"
-          >
+          <v-avatar :color="zaloTrangThai.personalLoggedIn ? 'success' : 'warning'" size="44" rounded="xl">
             <Smartphone class="w-6 h-6 text-white" />
           </v-avatar>
           <div>
             <div class="d-flex align-center gap-3 mb-1">
               <span class="text-subtitle-1 font-weight-bold">Zalo Chat Personal Bridge (Cổng 3847):</span>
-              <v-chip
-                :color="zaloTrangThai.personalLoggedIn ? 'success' : 'warning'"
-                size="small"
-                variant="flat"
-                class="font-weight-black"
-              >
+              <v-chip :color="zaloTrangThai.personalLoggedIn ? 'success' : 'warning'" size="small" variant="flat"
+                class="font-weight-black">
                 {{ zaloTrangThai.personalLoggedIn ? 'Đã Kết Nối' : 'Chưa Đăng Nhập' }}
               </v-chip>
             </div>
@@ -961,15 +937,8 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <v-btn
-          size="small"
-          variant="tonal"
-          color="primary"
-          rounded="lg"
-          class="text-none font-weight-bold px-4"
-          :loading="loadingZaloTrangThai"
-          @click="loadZaloTrangThai"
-        >
+        <v-btn size="small" variant="tonal" color="primary" rounded="lg" class="text-none font-weight-bold px-4"
+          :loading="loadingZaloTrangThai" @click="loadZaloTrangThai">
           <template v-slot:prepend>
             <RefreshCw class="w-4 h-4 mr-1" />
           </template>
@@ -992,14 +961,8 @@ onUnmounted(() => {
           </div>
 
           <!-- Mode Toggle Buttons -->
-          <v-btn-toggle
-            v-model="sendMode"
-            mandatory
-            color="primary"
-            rounded="xl"
-            density="comfortable"
-            class="w-100 border mb-6"
-          >
+          <v-btn-toggle v-model="sendMode" mandatory color="primary" rounded="xl" density="comfortable"
+            class="w-100 border mb-6">
             <v-btn value="single" class="flex-grow-1 text-none font-weight-bold py-2">
               <User class="w-4 h-4 mr-2" />
               Gửi 1 Khách Hàng
@@ -1013,21 +976,14 @@ onUnmounted(() => {
           <!-- ── SINGLE MODE SELECTOR ── -->
           <div v-if="sendMode === 'single'" class="mb-6 space-y-6">
             <div class="mb-4">
-              <label class="text-caption font-weight-bold text-medium-emphasis mb-2 d-block">Chọn Khách Hàng Nhận Tin:</label>
-              <v-autocomplete
-                v-model="maKh"
-                :items="khachHangList"
-                item-title="hoTen"
-                item-value="maKh"
-                placeholder="-- Chọn hoặc tìm kiếm khách hàng --"
-                variant="outlined"
-                density="comfortable"
-                rounded="xl"
-                hide-details
-                clearable
-              >
+              <label class="text-caption font-weight-bold text-medium-emphasis mb-2 d-block">Chọn Khách Hàng Nhận
+                Tin:</label>
+              <v-autocomplete v-model="maKh" :items="khachHangList" item-title="hoTen" item-value="maKh"
+                placeholder="-- Chọn hoặc tìm kiếm khách hàng --" variant="outlined" density="comfortable" rounded="xl"
+                hide-details clearable>
                 <template v-slot:item="{ props, item }">
-                  <v-list-item v-bind="props" :title="item.raw.hoTen || item.raw.maKh" :subtitle="item.raw.sdt || item.raw.email || ''"></v-list-item>
+                  <v-list-item v-bind="props" :title="item.raw.hoTen || item.raw.maKh"
+                    :subtitle="item.raw.sdt || item.raw.email || ''"></v-list-item>
                 </template>
               </v-autocomplete>
             </div>
@@ -1036,23 +992,21 @@ onUnmounted(() => {
             <v-card v-if="selectedKhach" rounded="2xl" border class="pa-5 bg-surface space-y-4 shadow-xs">
               <div class="d-flex align-center justify-space-between mb-2">
                 <div class="d-flex align-center gap-3">
-                  <v-avatar :color="getAvatarColor(selectedKhach.hoTen || selectedKhach.maKh)" size="46" rounded="xl" class="text-white font-weight-bold shadow-xs">
+                  <v-avatar :color="getAvatarColor(selectedKhach.hoTen || selectedKhach.maKh)" size="46" rounded="xl"
+                    class="text-white font-weight-bold shadow-xs">
                     {{ selectedKhach.hoTen?.charAt(0)?.toUpperCase() || 'K' }}
                   </v-avatar>
                   <div>
-                    <div class="text-subtitle-1 font-weight-bold leading-tight">{{ selectedKhach.hoTen || 'Khách hàng' }}</div>
-                    <div class="text-caption text-medium-emphasis font-mono mt-1" style="font-size: 11px;">Mã: {{ selectedKhach.maKh }}</div>
+                    <div class="text-subtitle-1 font-weight-bold leading-tight">{{ selectedKhach.hoTen || 'Khách hàng'
+                      }}
+                    </div>
+                    <div class="text-caption text-medium-emphasis font-mono mt-1" style="font-size: 11px;">Mã: {{
+                      selectedKhach.maKh }}</div>
                   </div>
                 </div>
 
-                <v-btn
-                  size="small"
-                  color="success"
-                  variant="tonal"
-                  rounded="lg"
-                  class="text-none font-weight-bold px-3"
-                  @click="checkKhachZalo(selectedKhach)"
-                >
+                <v-btn size="small" color="success" variant="tonal" rounded="lg" class="text-none font-weight-bold px-3"
+                  @click="checkKhachZalo(selectedKhach)">
                   Rà Zalo
                 </v-btn>
               </div>
@@ -1062,32 +1016,24 @@ onUnmounted(() => {
               <div class="text-body-2 space-y-3 text-medium-emphasis my-3">
                 <div class="d-flex align-center gap-2">
                   <Phone class="w-4 h-4 text-primary me-1" />
-                  <span>SĐT: <strong class="text-high-emphasis ms-1">{{ selectedKhach.sdt || 'Chưa có SĐT' }}</strong></span>
+                  <span>SĐT: <strong class="text-high-emphasis ms-1">{{ selectedKhach.sdt || 'Chưa có SĐT'
+                      }}</strong></span>
                 </div>
                 <div class="d-flex align-center gap-2">
                   <Mail class="w-4 h-4 text-primary me-1" />
-                  <span>Email: <strong class="text-high-emphasis ms-1">{{ selectedKhach.email || 'Chưa có Email' }}</strong></span>
+                  <span>Email: <strong class="text-high-emphasis ms-1">{{ selectedKhach.email || 'Chưa có Email'
+                      }}</strong></span>
                 </div>
               </div>
 
               <!-- Zalo Check Badge -->
               <div v-if="getCheckResult(selectedKhach.maKh)" class="pt-3 border-t">
-                <v-chip
-                  v-if="getCheckResult(selectedKhach.maKh)?.exists"
-                  color="success"
-                  size="small"
-                  variant="flat"
-                  class="font-weight-bold py-1 px-3"
-                >
+                <v-chip v-if="getCheckResult(selectedKhach.maKh)?.exists" color="success" size="small" variant="flat"
+                  class="font-weight-bold py-1 px-3">
                   ✓ Đã có Zalo: {{ getCheckResult(selectedKhach.maKh)?.user?.displayName }}
                 </v-chip>
-                <v-chip
-                  v-else-if="!getCheckResult(selectedKhach.maKh)?.checking"
-                  color="warning"
-                  size="small"
-                  variant="tonal"
-                  class="font-weight-bold py-1 px-3"
-                >
+                <v-chip v-else-if="!getCheckResult(selectedKhach.maKh)?.checking" color="warning" size="small"
+                  variant="tonal" class="font-weight-bold py-1 px-3">
                   ✗ Chưa có / Chặn Zalo
                 </v-chip>
               </div>
@@ -1115,28 +1061,14 @@ onUnmounted(() => {
                   Làm Mới Danh Sách
                 </v-btn> -->
               </div>
-              <v-text-field
-                v-model="bulkSearchQuery"
-                placeholder="Tìm theo tên, SĐT, email..."
-                variant="outlined"
-                density="comfortable"
-                hide-details
-                rounded="xl"
-              >
+              <v-text-field v-model="bulkSearchQuery" placeholder="Tìm theo tên, SĐT, email..." variant="outlined"
+                density="comfortable" hide-details rounded="xl">
                 <template v-slot:prepend-inner>
                   <Search class="w-4 h-4 text-medium-emphasis me-2" />
                 </template>
                 <template v-slot:append-inner>
-                  <v-btn
-                    icon
-                    variant="text"
-                    size="small"
-                    density="comfortable"
-                    color="primary"
-                    :loading="loadingList"
-                    @click="loadKhachHang(true)"
-                    title="Làm mới danh sách khách hàng"
-                  >
+                  <v-btn icon variant="text" size="small" density="comfortable" color="primary" :loading="loadingList"
+                    @click="loadKhachHang(true)" title="Làm mới danh sách khách hàng">
                     <RefreshCw class="w-4 h-4" />
                   </v-btn>
                 </template>
@@ -1144,20 +1076,13 @@ onUnmounted(() => {
             </div>
 
             <!-- Zalo Bulk Action Card -->
-            <v-card variant="flat" border rounded="xl" class="pa-4 mb-4" style="background-color: rgba(var(--v-theme-on-surface), 0.03);">
+            <v-card variant="flat" border rounded="xl" class="pa-4 mb-4"
+              style="background-color: rgba(var(--v-theme-on-surface), 0.03);">
               <!-- Top Row: Zalo Actions & Sort Switch -->
               <div class="d-flex align-center justify-space-between flex-wrap gap-3 pb-3 border-b">
                 <div class="d-flex align-center gap-2.5 flex-wrap">
-                  <v-btn
-                    size="small"
-                    color="success"
-                    variant="flat"
-                    rounded="lg"
-                    height="36"
-                    class="text-none font-weight-bold px-3"
-                    :loading="isBulkCheckingZalo"
-                    @click="checkBulkZalo"
-                  >
+                  <v-btn size="small" color="success" variant="flat" rounded="lg" height="36"
+                    class="text-none font-weight-bold px-3" :loading="isBulkCheckingZalo" @click="checkBulkZalo">
                     <template v-slot:prepend>
                       <Smartphone class="w-4 h-4 mr-1" />
                     </template>
@@ -1168,16 +1093,9 @@ onUnmounted(() => {
                     }}
                   </v-btn>
 
-                  <v-btn
-                    size="small"
-                    color="success"
-                    variant="tonal"
-                    rounded="lg"
-                    height="36"
-                    class="text-none font-weight-bold px-3"
-                    @click="selectOnlyZaloUsers"
-                    title="Chỉ chọn những khách hàng đã rà thấy Zalo"
-                  >
+                  <v-btn size="small" color="success" variant="tonal" rounded="lg" height="36"
+                    class="text-none font-weight-bold px-3" @click="selectOnlyZaloUsers"
+                    title="Chỉ chọn những khách hàng đã rà thấy Zalo">
                     <template v-slot:prepend>
                       <CheckCircle2 class="w-4 h-4 mr-1" />
                     </template>
@@ -1186,14 +1104,7 @@ onUnmounted(() => {
                 </div>
 
                 <div class="d-flex align-center gap-2">
-                  <v-switch
-                    v-model="sortByZalo"
-                    color="success"
-                    density="compact"
-                    hide-details
-                    inset
-                    class="ma-0 pa-0"
-                  >
+                  <v-switch v-model="sortByZalo" color="success" density="compact" hide-details inset class="ma-0 pa-0">
                     <template v-slot:label>
                       <span class="text-caption font-weight-semibold text-medium-emphasis ps-1">Ưu tiên có Zalo</span>
                     </template>
@@ -1204,15 +1115,18 @@ onUnmounted(() => {
               <!-- Bottom Row: Selection Controls -->
               <div class="d-flex align-center justify-space-between pt-3 px-0.5">
                 <div class="d-flex align-center gap-2">
-                  <v-btn size="small" variant="text" color="primary" rounded="md" class="text-none font-weight-bold px-2.5" @click="selectAllBulk">
+                  <v-btn size="small" variant="text" color="primary" rounded="md"
+                    class="text-none font-weight-bold px-2.5" @click="selectAllBulk">
                     Chọn tất cả
                   </v-btn>
                   <span class="text-caption text-medium-emphasis opacity-60">|</span>
-                  <v-btn size="small" variant="text" color="grey-darken-1" rounded="md" class="text-none font-weight-bold px-2.5" @click="deselectAllBulk">
+                  <v-btn size="small" variant="text" color="grey-darken-1" rounded="md"
+                    class="text-none font-weight-bold px-2.5" @click="deselectAllBulk">
                     Bỏ chọn
                   </v-btn>
                   <span class="text-caption text-medium-emphasis opacity-60">|</span>
-                  <v-btn size="small" variant="text" color="primary" rounded="md" class="text-none font-weight-bold px-2.5" :loading="loadingList" @click="loadKhachHang(true)">
+                  <v-btn size="small" variant="text" color="primary" rounded="md"
+                    class="text-none font-weight-bold px-2.5" :loading="loadingList" @click="loadKhachHang(true)">
                     <template v-slot:prepend>
                       <RefreshCw class="w-3.5 h-3.5 mr-1" />
                     </template>
@@ -1226,40 +1140,21 @@ onUnmounted(() => {
             </v-card>
 
             <!-- Scrollable Cards List with Spaced Out Item Cards -->
-            <v-sheet
-              border
-              rounded="2xl"
-              class="flex-grow-1 overflow-y-auto pa-3 d-flex flex-column"
-              style="max-height: 300px; min-height: 200px; gap: 10px; background-color: rgba(var(--v-theme-on-surface), 0.02);"
-            >
-              <v-card
-                v-for="k in filteredKhachHangList"
-                :key="k.maKh"
-                variant="flat"
-                rounded="xl"
-                class="pa-3 cursor-pointer border relative transition-all"
-                :class="[
+            <v-sheet border rounded="2xl" class="flex-grow-1 overflow-y-auto pa-3 d-flex flex-column"
+              style="max-height: 300px; min-height: 200px; gap: 10px; background-color: rgba(var(--v-theme-on-surface), 0.02);">
+              <v-card v-for="k in filteredKhachHangList" :key="k.maKh" variant="flat" rounded="xl"
+                class="pa-3 cursor-pointer border relative transition-all" :class="[
                   selectedMaKhs.includes(k.maKh)
                     ? 'border-primary'
                     : ''
-                ]"
-                :style="
-                  selectedMaKhs.includes(k.maKh)
+                ]" :style="selectedMaKhs.includes(k.maKh)
                     ? 'background-color: rgba(var(--v-theme-on-surface), 0.08);'
                     : 'background-color: rgba(var(--v-theme-on-surface), 0.03);'
-                "
-                @click="toggleSelectKhach(k.maKh)"
-              >
+                  " @click="toggleSelectKhach(k.maKh)">
                 <div class="d-flex align-center justify-space-between gap-2">
                   <div class="d-flex align-center gap-3 min-w-0">
-                    <v-checkbox
-                      :model-value="selectedMaKhs.includes(k.maKh)"
-                      density="compact"
-                      hide-details
-                      color="primary"
-                      class="me-1 shrink-0"
-                      @click.stop="toggleSelectKhach(k.maKh)"
-                    ></v-checkbox>
+                    <v-checkbox :model-value="selectedMaKhs.includes(k.maKh)" density="compact" hide-details
+                      color="primary" class="me-1 shrink-0" @click.stop="toggleSelectKhach(k.maKh)"></v-checkbox>
                     <v-avatar size="32" color="primary" variant="tonal" class="text-caption font-weight-bold shrink-0">
                       {{ (k.hoTen?.charAt(0) || k.maKh?.charAt(0) || 'K').toUpperCase() }}
                     </v-avatar>
@@ -1271,41 +1166,20 @@ onUnmounted(() => {
 
                   <!-- Zalo Check Badge per Item -->
                   <div class="shrink-0 d-flex align-center gap-1">
-                    <v-chip
-                      v-if="getCheckResult(k.maKh)?.exists"
-                      color="success"
-                      size="x-small"
-                      variant="flat"
-                      class="font-weight-bold"
-                    >
+                    <v-chip v-if="getCheckResult(k.maKh)?.exists" color="success" size="x-small" variant="flat"
+                      class="font-weight-bold">
                       ✓ Zalo: {{ getCheckResult(k.maKh)?.user?.displayName || 'Khả dụng' }}
                     </v-chip>
-                    <v-chip
-                      v-else-if="getCheckResult(k.maKh)?.checking"
-                      color="primary"
-                      size="x-small"
-                      variant="tonal"
-                    >
+                    <v-chip v-else-if="getCheckResult(k.maKh)?.checking" color="primary" size="x-small" variant="tonal">
                       <v-progress-circular indeterminate size="10" width="2" class="mr-1"></v-progress-circular>
                       Đang rà...
                     </v-chip>
-                    <v-chip
-                      v-else-if="getCheckResult(k.maKh) && !getCheckResult(k.maKh)?.exists"
-                      color="grey"
-                      size="x-small"
-                      variant="tonal"
-                    >
+                    <v-chip v-else-if="getCheckResult(k.maKh) && !getCheckResult(k.maKh)?.exists" color="grey"
+                      size="x-small" variant="tonal">
                       Không có Zalo
                     </v-chip>
-                    <v-btn
-                      v-else-if="k.sdt"
-                      size="x-small"
-                      variant="tonal"
-                      color="success"
-                      rounded="md"
-                      class="text-none font-weight-bold px-2"
-                      @click.stop="checkKhachZalo(k)"
-                    >
+                    <v-btn v-else-if="k.sdt" size="x-small" variant="tonal" color="success" rounded="md"
+                      class="text-none font-weight-bold px-2" @click.stop="checkKhachZalo(k)">
                       Rà Zalo
                     </v-btn>
                   </div>
@@ -1315,16 +1189,12 @@ onUnmounted(() => {
           </div>
 
           <!-- KÊNH GỬI & NÚT GỬI -->
-          <v-card variant="flat" border rounded="xl" class="pa-4 mb-6" style="background-color: rgba(var(--v-theme-on-surface), 0.03);">
+          <v-card variant="flat" border rounded="xl" class="pa-4 mb-6"
+            style="background-color: rgba(var(--v-theme-on-surface), 0.03);">
             <div class="text-subtitle-2 font-weight-bold mb-3">Kênh Thông Báo Nổi Bật:</div>
-            
+
             <div class="d-flex flex-column gap-2">
-              <v-switch
-                v-model="sendViaGmail"
-                color="primary"
-                hide-details
-                density="comfortable"
-              >
+              <v-switch v-model="sendViaGmail" color="primary" hide-details density="comfortable">
                 <template v-slot:label>
                   <div class="d-flex align-center gap-2 font-weight-bold text-body-2">
                     <Mail class="w-4 h-4 text-primary" />
@@ -1333,12 +1203,7 @@ onUnmounted(() => {
                 </template>
               </v-switch>
 
-              <v-switch
-                v-model="sendViaZalo"
-                color="success"
-                hide-details
-                density="comfortable"
-              >
+              <v-switch v-model="sendViaZalo" color="success" hide-details density="comfortable">
                 <template v-slot:label>
                   <div class="d-flex align-center gap-2 font-weight-bold text-body-2">
                     <Smartphone class="w-4 h-4 text-success" />
@@ -1349,17 +1214,9 @@ onUnmounted(() => {
             </div>
           </v-card>
 
-          <v-btn
-            color="primary"
-            size="x-large"
-            rounded="xl"
-            block
-            elevation="3"
-            class="text-none font-weight-bold text-subtitle-1 mt-auto"
-            :disabled="!canSubmit"
-            :loading="sending"
-            @click="onSubmit"
-          >
+          <v-btn color="primary" size="x-large" rounded="xl" block elevation="3"
+            class="text-none font-weight-bold text-subtitle-1 mt-auto" :disabled="!canSubmit" :loading="sending"
+            @click="onSubmit">
             <template v-slot:prepend>
               <Send class="w-5 h-5 mr-2" />
             </template>
@@ -1380,15 +1237,19 @@ onUnmounted(() => {
 
           <!-- Quick Templates Chips -->
           <div class="mb-6 space-y-2">
-            <span class="text-caption font-weight-bold text-medium-emphasis uppercase d-block mb-1">Mẫu Tin Nhắn Gợi Ý:</span>
+            <span class="text-caption font-weight-bold text-medium-emphasis uppercase d-block mb-1">Mẫu Tin Nhắn Gợi
+              Ý:</span>
             <div class="d-flex align-center gap-2 flex-wrap">
-              <v-chip color="primary" variant="tonal" size="small" class="font-weight-bold cursor-pointer py-1" @click="fillTemplate('nhac_lich')">
+              <v-chip color="primary" variant="tonal" size="small" class="font-weight-bold cursor-pointer py-1"
+                @click="fillTemplate('nhac_lich')">
                 📅 Nhắc Lịch Hẹn
               </v-chip>
-              <v-chip color="success" variant="tonal" size="small" class="font-weight-bold cursor-pointer py-1" @click="fillTemplate('chuc_mung')">
+              <v-chip color="success" variant="tonal" size="small" class="font-weight-bold cursor-pointer py-1"
+                @click="fillTemplate('chuc_mung')">
                 🎉 Sinh Nhật KH
               </v-chip>
-              <v-chip color="warning" variant="tonal" size="small" class="font-weight-bold cursor-pointer py-1" @click="fillTemplate('khuyen_mai')">
+              <v-chip color="warning" variant="tonal" size="small" class="font-weight-bold cursor-pointer py-1"
+                @click="fillTemplate('khuyen_mai')">
                 🔥 Khuyến Mãi Hot
               </v-chip>
             </div>
@@ -1398,27 +1259,15 @@ onUnmounted(() => {
           <div class="space-y-6 flex-grow-1 d-flex flex-column">
             <div>
               <label class="text-caption font-weight-bold text-medium-emphasis mb-2 d-block">Tiêu Đề Thông Báo:</label>
-              <v-text-field
-                v-model="tieuDe"
-                placeholder="Nhập tiêu đề thông báo..."
-                variant="outlined"
-                density="comfortable"
-                rounded="xl"
-                hide-details
-              ></v-text-field>
+              <v-text-field v-model="tieuDe" placeholder="Nhập tiêu đề thông báo..." variant="outlined"
+                density="comfortable" rounded="xl" hide-details></v-text-field>
             </div>
 
             <div class="flex-grow-1 d-flex flex-column">
-              <label class="text-caption font-weight-bold text-medium-emphasis mb-2 d-block">Nội Dung Chi Tiết Tin Nhắn:</label>
-              <v-textarea
-                v-model="noiDung"
-                placeholder="Nhập nội dung chi tiết gửi cho khách hàng..."
-                variant="outlined"
-                rounded="2xl"
-                rows="8"
-                hide-details
-                class="flex-grow-1"
-              ></v-textarea>
+              <label class="text-caption font-weight-bold text-medium-emphasis mb-2 d-block">Nội Dung Chi Tiết Tin
+                Nhắn:</label>
+              <v-textarea v-model="noiDung" placeholder="Nhập nội dung chi tiết gửi cho khách hàng..."
+                variant="outlined" rounded="2xl" rows="8" hide-details class="flex-grow-1"></v-textarea>
             </div>
           </div>
         </v-card>
@@ -1439,7 +1288,8 @@ onUnmounted(() => {
           </v-btn>
         </v-btn-toggle>
 
-        <v-btn v-if="activeBottomTab === 'lichsu'" color="error" variant="tonal" size="small" rounded="lg" class="text-none font-weight-bold px-4" @click="clearSentHistory">
+        <v-btn v-if="activeBottomTab === 'lichsu'" color="error" variant="tonal" size="small" rounded="lg"
+          class="text-none font-weight-bold px-4" @click="clearSentHistory">
           Xóa Lịch Sử
         </v-btn>
       </div>
@@ -1449,44 +1299,20 @@ onUnmounted(() => {
         <!-- Controls -->
         <div class="d-flex flex-column flex-sm-row align-center justify-space-between gap-4 mb-4">
           <div class="d-flex align-center gap-3 w-100 sm:w-auto">
-            <v-text-field
-              v-model="datLichNgayFilter"
-              type="date"
-              variant="outlined"
-              density="compact"
-              hide-details
-              rounded="xl"
-              style="min-width: 170px;"
-              @change="loadKhachHangDatLich"
-            ></v-text-field>
+            <v-text-field v-model="datLichNgayFilter" type="date" variant="outlined" density="compact" hide-details
+              rounded="xl" style="min-width: 170px;" @change="loadKhachHangDatLich"></v-text-field>
 
-            <v-select
-              v-model="datLichTrangThaiFilter"
-              :items="[
-                { title: 'Tất cả trạng thái', value: 'all' },
-                { title: 'Chờ xác nhận', value: '0' },
-                { title: 'Đã xác nhận', value: '1' },
-                { title: 'Hoàn thành', value: '2' }
-              ]"
-              item-title="title"
-              item-value="value"
-              variant="outlined"
-              density="compact"
-              hide-details
-              rounded="xl"
-              style="min-width: 180px;"
-            ></v-select>
+            <v-select v-model="datLichTrangThaiFilter" :items="[
+              { title: 'Tất cả trạng thái', value: 'all' },
+              { title: 'Chờ xác nhận', value: '0' },
+              { title: 'Đã xác nhận', value: '1' },
+              { title: 'Hoàn thành', value: '2' }
+            ]" item-title="title" item-value="value" variant="outlined" density="compact" hide-details rounded="xl"
+              style="min-width: 180px;"></v-select>
           </div>
 
-          <v-text-field
-            v-model="datLichSearch"
-            placeholder="Tìm tên, SĐT..."
-            variant="outlined"
-            density="compact"
-            hide-details
-            rounded="xl"
-            style="min-width: 220px;"
-          >
+          <v-text-field v-model="datLichSearch" placeholder="Tìm tên, SĐT..." variant="outlined" density="compact"
+            hide-details rounded="xl" style="min-width: 220px;">
             <template v-slot:prepend-inner>
               <Search class="w-4 h-4 text-medium-emphasis" />
             </template>
@@ -1522,12 +1348,14 @@ onUnmounted(() => {
                 {{ formatNgayVN(item.ngayHen) }} {{ item.gioBatDau ? `(${item.gioBatDau})` : '' }}
               </td>
               <td class="px-4 py-3">
-                <v-chip :color="getTrangThaiDatLich(item.trangThai).color" size="x-small" variant="flat" class="font-weight-black">
+                <v-chip :color="getTrangThaiDatLich(item.trangThai).color" size="x-small" variant="flat"
+                  class="font-weight-black">
                   {{ getTrangThaiDatLich(item.trangThai).label }}
                 </v-chip>
               </td>
               <td class="text-end px-4 py-3">
-                <v-btn color="primary" size="small" variant="tonal" rounded="lg" class="text-none font-weight-bold px-4" @click="selectDatLichKhach(item)">
+                <v-btn color="primary" size="small" variant="tonal" rounded="lg" class="text-none font-weight-bold px-4"
+                  @click="selectDatLichKhach(item)">
                   Chọn Gửi Tin
                 </v-btn>
               </td>
@@ -1541,49 +1369,24 @@ onUnmounted(() => {
         <!-- Controls -->
         <div class="d-flex flex-column flex-sm-row align-center justify-space-between gap-4 mb-4">
           <div class="d-flex align-center gap-3 w-100 sm:w-auto">
-            <v-select
-              v-model="historyStatusFilter"
-              :items="[
-                { title: 'Tất cả kết quả', value: 'all' },
-                { title: 'Thành công', value: 'success' },
-                { title: 'Một số thất bại', value: 'partial' },
-                { title: 'Thất bại', value: 'error' }
-              ]"
-              item-title="title"
-              item-value="value"
-              variant="outlined"
-              density="compact"
-              hide-details
-              rounded="xl"
-              style="min-width: 180px;"
-            ></v-select>
+            <v-select v-model="historyStatusFilter" :items="[
+              { title: 'Tất cả kết quả', value: 'all' },
+              { title: 'Thành công', value: 'success' },
+              { title: 'Một số thất bại', value: 'partial' },
+              { title: 'Thất bại', value: 'error' }
+            ]" item-title="title" item-value="value" variant="outlined" density="compact" hide-details rounded="xl"
+              style="min-width: 180px;"></v-select>
 
-            <v-select
-              v-model="historyChannelFilter"
-              :items="[
-                { title: 'Tất cả kênh', value: 'all' },
-                { title: 'Kênh Zalo', value: 'Zalo' },
-                { title: 'Kênh Gmail', value: 'Gmail' }
-              ]"
-              item-title="title"
-              item-value="value"
-              variant="outlined"
-              density="compact"
-              hide-details
-              rounded="xl"
-              style="min-width: 180px;"
-            ></v-select>
+            <v-select v-model="historyChannelFilter" :items="[
+              { title: 'Tất cả kênh', value: 'all' },
+              { title: 'Kênh Zalo', value: 'Zalo' },
+              { title: 'Kênh Gmail', value: 'Gmail' }
+            ]" item-title="title" item-value="value" variant="outlined" density="compact" hide-details rounded="xl"
+              style="min-width: 180px;"></v-select>
           </div>
 
-          <v-text-field
-            v-model="historySearch"
-            placeholder="Tìm người nhận, nội dung..."
-            variant="outlined"
-            density="compact"
-            hide-details
-            rounded="xl"
-            style="min-width: 220px;"
-          >
+          <v-text-field v-model="historySearch" placeholder="Tìm người nhận, nội dung..." variant="outlined"
+            density="compact" hide-details rounded="xl" style="min-width: 220px;">
             <template v-slot:prepend-inner>
               <Search class="w-4 h-4 text-medium-emphasis" />
             </template>
@@ -1620,10 +1423,7 @@ onUnmounted(() => {
               <td class="px-4 py-3">
                 <v-chip
                   :color="item.trangThai === 'success' ? 'success' : (item.trangThai === 'partial' ? 'warning' : 'error')"
-                  size="x-small"
-                  variant="flat"
-                  class="font-weight-black"
-                >
+                  size="x-small" variant="flat" class="font-weight-black">
                   {{ item.trangThai === 'success' ? 'Thành công' : (item.trangThai === 'partial' ? 'Từng phần' : 'Thất bại') }}
                 </v-chip>
               </td>
@@ -1697,7 +1497,8 @@ onUnmounted(() => {
         </div>
 
         <div class="d-flex justify-end border-t pt-4">
-          <v-btn variant="flat" color="primary" rounded="lg" class="text-none font-weight-bold" @click="detailModalOpen = false">
+          <v-btn variant="flat" color="primary" rounded="lg" class="text-none font-weight-bold"
+            @click="detailModalOpen = false">
             Đóng
           </v-btn>
         </div>

@@ -792,7 +792,7 @@ const totalPages = computed(() => {
                   <!-- TH 1: Đơn không được phép đổi trạng thái => Chip tĩnh màu sắc rõ nét -->
                   <div
                     v-if="!canEditStatus(hd)"
-                    class="status-chip d-inline-flex align-center px-3 py-1.5 rounded-pill font-weight-bold text-caption text-no-wrap"
+                    class="status-chip d-inline-flex align-center px-3 py-1 rounded-pill font-weight-bold text-caption text-no-wrap"
                     :style="{
                       backgroundColor: getStatusBadgeConfig(hd.trangThai, hd.maHd).bgColor,
                       color: getStatusBadgeConfig(hd.trangThai, hd.maHd).textColor,
@@ -911,6 +911,8 @@ const totalPages = computed(() => {
       :ma-hd="selectedMaHd"
       :initial-data="selectedHd"
       @status-updated="fetchHoaDons"
+      @closed="fetchHoaDons"
+      @refresh="fetchHoaDons"
     />
 
     <!-- ═══════ MODAL VIETQR HOÀN TIỀN RIÊNG BIỆT ═══════ -->
@@ -918,8 +920,8 @@ const totalPages = computed(() => {
       :is-open="isVietQRModalOpen"
       :ma-hd="vietQRSelectedMaHd"
       :tong-tien="vietQRSelectedAmount"
-      @close="isVietQRModalOpen = false"
-      @updated="handleVietQRUpdated"
+      @close="() => { isVietQRModalOpen = false; fetchHoaDons(); }"
+      @updated="() => { isVietQRModalOpen = false; fetchHoaDons(); }"
     />
   </v-container>
 </template>
