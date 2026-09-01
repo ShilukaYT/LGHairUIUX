@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue';
-import { 
-  User, 
-  Package, 
-  Calendar, 
-  LogOut, 
-  Camera, 
-  Lock, 
-  Award, 
-  Loader2, 
-  Sparkles, 
-  TrendingUp, 
+import {
+  User,
+  Package,
+  Calendar,
+  LogOut,
+  Camera,
+  Lock,
+  Award,
+  Loader2,
+  Sparkles,
+  TrendingUp,
   Star,
   ShieldAlert,
   CheckCircle2,
@@ -131,12 +131,12 @@ const fileInputRef = ref<HTMLInputElement | null>(null);
 
 // Helper for auth headers
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('token') || 
-                localStorage.getItem('access_token') || 
-                localStorage.getItem('accessToken') || 
-                sessionStorage.getItem('token') || 
-                sessionStorage.getItem('access_token') || 
-                sessionStorage.getItem('accessToken');
+  const token = localStorage.getItem('token') ||
+    localStorage.getItem('access_token') ||
+    localStorage.getItem('accessToken') ||
+    sessionStorage.getItem('token') ||
+    sessionStorage.getItem('access_token') ||
+    sessionStorage.getItem('accessToken');
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 
@@ -162,16 +162,16 @@ const nextRankInfo = computed(() => {
 const rankProgress = computed(() => {
   if (!profileData.value || !ranksList.value.length) return 0;
   const currentPoints = profileData.value.diemTichLuy || 0;
-  
+
   if (!nextRankInfo.value) {
     return 100; // max rank reached
   }
-  
+
   const minPointsCurrent = currentRankInfo.value ? currentRankInfo.value.diemToiThieu : 0;
   const minPointsNext = nextRankInfo.value.diemToiThieu;
-  
+
   if (minPointsNext <= minPointsCurrent) return 100;
-  
+
   const progress = ((currentPoints - minPointsCurrent) / (minPointsNext - minPointsCurrent)) * 100;
   return Math.min(Math.max(progress, 0), 100);
 });
@@ -268,29 +268,29 @@ const isRankActive = (rankName: string) => {
 const getRankCardClass = (rankName: string) => {
   const normalized = rankName.toLowerCase().trim();
   const unlocked = isRankUnlocked(normalized);
-  
+
   if (normalized.includes('đồng') || normalized.includes('bronze')) {
     return 'bg-gradient-to-tr from-[#5c381c] via-[#462812] to-[#341d0b] border-orange-950/20 text-white';
   }
-  
+
   if (normalized.includes('bạc') || normalized.includes('silver')) {
-    return unlocked 
-      ? 'bg-gradient-to-tr from-[#475569] via-[#334155] to-[#1e293b] border-slate-600 text-white' 
+    return unlocked
+      ? 'bg-gradient-to-tr from-[#475569] via-[#334155] to-[#1e293b] border-slate-600 text-white'
       : 'bg-[#ebf0f5] border-slate-200/80 text-slate-700';
   }
-  
+
   if (normalized.includes('vàng') || normalized.includes('gold')) {
-    return unlocked 
-      ? 'bg-gradient-to-tr from-[#b45309] via-[#78350f] to-[#451a03] border-amber-700 text-white' 
+    return unlocked
+      ? 'bg-gradient-to-tr from-[#b45309] via-[#78350f] to-[#451a03] border-amber-700 text-white'
       : 'bg-[#fffbeb] border-amber-200/60 text-amber-900';
   }
-  
+
   if (normalized.includes('kim cương') || normalized.includes('diamond')) {
-    return unlocked 
-      ? 'bg-gradient-to-tr from-[#0284c7] via-[#0369a1] to-[#0f172a] border-sky-600 text-white' 
+    return unlocked
+      ? 'bg-gradient-to-tr from-[#0284c7] via-[#0369a1] to-[#0f172a] border-sky-600 text-white'
       : 'bg-[#f0f9ff] border-sky-200/60 text-sky-950';
   }
-  
+
   return 'bg-gray-50 border-gray-200 text-gray-700';
 };
 
@@ -330,12 +330,12 @@ const fetchProfileData = async () => {
     });
     if (res.data && res.data.success) {
       profileData.value = res.data.data;
-      
+
       // Update form
       profileForm.value.email = profileData.value?.email || '';
       profileForm.value.sdt = profileData.value?.sdt || '';
       profileForm.value.gioiTinh = profileData.value?.gioiTinh || 'Nam';
-      
+
       // Split Ho & Ten for mockup input representation
       const hoTenVal = profileData.value?.hoTen || '';
       const names = hoTenVal.trim().split(/\s+/);
@@ -346,7 +346,7 @@ const fetchProfileData = async () => {
         lastNameInput.value = '';
         firstNameInput.value = hoTenVal;
       }
-      
+
       // Update local storage credentials
       if (profileData.value) {
         updateLocalStorageUser(profileData.value);
@@ -480,7 +480,7 @@ const handleSaveAllChanges = async () => {
       timer: 1500,
       showConfirmButton: false
     });
-    
+
     await fetchProfileData();
   } catch (error: any) {
     console.error(error);
@@ -647,7 +647,7 @@ const handleAvatarChange = async (event: Event) => {
 
   const file = target.files?.[0];
   if (!file) return;
-  
+
   const allowedExtensions = ['image/jpeg', 'image/png', 'image/jpg'];
   if (!allowedExtensions.includes(file.type)) {
     Swal.fire({
@@ -802,13 +802,15 @@ const handleLogoutAll = () => {
 <template>
   <div class="w-full bg-[#fcfcfc] min-h-screen py-8 lg:py-12 animate-in fade-in duration-500">
     <div class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
-      
+
 
       <!-- Guest / Not logged in State -->
-      <div v-if="!customerInfo || customerInfo.maKH === 'GUEST'" class="bg-white p-12 border border-gray-200 shadow-sm text-center py-20 rounded-sm">
+      <div v-if="!customerInfo || customerInfo.maKH === 'GUEST'"
+        class="bg-white p-12 border border-gray-200 shadow-sm text-center py-20 rounded-sm">
         <ShieldAlert class="w-14 h-14 mx-auto text-gray-300 mb-6" :stroke-width="1.2" />
         <h3 class="font-heading text-lg uppercase tracking-widest mb-3 font-semibold text-black">Yêu Cầu Đăng Nhập</h3>
-        <p class="text-xs tracking-widest text-gray-400 mb-8 max-w-sm mx-auto leading-relaxed">Vui lòng đăng nhập tài khoản của bạn để truy cập và quản lý hồ sơ cá nhân cũng như các đặc quyền thành viên.</p>
+        <p class="text-xs tracking-widest text-gray-400 mb-8 max-w-sm mx-auto leading-relaxed">Vui lòng đăng nhập tài
+          khoản của bạn để truy cập và quản lý hồ sơ cá nhân cũng như các đặc quyền thành viên.</p>
         <router-link to="/login"
           class="inline-block bg-black text-white px-8 py-3.5 text-[10px] uppercase tracking-[0.2em] hover:bg-gray-900 transition-all hover:shadow-md rounded-sm font-semibold">
           Đăng nhập ngay
@@ -824,7 +826,8 @@ const handleLogoutAll = () => {
             <h2 class="font-heading text-base uppercase tracking-widest text-black mb-1.5 font-bold truncate">
               {{ profileData?.hoTen || customerInfo?.hoTen || 'Khách Hàng' }}
             </h2>
-            <div :class="['inline-flex items-center gap-1.5 px-3 py-1 text-[9px] uppercase tracking-widest font-semibold rounded-sm shadow-sm transition-colors duration-300', sidebarBadgeClass]">
+            <div
+              :class="['inline-flex items-center gap-1.5 px-3 py-1 text-[9px] uppercase tracking-widest font-semibold rounded-sm shadow-sm transition-colors duration-300', sidebarBadgeClass]">
               <Award :size="10" />
               <span>{{ profileData?.tenRank || 'Mới' }}</span>
             </div>
@@ -838,14 +841,16 @@ const handleLogoutAll = () => {
                 {{ profileData?.hoTen || customerInfo?.hoTen || 'Khách' }}
               </h2>
             </div>
-            <div :class="['inline-flex items-center gap-1 px-2.5 py-1 text-[8px] uppercase tracking-widest font-semibold rounded-sm shadow-sm transition-colors duration-300', sidebarBadgeClass]">
+            <div
+              :class="['inline-flex items-center gap-1 px-2.5 py-1 text-[8px] uppercase tracking-widest font-semibold rounded-sm shadow-sm transition-colors duration-300', sidebarBadgeClass]">
               <Award :size="10" />
               <span>{{ profileData?.tenRank || 'Mới' }}</span>
             </div>
           </div>
 
           <!-- Vertical Nav Menu -->
-          <nav class="flex flex-row lg:flex-col gap-1 overflow-x-auto pb-4 lg:pb-0 scrollbar-hide whitespace-nowrap border-b border-gray-200 lg:border-b-0">
+          <nav
+            class="flex flex-row lg:flex-col gap-1 overflow-x-auto pb-4 lg:pb-0 scrollbar-hide whitespace-nowrap border-b border-gray-200 lg:border-b-0">
             <button @click="changeTab('profile')"
               :class="['flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest transition-all rounded-sm', activeTab === 'profile' ? 'bg-white border-l-2 border-black text-black shadow-sm font-semibold' : 'text-gray-500 hover:text-black hover:bg-gray-100/50 border-l-2 border-transparent']">
               <User :size="15" :stroke-width="1.8" />
@@ -885,9 +890,10 @@ const handleLogoutAll = () => {
 
         <!-- Main Content Area -->
         <main class="flex-1 min-w-0">
-          
+
           <!-- Loading State Overlay -->
-          <div v-if="isPageLoading" class="bg-white p-20 border border-gray-200 shadow-sm text-center py-32 flex flex-col items-center justify-center rounded-sm">
+          <div v-if="isPageLoading"
+            class="bg-white p-20 border border-gray-200 shadow-sm text-center py-32 flex flex-col items-center justify-center rounded-sm">
             <Loader2 class="w-10 h-10 animate-spin text-black mb-4" />
             <p class="text-xs uppercase tracking-widest text-gray-400 font-semibold">Đang tải hồ sơ thành viên...</p>
           </div>
@@ -896,22 +902,27 @@ const handleLogoutAll = () => {
             <!-- Tab: Profile (Hồ sơ của tôi) -->
             <div v-if="activeTab === 'profile'"
               class="bg-white p-6 lg:p-10 border border-gray-200 shadow-sm rounded-sm space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              
+
               <!-- Main Title Header -->
               <div class="border-b border-gray-150 pb-4 mb-2">
-                <h1 class="font-heading text-sm uppercase tracking-[0.25em] font-extrabold text-black">Thông tin khách hàng</h1>
+                <h1 class="font-heading text-sm uppercase tracking-[0.25em] font-extrabold text-black">Thông tin khách
+                  hàng</h1>
               </div>
 
               <!-- GRID HEADER: 3 Columns like the mockup -->
               <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                
+
                 <!-- Box 1: Avatar -->
-                <div :class="['p-6 rounded-sm text-center border shadow-sm flex flex-col items-center justify-center relative min-h-[190px]', topCardClass]">
+                <div
+                  :class="['p-6 rounded-sm text-center border shadow-sm flex flex-col items-center justify-center relative min-h-[190px]', topCardClass]">
                   <div :class="topCardPatternClass"></div>
-                  
-                  <div class="relative group cursor-pointer w-24 h-24 rounded-full overflow-hidden border-2 border-white shadow-md mb-3 flex items-center justify-center bg-gray-100" @click="triggerAvatarUpload">
+
+                  <div
+                    class="relative group cursor-pointer w-24 h-24 rounded-full overflow-hidden border-2 border-white shadow-md mb-3 flex items-center justify-center bg-gray-100"
+                    @click="triggerAvatarUpload">
                     <img :src="avatarUrl" alt="Avatar" class="w-full h-full object-cover" />
-                    <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white">
+                    <div
+                      class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white">
                       <Camera class="w-5 h-5 mb-0.5" />
                       <span class="text-[7px] uppercase tracking-widest font-bold">Cập nhật</span>
                     </div>
@@ -919,50 +930,68 @@ const handleLogoutAll = () => {
                       <Loader2 class="w-6 h-6 animate-spin text-white" />
                     </div>
                   </div>
-                  <input type="file" ref="fileInputRef" class="hidden" accept=".jpg,.jpeg,.png" @change="handleAvatarChange" />
-                  
-                  <h3 :class="['font-heading text-sm uppercase tracking-widest font-bold mt-1 max-w-[200px] truncate', rankKey === 'kimcuong' ? 'text-[#0369a1]' : 'text-white']" :title="profileData?.hoTen">
+                  <input type="file" ref="fileInputRef" class="hidden" accept=".jpg,.jpeg,.png"
+                    @change="handleAvatarChange" />
+
+                  <h3
+                    :class="['font-heading text-sm uppercase tracking-widest font-bold mt-1 max-w-[200px] truncate', rankKey === 'kimcuong' ? 'text-[#0369a1]' : 'text-white']"
+                    :title="profileData?.hoTen">
                     {{ profileData?.hoTen || 'Khách hàng' }}
                   </h3>
-                  <div :class="['mt-2 inline-flex items-center gap-1.5 px-4 py-1 text-[11px] uppercase tracking-widest font-extrabold rounded-full backdrop-blur-sm shadow-sm border border-white/10', topCardBadgeClass]">
+                  <div
+                    :class="['mt-2 inline-flex items-center gap-1.5 px-4 py-1 text-[11px] uppercase tracking-widest font-extrabold rounded-full backdrop-blur-sm shadow-sm border border-white/10', topCardBadgeClass]">
                     <component :is="rankIcon" :size="12" class="shrink-0" />
                     <span>{{ profileData?.tenRank || 'Mới' }}</span>
                   </div>
                 </div>
 
                 <!-- Box 2: Points -->
-                <div class="bg-white p-6 border border-gray-200 shadow-sm rounded-sm flex flex-col justify-between min-h-[190px] relative">
-                  <div class="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.012)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.012)_1px,transparent_1px)] bg-[size:15px_15px] pointer-events-none"></div>
+                <div
+                  class="bg-white p-6 border border-gray-200 shadow-sm rounded-sm flex flex-col justify-between min-h-[190px] relative">
+                  <div
+                    class="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.012)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.012)_1px,transparent_1px)] bg-[size:15px_15px] pointer-events-none">
+                  </div>
                   <div class="flex justify-between items-start">
                     <div>
-                      <span class="text-[9px] uppercase tracking-widest text-gray-400 font-bold block">Điểm tích lũy</span>
+                      <span class="text-[9px] uppercase tracking-widest text-gray-400 font-bold block">Điểm tích
+                        lũy</span>
                       <div class="text-3xl font-extrabold text-black font-heading mt-2">
-                        {{ profileData?.diemTichLuy || 0 }} <span class="text-xs uppercase font-normal text-gray-500 tracking-wider">Điểm</span>
+                        {{ profileData?.diemTichLuy || 0 }} <span
+                          class="text-xs uppercase font-normal text-gray-500 tracking-wider">Điểm</span>
                       </div>
-                      <p class="text-[8px] text-gray-400 font-bold uppercase tracking-wider mt-1.5">100.000đ = 10 điểm (SP & Dịch vụ)</p>
+                      <p class="text-[8px] text-gray-400 font-bold uppercase tracking-wider mt-1.5">100.000đ = 10 điểm
+                        (SP & Dịch vụ)</p>
                     </div>
                     <Award class="w-5 h-5 text-gray-300" />
                   </div>
-                  
+
                   <div class="flex justify-between items-center border-t border-gray-100 pt-4 mt-2">
                     <span class="text-[9px] uppercase tracking-widest text-gray-400 font-bold">Tổng chi tiêu:</span>
-                    <span class="text-sm font-bold text-[#b45309] font-mono">{{ formatPrice(profileData?.tongTienDaChi) }}</span>
+                    <span class="text-sm font-bold text-[#b45309] font-mono">{{ formatPrice(profileData?.tongTienDaChi)
+                      }}</span>
                   </div>
                 </div>
 
                 <!-- Box 3: Progress State -->
-                <div class="bg-white p-6 border border-gray-200 shadow-sm rounded-sm flex flex-col items-center justify-center min-h-[190px] relative text-center">
-                  <div class="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.012)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.012)_1px,transparent_1px)] bg-[size:15px_15px] pointer-events-none"></div>
-                  <div class="absolute top-4 left-6 text-[9px] uppercase tracking-widest text-gray-400 font-bold">Tiến trình thăng hạng</div>
+                <div
+                  class="bg-white p-6 border border-gray-200 shadow-sm rounded-sm flex flex-col items-center justify-center min-h-[190px] relative text-center">
+                  <div
+                    class="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.012)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.012)_1px,transparent_1px)] bg-[size:15px_15px] pointer-events-none">
+                  </div>
+                  <div class="absolute top-4 left-6 text-[9px] uppercase tracking-widest text-gray-400 font-bold">Tiến
+                    trình thăng hạng</div>
                   <TrendingUp class="w-4 h-4 text-gray-300 absolute top-4 right-6" />
 
                   <!-- Highest member tier reached -->
                   <div v-if="!nextRankInfo" class="mt-4">
-                    <div class="w-10 h-10 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center mx-auto mb-2 border border-emerald-100 shadow-sm">
+                    <div
+                      class="w-10 h-10 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center mx-auto mb-2 border border-emerald-100 shadow-sm">
                       <CheckCircle2 :size="20" class="text-emerald-500" />
                     </div>
-                    <div class="text-[10px] uppercase tracking-widest font-bold text-emerald-600">Thành viên cao nhất</div>
-                    <p class="text-[9px] text-gray-400 max-w-[200px] mx-auto mt-1 leading-relaxed">Bạn đang giữ vị thế hạng thành viên cao nhất tại LG Hair!</p>
+                    <div class="text-[10px] uppercase tracking-widest font-bold text-emerald-600">Thành viên cao nhất
+                    </div>
+                    <p class="text-[9px] text-gray-400 max-w-[200px] mx-auto mt-1 leading-relaxed">Bạn đang giữ vị thế
+                      hạng thành viên cao nhất tại LGHair!</p>
                   </div>
 
                   <!-- In progress -->
@@ -974,11 +1003,14 @@ const handleLogoutAll = () => {
                           :stroke-dasharray="2 * Math.PI * 20"
                           :stroke-dashoffset="2 * Math.PI * 20 * (1 - rankProgress / 100)" />
                       </svg>
-                      <span class="absolute text-[10px] font-bold text-gray-700 font-mono">{{ Math.round(rankProgress) }}%</span>
+                      <span class="absolute text-[10px] font-bold text-gray-700 font-mono">{{ Math.round(rankProgress)
+                        }}%</span>
                     </div>
-                    <div class="text-[9px] uppercase tracking-widest font-bold text-amber-700">Lên hạng {{ nextRankInfo.tenRank }}</div>
+                    <div class="text-[9px] uppercase tracking-widest font-bold text-amber-700">Lên hạng {{
+                      nextRankInfo.tenRank }}</div>
                     <p class="text-[8px] text-gray-400 mt-1">Cần tích lũy thêm {{ pointsToNextRank }} điểm</p>
-                    <p class="text-[8px] text-gray-400 mt-0.5 font-semibold">Tương đương {{ formatPrice(moneyToNextRank) }}</p>
+                    <p class="text-[8px] text-gray-400 mt-0.5 font-semibold">Tương đương {{ formatPrice(moneyToNextRank)
+                      }}</p>
                   </div>
                 </div>
               </div>
@@ -986,7 +1018,7 @@ const handleLogoutAll = () => {
               <!-- FORM CONTAINER -->
               <div class="pt-8 border-t border-gray-150">
                 <form @submit.prevent="handleSaveAllChanges" class="space-y-6">
-                  
+
                   <!-- Họ and Tên splits inputs -->
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
@@ -1004,12 +1036,14 @@ const handleLogoutAll = () => {
                   <!-- Email & SĐT side-by-side -->
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label class="block text-[9px] uppercase tracking-widest text-gray-500 font-bold mb-2">Email</label>
+                      <label
+                        class="block text-[9px] uppercase tracking-widest text-gray-500 font-bold mb-2">Email</label>
                       <input v-model="profileForm.email" type="email" placeholder="email@example.com (không bắt buộc)"
                         class="w-full bg-white border border-gray-200 focus:border-black outline-none px-4 py-3 text-xs transition-all rounded-sm text-black shadow-sm" />
                     </div>
                     <div>
-                      <label class="block text-[9px] uppercase tracking-widest text-gray-500 font-bold mb-2">Số điện thoại</label>
+                      <label class="block text-[9px] uppercase tracking-widest text-gray-500 font-bold mb-2">Số điện
+                        thoại</label>
                       <input v-model="profileForm.sdt" type="tel" placeholder="03xxxxxxxx" required
                         class="w-full bg-white border border-gray-200 focus:border-black outline-none px-4 py-3 text-xs transition-all rounded-sm text-black shadow-sm" />
                     </div>
@@ -1017,10 +1051,12 @@ const handleLogoutAll = () => {
 
                   <!-- Gender selection horizontally -->
                   <div>
-                    <label class="block text-[9px] uppercase tracking-widest text-gray-500 font-bold mb-2">Giới tính</label>
+                    <label class="block text-[9px] uppercase tracking-widest text-gray-500 font-bold mb-2">Giới
+                      tính</label>
                     <div class="flex items-center gap-6">
-                      <label v-for="g in ['Nam', 'Nữ', 'Khác']" :key="g" class="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer select-none">
-                        <input type="radio" :value="g" v-model="profileForm.gioiTinh" 
+                      <label v-for="g in ['Nam', 'Nữ', 'Khác']" :key="g"
+                        class="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer select-none">
+                        <input type="radio" :value="g" v-model="profileForm.gioiTinh"
                           class="w-4 h-4 text-black border-gray-300 focus:ring-black accent-black cursor-pointer" />
                         <span>{{ g }}</span>
                       </label>
@@ -1030,50 +1066,59 @@ const handleLogoutAll = () => {
                   <!-- Security Section -->
                   <div class="pt-8 border-t border-gray-150">
                     <div class="flex items-center justify-between mb-4">
-                      <h3 class="font-heading text-xs uppercase tracking-widest text-black font-bold">Tài khoản & bảo mật</h3>
-                      
+                      <h3 class="font-heading text-xs uppercase tracking-widest text-black font-bold">Tài khoản & bảo
+                        mật</h3>
+
                       <!-- Google account indicator -->
-                      <div v-if="profileData?.isGoogleAccount" class="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50/90 border border-amber-200/80 text-amber-900 text-[10.5px] font-medium rounded-full shadow-2xs">
+                      <div v-if="profileData?.isGoogleAccount"
+                        class="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50/90 border border-amber-200/80 text-amber-900 text-[10.5px] font-medium rounded-full shadow-2xs">
                         <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">
-                          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-                          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                          <path fill="#4285F4"
+                            d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                          <path fill="#34A853"
+                            d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                          <path fill="#FBBC05"
+                            d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                          <path fill="#EA4335"
+                            d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
                         </svg>
                         <span>Đã liên kết với tài khoản Google</span>
                       </div>
                     </div>
-                    
+
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
-                        <label class="block text-[9px] uppercase tracking-widest text-gray-500 font-bold mb-2">Tên đăng nhập</label>
+                        <label class="block text-[9px] uppercase tracking-widest text-gray-500 font-bold mb-2">Tên đăng
+                          nhập</label>
                         <input :value="profileForm.email || profileForm.sdt" type="text" readonly disabled
                           class="w-full bg-gray-50 border border-gray-200 outline-none px-4 py-3 text-xs rounded-sm text-gray-400 shadow-sm cursor-not-allowed" />
-                        <span class="text-[8px] uppercase tracking-wider text-gray-400 block mt-1 font-semibold">Mặc định dùng Email hoặc SĐT đăng nhập</span>
+                        <span class="text-[8px] uppercase tracking-wider text-gray-400 block mt-1 font-semibold">Mặc
+                          định dùng Email hoặc SĐT đăng nhập</span>
                       </div>
                       <div>
                         <div class="flex items-center justify-between mb-2">
-                          <label class="block text-[9px] uppercase tracking-widest text-gray-500 font-bold">Mật khẩu mới</label>
-                          <button 
-                            v-if="profileData?.isGoogleAccount && newPasswordInput.trim()"
-                            type="button"
+                          <label class="block text-[9px] uppercase tracking-widest text-gray-500 font-bold">Mật khẩu
+                            mới</label>
+                          <button v-if="profileData?.isGoogleAccount && newPasswordInput.trim()" type="button"
                             @click="openPasswordVerifyModal"
-                            class="text-[9px] uppercase tracking-widest text-amber-700 hover:text-black font-bold flex items-center gap-1 transition-colors"
-                          >
+                            class="text-[9px] uppercase tracking-widest text-amber-700 hover:text-black font-bold flex items-center gap-1 transition-colors">
                             <Sparkles :size="12" />
                             <span>Xác minh Google ngay</span>
                           </button>
                         </div>
                         <div class="relative">
-                          <input :type="showNewPassword ? 'text' : 'password'" v-model="newPasswordInput" placeholder="Bỏ trống nếu không đổi..."
+                          <input :type="showNewPassword ? 'text' : 'password'" v-model="newPasswordInput"
+                            placeholder="Bỏ trống nếu không đổi..."
                             class="w-full bg-white border border-gray-200 focus:border-black outline-none px-4 py-3 pr-10 text-xs transition-all rounded-sm text-black shadow-sm" />
-                          <button type="button" @click="showNewPassword = !showNewPassword" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black">
+                          <button type="button" @click="showNewPassword = !showNewPassword"
+                            class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black">
                             <Eye v-if="!showNewPassword" :size="14" />
                             <EyeOff v-else :size="14" />
                           </button>
                         </div>
                         <p v-if="profileData?.isGoogleAccount" class="text-[8px] text-gray-400 mt-1 font-medium">
-                          Tài khoản đã liên kết Google: Bạn có thể đổi hoặc đặt mật khẩu mới dễ dàng bằng cách bấm nút <strong>Xác minh Google</strong>.
+                          Tài khoản đã liên kết Google: Bạn có thể đổi hoặc đặt mật khẩu mới dễ dàng bằng cách bấm nút
+                          <strong>Xác minh Google</strong>.
                         </p>
                       </div>
                     </div>
@@ -1090,8 +1135,10 @@ const handleLogoutAll = () => {
 
                   <!-- Session & Device Management Section -->
                   <div class="pt-8 border-t border-gray-150">
-                    <h3 class="font-heading text-xs uppercase tracking-widest text-black font-bold mb-2">Quản lý phiên đăng nhập</h3>
-                    <p class="text-xs text-gray-400 font-light mb-5">Bảo vệ tài khoản của bạn bằng cách đăng xuất khỏi thiết bị này hoặc hủy bỏ phiên làm việc trên mọi thiết bị khác.</p>
+                    <h3 class="font-heading text-xs uppercase tracking-widest text-black font-bold mb-2">Quản lý phiên
+                      đăng nhập</h3>
+                    <p class="text-xs text-gray-400 font-light mb-5">Bảo vệ tài khoản của bạn bằng cách đăng xuất khỏi
+                      thiết bị này hoặc hủy bỏ phiên làm việc trên mọi thiết bị khác.</p>
 
                     <div class="flex flex-wrap gap-4">
                       <button type="button" @click="handleLogout"
@@ -1112,18 +1159,20 @@ const handleLogoutAll = () => {
 
               <!-- MEMBERSHIP RANKS GRID SYSTEM -->
               <div class="pt-8 border-t border-gray-150">
-                <h3 class="font-heading text-xs uppercase tracking-widest text-black font-bold mb-8">Bảng Hạng Thành Viên</h3>
-                
+                <h3 class="font-heading text-xs uppercase tracking-widest text-black font-bold mb-8">Bảng Hạng Thành
+                  Viên</h3>
+
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  
+
                   <!-- Rank Card 1: ĐỒNG -->
-                  <div :class="['relative rounded-sm p-6 flex flex-col justify-between min-h-[165px] border transition-all duration-300', getRankCardClass('đồng')]">
+                  <div
+                    :class="['relative rounded-sm p-6 flex flex-col justify-between min-h-[165px] border transition-all duration-300', getRankCardClass('đồng')]">
                     <div class="absolute inset-0 bg-white/[0.015] pointer-events-none"></div>
                     <div class="flex justify-between items-start">
                       <h4 class="font-heading text-xs uppercase tracking-widest font-bold text-white">Đồng</h4>
                       <Award class="w-4 h-4 text-amber-500/80" />
                     </div>
-                    
+
                     <div class="space-y-1.5 py-4">
                       <div class="flex justify-between text-xs text-white/80">
                         <span>Điểm tối thiểu:</span>
@@ -1134,8 +1183,9 @@ const handleLogoutAll = () => {
                         <span class="font-bold text-emerald-300">0%</span>
                       </div>
                     </div>
-                    
-                    <div class="border-t border-white/10 pt-3 flex items-center gap-1.5 text-[9px] uppercase tracking-widest font-bold text-emerald-400">
+
+                    <div
+                      class="border-t border-white/10 pt-3 flex items-center gap-1.5 text-[9px] uppercase tracking-widest font-bold text-emerald-400">
                       <CheckCircle2 :size="12" class="text-emerald-400" />
                       <span v-if="isRankActive('đồng')">Hạng của bạn</span>
                       <span v-else>Bạn đã đạt hạng này</span>
@@ -1143,112 +1193,148 @@ const handleLogoutAll = () => {
                   </div>
 
                   <!-- Rank Card 2: BẠC -->
-                  <div :class="['relative rounded-sm p-6 overflow-hidden shadow-sm flex flex-col justify-between min-h-[165px] border transition-all duration-300', getRankCardClass('bạc')]">
+                  <div
+                    :class="['relative rounded-sm p-6 overflow-hidden shadow-sm flex flex-col justify-between min-h-[165px] border transition-all duration-300', getRankCardClass('bạc')]">
                     <div class="absolute inset-0 bg-white/[0.01] pointer-events-none"></div>
                     <div class="flex justify-between items-start">
-                      <h4 :class="['font-heading text-xs uppercase tracking-widest font-bold', isRankUnlocked('bạc') ? 'text-white' : 'text-slate-700']">Bạc</h4>
+                      <h4
+                        :class="['font-heading text-xs uppercase tracking-widest font-bold', isRankUnlocked('bạc') ? 'text-white' : 'text-slate-700']">
+                        Bạc</h4>
                       <Award class="w-4 h-4" :class="isRankUnlocked('bạc') ? 'text-slate-200' : 'text-slate-400'" />
                     </div>
-                    
+
                     <div class="space-y-1.5 py-4">
-                      <div class="flex justify-between text-xs" :class="isRankUnlocked('bạc') ? 'text-white/80' : 'text-slate-500'">
+                      <div class="flex justify-between text-xs"
+                        :class="isRankUnlocked('bạc') ? 'text-white/80' : 'text-slate-500'">
                         <span>Điểm tối thiểu:</span>
-                        <span :class="['font-bold', isRankUnlocked('bạc') ? 'text-white' : 'text-slate-800']">1000 điểm</span>
+                        <span :class="['font-bold', isRankUnlocked('bạc') ? 'text-white' : 'text-slate-800']">1000
+                          điểm</span>
                       </div>
-                      <div class="flex justify-between text-xs" :class="isRankUnlocked('bạc') ? 'text-white/80' : 'text-slate-500'">
+                      <div class="flex justify-between text-xs"
+                        :class="isRankUnlocked('bạc') ? 'text-white/80' : 'text-slate-500'">
                         <span>Ưu đãi giảm giá:</span>
-                        <span :class="['font-bold', isRankUnlocked('bạc') ? 'text-emerald-300' : 'text-emerald-600']">5%</span>
+                        <span
+                          :class="['font-bold', isRankUnlocked('bạc') ? 'text-emerald-300' : 'text-emerald-600']">5%</span>
                       </div>
                     </div>
-                    
-                    <div class="border-t pt-3 flex items-center justify-between" :class="isRankUnlocked('bạc') ? 'border-white/10' : 'border-slate-200/80'">
-                      <div v-if="isRankActive('bạc')" class="flex items-center gap-1.5 text-[9px] uppercase tracking-widest font-bold text-emerald-400">
+
+                    <div class="border-t pt-3 flex items-center justify-between"
+                      :class="isRankUnlocked('bạc') ? 'border-white/10' : 'border-slate-200/80'">
+                      <div v-if="isRankActive('bạc')"
+                        class="flex items-center gap-1.5 text-[9px] uppercase tracking-widest font-bold text-emerald-400">
                         <CheckCircle2 :size="12" class="text-emerald-400" />
                         <span>Hạng của bạn</span>
                       </div>
-                      <div v-else-if="isRankUnlocked('bạc')" class="flex items-center gap-1.5 text-[9px] uppercase tracking-widest font-bold text-emerald-300">
+                      <div v-else-if="isRankUnlocked('bạc')"
+                        class="flex items-center gap-1.5 text-[9px] uppercase tracking-widest font-bold text-emerald-300">
                         <CheckCircle2 :size="12" class="text-emerald-300" />
                         <span>Bạn đã đạt hạng này</span>
                       </div>
                       <div v-else class="flex flex-col gap-0.5">
-                        <span class="inline-flex items-center gap-1 text-[8px] uppercase tracking-widest font-bold text-red-500">
+                        <span
+                          class="inline-flex items-center gap-1 text-[8px] uppercase tracking-widest font-bold text-red-500">
                           <Lock :size="9" /> Chưa đạt hạng
                         </span>
-                        <span class="text-[8px] text-gray-400 uppercase tracking-widest font-bold">Cần chi thêm: 10.000.000đ</span>
+                        <span class="text-[8px] text-gray-400 uppercase tracking-widest font-bold">Cần chi thêm:
+                          10.000.000đ</span>
                       </div>
                     </div>
                   </div>
 
                   <!-- Rank Card 3: VÀNG -->
-                  <div :class="['relative rounded-sm p-6 overflow-hidden shadow-sm flex flex-col justify-between min-h-[165px] border transition-all duration-300', getRankCardClass('vàng')]">
+                  <div
+                    :class="['relative rounded-sm p-6 overflow-hidden shadow-sm flex flex-col justify-between min-h-[165px] border transition-all duration-300', getRankCardClass('vàng')]">
                     <div class="absolute inset-0 bg-white/[0.01] pointer-events-none"></div>
                     <div class="flex justify-between items-start">
-                      <h4 :class="['font-heading text-xs uppercase tracking-widest font-bold', isRankUnlocked('vàng') ? 'text-white' : 'text-amber-800']">Vàng</h4>
+                      <h4
+                        :class="['font-heading text-xs uppercase tracking-widest font-bold', isRankUnlocked('vàng') ? 'text-white' : 'text-amber-800']">
+                        Vàng</h4>
                       <Award class="w-4 h-4" :class="isRankUnlocked('vàng') ? 'text-amber-200' : 'text-amber-500'" />
                     </div>
-                    
+
                     <div class="space-y-1.5 py-4">
-                      <div class="flex justify-between text-xs" :class="isRankUnlocked('vàng') ? 'text-white/80' : 'text-amber-800/80'">
+                      <div class="flex justify-between text-xs"
+                        :class="isRankUnlocked('vàng') ? 'text-white/80' : 'text-amber-800/80'">
                         <span>Điểm tối thiểu:</span>
-                        <span :class="['font-bold', isRankUnlocked('vàng') ? 'text-white' : 'text-amber-955']">5000 điểm</span>
+                        <span :class="['font-bold', isRankUnlocked('vàng') ? 'text-white' : 'text-amber-955']">5000
+                          điểm</span>
                       </div>
-                      <div class="flex justify-between text-xs" :class="isRankUnlocked('vàng') ? 'text-white/80' : 'text-amber-800/80'">
+                      <div class="flex justify-between text-xs"
+                        :class="isRankUnlocked('vàng') ? 'text-white/80' : 'text-amber-800/80'">
                         <span>Ưu đãi giảm giá:</span>
-                        <span :class="['font-bold', isRankUnlocked('vàng') ? 'text-emerald-300' : 'text-emerald-600']">10%</span>
+                        <span
+                          :class="['font-bold', isRankUnlocked('vàng') ? 'text-emerald-300' : 'text-emerald-600']">10%</span>
                       </div>
                     </div>
-                    
-                    <div class="border-t pt-3 flex items-center justify-between" :class="isRankUnlocked('vàng') ? 'border-white/10' : 'border-amber-200/80'">
-                      <div v-if="isRankActive('vàng')" class="flex items-center gap-1.5 text-[9px] uppercase tracking-widest font-bold text-emerald-400">
+
+                    <div class="border-t pt-3 flex items-center justify-between"
+                      :class="isRankUnlocked('vàng') ? 'border-white/10' : 'border-amber-200/80'">
+                      <div v-if="isRankActive('vàng')"
+                        class="flex items-center gap-1.5 text-[9px] uppercase tracking-widest font-bold text-emerald-400">
                         <CheckCircle2 :size="12" class="text-emerald-400" />
                         <span>Hạng của bạn</span>
                       </div>
-                      <div v-else-if="isRankUnlocked('vàng')" class="flex items-center gap-1.5 text-[9px] uppercase tracking-widest font-bold text-emerald-300">
+                      <div v-else-if="isRankUnlocked('vàng')"
+                        class="flex items-center gap-1.5 text-[9px] uppercase tracking-widest font-bold text-emerald-300">
                         <CheckCircle2 :size="12" class="text-emerald-300" />
                         <span>Bạn đã đạt hạng này</span>
                       </div>
                       <div v-else class="flex flex-col gap-0.5">
-                        <span class="inline-flex items-center gap-1 text-[8px] uppercase tracking-widest font-bold text-red-500">
+                        <span
+                          class="inline-flex items-center gap-1 text-[8px] uppercase tracking-widest font-bold text-red-500">
                           <Lock :size="9" /> Chưa đạt hạng
                         </span>
-                        <span class="text-[8px] text-gray-400 uppercase tracking-widest font-bold">Cần chi thêm: 50.000.000đ</span>
+                        <span class="text-[8px] text-gray-400 uppercase tracking-widest font-bold">Cần chi thêm:
+                          50.000.000đ</span>
                       </div>
                     </div>
                   </div>
 
                   <!-- Rank Card 4: KIM CƯƠNG -->
-                  <div :class="['relative rounded-sm p-6 overflow-hidden shadow-sm flex flex-col justify-between min-h-[165px] border transition-all duration-300', getRankCardClass('kim cương')]">
+                  <div
+                    :class="['relative rounded-sm p-6 overflow-hidden shadow-sm flex flex-col justify-between min-h-[165px] border transition-all duration-300', getRankCardClass('kim cương')]">
                     <div class="absolute inset-0 bg-white/[0.01] pointer-events-none"></div>
                     <div class="flex justify-between items-start">
-                      <h4 :class="['font-heading text-xs uppercase tracking-widest font-bold', isRankUnlocked('kim cương') ? 'text-white' : 'text-sky-800']">Kim Cương</h4>
+                      <h4
+                        :class="['font-heading text-xs uppercase tracking-widest font-bold', isRankUnlocked('kim cương') ? 'text-white' : 'text-sky-800']">
+                        Kim Cương</h4>
                       <Award class="w-4 h-4" :class="isRankUnlocked('kim cương') ? 'text-sky-200' : 'text-sky-400'" />
                     </div>
-                    
+
                     <div class="space-y-1.5 py-4">
-                      <div class="flex justify-between text-xs" :class="isRankUnlocked('kim cương') ? 'text-white/80' : 'text-sky-800/80'">
+                      <div class="flex justify-between text-xs"
+                        :class="isRankUnlocked('kim cương') ? 'text-white/80' : 'text-sky-800/80'">
                         <span>Điểm tối thiểu:</span>
-                        <span :class="['font-bold', isRankUnlocked('kim cương') ? 'text-white' : 'text-sky-950']">10000 điểm</span>
+                        <span :class="['font-bold', isRankUnlocked('kim cương') ? 'text-white' : 'text-sky-950']">10000
+                          điểm</span>
                       </div>
-                      <div class="flex justify-between text-xs" :class="isRankUnlocked('kim cương') ? 'text-white/80' : 'text-sky-800/80'">
+                      <div class="flex justify-between text-xs"
+                        :class="isRankUnlocked('kim cương') ? 'text-white/80' : 'text-sky-800/80'">
                         <span>Ưu đãi giảm giá:</span>
-                        <span :class="['font-bold', isRankUnlocked('kim cương') ? 'text-emerald-300' : 'text-emerald-600']">15%</span>
+                        <span
+                          :class="['font-bold', isRankUnlocked('kim cương') ? 'text-emerald-300' : 'text-emerald-600']">15%</span>
                       </div>
                     </div>
-                    
-                    <div class="border-t pt-3 flex items-center justify-between" :class="isRankUnlocked('kim cương') ? 'border-white/10' : 'border-sky-200/85'">
-                      <div v-if="isRankActive('kim cương')" class="flex items-center gap-1.5 text-[9px] uppercase tracking-widest font-bold text-emerald-400">
+
+                    <div class="border-t pt-3 flex items-center justify-between"
+                      :class="isRankUnlocked('kim cương') ? 'border-white/10' : 'border-sky-200/85'">
+                      <div v-if="isRankActive('kim cương')"
+                        class="flex items-center gap-1.5 text-[9px] uppercase tracking-widest font-bold text-emerald-400">
                         <CheckCircle2 :size="12" class="text-emerald-400" />
                         <span>Hạng của bạn</span>
                       </div>
-                      <div v-else-if="isRankUnlocked('kim cương')" class="flex items-center gap-1.5 text-[9px] uppercase tracking-widest font-bold text-emerald-300">
+                      <div v-else-if="isRankUnlocked('kim cương')"
+                        class="flex items-center gap-1.5 text-[9px] uppercase tracking-widest font-bold text-emerald-300">
                         <CheckCircle2 :size="12" class="text-emerald-300" />
                         <span>Bạn đã đạt hạng này</span>
                       </div>
                       <div v-else class="flex flex-col gap-0.5">
-                        <span class="inline-flex items-center gap-1 text-[8px] uppercase tracking-widest font-bold text-red-500">
+                        <span
+                          class="inline-flex items-center gap-1 text-[8px] uppercase tracking-widest font-bold text-red-500">
                           <Lock :size="9" /> Chưa đạt hạng
                         </span>
-                        <span class="text-[8px] text-gray-400 uppercase tracking-widest font-bold">Cần chi thêm: 100.000.000đ</span>
+                        <span class="text-[8px] text-gray-400 uppercase tracking-widest font-bold">Cần chi thêm:
+                          100.000.000đ</span>
                       </div>
                     </div>
                   </div>
@@ -1259,37 +1345,40 @@ const handleLogoutAll = () => {
 
             <!-- Tab: Orders (Lịch sử đơn hàng sản phẩm) -->
             <div v-else-if="activeTab === 'orders'">
-              <div class="bg-white p-5 sm:p-7 lg:p-8 border border-gray-200 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500 rounded-sm">
+              <div
+                class="bg-white p-5 sm:p-7 lg:p-8 border border-gray-200 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500 rounded-sm">
                 <LichSuDonHangSanPham />
               </div>
             </div>
 
             <!-- Tab: Appointments (Lịch hẹn & Hóa đơn) -->
             <div v-else-if="activeTab === 'appointments'">
-              <div class="bg-white p-5 sm:p-7 lg:p-8 border border-gray-200 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500 rounded-sm">
+              <div
+                class="bg-white p-5 sm:p-7 lg:p-8 border border-gray-200 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500 rounded-sm">
                 <LichSuHoaDon />
               </div>
             </div>
 
             <!-- Tab: Reviews (Đánh giá của tôi) -->
             <div v-else-if="activeTab === 'reviews'">
-              <div class="bg-white p-5 sm:p-7 lg:p-8 border border-gray-200 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500 rounded-sm">
-                <div class="mb-8 border-b border-gray-100 pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div
+                class="bg-white p-5 sm:p-7 lg:p-8 border border-gray-200 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500 rounded-sm">
+                <div
+                  class="mb-8 border-b border-gray-100 pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                   <div>
-                    <h2 class="font-heading text-lg uppercase tracking-widest text-black mb-1 font-semibold">Đánh Giá Của Tôi</h2>
-                    <p class="text-xs text-gray-500">Xem và quản lý lịch sử đánh giá dịch vụ, nhân viên & sản phẩm của bạn.</p>
+                    <h2 class="font-heading text-lg uppercase tracking-widest text-black mb-1 font-semibold">Đánh Giá
+                      Của Tôi</h2>
+                    <p class="text-xs text-gray-500">Xem và quản lý lịch sử đánh giá dịch vụ, nhân viên & sản phẩm của
+                      bạn.</p>
                   </div>
-                  <div class="flex border border-gray-200 p-0.5 bg-gray-50/50 self-start sm:self-auto rounded-sm shrink-0">
-                    <button 
-                      @click="reviewSubTab = 'services_staff'"
-                      :class="['text-[9px] uppercase tracking-widest px-4 py-2 transition-all font-semibold rounded-sm', reviewSubTab === 'services_staff' ? 'bg-black text-white' : 'text-gray-500 hover:text-black']"
-                    >
+                  <div
+                    class="flex border border-gray-200 p-0.5 bg-gray-50/50 self-start sm:self-auto rounded-sm shrink-0">
+                    <button @click="reviewSubTab = 'services_staff'"
+                      :class="['text-[9px] uppercase tracking-widest px-4 py-2 transition-all font-semibold rounded-sm', reviewSubTab === 'services_staff' ? 'bg-black text-white' : 'text-gray-500 hover:text-black']">
                       Dịch vụ & Nhân viên
                     </button>
-                    <button 
-                      @click="reviewSubTab = 'products'"
-                      :class="['text-[9px] uppercase tracking-widest px-4 py-2 transition-all font-semibold rounded-sm', reviewSubTab === 'products' ? 'bg-black text-white' : 'text-gray-500 hover:text-black']"
-                    >
+                    <button @click="reviewSubTab = 'products'"
+                      :class="['text-[9px] uppercase tracking-widest px-4 py-2 transition-all font-semibold rounded-sm', reviewSubTab === 'products' ? 'bg-black text-white' : 'text-gray-500 hover:text-black']">
                       Sản phẩm
                     </button>
                   </div>
@@ -1309,20 +1398,14 @@ const handleLogoutAll = () => {
 
     <!-- MODAL XÁC THỰC DANH TÍNH ĐỔI MẬT KHẨU (HỖ TRỢ GOOGLE VÀ MẬT KHẨU CŨ) -->
     <Teleport to="body">
-      <Transition
-        enter-active-class="transition duration-300 ease-out"
-        enter-from-class="opacity-0 scale-95"
-        enter-to-class="opacity-100 scale-100"
-        leave-active-class="transition duration-200 ease-in"
-        leave-from-class="opacity-100 scale-100"
-        leave-to-class="opacity-0 scale-95"
-      >
-        <div
-          v-if="showPasswordVerifyModal"
+      <Transition enter-active-class="transition duration-300 ease-out" enter-from-class="opacity-0 scale-95"
+        enter-to-class="opacity-100 scale-100" leave-active-class="transition duration-200 ease-in"
+        leave-from-class="opacity-100 scale-100" leave-to-class="opacity-0 scale-95">
+        <div v-if="showPasswordVerifyModal"
           class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs"
-          @click.self="closePasswordVerifyModal"
-        >
-          <div class="bg-white w-full max-w-[480px] border border-gray-200 shadow-2xl relative overflow-hidden rounded-sm animate-in fade-in zoom-in-95 duration-200">
+          @click.self="closePasswordVerifyModal">
+          <div
+            class="bg-white w-full max-w-[480px] border border-gray-200 shadow-2xl relative overflow-hidden rounded-sm animate-in fade-in zoom-in-95 duration-200">
             <!-- Header -->
             <div class="bg-black px-6 py-5 text-white flex items-center justify-between relative">
               <div class="flex items-center gap-3">
@@ -1330,14 +1413,12 @@ const handleLogoutAll = () => {
                   <KeyRound :size="18" class="text-amber-400" />
                 </div>
                 <div>
-                  <h3 class="text-sm font-heading uppercase tracking-[0.15em] font-bold text-white">Xác thực đổi mật khẩu</h3>
+                  <h3 class="text-sm font-heading uppercase tracking-[0.15em] font-bold text-white">Xác thực đổi mật
+                    khẩu</h3>
                   <p class="text-white/60 text-[10px] tracking-wide mt-0.5">Bảo vệ an toàn tài khoản của bạn</p>
                 </div>
               </div>
-              <button
-                @click="closePasswordVerifyModal"
-                class="text-white/70 hover:text-white transition-colors p-1"
-              >
+              <button @click="closePasswordVerifyModal" class="text-white/70 hover:text-white transition-colors p-1">
                 <X :size="18" />
               </button>
             </div>
@@ -1346,39 +1427,36 @@ const handleLogoutAll = () => {
             <div class="p-6">
               <div class="mb-5">
                 <p class="text-xs text-gray-600 leading-relaxed font-light">
-                  Bạn đang yêu cầu đặt mật khẩu mới cho tài khoản: <strong class="text-black font-semibold">{{ profileData?.email || profileData?.sdt }}</strong>
+                  Bạn đang yêu cầu đặt mật khẩu mới cho tài khoản: <strong class="text-black font-semibold">{{
+                    profileData?.email || profileData?.sdt }}</strong>
                 </p>
               </div>
 
               <!-- Verification Method Selector -->
               <div class="flex border border-gray-200 p-1 bg-gray-50 rounded-sm mb-6">
                 <!-- Tab 1: Google Verify (Khuyên dùng) -->
-                <button
-                  type="button"
-                  @click="verifyMethod = 'google'"
-                  :class="[
-                    'flex-1 flex items-center justify-center gap-2 py-2.5 px-3 text-[10px] uppercase tracking-wider font-bold transition-all rounded-xs',
-                    verifyMethod === 'google' ? 'bg-white text-black shadow-xs border border-gray-200' : 'text-gray-500 hover:text-black'
-                  ]"
-                >
+                <button type="button" @click="verifyMethod = 'google'" :class="[
+                  'flex-1 flex items-center justify-center gap-2 py-2.5 px-3 text-[10px] uppercase tracking-wider font-bold transition-all rounded-xs',
+                  verifyMethod === 'google' ? 'bg-white text-black shadow-xs border border-gray-200' : 'text-gray-500 hover:text-black'
+                ]">
                   <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                    <path fill="#4285F4"
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path fill="#34A853"
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                    <path fill="#EA4335"
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
                   </svg>
                   <span>Xác minh Google</span>
                 </button>
 
                 <!-- Tab 2: Mật khẩu cũ -->
-                <button
-                  type="button"
-                  @click="verifyMethod = 'password'"
-                  :class="[
-                    'flex-1 flex items-center justify-center gap-2 py-2.5 px-3 text-[10px] uppercase tracking-wider font-bold transition-all rounded-xs',
-                    verifyMethod === 'password' ? 'bg-white text-black shadow-xs border border-gray-200' : 'text-gray-500 hover:text-black'
-                  ]"
-                >
+                <button type="button" @click="verifyMethod = 'password'" :class="[
+                  'flex-1 flex items-center justify-center gap-2 py-2.5 px-3 text-[10px] uppercase tracking-wider font-bold transition-all rounded-xs',
+                  verifyMethod === 'password' ? 'bg-white text-black shadow-xs border border-gray-200' : 'text-gray-500 hover:text-black'
+                ]">
                   <Lock :size="13" />
                   <span>Mật khẩu cũ</span>
                 </button>
@@ -1392,17 +1470,20 @@ const handleLogoutAll = () => {
                     <div>
                       <p class="text-[11px] text-amber-900 font-medium">Xác thực 1 chạm với Google</p>
                       <p class="text-[10px] text-amber-700 font-light mt-0.5 leading-relaxed">
-                        Bạn chỉ cần bấm nút bên dưới và chọn đúng tài khoản Google <strong class="font-semibold">{{ profileData?.email }}</strong> để hệ thống xác nhận và đặt mật khẩu mới ngay.
+                        Bạn chỉ cần bấm nút bên dưới và chọn đúng tài khoản Google <strong class="font-semibold">{{
+                          profileData?.email }}</strong> để hệ thống xác nhận và đặt mật khẩu mới ngay.
                       </p>
                     </div>
                   </div>
                 </div>
 
                 <div class="flex justify-center pt-2 pb-1 min-h-[44px]">
-                  <GoogleLogin :callback="handleGoogleVerifyForPassword" :button-config="{ width: 300, shape: 'rectangular', text: 'continue_with' }" />
+                  <GoogleLogin :callback="handleGoogleVerifyForPassword"
+                    :button-config="{ width: 300, shape: 'rectangular', text: 'continue_with' }" />
                 </div>
 
-                <div v-if="isVerifyingPassword" class="flex items-center justify-center gap-2 text-xs text-gray-500 pt-2">
+                <div v-if="isVerifyingPassword"
+                  class="flex items-center justify-center gap-2 text-xs text-gray-500 pt-2">
                   <Loader2 class="w-4 h-4 animate-spin text-black" />
                   <span>Đang kiểm tra xác thực Google...</span>
                 </div>
@@ -1411,20 +1492,14 @@ const handleLogoutAll = () => {
               <!-- VIEW 2: XÁC MINH BẰNG MẬT KHẨU HIỆN TẠI -->
               <div v-else class="space-y-4">
                 <div>
-                  <label class="block text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-2">Nhập mật khẩu hiện tại</label>
+                  <label class="block text-[10px] uppercase tracking-widest text-gray-500 font-bold mb-2">Nhập mật khẩu
+                    hiện tại</label>
                   <div class="relative">
-                    <input
-                      :type="showOldPassword ? 'text' : 'password'"
-                      v-model="oldPasswordInput"
-                      @keyup.enter="handleOldPasswordVerifySubmit"
-                      placeholder="Mật khẩu đang sử dụng..."
-                      class="w-full bg-white border border-gray-200 focus:border-black outline-none px-4 py-3 pr-10 text-xs transition-all rounded-sm text-black shadow-sm"
-                    />
-                    <button
-                      type="button"
-                      @click="showOldPassword = !showOldPassword"
-                      class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black"
-                    >
+                    <input :type="showOldPassword ? 'text' : 'password'" v-model="oldPasswordInput"
+                      @keyup.enter="handleOldPasswordVerifySubmit" placeholder="Mật khẩu đang sử dụng..."
+                      class="w-full bg-white border border-gray-200 focus:border-black outline-none px-4 py-3 pr-10 text-xs transition-all rounded-sm text-black shadow-sm" />
+                    <button type="button" @click="showOldPassword = !showOldPassword"
+                      class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black">
                       <Eye v-if="!showOldPassword" :size="14" />
                       <EyeOff v-else :size="14" />
                     </button>
@@ -1432,12 +1507,9 @@ const handleLogoutAll = () => {
                 </div>
 
                 <div class="pt-2">
-                  <button
-                    type="button"
-                    :disabled="isVerifyingPassword || !oldPasswordInput.trim()"
+                  <button type="button" :disabled="isVerifyingPassword || !oldPasswordInput.trim()"
                     @click="handleOldPasswordVerifySubmit"
-                    class="w-full bg-black text-white py-3.5 text-[10px] uppercase tracking-[0.2em] font-semibold transition-all hover:bg-gray-900 active:scale-[0.98] disabled:opacity-40 rounded-sm flex items-center justify-center gap-2 shadow-sm"
-                  >
+                    class="w-full bg-black text-white py-3.5 text-[10px] uppercase tracking-[0.2em] font-semibold transition-all hover:bg-gray-900 active:scale-[0.98] disabled:opacity-40 rounded-sm flex items-center justify-center gap-2 shadow-sm">
                     <Loader2 v-if="isVerifyingPassword" class="w-3.5 h-3.5 animate-spin" />
                     <span>Xác nhận & Cập nhật mật khẩu</span>
                   </button>
@@ -1445,9 +1517,11 @@ const handleLogoutAll = () => {
               </div>
 
               <!-- Footer note -->
-              <div class="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between text-[10px] text-gray-400">
-                <span>LG Hair Security System</span>
-                <button type="button" @click="closePasswordVerifyModal" class="hover:text-black underline uppercase tracking-wider">
+              <div
+                class="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between text-[10px] text-gray-400">
+                <span>LGHair Security System</span>
+                <button type="button" @click="closePasswordVerifyModal"
+                  class="hover:text-black underline uppercase tracking-wider">
                   Hủy thao tác
                 </button>
               </div>
@@ -1463,6 +1537,7 @@ const handleLogoutAll = () => {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;

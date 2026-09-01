@@ -382,7 +382,7 @@ const handleCompleteRefund = () => {
 </script>
 
 <template>
-  <v-dialog :model-value="isOpen" max-width="850px" persistent scrollable @update:model-value="emit('close')">
+  <v-dialog :model-value="isOpen" max-width="850px" persistent scrollable @update:model-value="emit('close'); emit('updated');">
     <v-card rounded="xl">
       
       <!-- Dialog Header (Chuẩn theme bg-primary của Admin HoaDon.vue) -->
@@ -622,9 +622,9 @@ const handleCompleteRefund = () => {
                   <label class="block text-caption font-weight-bold text-medium-emphasis">Ngân hàng nhận tiền:</label>
                   <select 
                     v-model="manualForm.bankCode" 
-                    class="w-full bg-surface border rounded px-2.5 py-1.5 text-caption font-medium focus:border-primary outline-none"
+                    class="w-full bg-surface text-high-emphasis border rounded px-2.5 py-1.5 text-caption font-medium focus:border-primary outline-none"
                   >
-                    <option v-for="b in popularBanks" :key="b.code" :value="b.code">{{ b.name }}</option>
+                    <option v-for="b in popularBanks" :key="b.code" :value="b.code" class="bg-surface text-high-emphasis">{{ b.name }}</option>
                   </select>
                 </div>
 
@@ -634,7 +634,7 @@ const handleCompleteRefund = () => {
                     type="text" 
                     v-model="manualForm.bankAccountNumber" 
                     placeholder="Nhập STK ngân hàng của khách..." 
-                    class="w-full bg-surface border rounded px-2.5 py-1.5 text-caption font-mono font-weight-bold focus:border-primary outline-none"
+                    class="w-full bg-surface text-high-emphasis border rounded px-2.5 py-1.5 text-caption font-mono font-weight-bold focus:border-primary outline-none"
                   />
                 </div>
 
@@ -644,7 +644,7 @@ const handleCompleteRefund = () => {
                     type="text" 
                     v-model="manualForm.bankAccountHolder" 
                     placeholder="VD: NGUYEN VAN A" 
-                    class="w-full bg-surface border rounded px-2.5 py-1.5 text-caption text-uppercase font-weight-bold focus:border-primary outline-none"
+                    class="w-full bg-surface text-high-emphasis border rounded px-2.5 py-1.5 text-caption text-uppercase font-weight-bold focus:border-primary outline-none"
                   />
                 </div>
 
@@ -670,7 +670,7 @@ const handleCompleteRefund = () => {
           color="grey-darken-1" 
           rounded="lg"
           class="text-none font-weight-bold px-5" 
-          @click="emit('close')"
+          @click="emit('close'); emit('updated');"
         >
           Đóng cửa sổ
         </v-btn>

@@ -130,7 +130,7 @@ const getTabClass = (tabKey: string) => {
   if (currentTab.value !== tabKey) {
     return 'border-transparent text-gray-400 hover:text-black';
   }
-  
+
   if (tabKey === 'all') return 'border-black text-black font-extrabold';
   if (tabKey === 'pending') return 'border-yellow-500 text-yellow-600 font-extrabold';
   if (tabKey === 'shipping') return 'border-blue-600 text-blue-600 font-extrabold';
@@ -150,7 +150,7 @@ const getImageUrl = (path?: string) => {
 const getProductImage = (summaryOrName?: string) => {
   if (!summaryOrName) return getImageUrl();
   const cleanStr = ((summaryOrName || '').split('...')[0] || '').trim().toLowerCase();
-  
+
   for (const [key, value] of Object.entries(productImagesMap.value)) {
     if (cleanStr.includes(key) || key.includes(cleanStr)) {
       return getImageUrl(value);
@@ -166,7 +166,7 @@ const getItemQuantity = (item: any) => {
   if (item.Quantity != null && item.Quantity > 0) return item.Quantity;
   if (item.totalQuantity != null && item.totalQuantity > 0) return item.totalQuantity;
   if (item.TotalQuantity != null && item.TotalQuantity > 0) return item.TotalQuantity;
-  
+
   const children = item.chiTiet || item.ChiTiet || item.items || item.Items || item.details || item.Details;
   if (Array.isArray(children)) {
     return children.reduce((sum: number, subItem: any) => {
@@ -313,6 +313,7 @@ const openDetail = async (id: string) => {
 const closeModal = () => {
   isModalOpen.value = false;
   orderDetail.value = null;
+  fetchPurchaseHistory();
 };
 
 // =========================================================================
@@ -357,7 +358,29 @@ const openReturnModal = (item: any) => {
   isReturnModalOpen.value = true;
 };
 
+const hasTrackingCode = (item: any) => {
+  if (!item) return false;
+  if (item.maVanDon || item.MaVanDon) return true;
+  const saved = localStorage.getItem(`hoan_hang_vandon_${item.id}`);
+  if (saved) {
+    try {
+      const data = JSON.parse(saved);
+      if (data.maVanDon) return true;
+    } catch (e) {}
+  }
+  return false;
+};
+
 const openTrackingModal = (item: any) => {
+  if (hasTrackingCode(item)) {
+    Swal.fire({
+      icon: 'info',
+      title: 'Đã cập nhật mã vận đơn',
+      text: `Đơn hàng #${item.id} đã được cập nhật mã vận đơn thành công. Salon đang theo dõi bưu phẩm gửi về!`,
+      confirmButtonColor: '#000'
+    });
+    return;
+  }
   selectedTrackingOrderId.value = item.id;
   isTrackingModalOpen.value = true;
 };
@@ -425,9 +448,9 @@ const confirmCancelOrder = async () => {
     const res = await axios.post(`${API_BASE_URL}/api/LichSuHoaDon/submit-refund`, payload, {
       headers: getAuthHeaders()
     });
-    
+
     const isSuccess = res.status === 200 || (res.data && (res.data.success || res.data.message?.toLowerCase().includes('thành công')));
-    
+
     if (isSuccess) {
       Swal.fire({
         icon: 'success',
@@ -472,7 +495,7 @@ onMounted(async () => {
   try {
     isPageLoading.value = true;
     let info = getCustomerInfo();
-    
+
     // Nếu local chưa có nhưng trong storage có token, tự động gọi API lấy thông tin Profile
     const token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('accessToken') || sessionStorage.getItem('token');
     if ((!info || info.maKH === 'GUEST') && token) {
@@ -576,9 +599,9 @@ const handleLogoutAll = () => {
 <template>
   <div class="w-full bg-[#fcfcfc] min-h-screen py-10 lg:py-16 animate-in fade-in duration-500">
     <div class="max-w-[1440px] mx-auto px-4 lg:px-8">
-      
+
       <!-- Breadcrumbs -->
-      
+
 
       <div class="flex flex-col lg:flex-row gap-8 lg:gap-12">
 
@@ -588,7 +611,8 @@ const handleLogoutAll = () => {
             <h2 class="font-heading text-base uppercase tracking-widest text-black mb-1.5 font-bold truncate">
               {{ customerInfo?.hoTen || 'Khách Hàng' }}
             </h2>
-            <div :class="['inline-flex items-center gap-1.5 px-3 py-1 text-[9px] uppercase tracking-widest font-semibold rounded-sm shadow-sm transition-colors duration-300', sidebarBadgeClass]">
+            <div
+              :class="['inline-flex items-center gap-1.5 px-3 py-1 text-[9px] uppercase tracking-widest font-semibold rounded-sm shadow-sm transition-colors duration-300', sidebarBadgeClass]">
               <Award :size="10" />
               <span>{{ customerInfo?.tenRank || 'Mới' }}</span>
             </div>
@@ -602,13 +626,15 @@ const handleLogoutAll = () => {
                 {{ customerInfo?.hoTen || 'Khách' }}
               </h2>
             </div>
-            <div :class="['inline-flex items-center gap-1 px-2.5 py-1 text-[8px] uppercase tracking-widest font-semibold rounded-sm shadow-sm transition-colors duration-300', sidebarBadgeClass]">
+            <div
+              :class="['inline-flex items-center gap-1 px-2.5 py-1 text-[8px] uppercase tracking-widest font-semibold rounded-sm shadow-sm transition-colors duration-300', sidebarBadgeClass]">
               <Award :size="10" />
               <span>{{ customerInfo?.tenRank || 'Mới' }}</span>
             </div>
           </div>
 
-          <nav class="flex flex-row lg:flex-col gap-1 overflow-x-auto pb-4 lg:pb-0 scrollbar-hide whitespace-nowrap border-b border-gray-200 lg:border-b-0">
+          <nav
+            class="flex flex-row lg:flex-col gap-1 overflow-x-auto pb-4 lg:pb-0 scrollbar-hide whitespace-nowrap border-b border-gray-200 lg:border-b-0">
             <button @click="router.push({ name: 'profile', query: { tab: 'profile' } })"
               class="flex items-center gap-3 px-4 py-3.5 text-[11px] uppercase tracking-widest transition-all rounded-sm text-gray-500 hover:text-black hover:bg-gray-100/50 border-l-2 border-transparent">
               <User :size="15" :stroke-width="1.8" />
@@ -648,19 +674,22 @@ const handleLogoutAll = () => {
 
         <!-- Main Content Area -->
         <main class="flex-1 min-w-0">
-          <div class="bg-white p-6 lg:p-10 border border-gray-200 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500 rounded-sm">
-            
+          <div
+            class="bg-white p-6 lg:p-10 border border-gray-200 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500 rounded-sm">
+
             <!-- Loading state -->
             <div v-if="isPageLoading" class="flex flex-col items-center justify-center py-24">
               <div class="w-8 h-8 border-2 border-t-black border-gray-200 rounded-full animate-spin"></div>
-              <p class="mt-4 text-[10px] uppercase tracking-widest text-gray-400 font-semibold">Đang tải lịch sử đơn hàng...</p>
+              <p class="mt-4 text-[10px] uppercase tracking-widest text-gray-400 font-semibold">Đang tải lịch sử đơn
+                hàng...</p>
             </div>
 
             <!-- Guest state -->
             <div v-else-if="!customerInfo || customerInfo.maKH === 'GUEST'" class="text-center py-16">
               <Package class="w-12 h-12 mx-auto text-gray-200 mb-6" :stroke-width="1" />
               <h3 class="font-heading text-lg uppercase tracking-widest mb-2">Yêu Cầu Đăng Nhập</h3>
-              <p class="text-xs tracking-widest text-gray-400 mb-8">Vui lòng đăng nhập tài khoản để kiểm tra quản lý lịch sử mua hàng cá nhân!</p>
+              <p class="text-xs tracking-widest text-gray-400 mb-8">Vui lòng đăng nhập tài khoản để kiểm tra quản lý
+                lịch sử mua hàng cá nhân!</p>
               <router-link to="/login"
                 class="inline-block bg-black text-white px-8 py-3 text-[10px] uppercase tracking-[0.2em] hover:bg-gray-800 transition-colors rounded-sm">
                 Đăng nhập ngay
@@ -671,47 +700,42 @@ const handleLogoutAll = () => {
             <div v-else>
               <div class="mb-8 border-b border-gray-100 pb-4">
                 <h2 class="font-heading text-xl uppercase tracking-widest text-black mb-1">Lịch Sử Mua Hàng</h2>
-                <p class="text-xs text-gray-500">Quản lý và theo dõi trạng thái các đơn hàng sản phẩm của bạn tại <span class="text-black font-semibold">LG Hair</span></p>
+                <p class="text-xs text-gray-500">Quản lý và theo dõi trạng thái các đơn hàng sản phẩm của bạn tại <span
+                    class="text-black font-semibold">LGHair</span></p>
               </div>
 
               <!-- Toolbar / Filters -->
               <div class="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4 mb-6">
                 <div class="relative flex-1 max-w-md">
                   <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"></path>
+                    <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="1.5"
+                      viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"></path>
                     </svg>
                   </span>
-                  <input type="text" 
-                    placeholder="Tìm theo mã đơn hoặc tên sản phẩm..." 
-                    v-model="searchQuery" 
-                    class="w-full bg-[#fcfcfc] border border-gray-200 focus:border-black focus:bg-white outline-none pl-9 pr-4 py-2.5 text-xs transition-all duration-200 rounded-sm text-black shadow-sm"
-                  />
+                  <input type="text" placeholder="Tìm theo mã đơn hoặc tên sản phẩm..." v-model="searchQuery"
+                    class="w-full bg-[#fcfcfc] border border-gray-200 focus:border-black focus:bg-white outline-none pl-9 pr-4 py-2.5 text-xs transition-all duration-200 rounded-sm text-black shadow-sm" />
                 </div>
                 <div class="flex items-center gap-3">
                   <div class="relative flex items-center">
-                    <input type="date" 
-                      v-model="filterDate" 
-                      class="bg-[#fcfcfc] border border-gray-200 focus:border-black focus:bg-white outline-none px-3 pr-8 py-2.5 text-xs transition-all duration-200 rounded-sm text-black shadow-sm"
-                    />
-                    <button 
-                      v-if="filterDate"
-                      @click="filterDate = ''"
+                    <input type="date" v-model="filterDate"
+                      class="bg-[#fcfcfc] border border-gray-200 focus:border-black focus:bg-white outline-none px-3 pr-8 py-2.5 text-xs transition-all duration-200 rounded-sm text-black shadow-sm" />
+                    <button v-if="filterDate" @click="filterDate = ''"
                       class="absolute right-2.5 text-gray-400 hover:text-red-500 transition-colors text-[10px] font-bold px-1 py-0.5 rounded-full hover:bg-gray-100"
-                      title="Xóa bộ lọc ngày"
-                    >
+                      title="Xóa bộ lọc ngày">
                       ✕
                     </button>
                   </div>
                   <div class="relative">
-                    <select v-model="sortBy" 
-                      class="bg-[#fcfcfc] border border-gray-200 focus:border-black focus:bg-white outline-none pl-3 pr-8 py-2.5 text-xs transition-all duration-200 rounded-sm text-black appearance-none shadow-sm cursor-pointer"
-                    >
+                    <select v-model="sortBy"
+                      class="bg-[#fcfcfc] border border-gray-200 focus:border-black focus:bg-white outline-none pl-3 pr-8 py-2.5 text-xs transition-all duration-200 rounded-sm text-black appearance-none shadow-sm cursor-pointer">
                       <option value="newest">Mới nhất</option>
                       <option value="oldest">Cũ nhất</option>
                     </select>
                     <span class="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none">
-                      <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" stroke-width="1.5"
+                        viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"></path>
                       </svg>
                     </span>
@@ -721,19 +745,15 @@ const handleLogoutAll = () => {
 
               <!-- Status Tabs -->
               <div class="flex flex-wrap gap-8 mb-8 border-b border-gray-100 pb-px">
-                <button 
-                  v-for="tab in [
-                    { key: 'all', label: 'Tất cả' },
-                    { key: 'pending', label: 'Chờ xử lý' },
-                    { key: 'shipping', label: 'Đang giao' },
-                    { key: 'completed', label: 'Đã giao' },
-                    { key: 'returning', label: 'Hoàn hàng' },
-                    { key: 'cancelled', label: 'Đã hủy' }
-                  ]"
-                  :key="tab.key"
-                  @click="currentTab = tab.key"
-                  :class="['pb-3.5 text-[11px] uppercase tracking-widest font-semibold transition-all relative border-b-2 -mb-px', getTabClass(tab.key)]"
-                >
+                <button v-for="tab in [
+                  { key: 'all', label: 'Tất cả' },
+                  { key: 'pending', label: 'Chờ xử lý' },
+                  { key: 'shipping', label: 'Đang giao' },
+                  { key: 'completed', label: 'Đã giao' },
+                  { key: 'returning', label: 'Hoàn hàng' },
+                  { key: 'cancelled', label: 'Đã hủy' }
+                ]" :key="tab.key" @click="currentTab = tab.key"
+                  :class="['pb-3.5 text-[11px] uppercase tracking-widest font-semibold transition-all relative border-b-2 -mb-px', getTabClass(tab.key)]">
                   {{ tab.label }}
                 </button>
               </div>
@@ -741,7 +761,8 @@ const handleLogoutAll = () => {
               <!-- Loader -->
               <div v-if="isLoading" class="flex flex-col items-center justify-center py-16">
                 <div class="w-8 h-8 border-2 border-t-black border-gray-200 rounded-full animate-spin"></div>
-                <p class="mt-4 text-[10px] uppercase tracking-widest text-gray-400 font-semibold">Đang tải đơn hàng...</p>
+                <p class="mt-4 text-[10px] uppercase tracking-widest text-gray-400 font-semibold">Đang tải đơn hàng...
+                </p>
               </div>
 
               <!-- Content Table -->
@@ -750,32 +771,40 @@ const handleLogoutAll = () => {
                   <table class="w-full text-left border-collapse min-w-[750px]">
                     <thead>
                       <tr class="border-b border-gray-200 bg-gray-50/30">
-                        <th class="py-4 px-5 text-[10px] font-bold uppercase tracking-widest text-gray-500">Mã đơn hàng</th>
-                        <th class="py-4 px-5 text-[10px] font-bold uppercase tracking-widest text-gray-500">Ngày mua</th>
-                        <th class="py-4 px-5 text-[10px] font-bold uppercase tracking-widest text-gray-500">Sản phẩm</th>
-                        <th class="py-4 px-5 text-[10px] font-bold uppercase tracking-widest text-gray-500">Tổng tiền</th>
-                        <th class="py-4 px-5 text-[10px] font-bold uppercase tracking-widest text-gray-500">Trạng thái</th>
-                        <th class="py-4 px-5 text-[10px] font-bold uppercase tracking-widest text-gray-500 text-right">Thao tác</th>
+                        <th class="py-4 px-5 text-[10px] font-bold uppercase tracking-widest text-gray-500">Mã đơn hàng
+                        </th>
+                        <th class="py-4 px-5 text-[10px] font-bold uppercase tracking-widest text-gray-500">Ngày mua
+                        </th>
+                        <th class="py-4 px-5 text-[10px] font-bold uppercase tracking-widest text-gray-500">Sản phẩm
+                        </th>
+                        <th class="py-4 px-5 text-[10px] font-bold uppercase tracking-widest text-gray-500">Tổng tiền
+                        </th>
+                        <th class="py-4 px-5 text-[10px] font-bold uppercase tracking-widest text-gray-500">Trạng thái
+                        </th>
+                        <th class="py-4 px-5 text-[10px] font-bold uppercase tracking-widest text-gray-500 text-right">
+                          Thao tác</th>
                       </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100">
                       <tr v-if="paginatedData.length === 0">
                         <td colspan="6" class="py-16 text-center">
                           <Package class="w-8 h-8 mx-auto text-gray-200 mb-3" :stroke-width="1" />
-                          <p class="text-xs tracking-widest text-gray-400 mb-4">Không tìm thấy đơn hàng sản phẩm nào.</p>
+                          <p class="text-xs tracking-widest text-gray-400 mb-4">Không tìm thấy đơn hàng sản phẩm nào.
+                          </p>
                           <router-link :to="{ name: 'shop' }"
                             class="inline-block bg-black text-white px-6 py-2.5 text-[9px] uppercase tracking-[0.2em] hover:bg-gray-800 transition-colors rounded-sm">
                             Bắt đầu mua sắm
                           </router-link>
                         </td>
                       </tr>
-                      
+
                       <tr v-for="item in paginatedData" :key="item.id" class="hover:bg-gray-50/30 transition-colors">
                         <td class="py-5 px-5 text-xs font-bold text-black tracking-wider">#{{ item.id }}</td>
                         <td class="py-5 px-5 text-xs text-gray-500">{{ formatDate(item.date) }}</td>
                         <td class="py-5 px-5 text-xs text-gray-900 max-w-[450px]">
                           <div class="flex items-center gap-3.5 min-w-0">
-                            <img :src="getProductImage(item.productSummary)" class="w-11 h-11 rounded-sm object-cover border border-gray-200 shrink-0 shadow-sm" />
+                            <img :src="getProductImage(item.productSummary)"
+                              class="w-11 h-11 rounded-sm object-cover border border-gray-200 shrink-0 shadow-sm" />
                             <span class="truncate font-medium block" :title="item.productSummary">
                               {{ item.productSummary }}
                               <span v-if="getItemQuantity(item)" class="text-gray-400 font-normal text-[10px] ml-1">
@@ -786,60 +815,55 @@ const handleLogoutAll = () => {
                         </td>
                         <td class="py-5 px-5 text-xs font-bold text-black">{{ formatPrice(item.amount) }}</td>
                         <td class="py-5 px-5 text-xs">
-                          <span :class="['inline-flex items-center px-3 py-1 text-[9px] uppercase tracking-widest font-bold rounded-full border', getStatusBadgeClass(item.status)]">
-                            <span class="w-1.5 h-1.5 rounded-full mr-1.5 shrink-0" :class="getStatusDotClass(item.status)"></span>
+                          <span
+                            :class="['inline-flex items-center px-3 py-1 text-[9px] uppercase tracking-widest font-bold rounded-full border', getStatusBadgeClass(item.status)]">
+                            <span class="w-1.5 h-1.5 rounded-full mr-1.5 shrink-0"
+                              :class="getStatusDotClass(item.status)"></span>
                             {{ statusText(item.status) }}
                           </span>
                         </td>
                         <td class="py-5 px-5 text-xs text-right whitespace-nowrap">
-                          <button 
-                            @click="openDetail(item.id)"
-                            class="border border-black hover:bg-black hover:text-white text-black px-3.5 py-2 text-[9px] uppercase tracking-widest font-bold transition-all duration-200 rounded-sm"
-                          >
+                          <button @click="openDetail(item.id)"
+                            class="border border-black hover:bg-black hover:text-white text-black px-3.5 py-2 text-[9px] uppercase tracking-widest font-bold transition-all duration-200 rounded-sm">
                             Chi tiết
                           </button>
 
                           <!-- Nút Yêu cầu hoàn hàng nếu đơn Đã hoàn thành và trong hạn 1-3 ngày -->
-                          <button 
-                            v-if="isEligibleForReturn(item)"
-                            @click="openReturnModal(item)"
+                          <button v-if="isEligibleForReturn(item)" @click="openReturnModal(item)"
                             class="border border-amber-500 bg-amber-50/70 hover:bg-amber-500 hover:text-white text-amber-900 px-3 py-2 text-[9px] uppercase tracking-widest font-bold transition-all duration-200 rounded-sm ml-2 shadow-sm"
-                            :title="getRemainingReturnText(item)"
-                          >
+                            :title="getRemainingReturnText(item)">
                             Trả hàng / Hoàn tiền
                           </button>
 
-                          <!-- Nút Cập nhật mã vận đơn khi đơn ở trạng thái 4: Đang hoàn hàng -->
-                          <button 
-                            v-else-if="item.status?.toLowerCase() === 'returning'"
-                            @click="openTrackingModal(item)"
-                            class="border border-orange-500 bg-orange-50/70 hover:bg-orange-500 hover:text-white text-orange-900 px-3 py-2 text-[9px] uppercase tracking-widest font-bold transition-all duration-200 rounded-sm ml-2 shadow-sm"
-                            title="Cập nhật mã vận đơn bưu cục gửi hàng"
-                          >
-                            Mã vận đơn
-                          </button>
+                          <!-- Khi đang hoàn hàng: Nếu CHƯA có mã vận đơn thì hiện nút [Mã vận đơn], nếu ĐÃ CÓ thì hiện tag [🚚 Đang quay đầu] -->
+                          <template v-else-if="item.status?.toLowerCase() === 'returning'">
+                            <span v-if="hasTrackingCode(item)"
+                              class="inline-flex items-center px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded text-[9px] font-bold tracking-wider uppercase ml-2"
+                              title="Đã cập nhật vận đơn">
+                              Đã cập nhật vận đơn
+                            </span>
+                            <button v-else
+                              @click="openTrackingModal(item)"
+                              class="border border-orange-500 bg-orange-50/70 hover:bg-orange-500 hover:text-white text-orange-900 px-3 py-2 text-[9px] uppercase tracking-widest font-bold transition-all duration-200 rounded-sm ml-2 shadow-sm"
+                              title="Cập nhật mã vận đơn bưu cục gửi hàng">
+                              Mã vận đơn
+                            </button>
+                          </template>
 
                           <!-- Tag khi Đã nhận hàng về kho (Trạng thái 5) -->
-                          <span
-                            v-else-if="item.status?.toLowerCase() === 'returned'"
-                            class="inline-flex items-center px-2.5 py-1 bg-purple-50 text-purple-700 border border-purple-200 rounded text-[9px] font-bold tracking-wider uppercase ml-2"
-                          >
+                          <span v-else-if="item.status?.toLowerCase() === 'returned'"
+                            class="inline-flex items-center px-2.5 py-1 bg-purple-50 text-purple-700 border border-purple-200 rounded text-[9px] font-bold tracking-wider uppercase ml-2">
                             Chờ Salon hoàn tiền
                           </span>
 
                           <!-- Tag khi Đã hoàn tiền xong 100% (Trạng thái 6) -->
-                          <span
-                            v-else-if="item.status?.toLowerCase() === 'refunded'"
-                            class="inline-flex items-center px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[9px] font-bold tracking-wider uppercase ml-2"
-                          >
+                          <span v-else-if="item.status?.toLowerCase() === 'refunded'"
+                            class="inline-flex items-center px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[9px] font-bold tracking-wider uppercase ml-2">
                             Đã hoàn tiền ✓
                           </span>
 
-                          <button 
-                            v-if="item.status?.toLowerCase() === 'pending'" 
-                            @click="requestCancel(item.id)"
-                            class="border border-red-200 hover:bg-red-50 hover:border-red-300 text-red-600 px-3 py-2 text-[9px] uppercase tracking-widest font-bold transition-all duration-200 rounded-sm ml-2"
-                          >
+                          <button v-if="item.status?.toLowerCase() === 'pending'" @click="requestCancel(item.id)"
+                            class="border border-red-200 hover:bg-red-50 hover:border-red-300 text-red-600 px-3 py-2 text-[9px] uppercase tracking-widest font-bold transition-all duration-200 rounded-sm ml-2">
                             Hủy đơn
                           </button>
                         </td>
@@ -850,19 +874,13 @@ const handleLogoutAll = () => {
 
                 <!-- Pagination -->
                 <div v-if="totalPages > 1" class="flex justify-between items-center mt-6 pt-4 border-t border-gray-100">
-                  <button 
-                    :disabled="currentPage === 1" 
-                    @click="currentPage--"
-                    class="border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:hover:bg-white text-black px-4 py-2 text-[10px] uppercase tracking-widest transition-colors rounded-sm"
-                  >
+                  <button :disabled="currentPage === 1" @click="currentPage--"
+                    class="border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:hover:bg-white text-black px-4 py-2 text-[10px] uppercase tracking-widest transition-colors rounded-sm">
                     Trước
                   </button>
                   <span class="text-xs text-gray-500 tracking-widest">Trang {{ currentPage }} / {{ totalPages }}</span>
-                  <button 
-                    :disabled="currentPage === totalPages" 
-                    @click="currentPage++"
-                    class="border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:hover:bg-white text-black px-4 py-2 text-[10px] uppercase tracking-widest transition-colors rounded-sm"
-                  >
+                  <button :disabled="currentPage === totalPages" @click="currentPage++"
+                    class="border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:hover:bg-white text-black px-4 py-2 text-[10px] uppercase tracking-widest transition-colors rounded-sm">
                     Sau
                   </button>
                 </div>
@@ -877,16 +895,22 @@ const handleLogoutAll = () => {
 
   <!-- Modal Xem Chi Tiết Hóa Đơn Sản Phẩm -->
   <Transition name="modal-fade">
-    <div v-if="isModalOpen" class="fixed inset-0 z-[99999] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm overflow-y-auto" @click.self="closeModal">
-      <div class="relative bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-gray-100 flex flex-col max-h-[88vh] my-auto overflow-hidden text-neutral-900 animate-in fade-in duration-200">
+    <div v-if="isModalOpen"
+      class="fixed inset-0 z-[99999] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm overflow-y-auto"
+      @click.self="closeModal">
+      <div
+        class="relative bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-gray-100 flex flex-col max-h-[88vh] my-auto overflow-hidden text-neutral-900 animate-in fade-in duration-200">
         <!-- Modal Header -->
-        <div class="flex justify-between items-center px-6 py-4 border-b border-gray-100 bg-white sticky top-0 z-10 shrink-0">
+        <div
+          class="flex justify-between items-center px-6 py-4 border-b border-gray-100 bg-white sticky top-0 z-10 shrink-0">
           <div>
             <h3 class="text-base font-bold text-gray-900">Chi tiết đơn hàng sản phẩm</h3>
             <p class="text-xs text-gray-500 mt-0.5">Đơn hàng #{{ selectedOrderId }}</p>
           </div>
-          <button @click="closeModal" class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <button @click="closeModal"
+            class="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+              stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -909,7 +933,8 @@ const handleLogoutAll = () => {
                   Địa chỉ: {{ orderDetail.diaChiGiao }}
                 </p>
               </div>
-              <span :class="['inline-block px-2.5 py-1 text-[9px] uppercase tracking-wider font-bold rounded-full border shrink-0', getStatusBadgeClass(orderDetail.trangThai)]">
+              <span
+                :class="['inline-block px-2.5 py-1 text-[9px] uppercase tracking-wider font-bold rounded-full border shrink-0', getStatusBadgeClass(orderDetail.trangThai)]">
                 {{ statusText(orderDetail.trangThai) }}
               </span>
             </div>
@@ -918,15 +943,22 @@ const handleLogoutAll = () => {
             <div>
               <h6 class="text-xs font-bold text-gray-700 mb-3">Danh sách sản phẩm trong đơn</h6>
               <div class="border border-gray-100 rounded-xl divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                <div v-for="pro in orderDetail.items" :key="pro.maSP || pro.maSp || pro.id" class="flex justify-between items-center p-3 text-xs hover:bg-gray-50/50 transition-colors">
+                <div v-for="pro in orderDetail.items" :key="pro.maSP || pro.maSp || pro.id"
+                  class="flex justify-between items-center p-3 text-xs hover:bg-gray-50/50 transition-colors">
                   <div class="flex items-center gap-3 max-w-[70%]">
-                    <img :src="getProductImage(pro.tenSP || pro.tenSp || pro.ten || pro.name)" class="w-11 h-11 rounded-lg object-cover border border-gray-200 shrink-0 shadow-sm" />
+                    <img :src="getProductImage(pro.tenSP || pro.tenSp || pro.ten || pro.name)"
+                      class="w-11 h-11 rounded-lg object-cover border border-gray-200 shrink-0 shadow-sm" />
                     <div class="space-y-0.5 min-w-0">
-                      <span class="text-gray-900 font-medium block truncate" :title="pro.tenSP || pro.tenSp || pro.ten || pro.name">{{ pro.tenSP || pro.tenSp || pro.ten || pro.name }}</span>
-                      <span class="text-[11px] text-gray-400">Số lượng: x{{ pro.soLuong ?? pro.SoLuong ?? pro.quantity ?? pro.Quantity ?? 1 }}</span>
+                      <span class="text-gray-900 font-medium block truncate"
+                        :title="pro.tenSP || pro.tenSp || pro.ten || pro.name">{{ pro.tenSP || pro.tenSp || pro.ten ||
+                        pro.name }}</span>
+                      <span class="text-[11px] text-gray-400">Số lượng: x{{ pro.soLuong ?? pro.SoLuong ?? pro.quantity
+                        ?? pro.Quantity ?? 1 }}</span>
                     </div>
                   </div>
-                  <span class="text-gray-900 font-bold font-mono">{{ formatPrice(pro.thanhTien ?? pro.ThanhTien ?? ((pro.giaBan || pro.gia || pro.price || 0) * (pro.soLuong ?? pro.SoLuong ?? pro.quantity ?? pro.Quantity ?? 1))) }}</span>
+                  <span class="text-gray-900 font-bold font-mono">{{ formatPrice(pro.thanhTien ?? pro.ThanhTien ??
+                    ((pro.giaBan || pro.gia || pro.price || 0) * (pro.soLuong ?? pro.SoLuong ?? pro.quantity ??
+                    pro.Quantity ?? 1))) }}</span>
                 </div>
               </div>
             </div>
@@ -947,15 +979,17 @@ const handleLogoutAll = () => {
               </div>
               <div class="flex justify-between items-center border-t border-gray-100 pt-3 mt-1">
                 <span class="text-xs uppercase tracking-wider text-gray-900 font-bold">Số tiền thanh toán:</span>
-                <span class="text-base font-bold text-red-600 font-mono">{{ formatPrice(orderDetail.tongThanhToan) }}</span>
+                <span class="text-base font-bold text-red-600 font-mono">{{ formatPrice(orderDetail.tongThanhToan)
+                  }}</span>
               </div>
             </div>
           </div>
         </div>
-        
+
         <!-- Modal Footer -->
         <div class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end gap-2 shrink-0">
-          <button @click="closeModal" class="bg-gray-900 hover:bg-black text-white px-5 py-2 text-xs font-semibold rounded-xl transition-all shadow-sm">
+          <button @click="closeModal"
+            class="bg-gray-900 hover:bg-black text-white px-5 py-2 text-xs font-semibold rounded-xl transition-all shadow-sm">
             Đóng
           </button>
         </div>
@@ -965,16 +999,21 @@ const handleLogoutAll = () => {
 
   <!-- Modal Hủy Đơn Hàng Hoàn Tiền -->
   <Transition name="modal-fade">
-    <div v-if="isCancelModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="isCancelModalOpen = false">
-      <div class="bg-white w-full max-w-md rounded-sm shadow-2xl border border-gray-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-black">
+    <div v-if="isCancelModalOpen"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      @click.self="isCancelModalOpen = false">
+      <div
+        class="bg-white w-full max-w-md rounded-sm shadow-2xl border border-gray-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200 text-black">
         <!-- Modal Header -->
         <div class="flex justify-between items-center px-6 py-4 border-b border-gray-100">
           <div>
             <h3 class="font-heading text-sm uppercase tracking-widest text-black font-bold">Yêu Cầu Hủy Đơn Hàng</h3>
-            <span class="text-[10px] text-gray-400 font-semibold tracking-wider">ĐƠN HÀNG: #{{ selectedCancelId }}</span>
+            <span class="text-[10px] text-gray-400 font-semibold tracking-wider">ĐƠN HÀNG: #{{ selectedCancelId
+              }}</span>
           </div>
           <button @click="isCancelModalOpen = false" class="text-gray-400 hover:text-black transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
+              stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -985,7 +1024,8 @@ const handleLogoutAll = () => {
           <!-- Reason -->
           <div class="space-y-1">
             <label class="block text-[10px] uppercase tracking-widest text-gray-500 font-bold">Lý do hủy đơn</label>
-            <select v-model="cancelForm.reason" class="w-full bg-white border border-gray-200 focus:border-black outline-none px-3 py-2 text-xs transition-all rounded-sm text-black">
+            <select v-model="cancelForm.reason"
+              class="w-full bg-white border border-gray-200 focus:border-black outline-none px-3 py-2 text-xs transition-all rounded-sm text-black">
               <option value="Tôi muốn đổi ý">Tôi muốn đổi ý</option>
               <option value="Đặt trùng đơn">Đặt trùng đơn</option>
               <option value="Thời gian giao hàng quá lâu">Thời gian giao hàng quá lâu</option>
@@ -995,40 +1035,49 @@ const handleLogoutAll = () => {
           </div>
           <div v-if="cancelForm.reason === 'Lý do khác'" class="space-y-1 animate-in fade-in duration-200">
             <label class="block text-[10px] uppercase tracking-widest text-gray-500 font-bold">Nhập lý do khác</label>
-            <textarea v-model="cancelForm.customReason" placeholder="Nhập lý do chi tiết của bạn..." rows="2" class="w-full bg-white border border-gray-200 focus:border-black outline-none px-3 py-2 text-xs transition-all rounded-sm text-black resize-none"></textarea>
+            <textarea v-model="cancelForm.customReason" placeholder="Nhập lý do chi tiết của bạn..." rows="2"
+              class="w-full bg-white border border-gray-200 focus:border-black outline-none px-3 py-2 text-xs transition-all rounded-sm text-black resize-none"></textarea>
           </div>
 
           <!-- Refund Bank Info Title -->
           <div class="border-t border-gray-100 pt-3 mt-3">
-            <h4 class="text-[11px] uppercase tracking-widest text-black font-bold mb-2">Thông tin tài khoản hoàn tiền</h4>
-            <p class="text-[9px] text-gray-400 leading-normal mb-3">Vui lòng điền đúng thông tin tài khoản ngân hàng để hệ thống tự động hoàn tiền cho đơn hàng này.</p>
+            <h4 class="text-[11px] uppercase tracking-widest text-black font-bold mb-2">Thông tin tài khoản hoàn tiền
+            </h4>
+            <p class="text-[9px] text-gray-400 leading-normal mb-3">Vui lòng điền đúng thông tin tài khoản ngân hàng để
+              hệ thống tự động hoàn tiền cho đơn hàng này.</p>
           </div>
 
           <!-- Bank Name -->
           <div class="space-y-1">
             <label class="block text-[10px] uppercase tracking-widest text-gray-500 font-bold">Tên ngân hàng</label>
-            <input type="text" v-model="cancelForm.bankName" placeholder="Ví dụ: Vietcombank, Techcombank..." class="w-full bg-white border border-gray-200 focus:border-black outline-none px-3 py-2.5 text-xs transition-all rounded-sm text-black" />
+            <input type="text" v-model="cancelForm.bankName" placeholder="Ví dụ: Vietcombank, Techcombank..."
+              class="w-full bg-white border border-gray-200 focus:border-black outline-none px-3 py-2.5 text-xs transition-all rounded-sm text-black" />
           </div>
 
           <!-- Bank Account Number -->
           <div class="space-y-1">
             <label class="block text-[10px] uppercase tracking-widest text-gray-500 font-bold">Số tài khoản</label>
-            <input type="text" v-model="cancelForm.bankAccountNumber" placeholder="Nhập số tài khoản ngân hàng..." class="w-full bg-white border border-gray-200 focus:border-black outline-none px-3 py-2.5 text-xs transition-all rounded-sm text-black" />
+            <input type="text" v-model="cancelForm.bankAccountNumber" placeholder="Nhập số tài khoản ngân hàng..."
+              class="w-full bg-white border border-gray-200 focus:border-black outline-none px-3 py-2.5 text-xs transition-all rounded-sm text-black" />
           </div>
 
           <!-- Bank Account Holder -->
           <div class="space-y-1">
-            <label class="block text-[10px] uppercase tracking-widest text-gray-500 font-bold">Tên chủ tài khoản (Không dấu)</label>
-            <input type="text" v-model="cancelForm.bankAccountHolder" placeholder="Ví dụ: NGUYEN VAN A" class="w-full bg-white border border-gray-200 focus:border-black outline-none px-3 py-2.5 text-xs transition-all rounded-sm text-black uppercase font-semibold" />
+            <label class="block text-[10px] uppercase tracking-widest text-gray-500 font-bold">Tên chủ tài khoản (Không
+              dấu)</label>
+            <input type="text" v-model="cancelForm.bankAccountHolder" placeholder="Ví dụ: NGUYEN VAN A"
+              class="w-full bg-white border border-gray-200 focus:border-black outline-none px-3 py-2.5 text-xs transition-all rounded-sm text-black uppercase font-semibold" />
           </div>
         </div>
 
         <!-- Modal Footer -->
         <div class="bg-gray-50/50 px-6 py-3 border-t border-gray-100 flex justify-end gap-2">
-          <button @click="isCancelModalOpen = false" class="bg-white hover:bg-gray-100 text-gray-500 border border-gray-200 px-4 py-2 text-[10px] uppercase tracking-widest font-semibold rounded-sm transition-colors">
+          <button @click="isCancelModalOpen = false"
+            class="bg-white hover:bg-gray-100 text-gray-500 border border-gray-200 px-4 py-2 text-[10px] uppercase tracking-widest font-semibold rounded-sm transition-colors">
             Đóng
           </button>
-          <button @click="confirmCancelOrder" class="bg-black hover:bg-gray-900 text-white px-5 py-2 text-[10px] uppercase tracking-widest font-semibold rounded-sm transition-colors">
+          <button @click="confirmCancelOrder"
+            class="bg-black hover:bg-gray-900 text-white px-5 py-2 text-[10px] uppercase tracking-widest font-semibold rounded-sm transition-colors">
             Xác nhận hủy đơn
           </button>
         </div>
@@ -1037,21 +1086,13 @@ const handleLogoutAll = () => {
   </Transition>
 
   <!-- Component Modal Yêu Cầu Hoàn Tiền Riêng Biệt -->
-  <ModalYeuCauHoanHang
-    :is-open="isReturnModalOpen"
-    :order="selectedReturnOrder"
-    :default-account-holder="defaultAccountHolderName"
-    @close="isReturnModalOpen = false"
-    @success="handleReturnSuccess"
-  />
+  <ModalYeuCauHoanHang :is-open="isReturnModalOpen" :order="selectedReturnOrder"
+    :default-account-holder="defaultAccountHolderName" @close="() => { isReturnModalOpen = false; fetchPurchaseHistory(); }"
+    @success="() => { handleReturnSuccess(); fetchPurchaseHistory(); }" />
 
   <!-- Component Modal Cập Nhật Mã Vận Đơn Riêng Biệt -->
-  <ModalCapNhatVanDon
-    :is-open="isTrackingModalOpen"
-    :order-id="selectedTrackingOrderId"
-    @close="isTrackingModalOpen = false"
-    @success="handleTrackingSuccess"
-  />
+  <ModalCapNhatVanDon :is-open="isTrackingModalOpen" :order-id="selectedTrackingOrderId"
+    @close="() => { isTrackingModalOpen = false; fetchPurchaseHistory(); }" @success="() => { handleTrackingSuccess(); fetchPurchaseHistory(); }" />
 </template>
 
 <style scoped>
@@ -1059,6 +1100,7 @@ const handleLogoutAll = () => {
 .modal-fade-leave-active {
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
+
 .modal-fade-enter-from,
 .modal-fade-leave-to {
   opacity: 0;

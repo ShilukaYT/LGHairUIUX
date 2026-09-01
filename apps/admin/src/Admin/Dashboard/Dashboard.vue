@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import { logActivity } from '@/utils/activityLogger';
@@ -78,14 +78,124 @@ const formatCurrency = (v) =>
 const formatDate = (s) =>
   s ? new Date(s).toLocaleDateString('vi-VN') : '';
 
-const trangThaiLabel = (t) => {
-  const map = { 0: 'Hủy', 1: 'Chờ xử lý', 2: 'Đang xử lý', 3: 'Hoàn thành' };
-  return map[t] ?? 'Không rõ';
+const getStatusText = (status, maHd = '') => {
+  const laDonSp = String(maHd || '').toUpperCase().startsWith('SP') || String(maHd || '').toUpperCase().startsWith('HDSP');
+  if (laDonSp) {
+    const mapSp = {
+      0: 'Đã Hủy',
+      1: 'Chờ xử lý',
+      2: 'Đang giao hàng',
+      3: 'Đã giao hàng',
+      4: 'Đang hoàn hàng',
+      5: 'Đã nhận hàng (Chờ hoàn tiền)',
+      6: 'Đã hoàn tiền'
+    };
+    return mapSp[status] ?? 'N/A';
+  }
+  const mapDv = {
+    0: 'Đã Hủy',
+    1: 'Đã cọc 10%',
+    2: 'Đã thanh toán',
+    3: 'Hoàn thành',
+    4: 'Tạm hủy (Trễ hẹn)',
+    5: 'Chờ hoàn tiền',
+    6: 'Đã hoàn tiền',
+    9: 'Đã dời lịch'
+  };
+  return mapDv[status] ?? 'N/A';
 };
-const trangThaiColor = (t) => {
-  const map = { 0: 'error', 1: 'warning', 2: 'info', 3: 'success' };
-  return map[t] ?? 'default';
+
+const getStatusBadgeConfig = (status, maHd = '') => {
+  const isDark = isDarkMode.value;
+  const laDonSp = String(maHd || '').toUpperCase().startsWith('SP') || String(maHd || '').toUpperCase().startsWith('HDSP');
+
+  switch (status) {
+    case 0: // Đã Hủy (Đỏ)
+      return {
+        label: 'Đã Hủy',
+        color: 'error',
+        bgColor: isDark ? 'rgba(239, 68, 68, 0.18)' : '#fee2e2',
+        textColor: isDark ? '#fca5a5' : '#b91c1c',
+        borderColor: isDark ? 'rgba(239, 68, 68, 0.35)' : '#fca5a5',
+        dotColor: '#ef4444'
+      };
+    case 1: // Chờ xử lý / Đã cọc (Vàng Cam)
+      return {
+        label: laDonSp ? 'Chờ xử lý' : 'Đã cọc 10%',
+        color: 'warning',
+        bgColor: isDark ? 'rgba(245, 158, 11, 0.18)' : '#fef3c7',
+        textColor: isDark ? '#fde68a' : '#b45309',
+        borderColor: isDark ? 'rgba(245, 158, 11, 0.35)' : '#fde68a',
+        dotColor: '#f59e0b'
+      };
+    case 2: // Đang giao / Đã thanh toán (Xanh dương)
+      return {
+        label: laDonSp ? 'Đang giao hàng' : 'Đã thanh toán',
+        color: 'info',
+        bgColor: isDark ? 'rgba(14, 165, 233, 0.18)' : '#e0f2fe',
+        textColor: isDark ? '#7dd3fc' : '#0369a1',
+        borderColor: isDark ? 'rgba(14, 165, 233, 0.35)' : '#bae6fd',
+        dotColor: '#0ea5e9'
+      };
+    case 3: // Đã giao hàng / Hoàn thành (Xanh lá)
+      return {
+        label: laDonSp ? 'Đã giao hàng' : 'Hoàn thành',
+        color: 'success',
+        bgColor: isDark ? 'rgba(34, 197, 94, 0.18)' : '#dcfce7',
+        textColor: isDark ? '#86efac' : '#15803d',
+        borderColor: isDark ? 'rgba(34, 197, 94, 0.35)' : '#bbf7d0',
+        dotColor: '#22c55e'
+      };
+    case 4: // Đang hoàn hàng (SP) / Tạm hủy (DV)
+      return {
+        label: laDonSp ? 'Đang hoàn hàng' : 'Tạm hủy (Trễ hẹn)',
+        color: 'error',
+        bgColor: isDark ? 'rgba(244, 63, 94, 0.18)' : '#ffe4e6',
+        textColor: isDark ? '#fda4af' : '#be123c',
+        borderColor: isDark ? 'rgba(244, 63, 94, 0.35)' : '#fecdd3',
+        dotColor: '#e11d48'
+      };
+    case 5: // Chờ hoàn tiền (Cam)
+      return {
+        label: laDonSp ? 'Đã nhận hàng (Chờ hoàn tiền)' : 'Chờ hoàn tiền',
+        color: 'orange',
+        bgColor: isDark ? 'rgba(249, 115, 22, 0.18)' : '#ffedd5',
+        textColor: isDark ? '#fed7aa' : '#c2410c',
+        borderColor: isDark ? 'rgba(249, 115, 22, 0.35)' : '#fed7aa',
+        dotColor: '#f97316'
+      };
+    case 6: // Đã hoàn tiền (Xanh ngọc Emerald)
+      return {
+        label: 'Đã hoàn tiền',
+        color: 'emerald',
+        bgColor: isDark ? 'rgba(16, 185, 129, 0.18)' : '#d1fae5',
+        textColor: isDark ? '#6ee7b7' : '#047857',
+        borderColor: isDark ? 'rgba(16, 185, 129, 0.35)' : '#a7f3d0',
+        dotColor: '#10b981'
+      };
+    case 9: // Đã dời lịch (Tím Indigo)
+      return {
+        label: 'Đã dời lịch',
+        color: 'indigo',
+        bgColor: isDark ? 'rgba(99, 102, 241, 0.18)' : '#e0e7ff',
+        textColor: isDark ? '#a5b4fc' : '#4338ca',
+        borderColor: isDark ? 'rgba(99, 102, 241, 0.35)' : '#c7d2fe',
+        dotColor: '#6366f1'
+      };
+    default:
+      return {
+        label: 'N/A',
+        color: 'grey',
+        bgColor: isDark ? 'rgba(148, 163, 184, 0.18)' : '#f1f5f9',
+        textColor: isDark ? '#cbd5e1' : '#475569',
+        borderColor: isDark ? 'rgba(148, 163, 184, 0.35)' : '#cbd5e1',
+        dotColor: '#94a3b8'
+      };
+  }
 };
+
+const trangThaiLabel = (t, maHd = '') => getStatusText(t, maHd);
+const trangThaiColor = (t, maHd = '') => getStatusBadgeConfig(t, maHd).color;
 
 // ── State ─────────────────────────────────────────────────────────────────────
 const startDate   = ref(fmtInput(firstDay));
@@ -209,28 +319,87 @@ const handleYearChange = () => {
   fetchTopYeuThich();
 };
 
-// ── Pagination ────────────────────────────────────────────────────────────────
+// ── Status Filter & Pagination ────────────────────────────────────────────────
+const selectedStatusFilter = ref('');
+
+const statusFilterOptions = computed(() => {
+  if (activeTab.value === 'dichvu') {
+    return [
+      { title: 'Tất cả trạng thái', value: '' },
+      { title: 'Đã cọc 10%', value: '1' },
+      { title: 'Đã thanh toán', value: '2' },
+      { title: 'Hoàn thành', value: '3' },
+      { title: 'Tạm hủy (Trễ hẹn)', value: '4' },
+      { title: 'Chờ hoàn tiền', value: '5' },
+      { title: 'Đã hoàn tiền', value: '6' },
+      { title: 'Đã dời lịch', value: '9' },
+      { title: 'Đã Hủy', value: '0' },
+      { title: 'Đơn Hủy & Hoàn tiền (0, 4, 5, 6)', value: 'CANCEL_GROUP' }
+    ];
+  }
+  return [
+    { title: 'Tất cả trạng thái', value: '' },
+    { title: 'Chờ xử lý', value: '1' },
+    { title: 'Đang giao hàng', value: '2' },
+    { title: 'Đã giao hàng (Hoàn thành)', value: '3' },
+    { title: 'Đang hoàn hàng (Chờ về kho)', value: '4' },
+    { title: 'Đã nhận hàng (Chờ hoàn tiền)', value: '5' },
+    { title: 'Đã hoàn tiền (Hoàn tất 100%)', value: '6' },
+    { title: 'Đã Hủy', value: '0' },
+    { title: 'Tất cả đơn Hủy & Hoàn hàng (0, 4, 5, 6)', value: 'CANCEL_GROUP' }
+  ];
+});
+
 const pageSP  = ref(1);
 const pageDV  = ref(1);
 const perPage = 8;
 
+watch([activeTab, selectedStatusFilter], () => {
+  pageDV.value = 1;
+  pageSP.value = 1;
+});
+
+const filteredDV = computed(() => {
+  let list = stats.value.hoaDonDichVu || [];
+  if (selectedStatusFilter.value !== '') {
+    if (selectedStatusFilter.value === 'CANCEL_GROUP') {
+      list = list.filter(h => [0, 4, 5, 6].includes(Number(h.trangThai)));
+    } else {
+      list = list.filter(h => String(h.trangThai) === String(selectedStatusFilter.value));
+    }
+  }
+  return list;
+});
+
+const filteredSP = computed(() => {
+  let list = stats.value.hoaDonSanPham || [];
+  if (selectedStatusFilter.value !== '') {
+    if (selectedStatusFilter.value === 'CANCEL_GROUP') {
+      list = list.filter(h => [0, 4, 5, 6].includes(Number(h.trangThai)));
+    } else {
+      list = list.filter(h => String(h.trangThai) === String(selectedStatusFilter.value));
+    }
+  }
+  return list;
+});
+
 const pagedSP = computed(() => {
   const s = (pageSP.value - 1) * perPage;
-  return stats.value.hoaDonSanPham.slice(s, s + perPage);
+  return filteredSP.value.slice(s, s + perPage);
 });
 const pagedDV = computed(() => {
   const s = (pageDV.value - 1) * perPage;
-  return stats.value.hoaDonDichVu.slice(s, s + perPage);
+  return filteredDV.value.slice(s, s + perPage);
 });
-const totalPagesSP = computed(() => Math.ceil(stats.value.hoaDonSanPham.length / perPage));
-const totalPagesDV = computed(() => Math.ceil(stats.value.hoaDonDichVu.length  / perPage));
+const totalPagesSP = computed(() => Math.ceil(filteredSP.value.length / perPage) || 1);
+const totalPagesDV = computed(() => Math.ceil(filteredDV.value.length  / perPage) || 1);
 
 const totalRevenue = computed(() => {
   const spSum = stats.value.hoaDonSanPham
     ?.filter(hd => hd.trangThai === 3)
     ?.reduce((sum, hd) => sum + (hd.thanhTien || 0), 0) || 0;
   const dvSum = stats.value.hoaDonDichVu
-    ?.filter(hd => hd.trangThai === 3)
+    ?.filter(hd => hd.trangThai === 2 || hd.trangThai === 3)
     ?.reduce((sum, hd) => sum + (hd.thanhTien || 0), 0) || 0;
   return spSum + dvSum;
 });
@@ -869,7 +1038,24 @@ const fetchAdminData = async () => {
     });
 
     if (!res.ok) throw new Error(`Lỗi ${res.status}: Không thể tải dữ liệu thống kê`);
-    stats.value = await res.json();
+    const data = await res.json();
+
+    // Đồng bộ trạng thái hoàn hàng / hoàn tiền từ LocalStorage nếu có
+    const applyLocalStatus = (list) => {
+      if (!Array.isArray(list)) return;
+      list.forEach(h => {
+        const ma = String(h.maHd || h.MaHd || '').toUpperCase();
+        const localStatus = localStorage.getItem(`hoan_hang_status_${ma}`);
+        if (localStatus) {
+          h.trangThai = Number(localStatus);
+        }
+      });
+    };
+
+    applyLocalStatus(data.hoaDonSanPham);
+    applyLocalStatus(data.hoaDonDichVu);
+
+    stats.value = data;
   } catch (err) {
     error.value = err.message;
   } finally {
@@ -955,10 +1141,12 @@ const resetFilter = () => {
   logActivity('Đặt lại bộ lọc Dashboard', `Đặt lại toàn bộ bộ lọc trang Tổng quan Salon về mặc định:
 • Ngày bắt đầu: "${fmtInput(firstDay)}"
 • Ngày kết thúc: "${fmtInput(today)}"
+• Trạng thái: "Tất cả trạng thái"
 • Từ khóa tìm kiếm: "Đã xóa"`, 'Hóa đơn');
   startDate.value  = fmtInput(firstDay);
   endDate.value    = fmtInput(today);
   searchMaHd.value = '';
+  selectedStatusFilter.value = '';
   fetchAdminData();
   fetchTopYeuThich();
 };
@@ -1652,26 +1840,42 @@ onMounted(() => {
           </template>
         </v-card-item>
 
-        <v-tabs v-model="activeTab" color="primary" class="border-b">
-          <v-tab value="dichvu">
-            <template #prepend>
-              <Scissors class="w-4 h-4 mr-1.5" />
-            </template>
-            Dịch vụ Salon
-            <v-chip size="x-small" class="ml-2" color="success" variant="tonal">
-              {{ stats.hoaDonDichVu?.length ?? 0 }}
-            </v-chip>
-          </v-tab>
-          <v-tab value="sanpham">
-            <template #prepend>
-              <ShoppingBag class="w-4 h-4 mr-1.5" />
-            </template>
-            Sản phẩm
-            <v-chip size="x-small" class="ml-2" color="primary" variant="tonal">
-              {{ stats.hoaDonSanPham?.length ?? 0 }}
-            </v-chip>
-          </v-tab>
-        </v-tabs>
+        <div class="d-flex flex-column flex-md-row align-md-center justify-space-between border-b px-2 gap-2">
+          <v-tabs v-model="activeTab" color="primary">
+            <v-tab value="dichvu">
+              <template #prepend>
+                <Scissors class="w-4 h-4 mr-1.5" />
+              </template>
+              Dịch vụ Salon
+              <v-chip size="x-small" class="ml-2" color="success" variant="tonal">
+                {{ filteredDV.length }}
+              </v-chip>
+            </v-tab>
+            <v-tab value="sanpham">
+              <template #prepend>
+                <ShoppingBag class="w-4 h-4 mr-1.5" />
+              </template>
+              Sản phẩm
+              <v-chip size="x-small" class="ml-2" color="primary" variant="tonal">
+                {{ filteredSP.length }}
+              </v-chip>
+            </v-tab>
+          </v-tabs>
+
+          <!-- Bộ lọc trạng thái hóa đơn -->
+          <div class="pa-2 d-flex align-center gap-2" style="min-width: 260px; max-width: 340px;">
+            <v-select
+              v-model="selectedStatusFilter"
+              :items="statusFilterOptions"
+              label="Lọc theo trạng thái"
+              variant="outlined"
+              density="compact"
+              hide-details
+              rounded="lg"
+              class="text-caption font-weight-bold"
+            ></v-select>
+          </div>
+        </div>
 
         <v-window v-model="activeTab">
 
@@ -1702,10 +1906,21 @@ onMounted(() => {
                   <td>{{ formatDate(hd.ngayTao) }}</td>
                   <td class="text-right">{{ formatCurrency(hd.tongTien) }}</td>
                   <td class="text-right font-weight-semibold">{{ formatCurrency(hd.thanhTien) }}</td>
-                  <td class="text-center">
-                    <v-chip :color="trangThaiColor(hd.trangThai)" size="x-small" variant="tonal">
-                      {{ trangThaiLabel(hd.trangThai) }}
-                    </v-chip>
+                  <td class="text-center py-3">
+                    <div
+                      class="d-inline-flex align-center px-3 py-1 rounded-pill font-weight-bold text-caption text-no-wrap"
+                      :style="{
+                        backgroundColor: getStatusBadgeConfig(hd.trangThai, hd.maHd).bgColor,
+                        color: getStatusBadgeConfig(hd.trangThai, hd.maHd).textColor,
+                        border: '1px solid ' + getStatusBadgeConfig(hd.trangThai, hd.maHd).borderColor
+                      }"
+                    >
+                      <span
+                        class="w-1.5 h-1.5 rounded-full mr-1.5 shrink-0"
+                        :style="{ backgroundColor: getStatusBadgeConfig(hd.trangThai, hd.maHd).dotColor }"
+                      ></span>
+                      {{ getStatusText(hd.trangThai, hd.maHd) }}
+                    </div>
                   </td>
                 </tr>
               </tbody>
@@ -1764,10 +1979,18 @@ onMounted(() => {
                   </td>
                   <td class="text-right">{{ formatCurrency(hd.tongTien) }}</td>
                   <td class="text-right font-weight-semibold">{{ formatCurrency(hd.thanhTien) }}</td>
-                  <td class="text-center">
-                    <v-chip :color="trangThaiColor(hd.trangThai)" size="x-small" variant="tonal">
-                      {{ trangThaiLabel(hd.trangThai) }}
-                    </v-chip>
+                  <td class="text-center py-3">
+                    <div
+                      class="d-inline-flex align-center px-3 py-1 rounded-pill font-weight-bold text-caption text-no-wrap"
+                      :style="{
+                        backgroundColor: getStatusBadgeConfig(hd.trangThai, hd.maHd).bgColor,
+                        color: getStatusBadgeConfig(hd.trangThai, hd.maHd).textColor,
+                        border: '1px solid ' + getStatusBadgeConfig(hd.trangThai, hd.maHd).borderColor
+                      }"
+                    >
+                      
+                      {{ getStatusText(hd.trangThai, hd.maHd) }}
+                    </div>
                   </td>
                 </tr>
               </tbody>
@@ -1822,12 +2045,13 @@ onMounted(() => {
           <v-table density="comfortable" class="border rounded-xl" hover>
             <thead>
               <tr class="border-b" style="background-color: rgba(var(--v-theme-on-surface), 0.04);">
-                <th class="font-weight-bold text-caption uppercase text-left py-3" style="width: 130px;">Mã HD</th>
-                <th class="font-weight-bold text-caption uppercase text-left py-3" style="width: 120px;">Ngày tạo</th>
+                <th class="font-weight-bold text-caption uppercase text-left py-3" style="width: 120px;">Mã HD</th>
+                <th class="font-weight-bold text-caption uppercase text-left py-3" style="width: 110px;">Ngày tạo</th>
                 <th class="font-weight-bold text-caption uppercase text-left py-3">Địa chỉ giao nhận / Khách hàng</th>
-                <th class="font-weight-bold text-caption uppercase text-center py-3" style="width: 100px;">Loại</th>
-                <th class="font-weight-bold text-caption uppercase text-right py-3" style="width: 140px;">Thành tiền</th>
-                <th class="font-weight-bold text-caption uppercase text-center py-3" style="width: 90px;">Xem POS</th>
+                <th class="font-weight-bold text-caption uppercase text-center py-3" style="width: 90px;">Loại</th>
+                <th class="font-weight-bold text-caption uppercase text-center py-3" style="width: 140px;">Trạng thái</th>
+                <th class="font-weight-bold text-caption uppercase text-right py-3" style="width: 130px;">Thành tiền</th>
+                <th class="font-weight-bold text-caption uppercase text-center py-3" style="width: 80px;">Xem POS</th>
               </tr>
             </thead>
             <tbody>
@@ -1855,6 +2079,22 @@ onMounted(() => {
                   >
                     {{ String(hd.maHd || '').toUpperCase().startsWith('SP') ? 'Sản phẩm' : 'Dịch vụ' }}
                   </v-chip>
+                </td>
+                <td class="py-3 text-center">
+                  <div
+                    class="d-inline-flex align-center px-2.5 py-0.5 rounded-pill font-weight-bold text-caption text-no-wrap"
+                    :style="{
+                      backgroundColor: getStatusBadgeConfig(hd.trangThai, hd.maHd).bgColor,
+                      color: getStatusBadgeConfig(hd.trangThai, hd.maHd).textColor,
+                      border: '1px solid ' + getStatusBadgeConfig(hd.trangThai, hd.maHd).borderColor
+                    }"
+                  >
+                    <span
+                      class="w-1.5 h-1.5 rounded-full mr-1 shrink-0"
+                      :style="{ backgroundColor: getStatusBadgeConfig(hd.trangThai, hd.maHd).dotColor }"
+                    ></span>
+                    {{ getStatusText(hd.trangThai, hd.maHd) }}
+                  </div>
                 </td>
                 <td class="py-3 text-right font-mono font-weight-black text-body-2 text-primary">
                   {{ (hd.thanhTien || hd.tongTien || 0).toLocaleString() }}₫
@@ -1896,6 +2136,8 @@ onMounted(() => {
     v-model="isInvoiceModalOpen"
     :ma-hd="selectedInvoiceMaHd"
     @status-updated="fetchAdminData"
+    @closed="fetchAdminData"
+    @refresh="fetchAdminData"
   />
 
   <!-- ═══════ MODAL: DANH SÁCH HÓA ĐƠN THEO ĐỊA PHƯƠNG KHI BẤM VÀO ═══════ -->
@@ -1931,12 +2173,13 @@ onMounted(() => {
         <v-table density="comfortable" class="border rounded-xl" hover>
           <thead>
             <tr class="border-b" style="background-color: rgba(var(--v-theme-on-surface), 0.04);">
-              <th class="font-weight-bold text-caption uppercase text-left py-3" style="width: 130px;">Mã HD</th>
-              <th class="font-weight-bold text-caption uppercase text-left py-3">Khách hàng</th>
+              <th class="font-weight-bold text-caption uppercase text-left py-3" style="width: 120px;">Mã HD</th>
+              <th class="font-weight-bold text-caption uppercase text-left py-3" style="width: 140px;">Khách hàng</th>
               <th class="font-weight-bold text-caption uppercase text-left py-3">Địa chỉ Khách hàng / Giao hàng</th>
-              <th class="font-weight-bold text-caption uppercase text-center py-3" style="width: 100px;">Loại</th>
-              <th class="font-weight-bold text-caption uppercase text-right py-3" style="width: 140px;">Thành tiền</th>
-              <th class="font-weight-bold text-caption uppercase text-center py-3" style="width: 90px;">Xem POS</th>
+              <th class="font-weight-bold text-caption uppercase text-center py-3" style="width: 90px;">Loại</th>
+              <th class="font-weight-bold text-caption uppercase text-center py-3" style="width: 140px;">Trạng thái</th>
+              <th class="font-weight-bold text-caption uppercase text-right py-3" style="width: 130px;">Thành tiền</th>
+              <th class="font-weight-bold text-caption uppercase text-center py-3" style="width: 80px;">Xem POS</th>
             </tr>
           </thead>
           <tbody>
@@ -1964,6 +2207,22 @@ onMounted(() => {
                 >
                   {{ String(hd.maHd || '').toUpperCase().startsWith('SP') ? 'Sản phẩm' : 'Dịch vụ' }}
                 </v-chip>
+              </td>
+              <td class="py-3 text-center">
+                <div
+                  class="d-inline-flex align-center px-2.5 py-0.5 rounded-pill font-weight-bold text-caption text-no-wrap"
+                  :style="{
+                    backgroundColor: getStatusBadgeConfig(hd.trangThai, hd.maHd).bgColor,
+                    color: getStatusBadgeConfig(hd.trangThai, hd.maHd).textColor,
+                    border: '1px solid ' + getStatusBadgeConfig(hd.trangThai, hd.maHd).borderColor
+                  }"
+                >
+                  <span
+                    class="w-1.5 h-1.5 rounded-full mr-1 shrink-0"
+                    :style="{ backgroundColor: getStatusBadgeConfig(hd.trangThai, hd.maHd).dotColor }"
+                  ></span>
+                  {{ getStatusText(hd.trangThai, hd.maHd) }}
+                </div>
               </td>
               <td class="py-3 text-right font-mono font-weight-black text-body-2 text-success">
                 {{ (hd.thanhTien || hd.tongTien || 0).toLocaleString() }}₫

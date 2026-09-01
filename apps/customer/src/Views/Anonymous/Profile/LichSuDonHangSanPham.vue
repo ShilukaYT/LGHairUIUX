@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import axios from 'axios';
-import { 
-  Search, Package, RotateCcw, Truck, Eye, X, AlertCircle, 
-  CheckCircle, Clock, XCircle, ArrowRight, ShieldCheck, ChevronLeft, ChevronRight, MapPin 
+import {
+  Search, Package, RotateCcw, Truck, Eye, X, AlertCircle,
+  CheckCircle, Clock, XCircle, ArrowRight, ShieldCheck, ChevronLeft, ChevronRight, MapPin
 } from 'lucide-vue-next';
 import { getCustomerInfo } from "@/Views/Anonymous/CSDL/DuLieuNguoiDung";
 import Swal from 'sweetalert2';
@@ -57,12 +57,12 @@ const cancelReasonsList = [
 const productImagesMap = ref<Record<string, string>>({});
 
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('token') || 
-                localStorage.getItem('access_token') || 
-                localStorage.getItem('accessToken') || 
-                sessionStorage.getItem('token') || 
-                sessionStorage.getItem('access_token') || 
-                sessionStorage.getItem('accessToken');
+  const token = localStorage.getItem('token') ||
+    localStorage.getItem('access_token') ||
+    localStorage.getItem('accessToken') ||
+    sessionStorage.getItem('token') ||
+    sessionStorage.getItem('access_token') ||
+    sessionStorage.getItem('accessToken');
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 
@@ -95,7 +95,7 @@ const getImageUrl = (path?: string) => {
 const getProductImage = (summaryOrName?: string) => {
   if (!summaryOrName) return DEFAULT_PRODUCT_IMG;
   const cleanStr = ((summaryOrName || '').split('...')[0] || '').trim().toLowerCase();
-  
+
   for (const [key, value] of Object.entries(productImagesMap.value)) {
     if (cleanStr.includes(key) || key.includes(cleanStr)) {
       return getImageUrl(value);
@@ -111,7 +111,7 @@ const getItemQuantity = (item: any) => {
   if (item.Quantity != null && item.Quantity > 0) return item.Quantity;
   if (item.totalQuantity != null && item.totalQuantity > 0) return item.totalQuantity;
   if (item.TotalQuantity != null && item.TotalQuantity > 0) return item.TotalQuantity;
-  
+
   const children = item.chiTiet || item.ChiTiet || item.items || item.Items || item.details || item.Details;
   if (Array.isArray(children)) {
     return children.reduce((sum: number, subItem: any) => {
@@ -150,7 +150,7 @@ const loadProductCache = async () => {
 
 const fetchPurchaseHistory = async () => {
   let maKh = customerInfo.value?.maKH;
-  
+
   if (!maKh || maKh === 'GUEST') {
     const token = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('accessToken');
     if (token) {
@@ -254,7 +254,7 @@ const openDetail = async (id: string, fallbackItem?: any) => {
   selectedOrderId.value = id;
   isModalOpen.value = true;
   isModalLoading.value = true;
-  
+
   if (fallbackItem) {
     orderDetail.value = { ...fallbackItem };
   }
@@ -263,12 +263,12 @@ const openDetail = async (id: string, fallbackItem?: any) => {
     const res = await axios.get(`${API_BASE_URL}/api/DonHangSanPham/chi-tiet/${id}`, {
       headers: getAuthHeaders()
     });
-    
+
     let raw = res.data;
     if (raw && raw.data && !raw.id && !raw.maHd) {
       raw = raw.data;
     }
-    
+
     orderDetail.value = {
       ...(fallbackItem || {}),
       ...(raw || {})
@@ -292,6 +292,7 @@ const openDetail = async (id: string, fallbackItem?: any) => {
 const closeModal = () => {
   isModalOpen.value = false;
   orderDetail.value = null;
+  fetchPurchaseHistory();
 };
 
 // =========================================================================
@@ -300,12 +301,12 @@ const closeModal = () => {
 const isEligibleForReturn = (item: any) => {
   const st = item.status?.toLowerCase();
   if (st !== 'completed' && item.trangThai !== 3) return false;
-  
+
   if (!item.date) return true;
   const orderDate = new Date(item.date).getTime();
   const now = new Date().getTime();
   const diffHours = (now - orderDate) / (1000 * 60 * 60);
-  
+
   return diffHours <= 72;
 };
 
@@ -318,7 +319,29 @@ const openReturnModal = (item: any) => {
   isReturnModalOpen.value = true;
 };
 
+const hasTrackingCode = (item: any) => {
+  if (!item) return false;
+  if (item.maVanDon || item.MaVanDon) return true;
+  const saved = localStorage.getItem(`hoan_hang_vandon_${item.id}`);
+  if (saved) {
+    try {
+      const data = JSON.parse(saved);
+      if (data.maVanDon) return true;
+    } catch (e) {}
+  }
+  return false;
+};
+
 const openTrackingModal = (item: any) => {
+  if (hasTrackingCode(item)) {
+    Swal.fire({
+      icon: 'info',
+      title: 'Đã cập nhật mã vận đơn',
+      text: `Đơn hàng #${item.id} đã được cập nhật mã vận đơn thành công. Salon đang theo dõi bưu phẩm gửi về!`,
+      confirmButtonColor: '#000'
+    });
+    return;
+  }
   selectedTrackingOrderId.value = String(item.id);
   isTrackingModalOpen.value = true;
 };
@@ -456,7 +479,8 @@ onMounted(async () => {
     <!-- Header Title -->
     <div class="border-b border-gray-100 pb-4">
       <h2 class="font-heading text-lg uppercase tracking-widest text-black mb-1 font-bold">Lịch Sử Đơn Hàng</h2>
-      <p class="text-xs text-gray-500">Quản lý và theo dõi các đơn hàng sản phẩm của bạn tại <span class="text-black font-semibold">LG Hair</span></p>
+      <p class="text-xs text-gray-500">Quản lý và theo dõi các đơn hàng sản phẩm của bạn tại <span
+          class="text-black font-semibold">LGHair</span></p>
     </div>
 
     <!-- Toolbar / Filters -->
@@ -465,34 +489,22 @@ onMounted(async () => {
         <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
           <Search class="w-4 h-4 text-gray-400" />
         </span>
-        <input 
-          type="text" 
-          placeholder="Tìm theo mã đơn hoặc tên sản phẩm..." 
-          v-model="searchQuery" 
-          class="w-full bg-[#fcfcfc] border border-gray-200 focus:border-black focus:bg-white outline-none pl-9 pr-4 py-2.5 text-xs transition-all duration-200 rounded-sm text-black shadow-sm"
-        />
+        <input type="text" placeholder="Tìm theo mã đơn hoặc tên sản phẩm..." v-model="searchQuery"
+          class="w-full bg-[#fcfcfc] border border-gray-200 focus:border-black focus:bg-white outline-none pl-9 pr-4 py-2.5 text-xs transition-all duration-200 rounded-sm text-black shadow-sm" />
       </div>
       <div class="flex items-center gap-3">
         <div class="relative flex items-center">
-          <input 
-            type="date" 
-            v-model="filterDate" 
-            class="bg-[#fcfcfc] border border-gray-200 focus:border-black focus:bg-white outline-none px-3 pr-8 py-2.5 text-xs transition-all duration-200 rounded-sm text-black shadow-sm"
-          />
-          <button 
-            v-if="filterDate"
-            @click="filterDate = ''"
+          <input type="date" v-model="filterDate"
+            class="bg-[#fcfcfc] border border-gray-200 focus:border-black focus:bg-white outline-none px-3 pr-8 py-2.5 text-xs transition-all duration-200 rounded-sm text-black shadow-sm" />
+          <button v-if="filterDate" @click="filterDate = ''"
             class="absolute right-2.5 text-gray-400 hover:text-red-500 transition-colors text-[10px] font-bold px-1 py-0.5 rounded-full hover:bg-gray-100"
-            title="Xóa bộ lọc ngày"
-          >
+            title="Xóa bộ lọc ngày">
             ✕
           </button>
         </div>
         <div class="relative">
-          <select 
-            v-model="sortBy" 
-            class="bg-[#fcfcfc] border border-gray-200 focus:border-black focus:bg-white outline-none pl-3 pr-8 py-2.5 text-xs transition-all duration-200 rounded-sm text-black appearance-none shadow-sm cursor-pointer"
-          >
+          <select v-model="sortBy"
+            class="bg-[#fcfcfc] border border-gray-200 focus:border-black focus:bg-white outline-none pl-3 pr-8 py-2.5 text-xs transition-all duration-200 rounded-sm text-black appearance-none shadow-sm cursor-pointer">
             <option value="newest">Mới nhất</option>
             <option value="oldest">Cũ nhất</option>
           </select>
@@ -502,19 +514,15 @@ onMounted(async () => {
 
     <!-- Status Tabs -->
     <div class="flex flex-wrap gap-6 border-b border-gray-100 pb-px">
-      <button 
-        v-for="tab in [
-          { key: 'all', label: 'Tất cả' },
-          { key: 'pending', label: 'Chờ xử lý' },
-          { key: 'shipping', label: 'Đang giao' },
-          { key: 'completed', label: 'Đã giao' },
-          { key: 'returning', label: 'Hoàn hàng' },
-          { key: 'cancelled', label: 'Đã hủy' }
-        ]"
-        :key="tab.key"
-        @click="currentTab = tab.key"
-        :class="['pb-3.5 text-[11px] uppercase tracking-widest font-semibold transition-all relative border-b-2 -mb-px', getTabClass(tab.key)]"
-      >
+      <button v-for="tab in [
+        { key: 'all', label: 'Tất cả' },
+        { key: 'pending', label: 'Chờ xử lý' },
+        { key: 'shipping', label: 'Đang giao' },
+        { key: 'completed', label: 'Đã giao' },
+        { key: 'returning', label: 'Hoàn hàng' },
+        { key: 'cancelled', label: 'Đã hủy' }
+      ]" :key="tab.key" @click="currentTab = tab.key"
+        :class="['pb-3.5 text-[11px] uppercase tracking-widest font-semibold transition-all relative border-b-2 -mb-px', getTabClass(tab.key)]">
         {{ tab.label }}
       </button>
     </div>
@@ -530,7 +538,8 @@ onMounted(async () => {
       <div class="overflow-x-auto w-full">
         <table class="w-full text-left border-collapse">
           <thead>
-            <tr class="border-b border-gray-200 bg-gray-50/40 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+            <tr
+              class="border-b border-gray-200 bg-gray-50/40 text-[10px] font-bold uppercase tracking-widest text-gray-500">
               <th class="py-3.5 px-3 whitespace-nowrap">Mã đơn</th>
               <th class="py-3.5 px-3 whitespace-nowrap">Ngày mua</th>
               <th class="py-3.5 px-3 min-w-[200px]">Sản phẩm</th>
@@ -550,17 +559,15 @@ onMounted(async () => {
                 </router-link>
               </td>
             </tr>
-            
+
             <tr v-for="item in paginatedData" :key="item.id" class="hover:bg-gray-50/50 transition-colors">
               <td class="py-4 px-3 text-xs font-bold text-black whitespace-nowrap">#{{ item.id }}</td>
               <td class="py-4 px-3 text-xs text-gray-500 whitespace-nowrap">{{ formatDate(item.date) }}</td>
               <td class="py-4 px-3 text-xs text-gray-900">
                 <div class="flex items-center gap-3 min-w-0">
-                  <img 
-                    :src="getProductImage(item.productSummary)" 
+                  <img :src="getProductImage(item.productSummary)"
                     @error="(e: any) => { e.target.src = DEFAULT_PRODUCT_IMG; }"
-                    class="w-10 h-10 rounded-sm object-cover border border-gray-200 shrink-0 shadow-sm" 
-                  />
+                    class="w-10 h-10 rounded-sm object-cover border border-gray-200 shrink-0 shadow-sm" />
                   <span class="truncate font-medium block max-w-[240px] xl:max-w-none" :title="item.productSummary">
                     {{ item.productSummary }}
                     <span v-if="getItemQuantity(item)" class="text-gray-400 font-normal text-[10px] ml-1">
@@ -569,68 +576,62 @@ onMounted(async () => {
                   </span>
                 </div>
               </td>
-              <td class="py-4 px-3 text-xs font-bold text-black whitespace-nowrap font-mono">{{ formatPrice(item.amount) }}</td>
+              <td class="py-4 px-3 text-xs font-bold text-black whitespace-nowrap font-mono">{{ formatPrice(item.amount)
+                }}</td>
               <td class="py-4 px-3 text-xs text-center whitespace-nowrap">
-                <span :class="['inline-flex items-center px-2.5 py-1 text-[9px] uppercase tracking-wider font-bold rounded-full border', getStatusBadgeClass(item.status)]">
+                <span
+                  :class="['inline-flex items-center px-2.5 py-1 text-[9px] uppercase tracking-wider font-bold rounded-full border', getStatusBadgeClass(item.status)]">
                   <span class="w-1.5 h-1.5 rounded-full mr-1.5 shrink-0" :class="getStatusDotClass(item.status)"></span>
                   {{ statusText(item.status) }}
                 </span>
               </td>
               <td class="py-4 px-3 text-xs text-right whitespace-nowrap">
                 <div class="flex items-center justify-end gap-1.5">
-                  
+
                   <!-- Nút Trả hàng / Hoàn tiền -->
-                  <button
-                    v-if="isEligibleForReturn(item)"
-                    @click="openReturnModal(item)"
+                  <button v-if="isEligibleForReturn(item)" @click="openReturnModal(item)"
                     class="bg-amber-600 hover:bg-amber-700 text-white px-2.5 py-1.5 text-[9px] uppercase tracking-wider font-bold rounded-lg transition-all duration-200 shadow-sm flex items-center gap-1 shrink-0"
-                    title="Yêu cầu trả hàng & hoàn tiền trong vòng 3 ngày"
-                  >
+                    title="Yêu cầu trả hàng & hoàn tiền trong vòng 3 ngày">
                     <RotateCcw class="w-3 h-3" />
                     <span>Hoàn tiền</span>
                   </button>
 
-                  <!-- Nút Cập nhật mã vận đơn khi đang hoàn hàng (Trạng thái 4) -->
-                  <button
-                    v-else-if="item.status?.toLowerCase() === 'returning'"
-                    @click="openTrackingModal(item)"
-                    class="bg-orange-600 hover:bg-orange-700 text-white px-2.5 py-1.5 text-[9px] uppercase tracking-wider font-bold rounded-lg transition-all duration-200 shadow-sm flex items-center gap-1 shrink-0"
-                    title="Cập nhật mã vận đơn gửi hàng về Salon"
-                  >
-                    <Truck class="w-3 h-3" />
-                    <span>Mã vận đơn</span>
-                  </button>
+                  <!-- Khi đang hoàn hàng (Trạng thái 4) -->
+                  <template v-else-if="item.status?.toLowerCase() === 'returning'">
+                    <span v-if="hasTrackingCode(item)"
+                      class="inline-flex items-center px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-[9px] font-bold tracking-wider uppercase shrink-0"
+                      title="Kiện hàng đang được Shipper chuyển về Salon">
+                      Đã cập nhật vận đơn
+                    </span>
+                    <button v-else @click="openTrackingModal(item)"
+                      class="bg-orange-600 hover:bg-orange-700 text-white px-2.5 py-1.5 text-[9px] uppercase tracking-wider font-bold rounded-lg transition-all duration-200 shadow-sm flex items-center gap-1 shrink-0"
+                      title="Cập nhật mã vận đơn gửi hàng về Salon">
+                      <Truck class="w-3 h-3" />
+                      <span>Mã vận đơn</span>
+                    </button>
+                  </template>
 
                   <!-- Tag thông tin khi Đã nhận hàng về kho (Trạng thái 5) -->
-                  <span
-                    v-else-if="item.status?.toLowerCase() === 'returned'"
-                    class="inline-flex items-center px-2.5 py-1 bg-purple-50 text-purple-700 border border-purple-200 rounded-lg text-[9px] font-bold tracking-wider uppercase shrink-0"
-                  >
+                  <span v-else-if="item.status?.toLowerCase() === 'returned'"
+                    class="inline-flex items-center px-2.5 py-1 bg-purple-50 text-purple-700 border border-purple-200 rounded-lg text-[9px] font-bold tracking-wider uppercase shrink-0">
                     Chờ Salon hoàn tiền
                   </span>
 
                   <!-- Tag thông tin khi Đã hoàn tiền xong 100% (Trạng thái 6) -->
-                  <span
-                    v-else-if="item.status?.toLowerCase() === 'refunded'"
-                    class="inline-flex items-center px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[9px] font-bold tracking-wider uppercase shrink-0"
-                  >
+                  <span v-else-if="item.status?.toLowerCase() === 'refunded'"
+                    class="inline-flex items-center px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[9px] font-bold tracking-wider uppercase shrink-0">
                     Đã hoàn tiền ✓
                   </span>
 
                   <!-- Nút Hủy đơn nếu Chờ xử lý -->
-                  <button 
-                    v-if="item.status?.toLowerCase() === 'pending'"
-                    @click="openCancelModal(item.id)" 
-                    class="text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1.5 text-[9px] uppercase tracking-wider font-bold rounded-lg transition-all duration-200 shrink-0"
-                  >
+                  <button v-if="item.status?.toLowerCase() === 'pending'" @click="openCancelModal(item.id)"
+                    class="text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1.5 text-[9px] uppercase tracking-wider font-bold rounded-lg transition-all duration-200 shrink-0">
                     Hủy
                   </button>
 
                   <!-- Nút Chi tiết -->
-                  <button 
-                    @click="openDetail(item.id, item)" 
-                    class="bg-gray-100 hover:bg-black hover:text-white text-gray-700 px-2.5 py-1.5 text-[9px] uppercase tracking-wider font-semibold rounded-lg transition-all duration-200 border border-gray-200 shrink-0"
-                  >
+                  <button @click="openDetail(item.id, item)"
+                    class="bg-gray-100 hover:bg-black hover:text-white text-gray-700 px-2.5 py-1.5 text-[9px] uppercase tracking-wider font-semibold rounded-lg transition-all duration-200 border border-gray-200 shrink-0">
                     Chi tiết
                   </button>
                 </div>
@@ -646,19 +647,13 @@ onMounted(async () => {
           Trang {{ currentPage }} / {{ totalPages }} (Tổng {{ filteredData.length }} đơn)
         </span>
         <div class="flex items-center gap-2">
-          <button 
-            @click="currentPage--" 
-            :disabled="currentPage === 1"
-            class="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed text-black transition-colors"
-          >
+          <button @click="currentPage--" :disabled="currentPage === 1"
+            class="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed text-black transition-colors">
             <ChevronLeft class="w-4 h-4" />
           </button>
           <span class="text-xs font-bold px-2 text-black">{{ currentPage }}</span>
-          <button 
-            @click="currentPage++" 
-            :disabled="currentPage === totalPages"
-            class="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed text-black transition-colors"
-          >
+          <button @click="currentPage++" :disabled="currentPage === totalPages"
+            class="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed text-black transition-colors">
             <ChevronRight class="w-4 h-4" />
           </button>
         </div>
@@ -666,109 +661,131 @@ onMounted(async () => {
     </div>
 
     <!-- Modals -->
-    <ModalYeuCauHoanHang
-      :is-open="isReturnModalOpen"
-      :order="selectedReturnOrder"
-      :default-account-holder="customerInfo?.hoTen"
-      @close="isReturnModalOpen = false"
-      @success="handleReturnSuccess"
-    />
+    <ModalYeuCauHoanHang :is-open="isReturnModalOpen" :order="selectedReturnOrder"
+      :default-account-holder="customerInfo?.hoTen" @close="() => { isReturnModalOpen = false; fetchPurchaseHistory(); }" @success="handleReturnSuccess" />
 
-    <ModalCapNhatVanDon
-      :is-open="isTrackingModalOpen"
-      :order-id="selectedTrackingOrderId"
-      @close="isTrackingModalOpen = false"
-      @success="handleTrackingSuccess"
-    />
+    <ModalCapNhatVanDon :is-open="isTrackingModalOpen" :order-id="selectedTrackingOrderId"
+      @close="() => { isTrackingModalOpen = false; fetchPurchaseHistory(); }" @success="handleTrackingSuccess" />
 
     <!-- Order Detail Modal -->
     <Teleport to="body">
-      <div v-if="isModalOpen" class="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto font-sans" @click.self="closeModal">
-        <div class="relative bg-white w-full max-w-lg rounded-xl shadow-2xl border border-gray-100 flex flex-col max-h-[85vh] my-auto overflow-hidden text-neutral-900 animate-in fade-in duration-200 font-sans">
+      <div v-if="isModalOpen"
+        class="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto"
+        @click.self="closeModal">
+        <div
+          class="relative bg-white w-full max-w-lg rounded-xl shadow-2xl border border-gray-100 flex flex-col max-h-[85vh] my-auto overflow-hidden text-neutral-900 animate-in fade-in zoom-in-95 duration-200 text-black">
           <!-- Modal Header -->
-          <div class="flex justify-between items-center px-5 py-3.5 border-b border-gray-100 bg-white sticky top-0 z-10 shrink-0">
+          <div
+            class="flex justify-between items-center px-5 py-3.5 border-b border-gray-100 bg-white sticky top-0 z-10 shrink-0">
             <div>
-              <h3 class="text-sm font-black uppercase tracking-wider text-gray-900 font-sans">Chi tiết đơn hàng sản phẩm</h3>
-              <p class="text-[11px] text-gray-400 font-mono font-medium mt-0.5">ĐƠN HÀNG <strong class="text-gray-700 font-bold">#{{ selectedOrderId }}</strong></p>
+              <h3 class="text-sm uppercase tracking-wide text-gray-900 font-bold flex items-center gap-1.5">
+                <Package :size="16" class="text-gray-900" /> Chi Tiết Đơn Hàng Sản Phẩm
+              </h3>
+              <span class="text-[10.5px] text-gray-400 font-mono font-medium tracking-wide">
+                MÃ ĐƠN: <strong class="text-gray-800 font-bold">#{{ selectedOrderId }}</strong>
+              </span>
             </div>
-            <button @click="closeModal" class="w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
-              <X class="w-4 h-4" />
+            <button @click="closeModal"
+              class="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-black flex items-center justify-center transition-all cursor-pointer">
+              <X :size="14" />
             </button>
           </div>
 
-
-                    <div class="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 font-sans" v-if="orderDetail">
+          <div class="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1" v-if="orderDetail">
             <!-- 1. Thông tin tóm tắt đơn hàng -->
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 bg-gray-50/80 rounded-lg border border-gray-200/80 text-xs">
+            <div
+              class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 bg-gray-50/80 rounded-lg border border-gray-200/80 text-xs">
               <div class="space-y-0.5">
-                <span class="text-[9.5px] uppercase tracking-wider text-gray-400 block font-bold">Ngày đặt</span>
+                <span class="text-[9.5px] uppercase tracking-wider text-gray-500 font-bold block">Ngày đặt</span>
                 <span class="font-bold text-gray-900">
-                  {{ formatDate(orderDetail.ngayTao || orderDetail.ngayDat || orderDetail.date || orderDetail.createdAt || orderDetail.NgayTao || orderDetail.NgayDat) }}
+                  {{ formatDate(orderDetail.ngayTao || orderDetail.ngayDat || orderDetail.date || orderDetail.createdAt
+                    || orderDetail.NgayTao || orderDetail.NgayDat) }}
                 </span>
               </div>
               <div class="space-y-0.5">
-                <span class="text-[9.5px] uppercase tracking-wider text-gray-400 block font-bold mb-0.5">Trạng thái</span>
-                <span :class="['inline-flex items-center px-2 py-0.5 text-[8.5px] uppercase tracking-wider font-extrabold rounded border shadow-xs', getStatusBadgeClass(orderDetail.status ?? orderDetail.trangThai ?? orderDetail.TrangThai ?? orderDetail.trangThaiText)]">
-                  <span class="w-1.5 h-1.5 rounded-full mr-1 shrink-0" :class="getStatusDotClass(orderDetail.status ?? orderDetail.trangThai ?? orderDetail.TrangThai ?? orderDetail.trangThaiText)"></span>
-                  {{ statusText(orderDetail.status ?? orderDetail.trangThai ?? orderDetail.TrangThai ?? orderDetail.trangThaiText) }}
+                <span class="text-[9.5px] uppercase tracking-wider text-gray-500 font-bold block mb-0.5">Trạng
+                  thái</span>
+                <span
+                  :class="['inline-flex items-center px-2 py-0.5 text-[8.5px] uppercase tracking-wider font-bold rounded border shadow-xs', getStatusBadgeClass(orderDetail.status ?? orderDetail.trangThai ?? orderDetail.TrangThai ?? orderDetail.trangThaiText)]">
+                  <span class="w-1.5 h-1.5 rounded-full mr-1 shrink-0"
+                    :class="getStatusDotClass(orderDetail.status ?? orderDetail.trangThai ?? orderDetail.TrangThai ?? orderDetail.trangThaiText)"></span>
+                  {{ statusText(orderDetail.status ?? orderDetail.trangThai ?? orderDetail.TrangThai ??
+                    orderDetail.trangThaiText) }}
                 </span>
               </div>
               <div class="space-y-0.5">
-                <span class="text-[9.5px] uppercase tracking-wider text-gray-400 block font-bold">Thanh toán</span>
-                <span class="font-bold text-gray-900">{{ orderDetail.phuongThucThanhToan || orderDetail.PhuongThucThanhToan || orderDetail.phuongThuc || orderDetail.paymentMethod || 'Tiền mặt' }}</span>
+                <span class="text-[9.5px] uppercase tracking-wider text-gray-500 font-bold block">Thanh toán</span>
+                <span class="font-bold text-gray-900">{{ orderDetail.phuongThucThanhToan ||
+                  orderDetail.PhuongThucThanhToan || orderDetail.phuongThuc || orderDetail.paymentMethod || 'Tiền mặt'
+                  }}</span>
               </div>
               <div class="space-y-0.5">
-                <span class="text-[9.5px] uppercase tracking-wider text-gray-400 block font-bold">Tổng thanh toán</span>
-                <span :class="['font-black text-xs font-mono', (normalizeProductStatus(orderDetail.status ?? orderDetail.trangThai ?? orderDetail.TrangThai) === 'completed' || normalizeProductStatus(orderDetail.status ?? orderDetail.trangThai ?? orderDetail.TrangThai) === 'refunded') ? 'text-emerald-600' : 'text-red-600']">
-                  {{ formatPrice(orderDetail.thanhTien ?? orderDetail.ThanhTien ?? orderDetail.tongTien ?? orderDetail.TongTien ?? orderDetail.amount ?? orderDetail.Amount ?? orderDetail.tongThanhToan) }}
+                <span class="text-[9.5px] uppercase tracking-wider text-gray-500 font-bold block">Tổng thanh toán</span>
+                <span
+                  :class="['font-bold text-xs font-mono', (normalizeProductStatus(orderDetail.status ?? orderDetail.trangThai ?? orderDetail.TrangThai) === 'completed' || normalizeProductStatus(orderDetail.status ?? orderDetail.trangThai ?? orderDetail.TrangThai) === 'refunded') ? 'text-emerald-600' : 'text-red-600']">
+                  {{ formatPrice(orderDetail.thanhTien ?? orderDetail.ThanhTien ?? orderDetail.tongTien ??
+                    orderDetail.TongTien ?? orderDetail.amount ?? orderDetail.Amount ?? orderDetail.tongThanhToan) }}
                 </span>
               </div>
             </div>
 
             <!-- 2. Thông tin giao hàng & Vận đơn -->
-            <div v-if="orderDetail.tenNguoiNhan || orderDetail.diaChiGiao || orderDetail.diaChi || orderDetail.sdt || orderDetail.donViVanChuyen" class="p-3 bg-amber-50/60 border border-amber-200/70 rounded-lg text-xs space-y-2">
+            <div
+              v-if="orderDetail.tenNguoiNhan || orderDetail.diaChiGiao || orderDetail.diaChi || orderDetail.sdt || orderDetail.donViVanChuyen"
+              class="p-3 bg-amber-50/60 border border-amber-200/70 rounded-lg text-xs space-y-2">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-1.5 text-amber-950 font-bold">
                   <MapPin :size="14" class="text-amber-700 shrink-0" />
                   <span class="text-[10px] uppercase tracking-wider">Thông tin giao nhận</span>
                 </div>
-                <span v-if="orderDetail.donViVanChuyen || orderDetail.DonViVanChuyen" class="text-[9.5px] px-2 py-0.5 bg-white border border-amber-200 text-amber-900 rounded-full font-semibold shadow-2xs">
-                  {{ orderDetail.donViVanChuyen || orderDetail.DonViVanChuyen }} <span v-if="orderDetail.maVanDon || orderDetail.MaVanDon">| {{ orderDetail.maVanDon || orderDetail.MaVanDon }}</span>
+                <span v-if="orderDetail.donViVanChuyen || orderDetail.DonViVanChuyen"
+                  class="text-[9.5px] px-2 py-0.5 bg-white border border-amber-200 text-amber-900 rounded-full font-semibold shadow-2xs">
+                  {{ orderDetail.donViVanChuyen || orderDetail.DonViVanChuyen }} <span
+                    v-if="orderDetail.maVanDon || orderDetail.MaVanDon">| {{ orderDetail.maVanDon ||
+                    orderDetail.MaVanDon }}</span>
                 </span>
               </div>
               <div class="text-gray-800 text-xs leading-relaxed space-y-0.5">
                 <p class="font-bold text-gray-900" v-if="orderDetail.tenNguoiNhan || orderDetail.hoTen">
-                  Người nhận: <span class="font-semibold text-gray-800">{{ orderDetail.tenNguoiNhan || orderDetail.hoTen }}</span>
-                  <span v-if="orderDetail.sdtNhan || orderDetail.sdt || orderDetail.soDienThoai" class="text-gray-500 font-normal ml-1">({{ orderDetail.sdtNhan || orderDetail.sdt || orderDetail.soDienThoai }})</span>
+                  Người nhận: <span class="font-semibold text-gray-800">{{ orderDetail.tenNguoiNhan || orderDetail.hoTen
+                    }}</span>
+                  <span v-if="orderDetail.sdtNhan || orderDetail.sdt || orderDetail.soDienThoai"
+                    class="text-gray-500 font-normal ml-1">({{ orderDetail.sdtNhan || orderDetail.sdt ||
+                    orderDetail.soDienThoai }})</span>
                 </p>
-                <p class="text-gray-600 font-medium" v-if="orderDetail.diaChiGiao || orderDetail.diaChiNhan || orderDetail.diaChi">
-                  Địa chỉ: <span class="text-gray-800">{{ orderDetail.diaChiGiao || orderDetail.diaChiNhan || orderDetail.diaChi }}</span>
+                <p class="text-gray-600 font-medium"
+                  v-if="orderDetail.diaChiGiao || orderDetail.diaChiNhan || orderDetail.diaChi">
+                  Địa chỉ: <span class="text-gray-800">{{ orderDetail.diaChiGiao || orderDetail.diaChiNhan ||
+                    orderDetail.diaChi }}</span>
                 </p>
               </div>
             </div>
 
             <!-- 3. Danh sách sản phẩm -->
             <div>
-              <h4 class="text-[11px] font-black uppercase tracking-wider text-gray-600 mb-2 font-sans">Danh sách sản phẩm trong đơn</h4>
-              <div class="border border-gray-200 rounded-lg divide-y divide-gray-100 overflow-hidden bg-white shadow-xs">
-                <div 
-                  v-for="(prod, idx) in (orderDetail.chiTiet || orderDetail.ChiTiet || orderDetail.chiTietDonHangs || orderDetail.ChiTietDonHangs || orderDetail.items || orderDetail.Items || [])" 
-                  :key="idx"
-                  class="flex items-center justify-between p-2.5 px-3 hover:bg-gray-50/50 transition-colors"
-                >
+              <h4 class="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1.5 flex items-center gap-1">
+                <Package :size="11" class="text-gray-700" /> Danh sách sản phẩm trong đơn
+              </h4>
+              <div
+                class="border border-gray-200 rounded-lg divide-y divide-gray-100 overflow-hidden bg-white shadow-xs">
+                <div
+                  v-for="(prod, idx) in (orderDetail.chiTiet || orderDetail.ChiTiet || orderDetail.chiTietDonHangs || orderDetail.ChiTietDonHangs || orderDetail.items || orderDetail.Items || [])"
+                  :key="idx" class="flex items-center justify-between p-2.5 px-3 hover:bg-gray-50/50 transition-colors">
                   <div class="flex items-center gap-2.5">
-                    <img 
-                      :src="getImageUrl(prod.hinhAnh || prod.HinhAnh || prod.hinhAnhDaiDien || prod.HinhAnhDaiDien)" 
+                    <img :src="getImageUrl(prod.hinhAnh || prod.HinhAnh || prod.hinhAnhDaiDien || prod.HinhAnhDaiDien)"
                       @error="(e: any) => { e.target.src = DEFAULT_PRODUCT_IMG; }"
-                      class="w-10 h-10 rounded-md object-cover border border-gray-200 shrink-0" 
-                    />
+                      class="w-10 h-10 rounded-md object-cover border border-gray-200 shrink-0" />
                     <div>
-                      <h5 class="text-xs font-bold text-gray-900 leading-snug">{{ prod.tenSp || prod.TenSp || prod.tenSP || prod.TenSP || prod.ten || prod.Ten || 'Sản phẩm' }}</h5>
-                      <span class="text-[10px] text-gray-400 font-medium">Số lượng: x{{ prod.soLuong || prod.SoLuong || prod.quantity || 1 }}</span>
+                      <h5 class="text-xs font-bold text-gray-900 leading-snug">{{ prod.tenSp || prod.TenSp || prod.tenSP
+                        || prod.TenSP || prod.ten || prod.Ten || 'Sản phẩm' }}</h5>
+                      <span class="text-[10px] text-gray-400 font-medium">Số lượng: x{{ prod.soLuong || prod.SoLuong ||
+                        prod.quantity || 1 }}</span>
                     </div>
                   </div>
                   <div class="text-right">
-                    <span class="text-xs font-black text-gray-900 font-mono">{{ formatPrice(prod.thanhTien || prod.ThanhTien || ((prod.giaBan || prod.GiaBan || prod.gia || 0) * (prod.soLuong || prod.SoLuong || 1))) }}</span>
+                    <span class="text-xs font-bold text-gray-900 font-mono">{{ formatPrice(prod.thanhTien ||
+                      prod.ThanhTien || ((prod.giaBan || prod.GiaBan || prod.gia || 0) * (prod.soLuong || prod.SoLuong
+                      || 1))) }}</span>
                   </div>
                 </div>
               </div>
@@ -778,22 +795,27 @@ onMounted(async () => {
             <div class="border-t border-gray-100 pt-3 space-y-1.5 text-xs">
               <div class="flex justify-between text-gray-500">
                 <span>Tiền hàng:</span>
-                <span class="font-mono text-gray-800 font-medium">{{ formatPrice(orderDetail.tongTienHang || orderDetail.tongTien || orderDetail.TongTien) }}</span>
+                <span class="font-mono text-gray-800 font-medium">{{ formatPrice(orderDetail.tongTienHang ||
+                  orderDetail.tongTien || orderDetail.TongTien) }}</span>
               </div>
-              <div v-if="orderDetail.phiVanChuyen || orderDetail.phiShip || orderDetail.PhiVanChuyen" class="flex justify-between text-gray-500">
+              <div v-if="orderDetail.phiVanChuyen || orderDetail.phiShip || orderDetail.PhiVanChuyen"
+                class="flex justify-between text-gray-500">
                 <span>Phí vận chuyển:</span>
-                <span class="font-mono text-gray-800 font-medium">+{{ formatPrice(orderDetail.phiVanChuyen || orderDetail.phiShip || orderDetail.PhiVanChuyen) }}</span>
+                <span class="font-mono text-gray-800 font-medium">+{{ formatPrice(orderDetail.phiVanChuyen ||
+                  orderDetail.phiShip || orderDetail.PhiVanChuyen) }}</span>
               </div>
-              <div v-if="(orderDetail.giamGiaVoucher || orderDetail.GiamGiaVoucher) > 0" class="flex justify-between text-emerald-600 font-medium">
+              <div v-if="(orderDetail.giamGiaVoucher || orderDetail.GiamGiaVoucher) > 0"
+                class="flex justify-between text-emerald-600 font-medium">
                 <span>Giảm giá Voucher:</span>
-                <span class="font-mono">-{{ formatPrice(orderDetail.giamGiaVoucher || orderDetail.GiamGiaVoucher) }}</span>
+                <span class="font-mono">-{{ formatPrice(orderDetail.giamGiaVoucher || orderDetail.GiamGiaVoucher)
+                  }}</span>
               </div>
             </div>
           </div>
 
-
           <div class="bg-gray-50/80 px-5 py-3 border-t border-gray-100 flex justify-end shrink-0">
-            <button @click="closeModal" class="bg-black hover:bg-neutral-800 text-white px-5 py-1.5 text-xs font-bold uppercase tracking-wider rounded-md transition-all shadow-xs">
+            <button @click="closeModal"
+              class="bg-black hover:bg-neutral-800 text-white px-5 py-2 text-xs font-bold uppercase tracking-wider rounded-md transition-all shadow-xs cursor-pointer">
               Đóng
             </button>
           </div>
@@ -803,10 +825,14 @@ onMounted(async () => {
 
     <!-- Cancel Modal -->
     <Teleport to="body">
-      <div v-if="isCancelModalOpen" class="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="isCancelModalOpen = false">
-        <div class="bg-white w-full max-w-md rounded-sm shadow-2xl border border-gray-100 flex flex-col my-auto overflow-hidden text-black">
+      <div v-if="isCancelModalOpen"
+        class="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+        @click.self="isCancelModalOpen = false">
+        <div
+          class="bg-white w-full max-w-md rounded-sm shadow-2xl border border-gray-100 flex flex-col my-auto overflow-hidden text-black">
           <div class="px-6 py-4 border-b border-gray-100 bg-rose-50/60 flex justify-between items-center">
-            <h3 class="font-heading text-sm uppercase tracking-widest text-rose-950 font-bold">Xác Nhận Hủy Đơn Hàng</h3>
+            <h3 class="font-heading text-sm uppercase tracking-widest text-rose-950 font-bold">Xác Nhận Hủy Đơn Hàng
+            </h3>
             <button @click="isCancelModalOpen = false" class="text-gray-400 hover:text-black">
               <X class="w-5 h-5" />
             </button>
@@ -822,12 +848,15 @@ onMounted(async () => {
               </select>
             </div>
             <div v-if="cancelReason === 'Lý do khác'" class="space-y-1">
-              <textarea v-model="customCancelReason" placeholder="Nhập lý do cụ thể..." rows="2" class="w-full border border-gray-200 p-2 text-xs rounded-sm"></textarea>
+              <textarea v-model="customCancelReason" placeholder="Nhập lý do cụ thể..." rows="2"
+                class="w-full border border-gray-200 p-2 text-xs rounded-sm"></textarea>
             </div>
           </div>
           <div class="bg-gray-50/70 px-6 py-3 border-t border-gray-100 flex justify-end gap-2">
-            <button @click="isCancelModalOpen = false" class="px-4 py-2 border text-[10px] uppercase tracking-wider font-semibold rounded-sm">Đóng</button>
-            <button @click="handleCancelOrder" :disabled="isCancelling" class="bg-rose-600 hover:bg-rose-700 text-white px-5 py-2 text-[10px] uppercase tracking-wider font-bold rounded-sm disabled:opacity-50">
+            <button @click="isCancelModalOpen = false"
+              class="px-4 py-2 border text-[10px] uppercase tracking-wider font-semibold rounded-sm">Đóng</button>
+            <button @click="handleCancelOrder" :disabled="isCancelling"
+              class="bg-rose-600 hover:bg-rose-700 text-white px-5 py-2 text-[10px] uppercase tracking-wider font-bold rounded-sm disabled:opacity-50">
               <span v-if="isCancelling">Đang hủy...</span>
               <span v-else>Xác Nhận Hủy Đơn</span>
             </button>
