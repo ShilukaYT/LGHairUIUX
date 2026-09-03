@@ -102,11 +102,11 @@ watch(showApiSettings, (val) => {
 });
 
 // Thêm watch này để tự động reset kết quả cũ khi chọn lại kiểu hoặc màu tóc khác
-watch([selectedStyle, selectedColor], () => {
-  if (tryOnResult.value) {
-    tryOnResult.value = null; // Reset để hiện lại giao diện nút "Thử Kiểu Khác" nếu cần
-  }
-});
+// watch([selectedStyle, selectedColor], () => {
+//   if (tryOnResult.value) {
+//     tryOnResult.value = null; 
+//   }
+// });
 
 // --- METHODS TƯƠNG TÁC GIAO DIỆN ---
 const triggerFileInput = () => fileInputRef.value?.click();
@@ -340,7 +340,7 @@ const performTryOn = async () => {
                       </div>
                       <span class="style-name">{{ style.ten_kieu_toc }}</span>
                       
-                      <span v-if="style.mo_ta" class="style-desc">{{ style.mo_ta }}</span>
+                      <!-- <span v-if="style.mo_ta" class="style-desc">{{ style.mo_ta }}</span> -->
                     </div>
                   </div>
                 </div>
@@ -568,13 +568,30 @@ const performTryOn = async () => {
 
 /* CSS CARD KIỂU TÓC */
 .item-card {
-  border: 1px solid var(--color-border); border-radius: 10px; padding: 8px;
-  cursor: pointer; text-align: center; transition: 0.2s; background: #FFF;
-  display: flex; flex-direction: column; align-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 8px;
+  cursor: pointer;
+  text-align: center;
+  transition: 0.2s;
+  background: #fff;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  min-height: 190px;
 }
 .item-card:hover { border-color: var(--color-gold); box-shadow: 0 4px 8px rgba(199, 155, 72, 0.1); }
 .item-card.selected { border-color: var(--color-gold); background: #FFFDF8; border-width: 2px; }
-.item-thumbnail { width: 100%; height: 100px; object-fit: cover; border-radius: 6px; margin-bottom: 8px; }
+.item-thumbnail {
+  width: 100%;
+  height: 140px;
+  display: block;
+  object-fit: cover;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
 .placeholder-thumbnail { width: 100%; height: 100px; background: #EEE; border-radius: 6px; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; color: #999; font-size: 28px; }
 
 /* CSS TIÊU ĐỀ & MÔ TẢ KIỂU TÓC */
